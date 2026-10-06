@@ -20,6 +20,22 @@ final class ListeningController {
     private(set) var levelDB: Float = -120
     private(set) var ownerSpeaking = false
 
+    /// Расшифровка собеседника (R-03): итоговые реплики и текущая частичная.
+    private(set) var transcript: [TranscriptLine] = []
+    private(set) var partialText: String?
+    private(set) var sttStatus: String = "Модель распознавания не загружена"
+    /// Последнее событие распознавания — для определения хода (P-05).
+    var onTranscript: ((TranscriptEvent) -> Void)?
+
+    struct TranscriptLine: Identifiable, Equatable {
+        let id: Int
+        let text: String
+        let language: String
+    }
+
+    private var transcriber: StreamingTranscriber?
+    private var loadingModel = false
+
     /// Буфер последних 30 с звука собеседника (R-04). Читает распознавание (P-04).
     let buffer = AudioRingBuffer(seconds: 30)
     private var capture: SystemAudioCapture?
@@ -66,6 +82,7 @@ final class ListeningController {
             Log.audio.notice("no screen capture permission")
             return
         }
+        loadRecognizer()
         startMic()
         startLevelReporting()
         Task { await applySource(restart: true) }
@@ -74,6 +91,8 @@ final class ListeningController {
     func togglePause() {
         switch phase {
         case .listening:
+            transcriber?.setPaused(true)
+            partialText = nil
             Task {
                 await capture?.stop()
                 mic?.stop()
@@ -82,6 +101,7 @@ final class ListeningController {
             }
         case .paused:
             startMic()
+            transcriber?.setPaused(false)
             Task { await applySource(restart: true) }
         default:
             break
@@ -129,12 +149,73 @@ final class ListeningController {
         }
     }
 
+    /// Язык распознавания из настроек (R-03).
+    func languageSettingChanged() {
+        transcriber?.setLanguage(model.settings.language.whisperCode)
+    }
+
+    /// Загрузка модели whisper в фоне (≈0,5 с для small). Без модели слушание идёт, но текста нет.
+    private func loadRecognizer() {
+        guard transcriber == nil, !loadingModel else { return }
+        let path = AppPaths.model(model.settings.whisperModel).path
+        guard FileManager.default.fileExists(atPath: path) else {
+            sttStatus = "Нет модели распознавания: \(model.settings.whisperModel) (scripts/fetch-models.sh)"
+            Log.stt.error("whisper model missing: \(self.model.settings.whisperModel, privacy: .public)")
+            return
+        }
+        loadingModel = true
+        sttStatus = "Загружаю модель распознавания…"
+        let buffer = self.buffer
+        let language = model.settings.language.whisperCode
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) { Result { try WhisperEngine(modelPath: path) } }.value
+            self?.recognizerLoaded(result, path: path, buffer: buffer, language: language)
+        }
+    }
+
+    private func recognizerLoaded(_ result: Result<WhisperEngine, Error>, path: String, buffer: AudioRingBuffer, language: String?) {
+        loadingModel = false
+        switch result {
+        case .success(let engine):
+            let t = StreamingTranscriber(recognizer: engine, buffer: buffer) { [weak self] event in
+                Task { @MainActor in self?.handle(event) }
+            }
+            t.setLanguage(language)
+            t.setPaused(phase == .paused)
+            transcriberBox.set(t)
+            transcriber = t
+            sttStatus = "Распознавание: \((path as NSString).lastPathComponent)"
+        case .failure(let error):
+            sttStatus = "Ошибка модели: \(error)"
+        }
+        onChange?()
+    }
+
+    private func handle(_ event: TranscriptEvent) {
+        switch event {
+        case .speechStarted:
+            break
+        case .partial(_, let text):
+            partialText = text
+        case .final(let u, let text, let language, _, _):
+            partialText = nil
+            transcript.append(TranscriptLine(id: u, text: text, language: language))
+            if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
+        }
+        onTranscript?(event)
+    }
+
+    /// Ссылка на распознаватель, доступная из очереди захвата.
+    private let transcriberBox = TranscriberBox()
+
     private func makeCapture() -> SystemAudioCapture {
         let buffer = self.buffer
         let meter = levelMeter
+        let box = transcriberBox
         return SystemAudioCapture(onSamples: { samples in
             buffer.append(samples)
             meter.add(samples)
+            box.get()?.process(samples)
         }, onStop: { [weak self] error in
             Task { @MainActor in
                 guard let self else { return }
@@ -177,6 +258,13 @@ final class ListeningController {
         phase = new
         onChange?()
     }
+}
+
+final class TranscriberBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: StreamingTranscriber?
+    func set(_ t: StreamingTranscriber?) { lock.withLock { value = t } }
+    func get() -> StreamingTranscriber? { lock.withLock { value } }
 }
 
 /// Пиковый RMS за интервал, потокобезопасно.

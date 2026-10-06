@@ -65,6 +65,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var firstTokenTimeout: Double = 4
 
     // Audio
+    /// Файл модели whisper в `…/InterviewCopilot/models/` (ADR-0001 п. 5: small по замерам P-04).
+    public var whisperModel = AppSettings.defaultWhisperModel
     public var audioSource: AudioSourceSetting = .auto
     public var language: RecognitionLanguage = .auto
     /// Порог паузы T, мс (R-05: 700, диапазон 400–1500).
@@ -93,6 +95,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     public init() {}
 
+    public static let defaultWhisperModel = "ggml-small-q5_1.bin"
     public static let pauseThresholdRange = 400...1500
     public static let bankThresholdRange = 0.5...0.99
     public static let firstTokenTimeoutRange = 1.0...15.0
@@ -128,6 +131,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         chain = v(.chain, d.chain)
         strongProvider = v(.strongProvider, d.strongProvider)
         firstTokenTimeout = v(.firstTokenTimeout, d.firstTokenTimeout)
+        whisperModel = v(.whisperModel, d.whisperModel)
         audioSource = v(.audioSource, d.audioSource)
         language = v(.language, d.language)
         pauseThresholdMs = v(.pauseThresholdMs, d.pauseThresholdMs)

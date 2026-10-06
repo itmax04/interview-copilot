@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var settingsWindow = SettingsWindowController(model: model)
     private lazy var permissionsWindow = PermissionsWindowController(listening: listening)
     private var lastAudioSource: AudioSourceSetting?
+    private var lastLanguage: RecognitionLanguage?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenu.install()
@@ -43,12 +44,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.onSelectSource = { [weak self] value in self?.model.settings.audioSource = value }
         self.menuBar = menuBar
         lastAudioSource = model.settings.audioSource
+        lastLanguage = model.settings.language
 
         model.onChange = { [weak self] in
             guard let self else { return }
             if self.model.settings.audioSource != self.lastAudioSource {
                 self.lastAudioSource = self.model.settings.audioSource
                 self.listening.sourceSettingChanged()
+            }
+            if self.model.settings.language != self.lastLanguage {
+                self.lastLanguage = self.model.settings.language
+                self.listening.languageSettingChanged()
             }
             self.refreshMenu()
         }

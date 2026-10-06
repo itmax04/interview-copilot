@@ -76,6 +76,16 @@ struct PermissionsView: View {
             }
             .font(.callout)
 
+            VStack(alignment: .leading, spacing: 4) {
+                Text(listening.sttStatus).font(.caption).foregroundStyle(.secondary)
+                ForEach(listening.transcript.suffix(3)) { line in
+                    Text("\(line.language.uppercased()): \(line.text)").font(.callout).lineLimit(2)
+                }
+                if let partial = listening.partialText {
+                    Text(partial + " ▍").font(.callout).foregroundStyle(.secondary).lineLimit(2)
+                }
+            }
+
             HStack {
                 Spacer()
                 Button("Перезапустить приложение") { Relauncher.relaunch() }

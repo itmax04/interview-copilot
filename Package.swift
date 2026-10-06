@@ -14,13 +14,21 @@ let package = Package(
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.2"),
     ],
     targets: [
+        // whisper.cpp — готовый XCFramework из релизов (ADR-0001 п. 5); SHA256 = сумма архива из GitHub Releases.
+        .binaryTarget(
+            name: "whisper",
+            url: "https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-b5454-xcframework.zip",
+            checksum: "e57f8c48933000acabc13bb913fbe82805d483a2deff692cc6738836bd92393b"
+        ),
         .target(
             name: "CopilotCore",
-            dependencies: [.product(name: "Yams", package: "Yams")]
+            dependencies: [.product(name: "Yams", package: "Yams"), "whisper"]
         ),
         .executableTarget(
             name: "InterviewCopilot",
-            dependencies: ["CopilotCore"]
+            dependencies: ["CopilotCore"],
+            // В .app фреймворки лежат в Contents/Frameworks (scripts/build-app.sh).
+            linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         .executableTarget(
             name: "copilot-eval",
