@@ -86,6 +86,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var panelFontSize: PanelFontSize = .medium
     public var panelWidth: Double = 380
 
+    // Hotkeys (R-17): переназначенные сочетания; отсутствующие — по умолчанию ⌃⌥.
+    public var hotkeys: [HotkeyAction: HotkeyBinding] = [:]
+
+    public func hotkey(_ action: HotkeyAction) -> HotkeyBinding {
+        hotkeys[action] ?? HotkeyBinding.defaults[action]!
+    }
+
     // Budget
     public var monthlyBudgetUSD: Double = 5
     /// Ключ Gemini бесплатного тарифа — стоимость $0 (R-20).
@@ -142,6 +149,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         panelOpacity = v(.panelOpacity, d.panelOpacity)
         panelFontSize = v(.panelFontSize, d.panelFontSize)
         panelWidth = v(.panelWidth, d.panelWidth)
+        hotkeys = v(.hotkeys, d.hotkeys)
         monthlyBudgetUSD = v(.monthlyBudgetUSD, d.monthlyBudgetUSD)
         geminiFreeTier = v(.geminiFreeTier, d.geminiFreeTier)
         paidProvidersSuspended = v(.paidProvidersSuspended, d.paidProvidersSuspended)

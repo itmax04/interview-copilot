@@ -26,6 +26,8 @@ final class ListeningController {
     private(set) var sttStatus: String = "Модель распознавания не загружена"
     /// Последнее событие распознавания — для определения хода (P-05).
     var onTranscript: ((TranscriptEvent) -> Void)?
+    /// Владелец начал/перестал говорить; время — мс монотонных часов (R-02, S-07).
+    var onOwnerSpeaking: ((Bool, Double) -> Void)?
 
     struct TranscriptLine: Identifiable, Equatable {
         let id: Int
@@ -193,14 +195,16 @@ final class ListeningController {
 
     private func handle(_ event: TranscriptEvent) {
         switch event {
-        case .speechStarted:
+        case .speechStarted, .speechEnded:
             break
         case .partial(_, let text):
             partialText = text
+            onChange?()
         case .final(let u, let text, let language, _, _):
             partialText = nil
             transcript.append(TranscriptLine(id: u, text: text, language: language))
             if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
+            onChange?()
         }
         onTranscript?(event)
     }
@@ -228,7 +232,11 @@ final class ListeningController {
         guard Permissions.microphone == .granted else { return }
         if mic == nil {
             mic = MicActivityDetector { [weak self] speaking in
-                Task { @MainActor in self?.ownerSpeaking = speaking }
+                let t = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
+                Task { @MainActor in
+                    self?.ownerSpeaking = speaking
+                    self?.onOwnerSpeaking?(speaking, t)
+                }
             }
         }
         do { try mic?.start() } catch {

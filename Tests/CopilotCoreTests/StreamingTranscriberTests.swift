@@ -78,12 +78,13 @@ struct StreamingTranscriberTests {
         let events = sink.events
         #expect(events.first == .speechStarted(utterance: 1))
         #expect(events.contains { if case .partial(1, "привіт") = $0 { true } else { false } })
+        #expect(events.contains { if case .speechEnded(1, _) = $0 { true } else { false } })
         guard case .final(let u, let text, let lang, let phraseEnd, let emitted)? = events.last else {
             Issue.record("последним должен быть final"); return
         }
         #expect(u == 1 && text == "привіт" && lang == "uk")
         #expect(emitted >= phraseEnd)
-        // Язык определён во время речи один раз, итог распознан с фиксированным языком.
+        // Детектор языка — один раз за реплику (дальше только сравнение uk/ru), итог — с известным языком.
         #expect(fake.detectCalls == 1)
         #expect(fake.transcribeCalls.last?.language == "uk")
         // Итог включает всю речь (2,5 с) и предзахват, но не больше буфера.
@@ -95,22 +96,24 @@ struct StreamingTranscriberTests {
         let (t, _, fake, _) = make()
         fake.detected = "ru" // детектор ошибся
         fake.tokenProbability = ["uk": 0.91, "ru": 0.72]
-        let r = t.resolveLanguage([Float](repeating: 0.1, count: 32_000))
-        #expect(r?.0 == "uk")
-        #expect(r?.1 == 1)
+        let r = t.resolveLanguage([Float](repeating: 0.1, count: 32_000), skipDetector: false)
+        #expect(r?.code == "uk")
+        #expect(r?.confidence == 1)
+        #expect(abs((r?.ukMinusRu ?? 0) - 0.19) < 0.001)
     }
 
     @Test func closeScoresAreNotConfident() {
         let (t, _, fake, _) = make()
         fake.tokenProbability = ["uk": 0.80, "ru": 0.78]
-        #expect(t.resolveLanguage([Float](repeating: 0.1, count: 32_000))?.1 == 0.5)
+        #expect(t.resolveLanguage([Float](repeating: 0.1, count: 32_000), skipDetector: false)?.confidence == 0.5)
     }
 
     @Test func englishSkipsUkRuComparison() {
         let (t, _, fake, _) = make()
         fake.detected = "en"
-        let r = t.resolveLanguage([Float](repeating: 0.1, count: 32_000))
-        #expect(r?.0 == "en")
+        let r = t.resolveLanguage([Float](repeating: 0.1, count: 32_000), skipDetector: false)
+        #expect(r?.code == "en")
+        #expect(r?.ukMinusRu == nil)
         #expect(fake.transcribeCalls.isEmpty)
     }
 

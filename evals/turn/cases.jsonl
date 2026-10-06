@@ -1,0 +1,34 @@
+{"id": "q-ru-1", "segments": [["Расскажите о себе.", 0, 1800]], "expected_turn_at": 1800}
+{"id": "q-ru-2", "segments": [["Почему вы уходите с текущего места работы?", 0, 2500]], "expected_turn_at": 2500}
+{"id": "q-ru-3", "segments": [["Хорошо, спасибо.", 0, 900], ["А какие у вас зарплатные ожидания?", 1100, 3000]], "expected_turn_at": 3000}
+{"id": "q-uk-1", "segments": [["Розкажіть про свій досвід з React.", 0, 2200]], "expected_turn_at": 2200}
+{"id": "q-uk-2", "segments": [["Які ваші сильні сторони?", 0, 1500]], "expected_turn_at": 1500}
+{"id": "q-uk-3", "segments": [["Добре.", 0, 500], ["Опишіть складну задачу, яку ви вирішили.", 800, 3300]], "expected_turn_at": 3300}
+{"id": "q-en-1", "segments": [["Tell me about yourself.", 0, 1500]], "expected_turn_at": 1500}
+{"id": "q-en-2", "segments": [["Why do you want to work at our company?", 0, 2300]], "expected_turn_at": 2300}
+{"id": "q-en-3", "segments": [["Okay, great.", 0, 800], ["Can you walk me through your last project?", 1000, 3200]], "expected_turn_at": 3200}
+{"id": "q-en-4", "segments": [["What is the difference between a process and a thread?", 0, 3000]], "expected_turn_at": 3000}
+{"id": "mid-ru-1", "segments": [["Расскажите о проекте, который", 0, 1600], ["вы сделали в прошлом году.", 2600, 4200]], "expected_turn_at": 4200}
+{"id": "mid-ru-2", "segments": [["Как вы организуете работу, когда", 0, 1800], ["сроки очень сжатые?", 3000, 4300]], "expected_turn_at": 4300}
+{"id": "mid-uk-1", "segments": [["Розкажіть про ситуацію, коли", 0, 1500], ["ви не погодилися з керівником.", 2700, 4500]], "expected_turn_at": 4500}
+{"id": "mid-uk-2", "segments": [["Який проєкт ви вважаєте найкращим і", 0, 2000], ["чому саме він?", 3100, 4000]], "expected_turn_at": 4000}
+{"id": "mid-en-1", "segments": [["Tell me about a time when", 0, 1300], ["you had to deal with a difficult stakeholder.", 2400, 4700]], "expected_turn_at": 4700}
+{"id": "mid-en-2", "segments": [["How would you design a system that", 0, 1900], ["handles a million requests per second?", 3000, 5200]], "expected_turn_at": 5200}
+{"id": "mid-en-3", "segments": [["What do you know about our product and", 0, 2000], ["how would you improve it?", 3200, 4600]], "expected_turn_at": 4600}
+{"id": "short-ru-1", "segments": [["Угу.", 0, 400]], "expected_turn_at": null}
+{"id": "short-ru-2", "segments": [["Да, понятно.", 0, 700]], "expected_turn_at": null}
+{"id": "short-uk-1", "segments": [["Так.", 0, 300]], "expected_turn_at": null}
+{"id": "short-uk-2", "segments": [["Ага, добре.", 0, 700]], "expected_turn_at": null}
+{"id": "short-en-1", "segments": [["Mm-hmm.", 0, 400]], "expected_turn_at": null}
+{"id": "short-en-2", "segments": [["I see.", 0, 500]], "expected_turn_at": null}
+{"id": "owner-ru-1", "segments": [["Расскажите о своих слабых сторонах.", 0, 2200]], "owner": [[2500, 6000]], "expected_turn_at": null}
+{"id": "owner-en-1", "segments": [["Do you have any questions for us?", 0, 2000]], "owner": [[2300, 5000]], "expected_turn_at": null}
+{"id": "owner-uk-1", "segments": [["Чи готові ви до переїзду?", 0, 1800]], "owner": [[2100, 4000]], "expected_turn_at": null}
+{"id": "echo-ru-1", "segments": [["Какой у вас опыт с базами данных?", 0, 2600]], "owner": [[300, 2800]], "expected_turn_at": 2600}
+{"id": "echo-en-1", "segments": [["Where do you see yourself in five years?", 0, 2400]], "owner": [[200, 2650]], "expected_turn_at": 2400}
+{"id": "force-ru-1", "segments": [["Ну и", 0, 500]], "force_at": 1200, "expected_turn_at": 1200}
+{"id": "force-en-1", "segments": [["So, yeah", 0, 600]], "force_at": 900, "expected_turn_at": 900}
+{"id": "force-uk-1", "segments": [["Отже, питання про алгоритми.", 0, 2000]], "owner": [[2200, 4000]], "force_at": 3000, "expected_turn_at": 3000}
+{"id": "gap-ru-1", "segments": [["Расскажите о вашем опыте.", 0, 1600], ["Особенно в больших командах.", 2200, 3800]], "expected_turn_at": 3800}
+{"id": "gap-uk-1", "segments": [["Розкажіть про ваш досвід.", 0, 1500], ["Особливо з мікросервісами.", 2100, 3600]], "expected_turn_at": 3600}
+{"id": "gap-en-1", "segments": [["Tell me about your experience.", 0, 1700], ["Especially with distributed systems.", 2350, 4300]], "expected_turn_at": 4300}

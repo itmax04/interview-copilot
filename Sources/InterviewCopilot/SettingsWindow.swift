@@ -7,14 +7,16 @@ import SwiftUI
 final class SettingsWindowController {
     private var window: NSWindow?
     private let model: AppModel
+    private let hotkeyFailures: () -> [HotkeyAction: String]
 
-    init(model: AppModel) {
+    init(model: AppModel, hotkeyFailures: @escaping () -> [HotkeyAction: String] = { [:] }) {
         self.model = model
+        self.hotkeyFailures = hotkeyFailures
     }
 
     func show() {
         if window == nil {
-            let hosting = NSHostingController(rootView: SettingsView(model: model))
+            let hosting = NSHostingController(rootView: SettingsView(model: model, hotkeyFailures: hotkeyFailures))
             let w = NSWindow(contentViewController: hosting)
             w.title = "Interview Copilot Settings"
             w.styleMask = [.titled, .closable, .miniaturizable]
@@ -56,6 +58,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
 struct SettingsView: View {
     @Bindable var model: AppModel
+    let hotkeyFailures: () -> [HotkeyAction: String]
 
     var body: some View {
         TabView {
@@ -65,7 +68,7 @@ struct SettingsView: View {
             BankSettingsView(model: model).tabItem { Label(SettingsTab.bank.rawValue, systemImage: SettingsTab.bank.symbol) }
             PrivacySettingsView(model: model).tabItem { Label(SettingsTab.privacy.rawValue, systemImage: SettingsTab.privacy.symbol) }
             PanelSettingsView(model: model).tabItem { Label(SettingsTab.panel.rawValue, systemImage: SettingsTab.panel.symbol) }
-            HotkeysSettingsView().tabItem { Label(SettingsTab.hotkeys.rawValue, systemImage: SettingsTab.hotkeys.symbol) }
+            HotkeysSettingsView(model: model, failures: hotkeyFailures).tabItem { Label(SettingsTab.hotkeys.rawValue, systemImage: SettingsTab.hotkeys.symbol) }
             BudgetSettingsView(model: model).tabItem { Label(SettingsTab.budget.rawValue, systemImage: SettingsTab.budget.symbol) }
         }
         .padding(20)

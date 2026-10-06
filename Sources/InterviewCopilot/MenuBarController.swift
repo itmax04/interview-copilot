@@ -51,7 +51,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             image?.isTemplate = true
             item.image = image
         }
-        if let shortcut = spec.shortcut {
+        if let hotkey = spec.hotkey, let key = hotkey.menuKeyEquivalent {
+            item.keyEquivalent = key
+            item.keyEquivalentModifierMask = Self.cocoaModifiers(hotkey.modifiers)
+        } else if let shortcut = spec.shortcut {
             switch shortcut.key {
             case .character(let c): item.keyEquivalent = String(c)
             case .returnKey: item.keyEquivalent = "\r"
@@ -126,6 +129,15 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     @objc private func itemSelected(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let action = MenuAction(rawValue: raw) else { return }
         onAction(action)
+    }
+
+    static func cocoaModifiers(_ carbon: UInt32) -> NSEvent.ModifierFlags {
+        var flags: NSEvent.ModifierFlags = []
+        if carbon & 0x1000 != 0 { flags.insert(.control) }  // controlKey
+        if carbon & 0x0800 != 0 { flags.insert(.option) }   // optionKey
+        if carbon & 0x0200 != 0 { flags.insert(.shift) }    // shiftKey
+        if carbon & 0x0100 != 0 { flags.insert(.command) }  // cmdKey
+        return flags
     }
 
     private static func dotImage(_ dot: StatusDot) -> NSImage {

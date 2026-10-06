@@ -33,6 +33,8 @@ public struct MenuItemSpec: Sendable, Equatable {
     /// Имя SF Symbol для иконки слева.
     public var symbol: String
     public var shortcut: Shortcut?
+    /// Глобальная горячая клавиша помощника (R-17), если у пункта она есть; показывается как сочетание меню.
+    public var hotkey: HotkeyBinding?
     public var hasSubmenu: Bool
     public var enabled: Bool
     /// Цветная точка статуса вместо иконки (первая строка).
@@ -40,12 +42,13 @@ public struct MenuItemSpec: Sendable, Equatable {
     /// Пометка справа, например «soon».
     public var badge: String?
 
-    public init(_ action: MenuAction, _ title: String, symbol: String, shortcut: Shortcut? = nil,
+    public init(_ action: MenuAction, _ title: String, symbol: String, shortcut: Shortcut? = nil, hotkey: HotkeyBinding? = nil,
                 submenu: Bool = false, enabled: Bool = true, statusDot: StatusDot? = nil, badge: String? = nil) {
         self.action = action
         self.title = title
         self.symbol = symbol
         self.shortcut = shortcut
+        self.hotkey = hotkey
         self.hasSubmenu = submenu
         self.enabled = enabled
         self.statusDot = statusDot
@@ -63,11 +66,14 @@ public struct MenuState: Sendable, Equatable {
     public var bankCardCount: Int
     public var strongModelName: String
     public var statusLine: String
+    public var hotkeys: [HotkeyAction: HotkeyBinding]
+    public var panelVisible: Bool
 
     public init(listening: ListeningStatus = .idle, mode: AnswerMode = .bankAndHint,
                 chain: [ProviderID] = [.gemini, .deepseek, .anthropic], language: RecognitionLanguage = .auto,
                 profileName: String = "Example", bankCardCount: Int = 0, strongModelName: String = "Claude",
-                statusLine: String = "Today: $0.00 · Gemini: 0 req") {
+                statusLine: String = "Today: $0.00 · Gemini: 0 req",
+                hotkeys: [HotkeyAction: HotkeyBinding] = [:], panelVisible: Bool = false) {
         self.listening = listening
         self.mode = mode
         self.chain = chain
@@ -76,6 +82,12 @@ public struct MenuState: Sendable, Equatable {
         self.bankCardCount = bankCardCount
         self.strongModelName = strongModelName
         self.statusLine = statusLine
+        self.hotkeys = hotkeys
+        self.panelVisible = panelVisible
+    }
+
+    public func hotkey(_ action: HotkeyAction) -> HotkeyBinding {
+        hotkeys[action] ?? HotkeyBinding.defaults[action]!
     }
 }
 
@@ -97,7 +109,7 @@ public enum MenuLayout {
                 MenuItemSpec(.listeningSource, listeningTitle, symbol: "circle.fill",
                              submenu: s.listening != .noPermission, statusDot: s.listening.dot),
                 MenuItemSpec(.togglePause, paused ? "Resume listening" : "Pause listening",
-                             symbol: paused ? "play.fill" : "pause.fill", shortcut: .ctrlOpt("p")),
+                             symbol: paused ? "play.fill" : "pause.fill", hotkey: s.hotkey(.togglePause)),
             ],
             [
                 MenuItemSpec(.mode, "Mode: \(s.mode.title)", symbol: "brain", submenu: true),
@@ -111,9 +123,10 @@ public enum MenuLayout {
                 MenuItemSpec(.practice, "Practice mode…", symbol: "scope", enabled: false, badge: "soon"),
             ],
             [
-                MenuItemSpec(.answerNow, "Answer now", symbol: "bolt", shortcut: .ctrlOptReturn),
-                MenuItemSpec(.screenshot, "Screenshot → \(s.strongModelName)", symbol: "camera", shortcut: .ctrlOpt("s")),
-                MenuItemSpec(.togglePanel, "Show panel", symbol: "macwindow", shortcut: .ctrlOpt("h")),
+                MenuItemSpec(.answerNow, "Answer now", symbol: "bolt", hotkey: s.hotkey(.answerNow)),
+                MenuItemSpec(.screenshot, "Screenshot → \(s.strongModelName)", symbol: "camera", hotkey: s.hotkey(.screenshot)),
+                MenuItemSpec(.togglePanel, s.panelVisible ? "Hide panel" : "Show panel", symbol: "macwindow",
+                             hotkey: s.hotkey(.togglePanel)),
                 MenuItemSpec(.sessionHistory, "Session history…", symbol: "clock"),
             ],
             [

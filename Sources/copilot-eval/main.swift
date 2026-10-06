@@ -106,8 +106,29 @@ case "stt-stream":
     let median = l.isEmpty ? 0 : (l.count % 2 == 1 ? l[l.count / 2] : (l[l.count / 2 - 1] + l[l.count / 2]) / 2)
     print(String(format: "finals=%d partials=%d median_ms=%.0f max_ms=%.0f peak_mem_mb=%.0f",
                  l.count, collector.lock.withLock { collector.partials }, median, l.last ?? 0, ProcessMemory.footprintMB()))
-case "bank", "turn":
-    fail("copilot-eval \(args[0]): набор ещё не реализован (P-05/P-06)", code: 2)
+case "turn":
+    // Eval `turn` (R-05): evals/turn/cases.jsonl → преждевременные/пропущенные ходы, задержка.
+    args.removeFirst()
+    let threshold = Double(option("--threshold-ms") ?? "700") ?? 700
+    let verbose = flag("--verbose")
+    let path = args.first ?? "evals/turn/cases.jsonl"
+    let cases: [TurnEval.Case]
+    do { cases = try TurnEval.load(URL(fileURLWithPath: path)) } catch { fail("\(path): \(error)", code: 1) }
+    let summary = TurnEval.run(cases, config: TurnDetector.Config(thresholdMs: threshold))
+    if verbose {
+        for r in summary.results {
+            print("\(r.id): expected=\(r.expected.map { String(Int($0)) } ?? "null") fired=\(r.firedAt.map { String(Int($0)) } ?? "none")\(r.forced ? " forced" : "")")
+        }
+    }
+    for r in summary.results where r.premature || r.missed {
+        print("FAIL \(r.id): expected=\(r.expected.map { String(Int($0)) } ?? "null") fired=\(r.firedAt.map { String(Int($0)) } ?? "none")\(r.premature ? " premature" : "")\(r.missed ? " missed" : "")")
+    }
+    print(String(format: "turn: cases=%d T=%.0fms premature=%d (%.1f%%, порог ≤10%%) missed=%d/%d (%.1f%%, порог ≤5%%) mean_latency_ms=%.0f %@",
+                 summary.cases, threshold, summary.premature, summary.prematureRate * 100, summary.missed, summary.withExpected,
+                 summary.missedRate * 100, summary.meanLatencyMs, summary.passed ? "PASS" : "FAIL"))
+    exit(summary.passed ? 0 : 1)
+case "bank":
+    fail("copilot-eval bank: набор ещё не реализован (P-06)", code: 2)
 default:
     print("usage: copilot-eval <stt|bank|turn> [options]")
     exit(args.isEmpty ? 0 : 64)

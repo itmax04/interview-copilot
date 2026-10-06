@@ -148,23 +148,81 @@ struct PanelSettingsView: View {
     }
 }
 
-/// Hotkeys — R-17. Регистрация и переназначение подключаются на P-05.
+/// Hotkeys — R-17: глобальные сочетания, переназначение, предупреждение, если сочетание занято.
 struct HotkeysSettingsView: View {
-    private let rows: [(String, String)] = [
-        ("Ответить сейчас", "⌃⌥↩"),
-        ("Скриншот → сильная модель", "⌃⌥S"),
-        ("Показать / скрыть панель", "⌃⌥H"),
-        ("Пауза", "⌃⌥P"),
-        ("Сильная модель", "⌃⌥C"),
-    ]
+    @Bindable var model: AppModel
+    let failures: () -> [HotkeyAction: String]
+    @State private var recording: HotkeyAction?
+    @State private var monitor: Any?
+    @State private var problems: [HotkeyAction: String] = [:]
 
     var body: some View {
         Form {
-            ForEach(rows, id: \.0) { row in
-                LabeledContent(row.0) { Text(row.1).monospaced() }
+            ForEach(HotkeyAction.allCases, id: \.self) { action in
+                VStack(alignment: .leading, spacing: 2) {
+                    LabeledContent(action.title) {
+                        HStack {
+                            Text(recording == action ? "Нажмите сочетание…" : model.settings.hotkey(action).displayString)
+                                .monospaced()
+                                .foregroundStyle(recording == action ? .orange : .primary)
+                            Button(recording == action ? "Отмена" : "Изменить") { toggleRecording(action) }
+                        }
+                    }
+                    if let problem = problems[action] {
+                        Label(problem, systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Сбросить на ⌃⌥") { model.settings.hotkeys = [:]; refresh() }
             }
         }
         .formStyle(.grouped)
+        .onAppear(perform: refresh)
+        .onDisappear(perform: stopRecording)
+    }
+
+    private func refresh() {
+        // Регистрация происходит после сохранения настроек; даём ей завершиться.
+        DispatchQueue.main.async { problems = failures() }
+    }
+
+    private func toggleRecording(_ action: HotkeyAction) {
+        if recording == action {
+            stopRecording()
+            return
+        }
+        stopRecording()
+        recording = action
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 { // Esc — отмена
+                stopRecording()
+                return nil
+            }
+            var mods: UInt32 = 0
+            if event.modifierFlags.contains(.control) { mods |= 0x1000 }
+            if event.modifierFlags.contains(.option) { mods |= 0x0800 }
+            if event.modifierFlags.contains(.shift) { mods |= 0x0200 }
+            if event.modifierFlags.contains(.command) { mods |= 0x0100 }
+            let binding = HotkeyBinding(keyCode: UInt32(event.keyCode), modifiers: mods)
+            if binding.isValidGlobal {
+                model.settings.hotkeys[action] = binding
+                stopRecording()
+                refresh()
+            } else {
+                problems[action] = "Нужен модификатор ⌃, ⌥ или ⌘"
+            }
+            return nil
+        }
+    }
+
+    private func stopRecording() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+        recording = nil
     }
 }
 

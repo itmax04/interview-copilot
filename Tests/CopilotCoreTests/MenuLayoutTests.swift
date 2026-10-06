@@ -20,8 +20,10 @@ struct MenuLayoutTests {
         func item(_ a: MenuAction) -> MenuItemSpec { items.first { $0.action == a }! }
         // A-3: ⌃⌥ вместо ⌘ для клавиш помощника.
         for a in [MenuAction.togglePause, .answerNow, .screenshot, .togglePanel] {
-            #expect(item(a).shortcut?.controlOption == true)
+            #expect(item(a).hotkey?.modifiers == HotkeyBinding.ctrlOpt)
         }
+        #expect(item(.answerNow).hotkey?.displayString == "⌃⌥↩")
+        #expect(item(.screenshot).hotkey?.displayString == "⌃⌥S")
         #expect(item(.settings).shortcut == .command(","))
         #expect(item(.quit).shortcut == .command("q"))
         // Practice mode неактивен, с пометкой «soon».
@@ -44,6 +46,14 @@ struct MenuLayoutTests {
         let noPermission = MenuLayout.sections(for: MenuState(listening: .noPermission))[0][0]
         #expect(noPermission.statusDot == .red)
         #expect(noPermission.hasSubmenu == false)
+    }
+
+    @Test func reboundHotkeyShownInMenu() {
+        var s = MenuState()
+        s.hotkeys[.togglePanel] = HotkeyBinding(keyCode: 0x26 /* J */, modifiers: HotkeyBinding.ctrlOpt)
+        let item = MenuLayout.sections(for: s).flatMap { $0 }.first { $0.action == .togglePanel }
+        #expect(item?.hotkey?.displayString == "⌃⌥J")
+        #expect(item?.hotkey?.menuKeyEquivalent == "j")
     }
 
     @Test func dynamicTitles() {
