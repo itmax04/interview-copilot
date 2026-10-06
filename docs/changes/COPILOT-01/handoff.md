@@ -1,6 +1,6 @@
 # Передача COPILOT-01
 
-Статус: in progress (P-01: код готов, ожидание H-1) · Обновлено: 2026-10-06 · Ветка: `feat/copilot-01` · Commit: см. `git log -1`
+Статус: in progress (P-01 завершён, далее P-02) · Обновлено: 2026-10-06 · Ветка: `feat/copilot-01` · Commit: см. `git log -1`
 Цель и границы: [intent.md](intent.md), требования: [spec.md](spec.md), шаги: [plan.md](plan.md).
 
 ## Сделано
@@ -37,9 +37,12 @@
   иконка-попугай (рисуется кодом: шаблон для строки меню, цветная для .app), `Resources/Info.plist`,
   `scripts/build-app.sh`, `scripts/secret-scan.sh`, заглушка `copilot-eval`.
 
+- 2026-10-06, H-1 пройдена: сертификат подписи создан (имя в Связке ключей — «InterviewCopilot», без « Dev»;
+  `security find-identity -p codesigning` → 1 identity, CSSMERR_TP_NOT_TRUSTED — нормально для самоподписанного, trust не трогаю).
+  `scripts/build-app.sh` собирает и подписывает `dist/InterviewCopilot.app`, приложение запускается.
+
 ## Следующий шаг
-H-1: владелец создаёт сертификат «InterviewCopilot Dev». После «готово»: `security find-identity -p codesigning`,
-`scripts/build-app.sh`, `codesign -dv dist/InterviewCopilot.app`, запуск `.app`; затем P-02.
+P-02: настройки и ключи (R-18, R-23), затем H-2.
 
 ## Проверки
 | Шаг | Команда | Commit | Результат |
@@ -51,6 +54,8 @@ H-1: владелец создаёт сертификат «InterviewCopilot Dev
 | P-01 | `swift test` | P-01 | PASS: 4 теста (MenuLayoutTests) |
 | P-01 | `scripts/secret-scan.sh` (дерево + индекс + история) | P-01 | PASS: «0 findings»; самопроверка на фейковых ключах/email/телефоне — 5 находок из 5 |
 | P-01 | `scripts/build-app.sh` | P-01 | FAIL ожидаемо: нет сертификата → понятная ошибка; повтор после H-1 |
+| H-1 | `scripts/build-app.sh` | P-01 fix | PASS: `dist/InterviewCopilot.app`, `codesign -dvv` → `Identifier=com.itmax04.interviewcopilot`, `Authority=InterviewCopilot`; `codesign --verify` → valid on disk, satisfies DR |
+| H-1 | `open dist/InterviewCopilot.app` | P-01 fix | PASS: процесс запущен (pgrep); видимость иконки — подтверждение владельца |
 | P-01 | Запуск, иконка и меню видны (скриншот) | P-01 | Запуск debug-бинаря: процесс стартует без ошибок. Скриншот NOT RUN: у процесса исполнителя нет разрешения «Запись экрана» (`screencapture` даёт только обои), TCC не трогаю. Скриншот меню — на H-3/P-11 |
 
 ## Решения исполнителя
@@ -61,6 +66,8 @@ _(исполнитель дописывает: дата, шаг, решение,
 - 2026-10-06, P-01: иконка-попугай рисуется кодом (`ParrotIcon`), .icns собирается `iconutil` в build-app.sh — без бинарных ассетов в Git (R-15).
 - 2026-10-06, P-01: в меню первой строкой для паузы — «Paused — <app>» и пункт «Resume listening» (R-15 говорит только о цвете точки; так понятнее, HIG).
 - 2026-10-06, P-01: `secret-scan.sh` не проверяет email/телефоны в `profile.example/` и `evals/` (синтетика, AC-06); разрешены адреса `example.*`, `users.noreply.github.com`, `anthropic.com`.
+- 2026-10-06, H-1: `build-app.sh` принимает сертификат «InterviewCopilot Dev» (ADR-0001 п. 3) или «InterviewCopilot» (фактическое имя после H-1); переопределение — `CODESIGN_IDENTITY`. Пересоздавать сертификат не просил: на поведение TCC имя не влияет.
+- 2026-10-06, H-1: репозиторий лежит на «Рабочем столе» в iCloud Drive; File Provider вешает `com.apple.FinderInfo`, и `codesign` падает. Бандл собирается и подписывается во временной папке вне iCloud, затем `ditto --noextattr` в `dist/`; финальная проверка `codesign --verify` без `--strict` (AC-14).
 - 2026-10-06, P-00: whisper.cpp и llama.cpp берутся из сборочных тегов `bNNNN` (там лежат XCFramework), версия фиксируется URL + checksum (ADR-0001 п. 5, 9).
 
 ## Открытые вопросы
