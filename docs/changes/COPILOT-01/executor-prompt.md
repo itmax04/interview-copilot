@@ -1,6 +1,6 @@
 # Промпт исполнителя COPILOT-01
 
-Статус: **proposed** · Дата: 2026-10-06
+Статус: **accepted** (2026-10-06) · Дата: 2026-10-06
 Запуск: Claude Code в папке `~/Desktop/1/interview-copilot`, модель `claude-opus-5-5`, effort high.
 Использовать только после того, как владелец перевёл intent, spec, plan и ADR-0001 в статус accepted.
 

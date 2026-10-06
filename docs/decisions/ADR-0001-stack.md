@@ -1,6 +1,6 @@
 # ADR-0001: Стек и архитектура Interview Copilot v1
 
-Статус: **proposed** · Дата: 2026-10-06 · Владелец: itmax04 · Связи: [intent](../changes/COPILOT-01/intent.md), [spec](../changes/COPILOT-01/spec.md)
+Статус: **accepted** (2026-10-06) · Дата: 2026-10-06 · Владелец: itmax04 · Связи: [intent](../changes/COPILOT-01/intent.md), [spec](../changes/COPILOT-01/spec.md)
 
 ## Контекст
 - Личное приложение для macOS, один пользователь, MacBook Air M1 с 8 ГБ памяти, macOS 15.7.2.

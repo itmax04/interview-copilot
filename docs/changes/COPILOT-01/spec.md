@@ -1,6 +1,6 @@
 # COPILOT-01: Спецификация v1
 
-ID: COPILOT-01-spec · Статус: **proposed** · Версия: 1 · Дата: 2026-10-06 · Владелец: itmax04
+ID: COPILOT-01-spec · Статус: **accepted** (2026-10-06) · Версия: 1 · Дата: 2026-10-06 · Владелец: itmax04
 Связи: [intent.md](intent.md) (цель, границы, решения Q1–Q12) · [ADR-0001](../../decisions/ADR-0001-stack.md) (стек) ·
 [plan.md](plan.md) (реализация) · [evals/README.md](../../../evals/README.md) (наборы и пороги)
 Единственный источник требований — этот файл. В plan.md и handoff.md — только ссылки на R-/AC-номера.
