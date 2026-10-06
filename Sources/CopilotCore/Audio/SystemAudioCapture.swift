@@ -30,6 +30,8 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
     private let onSamples: SamplesHandler
     private let onStop: StopHandler
     private let lock = NSLock()
+    private var stats = (buffers: 0, empty: 0, samples: 0)
+    private var lastStatsLog = Date()
 
     public init(onSamples: @escaping SamplesHandler, onStop: @escaping StopHandler) {
         self.onSamples = onSamples
@@ -103,6 +105,7 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
         case .app(let app):
             let apps = content.applications.filter { AudioSourceResolver.belongsTo($0.bundleIdentifier, app: app.bundleID) }
             guard !apps.isEmpty else { throw AudioCaptureError.sourceNotRunning(app.name) }
+            Log.audio.info("filter apps: \(apps.map(\.bundleIdentifier).joined(separator: ","), privacy: .public)")
             return SCContentFilter(display: display, including: apps, exceptingWindows: [])
         case .allSystem:
             let me = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
@@ -117,6 +120,14 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
     public func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .audio, sampleBuffer.isValid else { return }
         let samples = converter.convert(sampleBuffer)
+        stats.buffers += 1
+        if samples.isEmpty { stats.empty += 1 } else { stats.samples += samples.count }
+        if Date().timeIntervalSince(lastStatsLog) >= 5 {
+            let fmt = sampleBuffer.formatDescription?.audioStreamBasicDescription
+            Log.audio.info("capture stats buffers=\(self.stats.buffers) empty=\(self.stats.empty) samples=\(self.stats.samples) rate=\(fmt?.mSampleRate ?? 0) ch=\(fmt?.mChannelsPerFrame ?? 0) flags=\(fmt?.mFormatFlags ?? 0) last=\(self.converter.lastError, privacy: .public)")
+            stats = (0, 0, 0)
+            lastStatsLog = Date()
+        }
         if !samples.isEmpty { onSamples(samples) }
     }
 

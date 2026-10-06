@@ -8,6 +8,8 @@ public final class PCMConverter: @unchecked Sendable {
                                                    channels: 1, interleaved: false)!
     private var converter: AVAudioConverter?
     private var sourceFormat: AVAudioFormat?
+    /// Последняя ошибка преобразования — для диагностики в логах (без звука).
+    public private(set) var lastError = ""
 
     public init() {}
 
@@ -21,7 +23,10 @@ public final class PCMConverter: @unchecked Sendable {
             converter = AVAudioConverter(from: format, to: Self.targetFormat)
             sourceFormat = format
         }
-        guard let converter else { return [] }
+        guard let converter else {
+            lastError = "no converter from \(format)"
+            return []
+        }
         let ratio = Self.targetSampleRate / format.sampleRate
         let capacity = AVAudioFrameCount(Double(buffer.frameLength) * ratio + 32)
         guard let out = AVAudioPCMBuffer(pcmFormat: Self.targetFormat, frameCapacity: capacity) else { return [] }
@@ -38,7 +43,10 @@ public final class PCMConverter: @unchecked Sendable {
             inputStatus.pointee = .haveData
             return buffer
         }
-        guard status != .error, let data = out.floatChannelData else { return [] }
+        guard status != .error, let data = out.floatChannelData else {
+            lastError = "AVAudioConverter \(error?.localizedDescription ?? "nil") from \(format)"
+            return []
+        }
         return Array(UnsafeBufferPointer(start: data[0], count: Int(out.frameLength)))
     }
 
@@ -51,7 +59,10 @@ public final class PCMConverter: @unchecked Sendable {
         pcm.frameLength = frames
         let status = CMSampleBufferCopyPCMDataIntoAudioBufferList(sampleBuffer, at: 0, frameCount: Int32(frames),
                                                                   into: pcm.mutableAudioBufferList)
-        guard status == noErr else { return [] }
+        guard status == noErr else {
+            lastError = "CopyPCMData status \(status)"
+            return []
+        }
         return convert(pcm)
     }
 }
