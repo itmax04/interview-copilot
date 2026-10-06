@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var settingsWindow = SettingsWindowController(model: model)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        MainMenu.install()
         let menuBar = MenuBarController(onAction: { [weak self] action in self?.handle(action) })
         menuBar.state = model.menuState
         model.onChange = { [weak self, weak menuBar] in
