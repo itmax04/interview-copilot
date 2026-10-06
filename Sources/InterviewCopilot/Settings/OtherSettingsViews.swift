@@ -7,8 +7,16 @@ struct ModelsSettingsView: View {
 
     var body: some View {
         Form {
+            Section {
+                ForEach(ProviderID.allCases, id: \.self) { p in
+                    if let warning = model.modelWarning(p) {
+                        Label(warning, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.caption)
+                    }
+                }
+            }
             Section("ID моделей") {
                 TextField("Gemini", text: $model.settings.modelIDs.gemini)
+                TextField("Gemini (запасная)", text: $model.settings.modelIDs.geminiBackup)
                 TextField("DeepSeek", text: $model.settings.modelIDs.deepseek)
                 TextField("Anthropic", text: $model.settings.modelIDs.anthropic)
             }

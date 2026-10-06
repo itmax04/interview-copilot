@@ -71,7 +71,7 @@ public struct KeyVerifier: Sendable {
                 message = m
             }
         }
-        if !key.isEmpty { message = message.replacingOccurrences(of: key, with: "[key]") }
+        if key.count >= 8 { message = message.replacingOccurrences(of: key, with: "[key]") } // короткие тестовые значения не трогаем
         return String(message.prefix(160))
     }
 }

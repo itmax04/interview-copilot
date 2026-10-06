@@ -1,6 +1,6 @@
 # Передача COPILOT-01
 
-Статус: in progress (P-06 завершён, далее P-07) · Обновлено: 2026-10-06 · Ветка: `feat/copilot-01` · Commit: см. `git log -1`
+Статус: in progress (P-07 завершён, далее P-08) · Обновлено: 2026-10-06 · Ветка: `feat/copilot-01` · Commit: см. `git log -1`
 Цель и границы: [intent.md](intent.md), требования: [spec.md](spec.md), шаги: [plan.md](plan.md).
 
 ## Сделано
@@ -87,8 +87,15 @@
   `BankController` в приложении (меню: число карточек, ошибка разбора, открытие базы и папки профиля), поиск по ходу
   с метрикой `bank_match`. Выбор модели и порога — ADR-0001 «Итоговые решения», п. 6.
 
+- 2026-10-06, P-07: перед кодом Anthropic прочитан skill `claude-api` (curl/examples.md, model-migration.md § Sonnet 5.5,
+  § refusal, § fallbacks «default»); Gemini — ai.google.dev (generate-content, thinking), DeepSeek — api-docs (chat completion).
+  Код: `LLMProvider`, `SSEClient`/`SSEParser`, `GeminiProvider`, `DeepSeekProvider`, `AnthropicProvider`, `MockProvider`,
+  `ProviderChain` (триггеры R-09, таймаут первого токена, отмена, рестарт текста), `ChainFactory` (бюджет, сильная модель),
+  `PromptBuilder` (R-11), `PIIFilter` (R-12), `AnswerRouter` (R-08), живая проверка `--smoke-llm`, проверка ID моделей при старте.
+  Фикстуры потоков — `Tests/CopilotCoreTests/Fixtures/`.
+
 ## Следующий шаг
-P-07: провайдеры и маршрутизатор (перед кодом Anthropic — skill `claude-api`; Gemini/DeepSeek — документация).
+P-08: карточка ответа и режимы в UI.
 
 ## Проверки
 | Шаг | Команда | Commit | Результат |
@@ -125,6 +132,9 @@ P-07: провайдеры и маршрутизатор (перед кодом 
 | P-06 | `scripts/run-evals.sh` (bank + turn) | P-06 | PASS: bank bge-m3 top-1 94,9%, ложные 0%, top-3 100%; turn 0% / 0% |
 | P-06 | `copilot-eval bank evals/bank/holdout.jsonl` | P-06 | PASS: top-1 91,7%, ложные 0% |
 | P-06 | `swift test` | P-06 | PASS: 74 теста в 12 наборах (+QuestionBank, BankMatcher со стаб-эмбеддером, ProfileStore, FileWatcher) |
+| P-07 | `swift test` | P-07 | PASS: 112 тестов в 16 наборах (+SSEClient/провайдеры на фикстурах, ProviderChain, AnswerRouter, PromptBuilder, PIIFilter) |
+| P-07 | `InterviewCopilot --smoke-llm` (Gemini, живой ключ) | P-07 | Список моделей: 62, `gemini-3.8-flash` есть. Стрим: формат запроса принят; `gemini-3.8-flash` — 503 «high demand» / 429 / первый токен 13–17 с; `gemini-flash-latest` — 2,1 с и 13 с; `gemini-flash-lite-latest` — 0,7 с; цепочка 3.8 → flash-latest отработала переход по 503 |
+| P-07 | DeepSeek, Anthropic (живые вызовы) | P-07 | NOT RUN — нет ключей; покрыто тестами на фикстурах и mock-провайдерах (AC-07) |
 | P-06 | Приложение: профиль, база, S-10 | P-06 | PASS: профиль скопирован, индекс 20 карточек; ошибка в questions.yaml → `parse error line=275`, прежняя база работает; новая карточка → 21, пересчёт только новой формулировки (137 мс); `footprint` 542 МБ |
 | P-01 | Запуск, иконка и меню видны (скриншот) | P-01 | Запуск debug-бинаря: процесс стартует без ошибок. Скриншот NOT RUN: у процесса исполнителя нет разрешения «Запись экрана» (`screencapture` даёт только обои), TCC не трогаю. Скриншот меню — на H-3/P-11 |
 
@@ -163,6 +173,12 @@ _(исполнитель дописывает: дата, шаг, решение,
 - 2026-10-06, P-06: в пример базы добавлены формулировки (по 6 на карточку), чтобы пройти AC-04; добавлен отложенный набор для проверки подгонки (AC-04).
 - 2026-10-06, P-06: пример профиля копируется чтением/записью, а не `copyItem`: клонирование файла из .app в iCloud Drive вешало главный поток (R-21).
 - 2026-10-06, P-06: «Edit resume & stories…» и «Open profile folder» открывают папку профиля в Finder, «Question bank…» — questions.yaml в редакторе по умолчанию (R-15).
+- 2026-10-06, P-07: Anthropic — `thinking: between_tools` + `effort: low` для подсказок и «сильной модели вручную» (минимальная задержка; `disabled` у Sonnet 5.5 — 400), адаптивное рассуждение + `effort: medium` для скриншотов; `fallbacks: "default"` с заголовком `server-side-fallback-2026-07-01`; температура не передаётся (R-13, skill `claude-api`).
+- 2026-10-06, P-07: неверный ключ (400/401/403) — переход к следующему провайдеру без повтора у этого же, в том числе без запасной модели того же провайдера (R-09, AC-07).
+- 2026-10-06, P-07: добавлена запасная модель Gemini (`gemini-flash-latest`, редактируется в Models) сразу после основной: основная `gemini-3.8-flash` на бесплатном ключе отвечала 503 «high demand». Цепочка остаётся Gemini → DeepSeek → Claude (R-09).
+- 2026-10-06, P-07: если Gemini не принимает `thinkingLevel` (400 про thinking), запрос повторяется без него — у разных Flash свой набор уровней (R-09).
+- 2026-10-06, P-07: частичный текст при отказе посреди ответа отбрасывается (`restart`), следующий провайдер отвечает заново (R-09, R-10).
+- 2026-10-06, P-07: ошибки провайдера чистятся от значения ключа, если ключ длиннее 8 символов (короткие тестовые значения не трогаются) (R-23).
 - 2026-10-06, P-00: whisper.cpp и llama.cpp берутся из сборочных тегов `bNNNN` (там лежат XCFramework), версия фиксируется URL + checksum (ADR-0001 п. 5, 9).
 
 ## Открытые вопросы

@@ -1,5 +1,6 @@
 import CopilotCore
 import Foundation
+import os
 import Observation
 
 /// Состояние приложения на главном потоке: настройки, наличие ключей, проверки ключей.
@@ -82,8 +83,30 @@ final class AppModel {
             let result = await verifier.verify(provider, key: key)
             checking.remove(provider)
             keyStatus[provider] = result.summary
-            if case .ok(let models) = result { availableModels[provider] = models }
+            if case .ok(let models) = result {
+                availableModels[provider] = models
+                let configured = settings.modelIDs.effective(provider)
+                Log.llm.info("model_ids provider=\(provider.rawValue, privacy: .public) configured=\(configured, privacy: .public) present=\(models.contains(configured)) count=\(models.count)")
+            }
+            onChange?()
         }
+    }
+
+    /// Проверка ID моделей по спискам провайдеров (R-09: «ID моделей проверяются по models-эндпоинтам»).
+    func verifyModelIDs() {
+        for p in ProviderID.allCases where hasKey[p] == true {
+            checkKey(p)
+        }
+    }
+
+    /// Предупреждение, если настроенный ID отсутствует в списке моделей провайдера.
+    func modelWarning(_ p: ProviderID) -> String? {
+        guard let models = availableModels[p], !models.isEmpty else { return nil }
+        var missing = [settings.modelIDs.effective(p)].filter { !models.contains($0) }
+        if p == .gemini, !settings.modelIDs.geminiBackup.isEmpty, !models.contains(settings.modelIDs.geminiBackup) {
+            missing.append(settings.modelIDs.geminiBackup)
+        }
+        return missing.isEmpty ? nil : "\(p.displayName): нет модели \(missing.joined(separator: ", ")) в списке провайдера"
     }
 
     func menuState(listening: ListeningStatus, profileName: String = "Profile", cardCount: Int = 0) -> MenuState {

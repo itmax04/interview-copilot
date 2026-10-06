@@ -25,10 +25,23 @@ public enum PanelFontSize: String, Codable, CaseIterable, Sendable {
 /// ID моделей провайдеров — R-09 (редактируются в Settings → Models). Проверяются по спискам моделей на P-07.
 public struct ModelIDs: Codable, Equatable, Sendable {
     public var gemini = "gemini-3.8-flash"
+    /// Запасная модель Gemini при 429/503 основной (P-07: gemini-3.8-flash отвечала 503 «high demand»); пусто — выключено.
+    public var geminiBackup = "gemini-flash-latest"
     public var deepseek = "deepseek-flash"
     public var anthropic = "claude-sonnet-5-5"
 
     public init() {}
+
+    enum CodingKeys: String, CodingKey { case gemini, geminiBackup, deepseek, anthropic }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = ModelIDs()
+        gemini = (try? c.decodeIfPresent(String.self, forKey: .gemini)) ?? d.gemini
+        geminiBackup = (try? c.decodeIfPresent(String.self, forKey: .geminiBackup)) ?? d.geminiBackup
+        deepseek = (try? c.decodeIfPresent(String.self, forKey: .deepseek)) ?? d.deepseek
+        anthropic = (try? c.decodeIfPresent(String.self, forKey: .anthropic)) ?? d.anthropic
+    }
 
     /// ID для запроса: без пробелов; пустое поле в настройках означает ID по умолчанию.
     public func effective(_ provider: ProviderID) -> String {

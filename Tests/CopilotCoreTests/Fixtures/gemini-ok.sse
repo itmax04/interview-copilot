@@ -1,0 +1,5 @@
+data: {"candidates":[{"content":{"parts":[{"text":"• Сім років"}],"role":"model"}}],"usageMetadata":{"promptTokenCount":900,"candidatesTokenCount":3},"modelVersion":"gemini-3.8-flash"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"думка","thought":true}],"role":"model"}}]}
+
+data: {"candidates":[{"content":{"parts":[{"text":" в iOS"}],"role":"model"},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":900,"candidatesTokenCount":12,"thoughtsTokenCount":5,"totalTokenCount":917}}

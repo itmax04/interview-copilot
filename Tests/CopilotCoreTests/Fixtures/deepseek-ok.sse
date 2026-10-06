@@ -1,0 +1,9 @@
+data: {"id":"1","object":"chat.completion.chunk","model":"deepseek-flash","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"1","object":"chat.completion.chunk","model":"deepseek-flash","choices":[{"index":0,"delta":{"content":"• Seven years"},"finish_reason":null}]}
+
+data: {"id":"1","object":"chat.completion.chunk","model":"deepseek-flash","choices":[{"index":0,"delta":{"content":" in iOS"},"finish_reason":"stop"}]}
+
+data: {"id":"1","object":"chat.completion.chunk","model":"deepseek-flash","choices":[],"usage":{"prompt_tokens":700,"completion_tokens":9,"prompt_cache_hit_tokens":512}}
+
+data: [DONE]

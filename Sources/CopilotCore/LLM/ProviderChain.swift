@@ -1,0 +1,206 @@
+import Foundation
+
+/// События цепочки для UI и учёта (R-09, R-10, R-20).
+public enum ChainEvent: Sendable, Equatable {
+    /// Начата попытка у провайдера.
+    case attempt(ProviderID, model: String)
+    /// Фактическая модель ответа (метка «Gemini · generated», S-03/S-04).
+    case model(ProviderID, String)
+    /// Первый токен; `afterMs` — от начала запроса цепочки (метрика AC-03 считается от конца хода снаружи).
+    case firstToken(ProviderID, afterMs: Double)
+    case text(String)
+    /// Предыдущий частичный текст отброшен: ответ начинается заново у другого провайдера.
+    case restart(ProviderID)
+    /// Провайдер не ответил; `invalidKey` — показать «ключ недействителен» в настройках (R-09).
+    case providerFailed(ProviderID, LLMError)
+    case usage(ProviderID, model: String, TokenUsage)
+    case finished(ProviderID, model: String)
+    /// Ни один провайдер не ответил (S-04: «Модели недоступны: <причина>»).
+    case exhausted(reason: String)
+}
+
+/// Цепочка провайдеров с автопереходом — R-09.
+/// Порядок из настроек, провайдеры без ключа пропускаются; переход при 429/5xx, сетевой ошибке, отказе модели,
+/// неверном ключе (400/401/403 — без повтора у того же провайдера) и если первый токен не пришёл за `firstTokenTimeout`.
+public struct ProviderChain: Sendable {
+    public struct Step: Sendable {
+        public var provider: LLMProvider
+        public var model: String
+        public var key: String?
+
+        public init(provider: LLMProvider, model: String, key: String?) {
+            self.provider = provider
+            self.model = model
+            self.key = key
+        }
+    }
+
+    public var steps: [Step]
+    public var firstTokenTimeout: Double
+
+    public init(steps: [Step], firstTokenTimeout: Double = 4) {
+        self.steps = steps
+        self.firstTokenTimeout = firstTokenTimeout
+    }
+
+    /// Запуск. Отмена задачи-потребителя (новый ход, R-10) прерывает текущий запрос.
+    public func run(_ request: LLMRequest) -> AsyncStream<ChainEvent> {
+        AsyncStream { continuation in
+            let task = Task {
+                let start = DispatchTime.now().uptimeNanoseconds
+                var reasons: [String] = []
+                let usable = steps.filter { $0.key?.isEmpty == false }
+                if usable.isEmpty {
+                    continuation.yield(.exhausted(reason: "нет ключей"))
+                    continuation.finish()
+                    return
+                }
+                var attemptIndex = 0
+                var invalidKey = Set<ProviderID>()
+                for step in usable {
+                    if Task.isCancelled { break }
+                    let pid = step.provider.id
+                    // 400/401/403 — у этого провайдера больше не пробуем, в том числе запасную модель (R-09).
+                    if invalidKey.contains(pid) { continue }
+                    continuation.yield(.attempt(pid, model: step.model))
+                    if attemptIndex > 0 { continuation.yield(.restart(pid)) }
+                    attemptIndex += 1
+                    do {
+                        try await Self.runStep(step, request: request, timeout: firstTokenTimeout, start: start, continuation: continuation)
+                        continuation.finish()
+                        return
+                    } catch let error as LLMError {
+                        if error == .cancelled || Task.isCancelled { break }
+                        Log.llm.error("provider \(pid.rawValue, privacy: .public) failed: \(error.description, privacy: .public)")
+                        continuation.yield(.providerFailed(pid, error))
+                        reasons.append("\(pid.displayName) \(step.model): \(error.description)")
+                        if error.isInvalidKey { invalidKey.insert(pid) }
+                        guard error.triggersFallback else { break }
+                    } catch {
+                        if Task.isCancelled { break }
+                        let e = LLMError.network(error.localizedDescription)
+                        continuation.yield(.providerFailed(pid, e))
+                        reasons.append("\(pid.displayName) \(step.model): \(e.description)")
+                    }
+                }
+                if !Task.isCancelled {
+                    continuation.yield(.exhausted(reason: reasons.joined(separator: "; ")))
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// Один провайдер; бросает ошибку, если нужен переход. Таймаут первого токена — гонка с часами.
+    static func runStep(_ step: Step, request: LLMRequest, timeout: Double, start: UInt64,
+                        continuation: AsyncStream<ChainEvent>.Continuation) async throws {
+        let pid = step.provider.id
+        let stream = step.provider.stream(request, model: step.model, key: step.key ?? "")
+        let gotFirst = FirstTokenFlag()
+        let stepStart = DispatchTime.now().uptimeNanoseconds
+
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask {
+                var model = step.model
+                var usage: TokenUsage?
+                for try await event in stream {
+                    switch event {
+                    case .model(let m):
+                        model = m
+                        continuation.yield(.model(pid, m))
+                    case .text(let t):
+                        if gotFirst.set() {
+                            let ms = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6
+                            continuation.yield(.firstToken(pid, afterMs: ms))
+                        }
+                        continuation.yield(.text(t))
+                    case .usage(let u):
+                        usage = u
+                    case .done:
+                        break
+                    }
+                }
+                if let usage { continuation.yield(.usage(pid, model: model, usage)) }
+                if !gotFirst.isSet { throw LLMError.badResponse("пустой ответ") }
+                continuation.yield(.finished(pid, model: model))
+            }
+            group.addTask {
+                // Сторож первого токена (R-09: 4 с).
+                while true {
+                    try await Task.sleep(for: .milliseconds(50))
+                    if gotFirst.isSet { return }
+                    if Double(DispatchTime.now().uptimeNanoseconds - stepStart) / 1e9 >= timeout {
+                        throw LLMError.firstTokenTimeout
+                    }
+                }
+            }
+            do {
+                // Ждём завершения потока; сторож завершится сам после первого токена.
+                for try await _ in group {}
+            } catch {
+                group.cancelAll()
+                throw error
+            }
+        }
+    }
+}
+
+final class FirstTokenFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = false
+    var isSet: Bool { lock.withLock { value } }
+    /// true, если флаг установлен этим вызовом.
+    func set() -> Bool {
+        lock.withLock {
+            if value { return false }
+            value = true
+            return true
+        }
+    }
+}
+
+/// Сборка цепочки из настроек: порядок, ID моделей, ключи; при достигнутом бюджете платные провайдеры
+/// выключены (R-18 Budget), Gemini Free продолжает работать.
+public enum ChainFactory {
+    public static func providers(transport: StreamingTransport = URLSessionStreamingTransport()) -> [ProviderID: LLMProvider] {
+        [.gemini: GeminiProvider(transport: transport), .deepseek: DeepSeekProvider(transport: transport),
+         .anthropic: AnthropicProvider(transport: transport)]
+    }
+
+    public static func isPaid(_ p: ProviderID, settings: AppSettings) -> Bool {
+        p != .gemini || !settings.geminiFreeTier
+    }
+
+    public static func chain(settings: AppSettings, secrets: SecretStore,
+                             providers: [ProviderID: LLMProvider]) -> ProviderChain {
+        var steps: [ProviderChain.Step] = []
+        for p in settings.chain {
+            guard let provider = providers[p] else { continue }
+            if settings.paidProvidersSuspended && isPaid(p, settings: settings) { continue }
+            let key = try? secrets.get(p)
+            steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: key))
+            // Запасная модель Gemini сразу после основной: при перегрузке основной ответ всё равно бесплатный.
+            let backup = settings.modelIDs.geminiBackup.trimmingCharacters(in: .whitespaces)
+            if p == .gemini, !backup.isEmpty, backup != settings.modelIDs.effective(.gemini) {
+                steps.append(ProviderChain.Step(provider: provider, model: backup, key: key))
+            }
+        }
+        return ProviderChain(steps: steps, firstTokenTimeout: settings.firstTokenTimeout)
+    }
+
+    /// Сильная модель (S-05, S-06): только она, без цепочки. Без ключа — nil (кнопка неактивна).
+    public static func strong(settings: AppSettings, secrets: SecretStore, providers: [ProviderID: LLMProvider],
+                              fallbackToGemini: Bool) -> ProviderChain? {
+        var order = [settings.strongProvider]
+        if fallbackToGemini && settings.strongProvider != .gemini { order.append(.gemini) }
+        let steps = order.compactMap { p -> ProviderChain.Step? in
+            guard let provider = providers[p], let key = try? secrets.get(p), !key.isEmpty else { return nil }
+            if settings.paidProvidersSuspended && isPaid(p, settings: settings) { return nil }
+            return ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: key)
+        }
+        guard let first = steps.first else { return nil }
+        // Скриншот без ключа Anthropic уходит в Gemini (S-06); ручной вызов — только сильная модель (S-05).
+        return ProviderChain(steps: fallbackToGemini ? steps : [first], firstTokenTimeout: max(settings.firstTokenTimeout, 8))
+    }
+}

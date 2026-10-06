@@ -17,6 +17,11 @@ enum InterviewCopilotMain {
             }
         }
 
+        if args.contains("--smoke-llm") {
+            setvbuf(stdout, nil, _IOLBF, 0)
+            exit(SmokeTest.run())
+        }
+
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
