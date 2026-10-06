@@ -86,8 +86,8 @@ final class AppModel {
         }
     }
 
-    var menuState: MenuState {
-        MenuState(listening: .idle, mode: settings.mode, chain: settings.chain, language: settings.language,
+    func menuState(listening: ListeningStatus) -> MenuState {
+        MenuState(listening: listening, mode: settings.mode, chain: settings.chain, language: settings.language,
                   strongModelName: settings.strongProvider.displayName)
     }
 }

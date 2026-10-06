@@ -93,7 +93,9 @@ public enum MenuLayout {
         let chainTitle = s.chain.map(\.displayName).joined(separator: " → ")
         return [
             [
-                MenuItemSpec(.listeningSource, listeningTitle, symbol: "circle.fill", submenu: true, statusDot: s.listening.dot),
+                // Без разрешения — пункт без подменю: клик открывает окно разрешений (AC-13).
+                MenuItemSpec(.listeningSource, listeningTitle, symbol: "circle.fill",
+                             submenu: s.listening != .noPermission, statusDot: s.listening.dot),
                 MenuItemSpec(.togglePause, paused ? "Resume listening" : "Pause listening",
                              symbol: paused ? "play.fill" : "pause.fill", shortcut: .ctrlOpt("p")),
             ],

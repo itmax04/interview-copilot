@@ -7,6 +7,9 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
     private let onAction: (MenuAction) -> Void
+    /// Текущая настройка источника и запущенные приложения — для подменю «Listening» (R-01).
+    var sourceMenuData: () -> (AudioSourceSetting, [RunningAppInfo]) = { (.auto, []) }
+    var onSelectSource: (AudioSourceSetting) -> Void = { _ in }
     var state = MenuState() {
         didSet { rebuild() }
     }
@@ -74,9 +77,18 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         }
         switch action {
         case .listeningSource:
-            add("Auto", checked: true)
+            let (setting, running) = sourceMenuData()
+            sub.addItem(sourceItem("Auto (Zoom → Chrome → Telegram)", .auto, checked: setting == .auto))
+            if !running.isEmpty { sub.addItem(.separator()) }
+            var shown = Set<String>()
+            for app in running.sorted(by: { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending })
+            where shown.insert(app.bundleID).inserted {
+                let value = AudioSourceSetting.app(bundleID: app.bundleID, name: app.name)
+                let checked: Bool = if case .app(let id, _) = setting { id == app.bundleID } else { false }
+                sub.addItem(sourceItem(app.name, value, checked: checked))
+            }
             sub.addItem(.separator())
-            add("All system audio")
+            sub.addItem(sourceItem("All system audio", .allSystem, checked: setting == .allSystem))
         case .mode:
             for mode in AnswerMode.allCases { add(mode.title, checked: mode == state.mode) }
         case .models:
@@ -91,6 +103,24 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             break
         }
         return sub
+    }
+
+    private final class SourceBox: NSObject {
+        let value: AudioSourceSetting
+        init(_ value: AudioSourceSetting) { self.value = value }
+    }
+
+    private func sourceItem(_ title: String, _ value: AudioSourceSetting, checked: Bool) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(sourceSelected(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = SourceBox(value)
+        item.state = checked ? .on : .off
+        return item
+    }
+
+    @objc private func sourceSelected(_ sender: NSMenuItem) {
+        guard let box = sender.representedObject as? SourceBox else { return }
+        onSelectSource(box.value)
     }
 
     @objc private func itemSelected(_ sender: NSMenuItem) {

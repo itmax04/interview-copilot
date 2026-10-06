@@ -28,18 +28,42 @@ enum InterviewCopilotMain {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = AppModel()
+    private lazy var listening = ListeningController(model: model)
     private var menuBar: MenuBarController?
     private lazy var settingsWindow = SettingsWindowController(model: model)
+    private lazy var permissionsWindow = PermissionsWindowController(listening: listening)
+    private var lastAudioSource: AudioSourceSetting?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenu.install()
         let menuBar = MenuBarController(onAction: { [weak self] action in self?.handle(action) })
-        menuBar.state = model.menuState
-        model.onChange = { [weak self, weak menuBar] in
-            guard let self else { return }
-            menuBar?.state = self.model.menuState
+        menuBar.sourceMenuData = { [weak self] in
+            (self?.model.settings.audioSource ?? .auto, ListeningController.runningApps())
         }
+        menuBar.onSelectSource = { [weak self] value in self?.model.settings.audioSource = value }
         self.menuBar = menuBar
+        lastAudioSource = model.settings.audioSource
+
+        model.onChange = { [weak self] in
+            guard let self else { return }
+            if self.model.settings.audioSource != self.lastAudioSource {
+                self.lastAudioSource = self.model.settings.audioSource
+                self.listening.sourceSettingChanged()
+            }
+            self.refreshMenu()
+        }
+        listening.onChange = { [weak self] in self?.refreshMenu() }
+        refreshMenu()
+
+        listening.start()
+        if listening.phase == .noPermission {
+            // AC-13: без разрешения — понятное состояние и инструкция, без падения.
+            permissionsWindow.show()
+        }
+    }
+
+    private func refreshMenu() {
+        menuBar?.state = model.menuState(listening: listening.listeningStatus)
     }
 
     private func handle(_ action: MenuAction) {
@@ -48,8 +72,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow.show()
         case .quit:
             NSApp.terminate(nil)
+        case .togglePause:
+            listening.togglePause()
+        case .listeningSource:
+            permissionsWindow.show()
         default:
-            // Остальные действия подключаются на шагах P-03…P-10.
+            // Остальные действия подключаются на шагах P-05…P-10.
             break
         }
     }

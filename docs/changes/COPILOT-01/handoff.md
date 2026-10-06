@@ -1,6 +1,6 @@
 # Передача COPILOT-01
 
-Статус: in progress (P-02: код готов, ожидание H-2) · Обновлено: 2026-10-06 · Ветка: `feat/copilot-01` · Commit: см. `git log -1`
+Статус: in progress (P-03: код готов, ожидание H-3) · Обновлено: 2026-10-06 · Ветка: `feat/copilot-01` · Commit: см. `git log -1`
 Цель и границы: [intent.md](intent.md), требования: [spec.md](spec.md), шаги: [plan.md](plan.md).
 
 ## Сделано
@@ -47,9 +47,18 @@
   Keys/Models/Audio/Bank/Privacy/Panel/Hotkeys/Budget. Перед кодом Anthropic прочитан skill `claude-api` (curl/examples.md);
   эндпоинты Gemini и DeepSeek сверены с ai.google.dev/api/models и api-docs.deepseek.com/api/list-models.
 
+- 2026-10-06, H-2 пройдена: владелец сохранил ключ Gemini и нажал «Проверить» → «OK · моделей: 62» (скриншот владельца).
+  `security find-generic-password -s com.itmax04.interviewcopilot -a gemini` (без `-w`) — запись есть; значение не читалось.
+- 2026-10-06, P-03 (код): `AudioSourceResolver` (Auto: Zoom → Chrome → Telegram, помощники приложения по префиксу bundle ID),
+  `SystemAudioCapture` (SCStream только аудио, 16 кГц моно, `excludesCurrentProcessAudio`, смена источника через
+  `updateContentFilter`), `PCMConverter`, `AudioRingBuffer` (≤ 30 с), `EnergyVAD`, `MicActivityDetector` (AVAudioEngine),
+  `Permissions`, `Log` (os_log), `ListeningController`, окно разрешений с индикатором уровня, подменю «Listening» со списком
+  запущенных приложений, пауза из меню.
+
 ## Следующий шаг
-H-2: владелец вводит ключ Gemini в Settings → Keys и нажимает «Проверить». После «готово»: исполнитель проверяет,
-что ключ есть в Keychain (без чтения значения в лог), и смотрит результат проверки; затем P-03.
+H-3: (1) владелец запускает приложение без разрешений — проверка AC-13; (2) выдаёт «Запись экрана и системного звука»
+и «Микрофон», перезапускает приложение; (3) включает видео со звуком в Chrome. Исполнитель смотрит `log show`
+(`level_db`, `capture started`), затем P-04.
 
 ## Проверки
 | Шаг | Команда | Commit | Результат |
@@ -67,6 +76,9 @@ H-2: владелец вводит ключ Gemini в Settings → Keys и на�
 | P-02 | `swift test` | P-02 | PASS: 22 теста в 4 наборах (MenuLayout, SettingsStore, KeychainStore — настоящая Связка ключей, тестовый service, KeyVerifier — mock) |
 | P-02 | `scripts/build-app.sh` | P-02 | PASS, `Authority=InterviewCopilot` |
 | P-02 | `scripts/secret-scan.sh` | P-02 | PASS: «0 findings» |
+| P-03 | `swift test` | P-03 | PASS: 36 тестов в 7 наборах (+AudioSourceResolver, AudioRingBuffer, EnergyVAD) |
+| P-03 | `scripts/build-app.sh` | P-03 | PASS |
+| P-03 | Запуск без разрешения | P-03 | PASS (лог): `no screen capture permission`, процесс жив, открыто окно разрешений; визуально — владелец при H-3 (AC-13) |
 | P-01 | Запуск, иконка и меню видны (скриншот) | P-01 | Запуск debug-бинаря: процесс стартует без ошибок. Скриншот NOT RUN: у процесса исполнителя нет разрешения «Запись экрана» (`screencapture` даёт только обои), TCC не трогаю. Скриншот меню — на H-3/P-11 |
 
 ## Решения исполнителя
@@ -85,6 +97,11 @@ _(исполнитель дописывает: дата, шаг, решение,
 - 2026-10-06, P-02: Keychain — классическая (файловая) связка, не data protection keychain: для неё нужен entitlement keychain-access-groups и профиль подписи, которых у локальной подписи нет.
 - 2026-10-06, H-2: у приложения-агента нет главного меню, поэтому ⌘V не вставлял ключ в поле. Добавлено невидимое главное меню с пунктами Edit (`MainMenu.swift`).
 - 2026-10-06, P-02: вкладка Hotkeys пока показывает сочетания; регистрация, проверка занятости и переназначение — P-05 (R-17).
+- 2026-10-06, P-03: Auto учитывает оба клиента Telegram (`ru.keepcoder.Telegram`, `org.telegram.desktop`); звук приложения берётся вместе с его помощниками (`com.google.Chrome.helper…`), иначе вкладки Chrome не слышно (R-01).
+- 2026-10-06, P-03: уровень шума в VAD — минимум энергии за 3 с, а не экспоненциальное сглаживание: постоянный фон с первой секунды иначе считался речью (тест `steadyNoiseIsNotSpeech`) (R-02).
+- 2026-10-06, P-03: слушание стартует само при запуске, если есть разрешение и найден источник; при отсутствии разрешения сразу открывается окно разрешений, системный запрос — только по кнопке «Запросить» (AC-13, S-09).
+- 2026-10-06, P-03: без разрешения пункт «Listening» без подменю — клик открывает окно разрешений (R-15, AC-13).
+- 2026-10-06, P-03: в zsh `log` — встроенная команда; для логов приложения использовать `/usr/bin/log show --predicate 'subsystem == "com.itmax04.interviewcopilot"' --info`.
 - 2026-10-06, P-00: whisper.cpp и llama.cpp берутся из сборочных тегов `bNNNN` (там лежат XCFramework), версия фиксируется URL + checksum (ADR-0001 п. 5, 9).
 
 ## Открытые вопросы

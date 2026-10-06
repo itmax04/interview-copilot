@@ -41,7 +41,9 @@ struct MenuLayoutTests {
         let paused = MenuLayout.sections(for: MenuState(listening: .paused(source: "Chrome")))[0]
         #expect(paused[0].statusDot == .gray)
         #expect(paused[1].title == "Resume listening")
-        #expect(MenuLayout.sections(for: MenuState(listening: .noPermission))[0][0].statusDot == .red)
+        let noPermission = MenuLayout.sections(for: MenuState(listening: .noPermission))[0][0]
+        #expect(noPermission.statusDot == .red)
+        #expect(noPermission.hasSubmenu == false)
     }
 
     @Test func dynamicTitles() {
