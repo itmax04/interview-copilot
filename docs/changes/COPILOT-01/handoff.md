@@ -1,6 +1,6 @@
 # Передача COPILOT-01
 
-Статус: in progress (P-01 завершён, далее P-02) · Обновлено: 2026-10-06 · Ветка: `feat/copilot-01` · Commit: см. `git log -1`
+Статус: in progress (P-02: код готов, ожидание H-2) · Обновлено: 2026-10-06 · Ветка: `feat/copilot-01` · Commit: см. `git log -1`
 Цель и границы: [intent.md](intent.md), требования: [spec.md](spec.md), шаги: [plan.md](plan.md).
 
 ## Сделано
@@ -41,8 +41,15 @@
   `security find-identity -p codesigning` → 1 identity, CSSMERR_TP_NOT_TRUSTED — нормально для самоподписанного, trust не трогаю).
   `scripts/build-app.sh` собирает и подписывает `dist/InterviewCopilot.app`, приложение запускается.
 
+- 2026-10-06, P-02 (код): `AppSettings`/`SettingsStore` (JSON в UserDefaults, значения по умолчанию из spec, ограничение диапазонов),
+  `KeychainStore` (generic password, service `com.itmax04.interviewcopilot`), `ProviderEndpoints` + `KeyVerifier`
+  («Проверить» = запрос списка моделей), `HTTPTransport` с mock для тестов, `AppModel`, вкладки настроек
+  Keys/Models/Audio/Bank/Privacy/Panel/Hotkeys/Budget. Перед кодом Anthropic прочитан skill `claude-api` (curl/examples.md);
+  эндпоинты Gemini и DeepSeek сверены с ai.google.dev/api/models и api-docs.deepseek.com/api/list-models.
+
 ## Следующий шаг
-P-02: настройки и ключи (R-18, R-23), затем H-2.
+H-2: владелец вводит ключ Gemini в Settings → Keys и нажимает «Проверить». После «готово»: исполнитель проверяет,
+что ключ есть в Keychain (без чтения значения в лог), и смотрит результат проверки; затем P-03.
 
 ## Проверки
 | Шаг | Команда | Commit | Результат |
@@ -56,6 +63,10 @@ P-02: настройки и ключи (R-18, R-23), затем H-2.
 | P-01 | `scripts/build-app.sh` | P-01 | FAIL ожидаемо: нет сертификата → понятная ошибка; повтор после H-1 |
 | H-1 | `scripts/build-app.sh` | P-01 fix | PASS: `dist/InterviewCopilot.app`, `codesign -dvv` → `Identifier=com.itmax04.interviewcopilot`, `Authority=InterviewCopilot`; `codesign --verify` → valid on disk, satisfies DR |
 | H-1 | `open dist/InterviewCopilot.app` | P-01 fix | PASS: процесс запущен (pgrep); видимость иконки — подтверждение владельца |
+| P-02 | `swift build` | P-02 | PASS |
+| P-02 | `swift test` | P-02 | PASS: 22 теста в 4 наборах (MenuLayout, SettingsStore, KeychainStore — настоящая Связка ключей, тестовый service, KeyVerifier — mock) |
+| P-02 | `scripts/build-app.sh` | P-02 | PASS, `Authority=InterviewCopilot` |
+| P-02 | `scripts/secret-scan.sh` | P-02 | PASS: «0 findings» |
 | P-01 | Запуск, иконка и меню видны (скриншот) | P-01 | Запуск debug-бинаря: процесс стартует без ошибок. Скриншот NOT RUN: у процесса исполнителя нет разрешения «Запись экрана» (`screencapture` даёт только обои), TCC не трогаю. Скриншот меню — на H-3/P-11 |
 
 ## Решения исполнителя
@@ -68,6 +79,11 @@ _(исполнитель дописывает: дата, шаг, решение,
 - 2026-10-06, P-01: `secret-scan.sh` не проверяет email/телефоны в `profile.example/` и `evals/` (синтетика, AC-06); разрешены адреса `example.*`, `users.noreply.github.com`, `anthropic.com`.
 - 2026-10-06, H-1: `build-app.sh` принимает сертификат «InterviewCopilot Dev» (ADR-0001 п. 3) или «InterviewCopilot» (фактическое имя после H-1); переопределение — `CODESIGN_IDENTITY`. Пересоздавать сертификат не просил: на поведение TCC имя не влияет.
 - 2026-10-06, H-1: репозиторий лежит на «Рабочем столе» в iCloud Drive; File Provider вешает `com.apple.FinderInfo`, и `codesign` падает. Бандл собирается и подписывается во временной папке вне iCloud, затем `ditto --noextattr` в `dist/`; финальная проверка `codesign --verify` без `--strict` (AC-14).
+- 2026-10-06, P-02: тексты окна настроек — по-русски (spec называет кнопки «Проверить», «Удалить», «ключ недействителен»), названия вкладок и меню — по-английски, как в R-15/R-18 и на картинке.
+- 2026-10-06, P-02: Gemini авторизуется заголовком `x-goog-api-key`, а не параметром `?key=` из примера документации — R-23 требует ключ только в заголовках.
+- 2026-10-06, P-02: «Проверить» при 429 — «лимит запросов», а не «ключ недействителен»; 400/401/403 — «ключ недействителен» (R-09). Текст ошибки провайдера очищается от значения ключа.
+- 2026-10-06, P-02: Keychain — классическая (файловая) связка, не data protection keychain: для неё нужен entitlement keychain-access-groups и профиль подписи, которых у локальной подписи нет.
+- 2026-10-06, P-02: вкладка Hotkeys пока показывает сочетания; регистрация, проверка занятости и переназначение — P-05 (R-17).
 - 2026-10-06, P-00: whisper.cpp и llama.cpp берутся из сборочных тегов `bNNNN` (там лежат XCFramework), версия фиксируется URL + checksum (ADR-0001 п. 5, 9).
 
 ## Открытые вопросы

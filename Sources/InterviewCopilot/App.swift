@@ -27,11 +27,18 @@ enum InterviewCopilotMain {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let model = AppModel()
     private var menuBar: MenuBarController?
-    private let settingsWindow = SettingsWindowController()
+    private lazy var settingsWindow = SettingsWindowController(model: model)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        menuBar = MenuBarController(onAction: { [weak self] action in self?.handle(action) })
+        let menuBar = MenuBarController(onAction: { [weak self] action in self?.handle(action) })
+        menuBar.state = model.menuState
+        model.onChange = { [weak self, weak menuBar] in
+            guard let self else { return }
+            menuBar?.state = self.model.menuState
+        }
+        self.menuBar = menuBar
     }
 
     private func handle(_ action: MenuAction) {
