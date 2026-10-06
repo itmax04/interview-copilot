@@ -304,7 +304,7 @@ struct ProviderChainTests {
 
     @Test func factoryAddsGeminiBackup() {
         let chain = ChainFactory.chain(settings: AppSettings(), secrets: InMemorySecretStore([.gemini: "g"]), providers: ChainFactory.providers())
-        #expect(chain.steps.map(\.model) == ["gemini-3.8-flash", "gemini-flash-latest", "deepseek-flash", "claude-sonnet-5-5"])
+        #expect(chain.steps.map(\.model) == ["gemini-3.8-flash", "gemini-flash-lite-latest", "deepseek-flash", "claude-sonnet-5-5"])
     }
 
     @Test func budgetSuspendsPaidProviders() {
@@ -323,7 +323,7 @@ struct ProviderChainTests {
         #expect(ChainFactory.strong(settings: s, secrets: noKey, providers: ChainFactory.providers(), fallbackToGemini: false) == nil)
         // Скриншот без ключа Anthropic — в Gemini (S-06).
         let shot = ChainFactory.strong(settings: s, secrets: noKey, providers: ChainFactory.providers(), fallbackToGemini: true)
-        #expect(shot?.steps.map(\.provider.id) == [.gemini])
+        #expect(shot?.steps.map(\.model) == ["gemini-3.8-flash", "gemini-flash-lite-latest"])
         let withKey = InMemorySecretStore([.gemini: "g", .anthropic: "a"])
         #expect(ChainFactory.strong(settings: s, secrets: withKey, providers: ChainFactory.providers(), fallbackToGemini: false)?
             .steps.map(\.provider.id) == [.anthropic])

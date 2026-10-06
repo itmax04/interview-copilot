@@ -97,6 +97,26 @@ struct TurnDetectorTests {
         #expect(run(&d, from: 2500, until: 5000)?.firedAt == 3200)
     }
 
+    @Test func echoDetectedByMicFirstIsIgnored() {
+        // Микрофон услышал динамики на 200 мс раньше, чем VAD захвата.
+        var d = TurnDetector()
+        d.setOwnerSpeaking(true, at: 800)
+        d.interviewerStartedSpeaking(at: 1000)
+        d.interviewerStoppedSpeaking(at: 3000)
+        d.phraseFinal("Tell me about yourself and your background.", speechEnd: 3000)
+        #expect(run(&d, from: 3000, until: 5000)?.firedAt == 3700)
+    }
+
+    @Test func realOwnerSpeechBeforeQuestionStillCounts() {
+        // Владелец говорил задолго до вопроса и продолжает — это не эхо.
+        var d = TurnDetector()
+        d.setOwnerSpeaking(true, at: 0)
+        d.interviewerStartedSpeaking(at: 2000)
+        d.interviewerStoppedSpeaking(at: 4000)
+        d.phraseFinal("Could you repeat your last point please?", speechEnd: 4000)
+        #expect(run(&d, from: 4000, until: 6000) == nil)
+    }
+
     @Test func echoTailRightAfterStopIsIgnored() {
         var d = TurnDetector()
         d.interviewerStartedSpeaking(at: 0)

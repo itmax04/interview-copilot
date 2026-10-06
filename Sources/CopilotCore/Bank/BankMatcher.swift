@@ -5,6 +5,11 @@ import Foundation
 public struct CardScore: Equatable, Sendable {
     public var card: BankCard
     public var score: Double
+
+    public init(card: BankCard, score: Double) {
+        self.card = card
+        self.score = score
+    }
 }
 
 /// Результат поиска по базе — R-07.
@@ -13,6 +18,11 @@ public struct BankMatch: Equatable, Sendable {
     public var matched: CardScore?
     /// Три ближайшие карточки (для «Нет в базе», S-02, и как основа для генерации, R-11).
     public var top: [CardScore]
+
+    public init(matched: CardScore?, top: [CardScore]) {
+        self.matched = matched
+        self.top = top
+    }
 }
 
 /// Индекс базы: эмбеддинги всех формулировок всех карточек. Поиск локальный, без сети (R-07).

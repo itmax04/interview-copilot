@@ -39,9 +39,24 @@ final class AppModel {
         refreshKeys()
     }
 
+    /// Наличие ключей проверяется в фоне: пока висит системный запрос Связки ключей, любой вызов к ней ждёт,
+    /// а главный поток (меню, панель) ждать не должен.
     func refreshKeys() {
-        for p in ProviderID.allCases { hasKey[p] = secrets.contains(p) }
+        let secrets = self.secrets
+        Task {
+            let found = await Task.detached { Dictionary(uniqueKeysWithValues: ProviderID.allCases.map { ($0, secrets.contains($0)) }) }.value
+            if found != hasKey {
+                hasKey = found
+                onChange?()
+            }
+            if verifyAfterRefresh {
+                verifyAfterRefresh = false
+                for p in ProviderID.allCases where hasKey[p] == true { checkKey(p) }
+            }
+        }
     }
+
+    private var verifyAfterRefresh = false
 
     func saveKey(_ value: String, for provider: ProviderID) {
         do {
@@ -52,6 +67,11 @@ final class AppModel {
         }
         refreshKeys()
         onChange?()
+    }
+
+    /// Провайдер ответил 400/401/403 — показать «ключ недействителен» в настройках (R-09).
+    func markInvalidKey(_ provider: ProviderID, _ error: LLMError) {
+        keyStatus[provider] = "Ключ недействителен: \(error.description)"
     }
 
     func deleteKey(_ provider: ProviderID) {
@@ -68,18 +88,17 @@ final class AppModel {
 
     func checkKey(_ provider: ProviderID) {
         guard !checking.contains(provider) else { return }
-        let key: String?
-        do { key = try secrets.get(provider) } catch {
-            keyStatus[provider] = "\(error)"
-            return
-        }
-        guard let key else {
-            keyStatus[provider] = "Нет ключа"
-            return
-        }
         checking.insert(provider)
         keyStatus[provider] = "Проверяю…"
+        let secrets = self.secrets
         Task {
+            // Чтение Связки ключей — не на главном потоке.
+            let read = await Task.detached { () -> Result<String?, Error> in Result { try secrets.get(provider) } }.value
+            guard case .success(let value) = read, let key = value else {
+                checking.remove(provider)
+                if case .failure(let error) = read { keyStatus[provider] = "\(error)" } else { keyStatus[provider] = "Нет ключа" }
+                return
+            }
             let result = await verifier.verify(provider, key: key)
             checking.remove(provider)
             keyStatus[provider] = result.summary
@@ -94,9 +113,8 @@ final class AppModel {
 
     /// Проверка ID моделей по спискам провайдеров (R-09: «ID моделей проверяются по models-эндпоинтам»).
     func verifyModelIDs() {
-        for p in ProviderID.allCases where hasKey[p] == true {
-            checkKey(p)
-        }
+        verifyAfterRefresh = true
+        refreshKeys()
     }
 
     /// Предупреждение, если настроенный ID отсутствует в списке моделей провайдера.

@@ -10,6 +10,14 @@ public struct Turn: Sendable, Equatable {
     public var firedAt: Double
     /// ⌃⌥↩ «Answer now» — ход по команде владельца.
     public var forced: Bool
+
+    public init(id: Int, text: String, speechEndedAt: Double, firedAt: Double, forced: Bool) {
+        self.id = id
+        self.text = text
+        self.speechEndedAt = speechEndedAt
+        self.firedAt = firedAt
+        self.forced = forced
+    }
 }
 
 /// Определение хода — R-05, S-07. Чистая логика со временем «снаружи» (мс), чтобы её можно было прогнать на eval `turn`.
@@ -27,6 +35,9 @@ public struct TurnDetector: Sendable {
         /// этого времени после неё (рассинхрон захвата и микрофона) считается эхом и не учитывается
         /// (handoff, «Известная проблема» P-03). Эхо начинается вместе с речью собеседника, а не после неё.
         public var echoGraceMs: Double = 150
+        /// Захват системного звука запаздывает относительно микрофона: «речь владельца», начавшаяся не раньше этого
+        /// до начала речи собеседника, тоже считается эхом.
+        public var echoLeadMs: Double = 500
 
         public init(thresholdMs: Double = 700) {
             self.thresholdMs = thresholdMs
@@ -39,6 +50,7 @@ public struct TurnDetector: Sendable {
     private var interviewerSpeaking = false
     private var interviewerStoppedAt: Double?
     private var ownerSpeaking = false
+    private var ownerStartedAt: Double?
     /// Владелец заговорил во время ожидания — автоответ на эту реплику не запускается (S-07).
     private var suppressed = false
     private var lastTurnText: String?
@@ -57,6 +69,10 @@ public struct TurnDetector: Sendable {
     public mutating func interviewerStartedSpeaking(at t: Double) {
         interviewerSpeaking = true
         suppressed = false
+        // Микрофон услышал динамики раньше, чем захват системного звука, — это тоже эхо.
+        if ownerSpeaking, let started = ownerStartedAt, t - started < config.echoLeadMs {
+            ownerSpeaking = false
+        }
     }
 
     /// Собеседник замолчал (конец фразы по VAD). Итоговый текст придёт позже — `phraseFinal`.
@@ -88,6 +104,7 @@ public struct TurnDetector: Sendable {
             let echo = interviewerSpeaking || (interviewerStoppedAt.map { t - $0 < config.echoGraceMs } ?? false)
             guard !echo else { return }
             ownerSpeaking = true
+            ownerStartedAt = t
             if !pending.isEmpty { suppressed = true }
         } else {
             ownerSpeaking = false

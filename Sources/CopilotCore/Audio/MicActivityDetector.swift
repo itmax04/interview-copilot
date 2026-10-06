@@ -6,7 +6,18 @@ import Foundation
 public final class MicActivityDetector: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let converter = PCMConverter()
-    private var vad = EnergyVAD()
+    /// Порог для микрофона выше, чем для звука собеседника: фон комнаты, клавиатура и вентилятор не должны считаться
+    /// речью владельца (иначе автоответ блокируется, S-07). Голос у ноутбучного микрофона — примерно −35…−15 dBFS.
+    public static let config: EnergyVAD.Config = {
+        var c = EnergyVAD.Config()
+        c.minSpeechDB = -36 // эхо динамиков у микрофона — около −40…−44 dBFS (замер P-08)
+        c.marginDB = 12
+        c.attackFrames = 4
+        c.hangoverMs = 400
+        return c
+    }()
+    private var vad = EnergyVAD(config: MicActivityDetector.config)
+    private var peakDB: Float = -120
     private let lock = NSLock()
     private var speaking = false
     private var running = false
@@ -17,6 +28,15 @@ public final class MicActivityDetector: @unchecked Sendable {
     }
 
     public var isOwnerSpeaking: Bool { lock.withLock { speaking } }
+
+    /// Пиковый уровень микрофона с прошлого вызова, dBFS (диагностика; звук не сохраняется).
+    public func takePeakDB() -> Float {
+        lock.withLock {
+            let v = peakDB
+            peakDB = -120
+            return v
+        }
+    }
 
     public func start() throws {
         guard Permissions.microphone == .granted else { return }
@@ -49,6 +69,7 @@ public final class MicActivityDetector: @unchecked Sendable {
         let samples = converter.convert(buffer)
         let changes = lock.withLock { () -> [Bool] in
             let c = vad.process(samples)
+            peakDB = max(peakDB, EnergyVAD.rmsDB(samples[...]))
             if let last = c.last { speaking = last }
             return c
         }

@@ -41,6 +41,7 @@ final class PanelModel {
     var answerTags: [String] = []
     var suggestions: [(id: String, score: Double)] = []
     var strongModelAvailable = false
+    var strongModelName = "Claude"
     var strongModelHint = "Нет ключа Anthropic"
 
     // Внешний вид (R-16, R-18 Panel).

@@ -265,7 +265,8 @@ final class ListeningController {
                 self.levelDB = self.levelMeter.takeDB()
                 tick += 1
                 if tick % 10 == 0, self.phase == .listening {
-                    Log.audio.info("level_db=\(self.levelDB, format: .fixed(precision: 1), privacy: .public) owner_speaking=\(self.ownerSpeaking, privacy: .public)")
+                    let mic = self.mic?.takePeakDB() ?? -120
+                    Log.audio.info("level_db=\(self.levelDB, format: .fixed(precision: 1), privacy: .public) mic_db=\(mic, format: .fixed(precision: 1), privacy: .public) owner_speaking=\(self.ownerSpeaking, privacy: .public)")
                 }
             }
         }

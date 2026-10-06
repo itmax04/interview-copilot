@@ -159,23 +159,6 @@ private struct InterviewerView: View {
     }
 }
 
-/// Карточка ответа — наполняется на P-08.
-private struct AnswerArea: View {
-    let model: PanelModel
-
-    var body: some View {
-        switch model.state {
-        case .thinking:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("Готовлю подсказку…").foregroundStyle(.white.opacity(0.75))
-            }
-        default:
-            EmptyView()
-        }
-    }
-}
-
 private struct Message: View {
     let icon: String
     let text: String

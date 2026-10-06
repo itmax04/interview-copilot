@@ -1,10 +1,59 @@
 import CopilotCore
 import Foundation
+import ImageIO
 
 /// Живая проверка провайдеров из самого приложения (P-07): ключи читаются из Связки ключей процессом приложения,
 /// в лог пишутся только ID моделей, задержки и число токенов — не ключи и не тексты (R-23, R-24).
 /// Запуск: `open dist/InterviewCopilot.app --args --smoke-llm` или прямой запуск бинаря с этим флагом.
 enum SmokeTest {
+    /// `--smoke-screenshot <png>`: фикстура задачи → сильная модель или Gemini (S-06), в лог — модель, задержка, длина ответа
+    /// и наличие разделов (код, сложность), без текста ответа.
+    static func screenshot(path: String) -> Int32 {
+        let settings = SettingsStore().load()
+        let secrets = KeychainStore()
+        let done = DispatchSemaphore(value: 0)
+        let result = ResultBox()
+        Task.detached {
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+                  let src = CGImageSourceCreateWithData(data as CFData, nil),
+                  let image = CGImageSourceCreateImageAtIndex(src, 0, nil),
+                  let jpeg = try? ScreenshotService.encode(image) else {
+                print("screenshot: cannot read \(path)")
+                done.signal()
+                return
+            }
+            guard let chain = ChainFactory.strong(settings: settings, secrets: secrets, providers: ChainFactory.providers(),
+                                                  fallbackToGemini: true) else {
+                print("screenshot: NOT RUN — нет ключей")
+                done.signal()
+                return
+            }
+            let start = Date()
+            var text = ""
+            var log: [String] = []
+            for await e in chain.run(PromptBuilder.screenshotRequest(image: jpeg, language: "ru")) {
+                switch e {
+                case .attempt(let p, let m): log.append("try \(p.rawValue)/\(m)")
+                case .providerFailed(let p, let err): log.append("fail \(p.rawValue): \(err.description)")
+                case .firstToken(let p, let ms): log.append(String(format: "first \(p.rawValue) %.0fms", ms))
+                case .text(let t): text += t
+                case .restart: text = ""
+                case .finished(let p, let m): log.append("done \(p.rawValue)/\(m)"); result.ok = true
+                case .exhausted(let r): log.append("exhausted: \(r)")
+                default: break
+                }
+            }
+            let hasCode = text.contains("```")
+            let mentionsComplexity = text.range(of: "O\\(", options: .regularExpression) != nil
+            print(String(format: "screenshot: jpeg=%d bytes total_ms=%.0f chars=%d code_block=%@ big_o=%@ | %@", jpeg.count,
+                         Date().timeIntervalSince(start) * 1000, text.count, hasCode ? "yes" : "no", mentionsComplexity ? "yes" : "no",
+                         log.joined(separator: " → ")))
+            done.signal()
+        }
+        done.wait()
+        return result.ok ? 0 : 1
+    }
+
     static func run() -> Int32 {
         let settings = SettingsStore().load()
         let secrets = KeychainStore()

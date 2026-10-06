@@ -72,6 +72,18 @@ struct SettingsStoreTests {
         #expect(s.pauseThresholdMs == 700)
     }
 
+    @Test func oldDefaultThresholdIsMigrated() {
+        let (store, defaults, suite) = makeStore()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data(#"{"bankThreshold":0.85,"mode":"bankOnly"}"#.utf8), forKey: SettingsStore.defaultsKey)
+        let s = store.load()
+        #expect(s.bankThreshold == 0.74)
+        #expect(s.schemaVersion == AppSettings.currentSchema)
+        // Значение, выбранное владельцем, не трогаем.
+        defaults.set(Data(#"{"bankThreshold":0.9}"#.utf8), forKey: SettingsStore.defaultsKey)
+        #expect(store.load().bankThreshold == 0.9)
+    }
+
     @Test func corruptDataGivesDefaults() {
         let (store, defaults, suite) = makeStore()
         defer { defaults.removePersistentDomain(forName: suite) }

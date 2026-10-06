@@ -71,7 +71,9 @@ public struct ProviderChain: Sendable {
                         return
                     } catch let error as LLMError {
                         if error == .cancelled || Task.isCancelled { break }
-                        Log.llm.error("provider \(pid.rawValue, privacy: .public) failed: \(error.description, privacy: .public)")
+                        var detail = ""
+                        if case .http(_, let m) = error { detail = m }
+                        Log.llm.error("provider \(pid.rawValue, privacy: .public) model=\(step.model, privacy: .public) failed: \(error.description, privacy: .public) \(String(detail.prefix(200)), privacy: .public)")
                         continuation.yield(.providerFailed(pid, error))
                         reasons.append("\(pid.displayName) \(step.model): \(error.description)")
                         if error.isInvalidKey { invalidKey.insert(pid) }
@@ -194,10 +196,15 @@ public enum ChainFactory {
                               fallbackToGemini: Bool) -> ProviderChain? {
         var order = [settings.strongProvider]
         if fallbackToGemini && settings.strongProvider != .gemini { order.append(.gemini) }
-        let steps = order.compactMap { p -> ProviderChain.Step? in
-            guard let provider = providers[p], let key = try? secrets.get(p), !key.isEmpty else { return nil }
-            if settings.paidProvidersSuspended && isPaid(p, settings: settings) { return nil }
-            return ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: key)
+        var steps: [ProviderChain.Step] = []
+        for p in order {
+            guard let provider = providers[p], let key = try? secrets.get(p), !key.isEmpty else { continue }
+            if settings.paidProvidersSuspended && isPaid(p, settings: settings) { continue }
+            steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: key))
+            let backup = settings.modelIDs.geminiBackup.trimmingCharacters(in: .whitespaces)
+            if p == .gemini, fallbackToGemini, !backup.isEmpty, backup != settings.modelIDs.effective(.gemini) {
+                steps.append(ProviderChain.Step(provider: provider, model: backup, key: key))
+            }
         }
         guard let first = steps.first else { return nil }
         // Скриншот без ключа Anthropic уходит в Gemini (S-06); ручной вызов — только сильная модель (S-05).

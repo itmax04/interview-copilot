@@ -1,0 +1,14 @@
+{
+  "_comment": "Цены за 1 млн токенов, USD (R-20). Источники: страницы цен Gemini, DeepSeek (api-docs.deepseek.com/quick_start/pricing, 2026-10-06), skill claude-api (Anthropic, 2026-09-25). Модель ищется по префиксу ID.",
+  "models": [
+    { "prefix": "gemini-3.8-flash", "provider": "gemini", "input": 0.75, "output": 3.75, "cachedInput": 0.75 },
+    { "prefix": "gemini", "provider": "gemini", "input": 0.75, "output": 3.75, "cachedInput": 0.75 },
+    { "prefix": "deepseek-flash", "provider": "deepseek", "input": 0.30, "output": 1.20, "cachedInput": 0.006, "offPeakMultiplier": 0.5 },
+    { "prefix": "deepseek", "provider": "deepseek", "input": 0.30, "output": 1.20, "cachedInput": 0.006, "offPeakMultiplier": 0.5 },
+    { "prefix": "claude-sonnet-5-5", "provider": "anthropic", "input": 2.0, "output": 10.0, "cachedInput": 0.20 },
+    { "prefix": "claude-sonnet-5", "provider": "anthropic", "input": 2.0, "output": 10.0, "cachedInput": 0.20 },
+    { "prefix": "claude-haiku-4-5", "provider": "anthropic", "input": 1.0, "output": 5.0, "cachedInput": 0.10 },
+    { "prefix": "claude-opus-5-5", "provider": "anthropic", "input": 4.0, "output": 20.0, "cachedInput": 0.20 }
+  ],
+  "deepseekPeakUTC": { "weekdays": [2, 3, 4, 5, 6], "ranges": [["01:00", "04:00"], ["06:00", "10:00"]] }
+}

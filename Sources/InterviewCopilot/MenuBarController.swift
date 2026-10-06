@@ -10,6 +10,12 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     /// Текущая настройка источника и запущенные приложения — для подменю «Listening» (R-01).
     var sourceMenuData: () -> (AudioSourceSetting, [RunningAppInfo]) = { (.auto, []) }
     var onSelectSource: (AudioSourceSetting) -> Void = { _ in }
+    var onSelectMode: (AnswerMode) -> Void = { _ in }
+    var onSelectLanguage: (RecognitionLanguage) -> Void = { _ in }
+    var onSelectStrongModel: (ProviderID) -> Void = { _ in }
+    /// Провайдеры с сохранённым ключом (подменю Models).
+    var providersWithKeys: () -> Set<ProviderID> = { [] }
+    var strongProvider: () -> ProviderID = { .anthropic }
     var state = MenuState() {
         didSet { rebuild() }
     }
@@ -93,11 +99,30 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             sub.addItem(.separator())
             sub.addItem(sourceItem("All system audio", .allSystem, checked: setting == .allSystem))
         case .mode:
-            for mode in AnswerMode.allCases { add(mode.title, checked: mode == state.mode) }
+            for mode in AnswerMode.allCases {
+                sub.addItem(actionItem(mode.title, checked: mode == state.mode) { [weak self] in self?.onSelectMode(mode) })
+            }
         case .models:
-            add(state.chain.map(\.displayName).joined(separator: " → "), checked: true)
+            let keys = providersWithKeys()
+            let info = NSMenuItem(title: "Chain: " + state.chain.map { keys.contains($0) ? $0.displayName : "\($0.displayName) (no key)" }
+                .joined(separator: " → "), action: nil, keyEquivalent: "")
+            info.isEnabled = false
+            sub.addItem(info)
+            sub.addItem(.separator())
+            let header = NSMenuItem(title: "Strong model", action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            sub.addItem(header)
+            for p in ProviderID.allCases {
+                sub.addItem(actionItem("  \(p.displayName)" + (keys.contains(p) ? "" : " — no key"), checked: p == strongProvider()) { [weak self] in
+                    self?.onSelectStrongModel(p)
+                })
+            }
+            sub.addItem(.separator())
+            sub.addItem(actionItem("Models & keys…", checked: false) { [weak self] in self?.onAction(.settings) })
         case .language:
-            for lang in RecognitionLanguage.allCases { add(lang.menuTitle, checked: lang == state.language) }
+            for lang in RecognitionLanguage.allCases {
+                sub.addItem(actionItem(lang.menuTitle, checked: lang == state.language) { [weak self] in self?.onSelectLanguage(lang) })
+            }
         case .profile:
             add(state.profileName, checked: true)
             sub.addItem(.separator())
@@ -109,6 +134,23 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             break
         }
         return sub
+    }
+
+    private final class ActionBox: NSObject {
+        let run: () -> Void
+        init(_ run: @escaping () -> Void) { self.run = run }
+    }
+
+    private func actionItem(_ title: String, checked: Bool, _ run: @escaping () -> Void) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(actionSelected(_:)), keyEquivalent: "")
+        item.target = self
+        item.representedObject = ActionBox(run)
+        item.state = checked ? .on : .off
+        return item
+    }
+
+    @objc private func actionSelected(_ sender: NSMenuItem) {
+        (sender.representedObject as? ActionBox)?.run()
     }
 
     private final class SourceBox: NSObject {

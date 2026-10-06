@@ -26,7 +26,8 @@ public enum PanelFontSize: String, Codable, CaseIterable, Sendable {
 public struct ModelIDs: Codable, Equatable, Sendable {
     public var gemini = "gemini-3.8-flash"
     /// Запасная модель Gemini при 429/503 основной (P-07: gemini-3.8-flash отвечала 503 «high demand»); пусто — выключено.
-    public var geminiBackup = "gemini-flash-latest"
+    /// Flash-Lite: свой лимит запросов и первый токен ~0,7 с (замер P-07/P-08).
+    public var geminiBackup = "gemini-flash-lite-latest"
     public var deepseek = "deepseek-flash"
     public var anthropic = "claude-sonnet-5-5"
 
@@ -115,7 +116,25 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Платные провайдеры выключены после достижения лимита, пока владелец не подтвердит (R-18 Budget).
     public var paidProvidersSuspended = false
 
+    /// Версия схемы настроек: при чтении старых значений по умолчанию они обновляются (см. `migrated()`).
+    public var schemaVersion = AppSettings.currentSchema
+    public static let currentSchema = 3
+
     public init() {}
+
+    /// Обновление сохранённых значений, которые были прежними умолчаниями: порог базы 0,85 → 0,74 (eval P-06).
+    public func migrated() -> AppSettings {
+        var s = self
+        if s.schemaVersion < 2 {
+            if s.bankThreshold == 0.85 { s.bankThreshold = AppSettings().bankThreshold }
+            s.schemaVersion = 2
+        }
+        if s.schemaVersion < 3 {
+            if s.modelIDs.geminiBackup == "gemini-flash-latest" { s.modelIDs.geminiBackup = ModelIDs().geminiBackup }
+            s.schemaVersion = 3
+        }
+        return s
+    }
 
     public static let defaultWhisperModel = "ggml-small-q5_1.bin"
     public static let defaultEmbeddingModel = "bge-m3-q8_0.gguf"
@@ -150,6 +169,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         func v<T: Decodable>(_ key: CodingKeys, _ fallback: T) -> T {
             (try? c.decodeIfPresent(T.self, forKey: key)) ?? fallback
         }
+        schemaVersion = v(.schemaVersion, 1)
         modelIDs = v(.modelIDs, d.modelIDs)
         chain = v(.chain, d.chain)
         strongProvider = v(.strongProvider, d.strongProvider)

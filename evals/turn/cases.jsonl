@@ -32,3 +32,5 @@
 {"id": "gap-ru-1", "segments": [["Расскажите о вашем опыте.", 0, 1600], ["Особенно в больших командах.", 2200, 3800]], "expected_turn_at": 3800}
 {"id": "gap-uk-1", "segments": [["Розкажіть про ваш досвід.", 0, 1500], ["Особливо з мікросервісами.", 2100, 3600]], "expected_turn_at": 3600}
 {"id": "gap-en-1", "segments": [["Tell me about your experience.", 0, 1700], ["Especially with distributed systems.", 2350, 4300]], "expected_turn_at": 4300}
+{"id": "echo-early-uk-1", "segments": [["Розкажіть про свій досвід з тестуванням.", 300, 2700]], "owner": [[100, 2950]], "expected_turn_at": 2700}
+{"id": "owner-long-en-1", "segments": [["Could you repeat that last part?", 2000, 3500]], "owner": [[0, 6000]], "expected_turn_at": null}
