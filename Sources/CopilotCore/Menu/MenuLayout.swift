@@ -68,6 +68,8 @@ public struct MenuState: Sendable, Equatable {
     public var statusLine: String
     public var hotkeys: [HotkeyAction: HotkeyBinding]
     public var panelVisible: Bool
+    /// Ошибка разбора questions.yaml (S-10): показывается вместо числа карточек, прежняя база продолжает работать.
+    public var bankError: String?
 
     public init(listening: ListeningStatus = .idle, mode: AnswerMode = .bankAndHint,
                 chain: [ProviderID] = [.gemini, .deepseek, .anthropic], language: RecognitionLanguage = .auto,
@@ -118,7 +120,8 @@ public enum MenuLayout {
             ],
             [
                 MenuItemSpec(.profile, "Profile: \(s.profileName)", symbol: "person", submenu: true),
-                MenuItemSpec(.questionBank, "Question bank (\(s.bankCardCount) cards)…", symbol: "book"),
+                MenuItemSpec(.questionBank, s.bankError ?? "Question bank (\(s.bankCardCount) cards)…",
+                             symbol: s.bankError == nil ? "book" : "exclamationmark.triangle"),
                 MenuItemSpec(.editProfile, "Edit resume & stories…", symbol: "doc.text"),
                 MenuItemSpec(.practice, "Practice mode…", symbol: "scope", enabled: false, badge: "soon"),
             ],

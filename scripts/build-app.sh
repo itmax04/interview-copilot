@@ -47,8 +47,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/$APP_NAME"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
-# Ресурсы приложения (pricing.json и т.п.) появляются на следующих шагах.
+# Ресурсы приложения (pricing.json и т.п.) и пример профиля для первого запуска (R-21).
 find "$ROOT/Resources" -maxdepth 1 -type f ! -name Info.plist -exec cp {} "$APP/Contents/Resources/" \;
+cp -R "$ROOT/profile.example" "$APP/Contents/Resources/profile.example"
 
 # Иконка рисуется самим приложением (ParrotIcon), затем iconutil собирает .icns.
 "$BIN" --export-iconset "$STAGE/AppIcon.iconset"

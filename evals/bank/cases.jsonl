@@ -1,0 +1,51 @@
+{"q": "Пару слов о вашем опыте?", "lang": "ru", "expected": "about-me"}
+{"q": "Почему решили сменить работу?", "lang": "ru", "expected": "why-leaving"}
+{"q": "Что вас привлекло в нашей компании?", "lang": "ru", "expected": "why-us"}
+{"q": "В чём вы особенно сильны как разработчик?", "lang": "ru", "expected": "strengths"}
+{"q": "Над чем вам ещё стоит поработать в себе?", "lang": "ru", "expected": "weaknesses"}
+{"q": "Был ли у вас спор с коллегой и как вы его решили?", "lang": "ru", "expected": "conflict"}
+{"q": "Приведите пример провала, из которого вы сделали выводы.", "lang": "ru", "expected": "failure"}
+{"q": "Расскажите про самую трудную задачу в карьере.", "lang": "ru", "expected": "hardest-project"}
+{"q": "Сколько вы хотите получать?", "lang": "ru", "expected": "salary"}
+{"q": "Какие у вас карьерные планы на ближайшие годы?", "lang": "ru", "expected": "five-years"}
+{"q": "Объясните, как устроена конкурентность в Swift.", "lang": "ru", "expected": "swift-concurrency"}
+{"q": "Как избежать циклов сильных ссылок?", "lang": "ru", "expected": "memory-management"}
+{"q": "Как скоро вы готовы приступить?", "lang": "ru", "expected": "notice-period"}
+{"q": "Коротко про ваш досвід, будь ласка.", "lang": "uk", "expected": "about-me"}
+{"q": "Чому ви шукаєте нову роботу?", "lang": "uk", "expected": "why-leaving"}
+{"q": "Чим вас зацікавила наша компанія?", "lang": "uk", "expected": "why-us"}
+{"q": "Що у вас виходить найкраще?", "lang": "uk", "expected": "strengths"}
+{"q": "Назвіть свою слабку сторону.", "lang": "uk", "expected": "weaknesses"}
+{"q": "Як ви вирішували суперечку з колегою?", "lang": "uk", "expected": "conflict"}
+{"q": "Розкажіть про випадок, коли щось пішло не так з вашої вини.", "lang": "uk", "expected": "failure"}
+{"q": "Який проєкт був для вас найважчим?", "lang": "uk", "expected": "hardest-project"}
+{"q": "Як ви встигаєте, коли терміни горять?", "lang": "uk", "expected": "deadline"}
+{"q": "Чи доводилося вам навчати молодших розробників?", "lang": "uk", "expected": "mentoring"}
+{"q": "Яку архітектуру ви обираєте для мобільних застосунків?", "lang": "uk", "expected": "architecture"}
+{"q": "Як ви пишете тести?", "lang": "uk", "expected": "testing"}
+{"q": "Як ви ставитеся до релокації?", "lang": "uk", "expected": "remote-relocation"}
+{"q": "Could you introduce yourself briefly?", "lang": "en", "expected": "about-me"}
+{"q": "What made you decide to leave your current company?", "lang": "en", "expected": "why-leaving"}
+{"q": "Why are you interested in this role at our company?", "lang": "en", "expected": "why-us"}
+{"q": "What would you say is your greatest strength?", "lang": "en", "expected": "strengths"}
+{"q": "What area do you most need to improve?", "lang": "en", "expected": "weaknesses"}
+{"q": "Describe a disagreement you had with a teammate.", "lang": "en", "expected": "conflict"}
+{"q": "Tell me about a mistake you made at work.", "lang": "en", "expected": "failure"}
+{"q": "How do you work under pressure with tight timelines?", "lang": "en", "expected": "deadline"}
+{"q": "Have you ever mentored other engineers?", "lang": "en", "expected": "mentoring"}
+{"q": "What compensation are you looking for?", "lang": "en", "expected": "salary"}
+{"q": "How do async and await work in Swift?", "lang": "en", "expected": "swift-concurrency"}
+{"q": "Do you have anything you'd like to ask us?", "lang": "en", "expected": "questions-for-us"}
+{"q": "What would you do if you disagreed with your boss?", "lang": "en", "expected": "disagree-manager"}
+{"q": "Какое у вас хобби?", "lang": "ru", "expected": null}
+{"q": "Какой ваш любимый фильм?", "lang": "ru", "expected": null}
+{"q": "Сколько будет семь умножить на восемь?", "lang": "ru", "expected": null}
+{"q": "Вы работали с Kubernetes?", "lang": "ru", "expected": null}
+{"q": "Який ваш улюблений вид спорту?", "lang": "uk", "expected": null}
+{"q": "Де ви провели останню відпустку?", "lang": "uk", "expected": null}
+{"q": "Яка погода зараз у вашому місті?", "lang": "uk", "expected": null}
+{"q": "Чи знаєте ви мову програмування Rust?", "lang": "uk", "expected": null}
+{"q": "What's your favorite book?", "lang": "en", "expected": null}
+{"q": "Do you have any pets?", "lang": "en", "expected": null}
+{"q": "How would you design a URL shortener backend?", "lang": "en", "expected": null}
+{"q": "What do you think about the latest football match?", "lang": "en", "expected": null}

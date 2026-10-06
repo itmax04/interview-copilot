@@ -37,8 +37,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let panelModel = PanelModel()
     private lazy var panel = PanelController(model: panelModel)
     private lazy var turns = TurnController(thresholdMs: model.settings.pauseThresholdMs)
+    private let bank = BankController()
     private var hotkeys: HotkeyCenter?
     private var lastSettings: AppSettings?
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Модели освобождаются до выхода: иначе ggml-metal падает в статических деструкторах.
+        bank.shutdown()
+        listening.shutdown()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainMenu.install()
@@ -62,6 +69,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
         panelModel.onOpenPermissions = { [weak self] in self?.permissionsWindow.show() }
         panelModel.onRetry = { [weak self] in self?.listening.start() }
+
+        bank.onChange = { [weak self] in self?.refreshUI() }
+        bank.start(embeddingModel: model.settings.embeddingModel)
 
         listening.start()
         turns.start()
@@ -87,12 +97,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !force && s.audioSource != old.audioSource { listening.sourceSettingChanged() }
         if !force && s.language != old.language { listening.languageSettingChanged() }
         if force || s.pauseThresholdMs != old.pauseThresholdMs { turns.setThreshold(s.pauseThresholdMs) }
+        if !force && s.embeddingModel != old.embeddingModel { bank.embeddingModelChanged(s.embeddingModel) }
         panel.apply(s)
         lastSettings = s
     }
 
     private func refreshUI() {
-        var state = model.menuState(listening: listening.listeningStatus)
+        var state = model.menuState(listening: listening.listeningStatus, profileName: bank.profile.name,
+                                    cardCount: bank.cards.count)
+        state.bankError = bank.error
         state.hotkeys = model.settings.hotkeys
         state.panelVisible = panel.isVisible
         menuBar?.state = state
@@ -115,7 +128,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func turnCompleted(_ turn: Turn) {
         panelModel.question = turn.text
-        // Ответ по базе и генерация подключаются на P-06…P-08.
+        let threshold = model.settings.bankThreshold
+        Task {
+            let started = TurnController.now()
+            guard let match = await bank.match(turn.text, threshold: threshold) else { return }
+            Log.metrics.info("bank_match turn=\(turn.id) matched=\(match.matched != nil) score=\(match.top.first?.score ?? 0, format: .fixed(precision: 3)) match_ms=\(Int(TurnController.now() - started))")
+            // Карточка ответа и режимы — P-08.
+        }
     }
 
     private func handle(_ action: HotkeyAction) {
@@ -152,6 +171,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             turns.forceTurn()
         case .listeningSource:
             permissionsWindow.show()
+        case .questionBank:
+            bank.openQuestions()
+        case .editProfile, .profile:
+            bank.openProfileFolder()
         default:
             // Остальные действия подключаются на шагах P-06…P-10.
             break

@@ -18,7 +18,8 @@ struct SettingsStoreTests {
         #expect(s.chain == [.gemini, .deepseek, .anthropic])   // R-09
         #expect(s.firstTokenTimeout == 4)                      // R-09
         #expect(s.pauseThresholdMs == 700)                     // R-05
-        #expect(s.bankThreshold == 0.85)                       // R-07
+        #expect(s.bankThreshold == 0.74)                       // R-07, порог по eval bank (P-06)
+        #expect(s.embeddingModel == "bge-m3-q8_0.gguf")        // ADR-0001 п. 6
         #expect(s.piiFilterEnabled)                            // R-12
         #expect(s.historyRetentionDays == 30)                  // R-18
         #expect(s.monthlyBudgetUSD == 5)                       // R-18

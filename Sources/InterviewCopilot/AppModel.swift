@@ -86,8 +86,9 @@ final class AppModel {
         }
     }
 
-    func menuState(listening: ListeningStatus) -> MenuState {
+    func menuState(listening: ListeningStatus, profileName: String = "Profile", cardCount: Int = 0) -> MenuState {
         MenuState(listening: listening, mode: settings.mode, chain: settings.chain, language: settings.language,
+                  profileName: profileName, bankCardCount: cardCount,
                   strongModelName: settings.strongProvider.displayName)
     }
 }

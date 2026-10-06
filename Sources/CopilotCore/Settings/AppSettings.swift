@@ -74,8 +74,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     // Answer / Bank
     public var mode: AnswerMode = .bankAndHint
-    /// Порог совпадения с карточкой (R-07: 0,85).
-    public var bankThreshold: Double = 0.85
+    /// Порог совпадения с карточкой (R-07: «по умолчанию 0,85, уточняется eval bank» → 0,74 по eval P-06, ADR-0001).
+    public var bankThreshold: Double = 0.74
+    /// Модель эмбеддингов в `…/models/` (ADR-0001 п. 6: bge-m3 по eval P-06).
+    public var embeddingModel = AppSettings.defaultEmbeddingModel
 
     // Privacy
     public var piiFilterEnabled = true
@@ -103,6 +105,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public init() {}
 
     public static let defaultWhisperModel = "ggml-small-q5_1.bin"
+    public static let defaultEmbeddingModel = "bge-m3-q8_0.gguf"
     public static let pauseThresholdRange = 400...1500
     public static let bankThresholdRange = 0.5...0.99
     public static let firstTokenTimeoutRange = 1.0...15.0
@@ -144,6 +147,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         pauseThresholdMs = v(.pauseThresholdMs, d.pauseThresholdMs)
         mode = v(.mode, d.mode)
         bankThreshold = v(.bankThreshold, d.bankThreshold)
+        embeddingModel = v(.embeddingModel, d.embeddingModel)
         piiFilterEnabled = v(.piiFilterEnabled, d.piiFilterEnabled)
         historyRetentionDays = v(.historyRetentionDays, d.historyRetentionDays)
         panelOpacity = v(.panelOpacity, d.panelOpacity)

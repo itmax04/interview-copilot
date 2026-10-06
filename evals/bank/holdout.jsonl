@@ -1,0 +1,16 @@
+{"q": "Кратко представьтесь, пожалуйста.", "lang": "ru", "expected": "about-me"}
+{"q": "Что вас не устраивает на нынешнем месте?", "lang": "ru", "expected": "why-leaving"}
+{"q": "Расскажите, как вы ведёте себя в споре с руководителем.", "lang": "ru", "expected": "disagree-manager"}
+{"q": "Как вы покрываете код тестами?", "lang": "ru", "expected": "testing"}
+{"q": "Чому саме наша компанія?", "lang": "uk", "expected": "why-us"}
+{"q": "Яка ваша найбільша слабкість?", "lang": "uk", "expected": "weaknesses"}
+{"q": "Як уникнути витоків пам'яті в iOS?", "lang": "uk", "expected": "memory-management"}
+{"q": "Коли ви могли б вийти на роботу?", "lang": "uk", "expected": "notice-period"}
+{"q": "Tell me something about you.", "lang": "en", "expected": "about-me"}
+{"q": "Give me an example of a project that failed.", "lang": "en", "expected": "failure"}
+{"q": "Which app architecture do you usually choose?", "lang": "en", "expected": "architecture"}
+{"q": "Would you consider moving to another country?", "lang": "en", "expected": "remote-relocation"}
+{"q": "Какую музыку вы слушаете?", "lang": "ru", "expected": null}
+{"q": "Чи любите ви подорожувати?", "lang": "uk", "expected": null}
+{"q": "What is your favorite programming language and why?", "lang": "en", "expected": null}
+{"q": "Explain how a hash map works.", "lang": "en", "expected": null}

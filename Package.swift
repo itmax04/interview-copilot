@@ -20,23 +20,33 @@ let package = Package(
             url: "https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-b5454-xcframework.zip",
             checksum: "e57f8c48933000acabc13bb913fbe82805d483a2deff692cc6738836bd92393b"
         ),
+        // llama.cpp — эмбеддинги для поиска по базе (ADR-0001 п. 6, 9).
+        .binaryTarget(
+            name: "llama",
+            url: "https://github.com/ggml-org/llama.cpp/releases/download/b11446/llama-b11446-xcframework.zip",
+            checksum: "da7edb84bd4990680cd6bb475468cc3f78b28cc0062fabebeae40218d228966b"
+        ),
+        .target(
+            name: "CopilotEmbeddings",
+            dependencies: ["CopilotCore", "llama"]
+        ),
         .target(
             name: "CopilotCore",
             dependencies: [.product(name: "Yams", package: "Yams"), "whisper"]
         ),
         .executableTarget(
             name: "InterviewCopilot",
-            dependencies: ["CopilotCore"],
+            dependencies: ["CopilotCore", "CopilotEmbeddings"],
             // В .app фреймворки лежат в Contents/Frameworks (scripts/build-app.sh).
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
         .executableTarget(
             name: "copilot-eval",
-            dependencies: ["CopilotCore"]
+            dependencies: ["CopilotCore", "CopilotEmbeddings"]
         ),
         .testTarget(
             name: "CopilotCoreTests",
-            dependencies: ["CopilotCore"]
+            dependencies: ["CopilotCore", "CopilotEmbeddings"]
         ),
     ]
 )

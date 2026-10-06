@@ -101,7 +101,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         case .profile:
             add(state.profileName, checked: true)
             sub.addItem(.separator())
-            add("Open profile folder")
+            let open = NSMenuItem(title: "Open profile folder", action: #selector(itemSelected(_:)), keyEquivalent: "")
+            open.target = self
+            open.representedObject = MenuAction.editProfile.rawValue
+            sub.addItem(open)
         default:
             break
         }

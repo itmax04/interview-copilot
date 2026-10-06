@@ -48,6 +48,13 @@ struct MenuLayoutTests {
         #expect(noPermission.hasSubmenu == false)
     }
 
+    @Test func bankErrorShownInMenu() {
+        var s = MenuState(bankCardCount: 20)
+        s.bankError = "Question bank: ошибка в строке 7: пустой ответ"
+        let item = MenuLayout.sections(for: s).flatMap { $0 }.first { $0.action == .questionBank }
+        #expect(item?.title == "Question bank: ошибка в строке 7: пустой ответ")
+    }
+
     @Test func reboundHotkeyShownInMenu() {
         var s = MenuState()
         s.hotkeys[.togglePanel] = HotkeyBinding(keyCode: 0x26 /* J */, modifiers: HotkeyBinding.ctrlOpt)

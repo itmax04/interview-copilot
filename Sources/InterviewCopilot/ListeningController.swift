@@ -151,6 +151,16 @@ final class ListeningController {
         }
     }
 
+    /// Остановка и освобождение модели перед выходом.
+    func shutdown() {
+        transcriberBox.set(nil)
+        transcriber?.setPaused(true)
+        transcriber = nil
+        mic?.stop()
+        let capture = self.capture
+        Task { await capture?.stop() }
+    }
+
     /// Язык распознавания из настроек (R-03).
     func languageSettingChanged() {
         transcriber?.setLanguage(model.settings.language.whisperCode)
