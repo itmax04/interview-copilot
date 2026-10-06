@@ -1,0 +1,33 @@
+# Сборка SwiftPM и приложения
+.build/
+.swiftpm/
+build/
+dist/
+*.app
+*.xcarchive
+DerivedData/
+
+# Модели распознавания и эмбеддингов (скачиваются скриптом, сотни МБ)
+models/
+*.bin
+*.gguf
+
+# Личные данные владельца: резюме, истории, база вопросов, сессии
+profile/
+!profile.example/
+sessions/
+
+# Секреты (ключи хранятся только в Связке ключей macOS)
+.env
+.env.*
+*.p12
+*.cer
+*.key
+
+# Результаты прогонов и логи
+evals/results/
+logs/
+*.log
+
+# Системное
+.DS_Store
