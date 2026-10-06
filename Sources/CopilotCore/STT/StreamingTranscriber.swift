@@ -262,7 +262,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             // Тишина и шум: whisper иногда «слышит» речь там, где её нет.
             guard !result.text.isEmpty, result.noSpeechProbability < 0.8 else { return }
             let emitted = DispatchTime.now().uptimeNanoseconds
-            Log.metrics.info("transcript_final utt=\(u) lang=\(result.language, privacy: .public) audio_ms=\(Int(result.audioSeconds * 1000)) stt_ms=\(Int(result.elapsedMs)) phrase_end_to_final_ms=\(Int((emitted - phraseEnd) / 1_000_000))")
+            Log.metrics.notice("transcript_final utt=\(u) lang=\(result.language, privacy: .public) audio_ms=\(Int(result.audioSeconds * 1000)) stt_ms=\(Int(result.elapsedMs)) phrase_end_to_final_ms=\(Int((emitted - phraseEnd) / 1_000_000))")
             onEvent(.final(utterance: u, text: result.text, language: result.language, phraseEnd: phraseEnd, emittedAt: emitted))
         } catch {
             Log.stt.error("final transcription failed: \(String(describing: error), privacy: .public)")

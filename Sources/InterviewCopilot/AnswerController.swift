@@ -71,7 +71,7 @@ final class AnswerController {
             }
             guard !Task.isCancelled else { return }
             self.lastMatch = match
-            Log.metrics.info("bank_match turn=\(turn.id) matched=\(match.matched != nil) score=\(match.top.first?.score ?? 0, format: .fixed(precision: 3)) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
+            Log.metrics.notice("bank_match turn=\(turn.id) matched=\(match.matched != nil) score=\(match.top.first?.score ?? 0, format: .fixed(precision: 3)) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
             self.route(turn, match: match, settings: settings)
         }
     }
@@ -112,7 +112,7 @@ final class AnswerController {
         panel.suggestions = []
         panel.state = .answer
         // AC-02: turn_end → card_shown.
-        Log.metrics.info("card_shown turn=\(turn.id) card=\(card.card.id, privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(shownMs)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt))")
+        Log.metrics.notice("card_shown turn=\(turn.id) card=\(card.card.id, privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(shownMs)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt))")
         onAnswer?(AnswerRecord(turn: turn, source: "bank", model: nil, cardID: card.card.id, text: card.card.answer,
                                firstTokenMs: nil, cardShownMs: shownMs, usage: nil))
     }
@@ -127,7 +127,7 @@ final class AnswerController {
         panel.latency = (Self.now() - turn.speechEndedAt) / 1000
         panel.suggestions = top.map { (id: $0.card.id, score: $0.score) }
         panel.state = .noMatch
-        Log.metrics.info("no_match turn=\(turn.id) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
+        Log.metrics.notice("no_match turn=\(turn.id) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
         onAnswer?(AnswerRecord(turn: turn, source: "bank", model: nil, cardID: nil, text: "", firstTokenMs: nil, cardShownMs: nil, usage: nil))
     }
 
@@ -158,7 +158,7 @@ final class AnswerController {
                     let ms = Self.now() - turn.speechEndedAt
                     firstMs = ms
                     // AC-03: turn_end → first_token.
-                    Log.metrics.info("first_token turn=\(turn.id) provider=\(provider?.rawValue ?? "?", privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(ms)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt))")
+                    Log.metrics.notice("first_token turn=\(turn.id) provider=\(provider?.rawValue ?? "?", privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(ms)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt))")
                 case .text(let t):
                     text += t
                     // «—» — не вопрос: панель не меняется (R-11). Ждём, пока станет ясно.
@@ -180,7 +180,7 @@ final class AnswerController {
                 case .finished:
                     if PromptBuilder.isNoAnswer(text) {
                         (self.panel.state, self.panel.answerSource, self.panel.answerText, self.panel.answerTags, self.panel.badge) = previous
-                        Log.metrics.info("not_a_question turn=\(turn.id)")
+                        Log.metrics.notice("not_a_question turn=\(turn.id)")
                     } else {
                         self.onAnswer?(AnswerRecord(turn: turn, source: provider?.rawValue ?? "?", model: actualModel, cardID: nil,
                                                     text: text, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))

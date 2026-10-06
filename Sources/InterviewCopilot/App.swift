@@ -43,6 +43,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self?.hotkeys?.failures ?? [:]
     })
     private lazy var permissionsWindow = PermissionsWindowController(listening: listening)
+    private lazy var onboarding: OnboardingWindowController = makeOnboarding()
+
+    private func makeOnboarding() -> OnboardingWindowController {
+        OnboardingWindowController(model: model, listening: listening) { [weak self] in
+            self?.onboarding.close()
+            self?.listening.start()
+        }
+    }
     private let panelModel = PanelModel()
     private lazy var panel = PanelController(model: panelModel)
     private lazy var turns = TurnController(thresholdMs: model.settings.pauseThresholdMs)
@@ -124,10 +132,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.verifyModelIDs()
         refreshUI()
         panel.show()
-        if listening.phase == .noPermission {
+        onboarding.state.refresh()
+        if !model.settings.onboardingCompleted || !onboarding.state.allModelsPresent {
+            // S-09: мастер первого запуска (разрешения → ключ → модели).
+            onboarding.show()
+        } else if listening.phase == .noPermission {
             // AC-13: без разрешения — понятное состояние и инструкция, без падения.
             permissionsWindow.show()
         }
+        startDownloadProgressMirror()
     }
 
     private func settingsChanged() {
@@ -200,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             do {
                 let started = TurnController.now()
                 let jpeg = try await ScreenshotService.captureDisplayUnderCursor()
-                Log.metrics.info("screenshot_captured bytes=\(jpeg.count) ms=\(Int(TurnController.now() - started))")
+                Log.metrics.notice("screenshot_captured bytes=\(jpeg.count) ms=\(Int(TurnController.now() - started))")
                 let chain = await Task.detached {
                     ChainFactory.strong(settings: settings, secrets: secrets, providers: ChainFactory.providers(), fallbackToGemini: true)
                 }.value
@@ -212,6 +225,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 answers.showGenerated(chain: chain, request: PromptBuilder.screenshotRequest(image: jpeg, language: language), label: turn)
             } catch {
                 panelModel.state = .error("\(error)")
+            }
+        }
+    }
+
+    /// Прогресс загрузки моделей — в панель (состояние downloading, R-16).
+    private func startDownloadProgressMirror() {
+        Task { [weak self] in
+            while let self {
+                try? await Task.sleep(for: .milliseconds(300))
+                if let p = self.onboarding.state.overallProgress {
+                    self.panelModel.state = .downloading(p)
+                } else if case .downloading = self.panelModel.state {
+                    self.panelModel.state = .idle
+                    self.refreshUI()
+                }
             }
         }
     }

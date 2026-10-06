@@ -109,6 +109,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         hotkeys[action] ?? HotkeyBinding.defaults[action]!
     }
 
+    /// Мастер первого запуска пройден (S-09).
+    public var onboardingCompleted = false
+
     // Budget
     public var monthlyBudgetUSD: Double = 5
     /// Ключ Gemini бесплатного тарифа — стоимость $0 (R-20).
@@ -187,6 +190,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         panelFontSize = v(.panelFontSize, d.panelFontSize)
         panelWidth = v(.panelWidth, d.panelWidth)
         hotkeys = v(.hotkeys, d.hotkeys)
+        onboardingCompleted = v(.onboardingCompleted, d.onboardingCompleted)
         monthlyBudgetUSD = v(.monthlyBudgetUSD, d.monthlyBudgetUSD)
         geminiFreeTier = v(.geminiFreeTier, d.geminiFreeTier)
         paidProvidersSuspended = v(.paidProvidersSuspended, d.paidProvidersSuspended)
