@@ -254,3 +254,4 @@ public final class WhisperEngine: SpeechRecognizer, @unchecked Sendable {
         return words.joined(separator: " ")
     }
 }
+

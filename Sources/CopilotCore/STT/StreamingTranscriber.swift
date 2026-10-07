@@ -33,6 +33,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
         public var languageConfidence: Float = 0.9
         public var languageRefineStep: Double = 1.0
         public var languageRefineUntil: Double = 8
+        /// Закреплять язык разговора после двух уверенных реплик и пропускать детектор (~1,5 с на medium, не прерывается).
+        /// Собеседование обычно идёт на одном языке; при смене языка уверенность падает и закрепление снимается.
+        /// Если язык известен заранее, надёжнее выбрать его в меню Language.
+        public var stickyLanguage = true
         /// При разнице вероятностей uk/ru меньше этой — берётся язык прошлой реплики.
         public var ukRuTie: Float = 0.02
         /// Сколько звука брать до начала речи (VAD срабатывает с задержкой «атаки»), с.
@@ -74,6 +78,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
     private var sessionLanguage: String?
     private var languageStreak: (code: String, count: Int)?
     private var utteranceUsesSessionLanguage = false
+    private var lowConfidenceStreak = 0
     private var partialBusy = false
     private var lastPartialAt: Int64 = 0
     private var paused = false
@@ -88,6 +93,26 @@ public final class StreamingTranscriber: @unchecked Sendable {
     }
 
     /// Язык из настроек (R-03): "uk" / "ru" / "en" или nil — Auto.
+    /// Подсказка распознаванию (initial prompt whisper) для языка: словарь из базы вопросов и предыдущие реплики.
+    /// Помогает на терминах и именах при сжатом звуке созвона (H-4, решение владельца — вариант 1).
+    public func setPromptProvider(_ provider: (@Sendable (String) -> String?)?) {
+        lock.withLock { promptProvider = provider }
+    }
+
+    private var promptProvider: (@Sendable (String) -> String?)?
+    private var recentFinals: [(language: String, text: String)] = []
+
+    func prompt(for language: String?) -> String? {
+        guard let language else { return nil }
+        let (provider, recent) = lock.withLock { (promptProvider, recentFinals) }
+        var parts: [String] = []
+        if let base = provider?(language), !base.isEmpty { parts.append(base) }
+        // Предыдущие реплики в подсказку не добавляются: на сжатом звуке whisper начинал их повторять (замер P-12).
+        _ = recent
+        let joined = parts.joined(separator: " ")
+        return joined.isEmpty ? nil : String(joined.suffix(600))
+    }
+
     public func setLanguage(_ code: String?) {
         lock.withLock {
             language = code
@@ -129,6 +154,12 @@ public final class StreamingTranscriber: @unchecked Sendable {
                 utteranceLanguageConfidence = utteranceLanguage == nil ? 0 : 1
                 languageDetectedAtLength = 0
                 utteranceSlavic = false
+                // Язык разговора uk или ru: детектор пропускаем, но uk/ru по-прежнему сравниваем (прерываемо) —
+                // собеседник может перейти с русского на украинский.
+                if utteranceUsesSessionLanguage, sessionLanguage == "uk" || sessionLanguage == "ru" {
+                    utteranceSlavic = true
+                    utteranceLanguageConfidence = 0.5
+                }
                 lastPartialAt = end
                 startedUtterance = utterance
             } else if let start = utteranceStart {
@@ -208,7 +239,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
         if let resolved, resolved.language == lang {
             result = resolved
         } else {
-            guard let r = try? recognizer.transcribe(audio, language: lang, prompt: nil, reducedContext: true) else { return }
+            guard let r = try? recognizer.transcribe(audio, language: lang, prompt: prompt(for: lang), reducedContext: true) else { return }
             result = r
         }
         guard lock.withLock({ u == utterance && utteranceStart != nil }), !result.text.isEmpty else { return }
@@ -244,6 +275,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
         guard code == "uk" || code == "ru" || slavic > (probs["en"] ?? 0) else {
             return LanguageGuess(code: code, confidence: probs[code] ?? 0, ukMinusRu: nil, transcription: nil)
         }
+
         guard let uk = try? recognizer.transcribe(audio, language: "uk", prompt: nil, reducedContext: true), !isCancelled(),
               let ru = try? recognizer.transcribe(audio, language: "ru", prompt: nil, reducedContext: true)
         else { return nil }
@@ -263,7 +295,9 @@ public final class StreamingTranscriber: @unchecked Sendable {
         }
         if lang == nil {
             // Короткая реплика: язык не успели определить во время речи.
-            if Double(audio.count) / Double(buffer.sampleRate) >= 1.0, let r = resolveLanguage(audio, skipDetector: false) {
+            if let known = lock.withLock({ lastLanguage }) {
+                lang = known // короткая реплика — язык прошлой, без лишних прогонов
+            } else if Double(audio.count) / Double(buffer.sampleRate) >= 1.0, let r = resolveLanguage(audio, skipDetector: false) {
                 if let delta = r.ukMinusRu, abs(delta) < config.ukRuTie {
                     lang = lock.withLock { lastLanguage } ?? r.code
                 } else {
@@ -274,25 +308,37 @@ public final class StreamingTranscriber: @unchecked Sendable {
             }
         }
         do {
-            let result = try recognizer.transcribe(audio, language: lang, prompt: nil, reducedContext: true)
+            let result = try recognizer.transcribe(audio, language: lang, prompt: prompt(for: lang), reducedContext: true)
             let seconds = Double(audio.count) / Double(buffer.sampleRate)
             lock.withLock {
                 lastLanguage = result.language
                 guard language == nil, u == utterance || utteranceStart == nil else { return }
                 if utteranceUsesSessionLanguage {
-                    // Низкая уверенность на длинной реплике — возможно, собеседник сменил язык: снова определяем.
-                    if seconds >= 1.5 && result.averageTokenProbability < 0.55 {
-                        sessionLanguage = nil
-                        languageStreak = nil
+                    // Две длинные реплики подряд с низкой уверенностью — возможно, собеседник сменил язык: снова определяем.
+                    if seconds >= 1.5 && result.averageTokenProbability < 0.7 {
+                        lowConfidenceStreak += 1
+                        if lowConfidenceStreak >= 1 {
+                            sessionLanguage = nil
+                            languageStreak = nil
+                            lowConfidenceStreak = 0
+                        }
+                    } else {
+                        lowConfidenceStreak = 0
                     }
                 } else if seconds >= 1.5 && result.averageTokenProbability >= 0.75 {
                     let count = languageStreak?.code == result.language ? (languageStreak?.count ?? 0) + 1 : 1
                     languageStreak = (result.language, count)
-                    if count >= 2 { sessionLanguage = result.language }
+                    // Язык разговора — после двух уверенных реплик подряд. Для uk/ru он только отменяет детектор
+                    // (сравнение uk/ru остаётся): иначе в смешанном разговоре украинские фразы шли на русском (замер P-12).
+                    if count >= 2 && config.stickyLanguage { sessionLanguage = result.language }
                 }
             }
             // Тишина и шум: whisper иногда «слышит» речь там, где её нет.
             guard !result.text.isEmpty, result.noSpeechProbability < 0.8 else { return }
+            lock.withLock {
+                recentFinals.append((result.language, result.text))
+                if recentFinals.count > 6 { recentFinals.removeFirst() }
+            }
             let emitted = DispatchTime.now().uptimeNanoseconds
             Log.metrics.notice("transcript_final utt=\(u) lang=\(result.language, privacy: .public) audio_ms=\(Int(result.audioSeconds * 1000)) stt_ms=\(Int(result.elapsedMs)) phrase_end_to_final_ms=\(Int((emitted - phraseEnd) / 1_000_000))")
             onEvent(.final(utterance: u, text: result.text, language: result.language, phraseEnd: phraseEnd, emittedAt: emitted))

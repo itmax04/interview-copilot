@@ -107,3 +107,25 @@ public enum QuestionBankParser {
         }
     }
 }
+
+/// Подсказка для распознавания речи из базы: формулировки вопросов на нужном языке (по алфавиту письма),
+/// не длиннее `limit` символов. Термины и имена из базы чаще распознаются верно.
+public enum RecognitionVocabulary {
+    public static func prompt(cards: [BankCard], language: String, limit: Int = 400) -> String {
+        func lang(_ q: String) -> String {
+            if q.range(of: "[іїєґІЇЄҐ]", options: .regularExpression) != nil { return "uk" }
+            if q.range(of: "[а-яА-ЯёЁ]", options: .regularExpression) != nil { return "ru" }
+            return "en"
+        }
+        var out = ""
+        for card in cards {
+            for q in card.questions where lang(q) == language {
+                let next = out.isEmpty ? q : out + " " + q
+                if next.count > limit { return out }
+                out = next
+                break // по одной формулировке на карточку — шире словарь
+            }
+        }
+        return out
+    }
+}

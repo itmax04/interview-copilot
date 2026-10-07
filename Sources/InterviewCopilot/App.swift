@@ -107,7 +107,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.onOpenPermissions = { [weak self] in self?.permissionsWindow.show() }
         panelModel.onRetry = { [weak self] in self?.listening.start() }
 
-        bank.onChange = { [weak self] in self?.refreshUI() }
+        bank.onChange = { [weak self] in
+            self?.updateRecognitionPrompt()
+            self?.refreshUI()
+        }
         answers.transcript = { [weak self] in self?.listening.transcript.map(\.text) ?? [] }
         answers.onUsage = { [weak self] provider, modelID, u in
             guard let self else { return }
@@ -158,9 +161,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !force && s.language != old.language { listening.languageSettingChanged() }
         if force || s.pauseThresholdMs != old.pauseThresholdMs { turns.setThreshold(s.pauseThresholdMs) }
         if !force && s.embeddingModel != old.embeddingModel { bank.embeddingModelChanged(s.embeddingModel) }
+        if force || s.recognitionPromptFromBank != old.recognitionPromptFromBank { updateRecognitionPrompt() }
         panel.apply(s)
         answers.refreshStrongModelAvailability()
         lastSettings = s
+    }
+
+    private func updateRecognitionPrompt() {
+        guard model.settings.recognitionPromptFromBank else {
+            listening.setRecognitionPrompt(nil)
+            return
+        }
+        let cards = bank.cards
+        listening.setRecognitionPrompt { language in RecognitionVocabulary.prompt(cards: cards, language: language) }
     }
 
     private func refreshUI() {

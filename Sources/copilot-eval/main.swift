@@ -72,6 +72,7 @@ case "stt-stream":
     let lang = option("--lang")
     // --gain 0.033 — имитация тихого собеседника в Meet (−30 дБ).
     let gain = Float(option("--gain") ?? "1") ?? 1
+    let usePrompt = flag("--prompt-bank")
     guard args.count >= 2 else { fail("usage: copilot-eval stt-stream <model.bin> <file.wav>... [--lang xx] [--gain k]") }
     let engine: WhisperEngine
     do { engine = try WhisperEngine(modelPath: args[0]) } catch { fail("\(error)", code: 1) }
@@ -94,6 +95,9 @@ case "stt-stream":
         }
     }
     transcriber.setLanguage(lang)
+    if usePrompt, let cards = try? QuestionBankParser.load(URL(fileURLWithPath: "profile.example/questions.yaml")) {
+        transcriber.setPromptProvider { language in RecognitionVocabulary.prompt(cards: cards, language: language) }
+    }
     let silence = [Float](repeating: 0, count: 16_000)
     func play(_ samples: [Float]) {
         var i = 0

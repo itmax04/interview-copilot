@@ -181,3 +181,21 @@ struct BankMatcherTests {
         #expect(second.calls == 1)
     }
 }
+
+@Suite("RecognitionVocabulary — подсказка распознаванию")
+struct RecognitionVocabularyTests {
+    let cards = [
+        BankCard(id: "a", questions: ["Расскажите о себе", "Tell me about yourself", "Розкажіть про себе"], answer: "x"),
+        BankCard(id: "b", questions: ["Как работает async/await в Swift?", "Як працює async/await у Swift?"], answer: "y"),
+    ]
+
+    @Test func picksLanguage() {
+        #expect(RecognitionVocabulary.prompt(cards: cards, language: "ru") == "Расскажите о себе Как работает async/await в Swift?")
+        #expect(RecognitionVocabulary.prompt(cards: cards, language: "uk") == "Розкажіть про себе Як працює async/await у Swift?")
+        #expect(RecognitionVocabulary.prompt(cards: cards, language: "en") == "Tell me about yourself")
+    }
+
+    @Test func respectsLimit() {
+        #expect(RecognitionVocabulary.prompt(cards: cards, language: "ru", limit: 20) == "Расскажите о себе")
+    }
+}

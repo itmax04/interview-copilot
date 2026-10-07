@@ -10,7 +10,7 @@ final class FakeRecognizer: SpeechRecognizer, @unchecked Sendable {
     var detected = "uk"
     var text = "привіт"
     /// Средняя вероятность токенов по языку (для выбора uk/ru).
-    var tokenProbability: [String: Float] = ["uk": 0.9, "ru": 0.7, "en": 0.9]
+    var tokenProbability: [String: Float] = ["uk": 0.9, "ru": 0.7, "en": 0.6]
 
     func transcribe(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription {
         lock.withLock { transcribeCalls.append((samples.count, language)) }
@@ -57,12 +57,13 @@ struct StreamingTranscriberTests {
         }
     }
 
-    func make(language: String? = nil) -> (StreamingTranscriber, AudioRingBuffer, FakeRecognizer, EventSink) {
+    func make(language: String? = nil, sticky: Bool = false) -> (StreamingTranscriber, AudioRingBuffer, FakeRecognizer, EventSink) {
         let buffer = AudioRingBuffer(seconds: 30)
         let fake = FakeRecognizer()
         let sink = EventSink()
         var config = StreamingTranscriber.Config()
         config.partialInterval = 0.5
+        config.stickyLanguage = sticky
         let t = StreamingTranscriber(recognizer: fake, buffer: buffer, config: config) { sink.add($0) }
         t.setLanguage(language)
         return (t, buffer, fake, sink)
@@ -118,15 +119,16 @@ struct StreamingTranscriberTests {
     }
 
     @Test func stickyLanguageAfterTwoConfidentUtterances() async {
-        let (t, buffer, fake, sink) = make()
+        let (t, buffer, fake, sink) = make(sticky: true)
         fake.detected = "en"
-        for i in 1...3 {
+        fake.tokenProbability["en"] = 0.95 // уверенное распознавание
+        for i in 1...4 {
             feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
             feed(t, buffer, EnergyVADTests.tone(ms: 2000, amplitude: 0.3))
             feed(t, buffer, EnergyVADTests.noise(ms: 600, amplitude: 0.001))
             #expect(await sink.waitFor { events in events.filter { if case .final = $0 { true } else { false } }.count == i })
         }
-        // Детектор — только в первых двух репликах, третья идёт сразу на языке разговора.
+        // Детектор — только в первых двух репликах, дальше язык разговора.
         #expect(fake.detectCalls == 2)
     }
 

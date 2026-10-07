@@ -71,6 +71,11 @@ struct AudioSettingsView: View {
             Picker("Язык", selection: $model.settings.language) {
                 ForEach(RecognitionLanguage.allCases, id: \.self) { Text($0.menuTitle).tag($0) }
             }
+            Text("Если язык собеседования известен заранее, выберите его: распознавание точнее и быстрее, чем в Auto.")
+                .font(.footnote).foregroundStyle(.secondary)
+            Toggle("Подсказывать распознаванию формулировки из базы вопросов", isOn: $model.settings.recognitionPromptFromBank)
+            Text("Экспериментально: на сжатом звуке помогает одним фразам и мешает другим.")
+                .font(.footnote).foregroundStyle(.secondary)
             VStack(alignment: .leading) {
                 Text("Пауза конца вопроса T: \(model.settings.pauseThresholdMs) мс")
                 Slider(value: pauseBinding, in: Double(AppSettings.pauseThresholdRange.lowerBound)...Double(AppSettings.pauseThresholdRange.upperBound), step: 50)

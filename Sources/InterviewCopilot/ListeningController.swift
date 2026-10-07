@@ -161,6 +161,14 @@ final class ListeningController {
         Task { await capture?.stop() }
     }
 
+    /// Подсказка распознаванию из базы (настройка Audio → «Подсказывать словарь базы»).
+    func setRecognitionPrompt(_ provider: (@Sendable (String) -> String?)?) {
+        promptProvider = provider
+        transcriber?.setPromptProvider(provider)
+    }
+
+    private var promptProvider: (@Sendable (String) -> String?)?
+
     /// Язык распознавания из настроек (R-03).
     func languageSettingChanged() {
         transcriber?.setLanguage(model.settings.language.whisperCode)
@@ -193,6 +201,7 @@ final class ListeningController {
                 Task { @MainActor in self?.handle(event) }
             }
             t.setLanguage(language)
+            t.setPromptProvider(promptProvider)
             t.setPaused(phase == .paused)
             transcriberBox.set(t)
             transcriber = t

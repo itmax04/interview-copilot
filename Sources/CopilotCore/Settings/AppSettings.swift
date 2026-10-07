@@ -82,6 +82,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Файл модели whisper в `…/InterviewCopilot/models/` (ADR-0001 п. 5: small по замерам P-04).
     public var whisperModel = AppSettings.defaultWhisperModel
     public var audioSource: AudioSourceSetting = .auto
+    /// Подсказывать распознаванию формулировки из базы вопросов (initial prompt). По замеру P-12 на сжатом звуке
+    /// результат смешанный (одни фразы точнее, другие переводятся/повторяются) — выключено по умолчанию.
+    public var recognitionPromptFromBank = false
     public var language: RecognitionLanguage = .auto
     /// Порог паузы T, мс (R-05: 700, диапазон 400–1500).
     public var pauseThresholdMs: Int = 700
@@ -184,6 +187,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         firstTokenTimeout = v(.firstTokenTimeout, d.firstTokenTimeout)
         whisperModel = v(.whisperModel, d.whisperModel)
         audioSource = v(.audioSource, d.audioSource)
+        recognitionPromptFromBank = v(.recognitionPromptFromBank, d.recognitionPromptFromBank)
         language = v(.language, d.language)
         pauseThresholdMs = v(.pauseThresholdMs, d.pauseThresholdMs)
         mode = v(.mode, d.mode)
