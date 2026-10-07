@@ -117,6 +117,19 @@ struct StreamingTranscriberTests {
         #expect(fake.transcribeCalls.isEmpty)
     }
 
+    @Test func stickyLanguageAfterTwoConfidentUtterances() async {
+        let (t, buffer, fake, sink) = make()
+        fake.detected = "en"
+        for i in 1...3 {
+            feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
+            feed(t, buffer, EnergyVADTests.tone(ms: 2000, amplitude: 0.3))
+            feed(t, buffer, EnergyVADTests.noise(ms: 600, amplitude: 0.001))
+            #expect(await sink.waitFor { events in events.filter { if case .final = $0 { true } else { false } }.count == i })
+        }
+        // Детектор — только в первых двух репликах, третья идёт сразу на языке разговора.
+        #expect(fake.detectCalls == 2)
+    }
+
     @Test func explicitLanguageSkipsDetection() async {
         let (t, buffer, fake, sink) = make(language: "ru")
         feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))

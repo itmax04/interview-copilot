@@ -121,7 +121,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     /// Версия схемы настроек: при чтении старых значений по умолчанию они обновляются (см. `migrated()`).
     public var schemaVersion = AppSettings.currentSchema
-    public static let currentSchema = 3
+    public static let currentSchema = 4
 
     public init() {}
 
@@ -136,10 +136,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
             if s.modelIDs.geminiBackup == "gemini-flash-latest" { s.modelIDs.geminiBackup = ModelIDs().geminiBackup }
             s.schemaVersion = 3
         }
+        if s.schemaVersion < 4 {
+            if s.whisperModel == "ggml-small-q5_1.bin" { s.whisperModel = AppSettings.defaultWhisperModel }
+            s.schemaVersion = 4
+        }
         return s
     }
 
-    public static let defaultWhisperModel = "ggml-small-q5_1.bin"
+    /// medium: на сжатом звуке Meet small ошибается (H-4), medium распознаёт верно за 0,4–0,7 с (ADR-0001).
+    public static let defaultWhisperModel = "ggml-medium-q5_0.bin"
     public static let defaultEmbeddingModel = "bge-m3-q8_0.gguf"
     public static let pauseThresholdRange = 400...1500
     public static let bankThresholdRange = 0.5...0.99
