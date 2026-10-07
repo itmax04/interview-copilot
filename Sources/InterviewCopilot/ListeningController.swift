@@ -41,6 +41,9 @@ final class ListeningController {
     /// Буфер последних 30 с звука собеседника (R-04). Читает распознавание (P-04).
     let buffer = AudioRingBuffer(seconds: 30)
     private var capture: SystemAudioCapture?
+    /// Микрофон как источник (режим самопроверки, запрос владельца 2026-10-07).
+    private var micSource: MicrophoneCapture?
+    private var usesMicrophone: Bool { model.settings.audioSource == .microphone }
     private var mic: MicActivityDetector?
     private let model: AppModel
     private var observers: [NSObjectProtocol] = []
@@ -79,13 +82,14 @@ final class ListeningController {
 
     /// Запуск при старте приложения и после выдачи разрешений.
     func start() {
-        guard Permissions.screenCaptureGranted else {
+        // Микрофону разрешение «Запись экрана» не нужно.
+        guard usesMicrophone || Permissions.screenCaptureGranted else {
             setPhase(.noPermission)
             Log.audio.notice("no screen capture permission")
             return
         }
         loadRecognizer()
-        startMic()
+        if !usesMicrophone { startMic() }
         startLevelReporting()
         Task { await applySource(restart: true) }
     }
@@ -97,12 +101,13 @@ final class ListeningController {
             partialText = nil
             Task {
                 await capture?.stop()
+                micSource?.stop()
                 mic?.stop()
                 buffer.clear()
                 setPhase(.paused)
             }
         case .paused:
-            startMic()
+            if !usesMicrophone { startMic() }
             transcriber?.setPaused(false)
             Task { await applySource(restart: true) }
         default:
@@ -112,7 +117,8 @@ final class ListeningController {
 
     /// Смена источника из меню или настроек — без перезапуска приложения (R-01).
     func sourceSettingChanged() {
-        guard phase != .paused, phase != .noPermission else { return }
+        guard phase != .paused else { return }
+        if phase == .noPermission && !usesMicrophone { return }
         Task { await applySource(restart: false) }
     }
 
@@ -123,11 +129,33 @@ final class ListeningController {
     }
 
     private func applySource(restart: Bool) async {
+        let resolved = AudioSourceResolver.resolve(model.settings.audioSource, running: Self.runningApps())
+        if resolved == .microphone {
+            // Режим самопроверки: системный звук не нужен, микрофон — «собеседник»; определение речи владельца выключено.
+            await capture?.stop()
+            mic?.stop()
+            ownerSpeaking = false
+            onOwnerSpeaking?(false, Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
+            source = resolved
+            let micSource = self.micSource ?? makeMicSource()
+            self.micSource = micSource
+            do {
+                try micSource.start()
+                setPhase(.listening)
+            } catch {
+                setPhase(.error(String(describing: error)))
+            }
+            return
+        }
+        // Вернулись к созвону: микрофон снова только для определения речи владельца.
+        if micSource?.isRunning == true {
+            micSource?.stop()
+            startMic()
+        }
         guard Permissions.screenCaptureGranted else {
             setPhase(.noPermission)
             return
         }
-        let resolved = AudioSourceResolver.resolve(model.settings.audioSource, running: Self.runningApps())
         source = resolved
         if resolved == .none {
             await capture?.stop()
@@ -156,6 +184,7 @@ final class ListeningController {
         transcriberBox.set(nil)
         transcriber?.setPaused(true)
         transcriber = nil
+        micSource?.stop()
         mic?.stop()
         let capture = self.capture
         Task { await capture?.stop() }
@@ -245,6 +274,17 @@ final class ListeningController {
                 self.setPhase(.error(error?.localizedDescription ?? "Захват остановлен"))
             }
         })
+    }
+
+    private func makeMicSource() -> MicrophoneCapture {
+        let buffer = self.buffer
+        let meter = levelMeter
+        let box = transcriberBox
+        return MicrophoneCapture { samples in
+            buffer.append(samples)
+            meter.add(samples)
+            box.get()?.process(samples)
+        }
     }
 
     private func startMic() {

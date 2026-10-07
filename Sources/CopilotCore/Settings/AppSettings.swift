@@ -8,6 +8,9 @@ public enum AudioSourceSetting: Codable, Equatable, Sendable {
     case app(bundleID: String, name: String)
     /// Весь системный звук (кроме самого помощника).
     case allSystem
+    /// Микрофон Mac — режим самопроверки: владелец сам задаёт вопросы голосом, без созвона (запрос владельца 2026-10-07).
+    /// В этом режиме микрофон — «собеседник», поэтому определение речи владельца (R-02) не используется.
+    case microphone
 }
 
 public enum PanelFontSize: String, Codable, CaseIterable, Sendable {

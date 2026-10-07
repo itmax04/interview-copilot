@@ -98,6 +98,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
             }
             sub.addItem(.separator())
             sub.addItem(sourceItem("All system audio", .allSystem, checked: setting == .allSystem))
+            sub.addItem(.separator())
+            sub.addItem(sourceItem("Microphone (practice, no call)", .microphone, checked: setting == .microphone))
         case .mode:
             for mode in AnswerMode.allCases {
                 sub.addItem(actionItem(mode.title, checked: mode == state.mode) { [weak self] in self?.onSelectMode(mode) })

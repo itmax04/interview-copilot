@@ -15,6 +15,8 @@ public struct RunningAppInfo: Equatable, Sendable, Hashable {
 public enum ResolvedAudioSource: Equatable, Sendable {
     case app(RunningAppInfo)
     case allSystem
+    /// Микрофон Mac (режим самопроверки).
+    case microphone
     /// Нет подходящего запущенного приложения (Auto) или выбранное приложение закрыто.
     case none
 
@@ -22,6 +24,7 @@ public enum ResolvedAudioSource: Equatable, Sendable {
         switch self {
         case .app(let a): a.name
         case .allSystem: "All system audio"
+        case .microphone: "Microphone"
         case .none: nil
         }
     }
@@ -40,6 +43,8 @@ public enum AudioSourceResolver {
         switch setting {
         case .allSystem:
             return .allSystem
+        case .microphone:
+            return .microphone
         case .app(let bundleID, _):
             if let app = running.first(where: { $0.bundleID == bundleID }) { return .app(app) }
             return .none

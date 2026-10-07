@@ -110,7 +110,7 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
         case .allSystem:
             let me = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
             return SCContentFilter(display: display, excludingApplications: me, exceptingWindows: [])
-        case .none:
+        case .none, .microphone:
             throw AudioCaptureError.failed("Источник не выбран")
         }
     }

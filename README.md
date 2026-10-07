@@ -29,7 +29,8 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
 в Связке ключей — «Разрешать всегда».
 
 ## Как пользоваться
-- **Listening — <app>**: источник звука (Auto: Zoom → Chrome → Telegram, конкретное приложение или весь системный звук).
+- **Listening — <app>**: источник звука (Auto: Zoom → Chrome → Telegram, конкретное приложение, весь системный звук
+  или **Microphone (practice, no call)** — говорите сами в микрофон Mac, без созвона, для тренировки и проверки).
 - **Mode**: Question bank only / Bank + hint / Generate every answer.
 - **Language**: Auto (UK/RU/EN) или конкретный язык — если язык собеседования известен, выберите его: точнее и быстрее.
 - **Question bank…** — `~/Library/Application Support/InterviewCopilot/profile/questions.yaml`

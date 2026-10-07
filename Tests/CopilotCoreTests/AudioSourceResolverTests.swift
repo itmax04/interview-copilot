@@ -27,6 +27,11 @@ struct AudioSourceResolverTests {
         #expect(AudioSourceResolver.resolve(setting, running: [chrome]) == .none)
     }
 
+    @Test func microphoneNeedsNoRunningApp() {
+        #expect(AudioSourceResolver.resolve(.microphone, running: []) == .microphone)
+        #expect(ResolvedAudioSource.microphone.displayName == "Microphone")
+    }
+
     @Test func allSystem() {
         #expect(AudioSourceResolver.resolve(.allSystem, running: []) == .allSystem)
     }

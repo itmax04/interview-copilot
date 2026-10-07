@@ -34,7 +34,7 @@ struct SettingsStoreTests {
         var s = AppSettings()
         s.mode = .generateAlways
         s.language = .uk
-        s.audioSource = .app(bundleID: "com.google.Chrome", name: "Google Chrome")
+        s.audioSource = .microphone
         s.modelIDs.gemini = "gemini-x"
         s.panelFontSize = .large
         store.save(s)

@@ -66,6 +66,7 @@ struct AudioSettingsView: View {
             Picker("Источник звука", selection: sourceBinding) {
                 Text("Auto (Zoom → Chrome → Telegram)").tag(0)
                 Text("Весь системный звук").tag(1)
+                Text("Микрофон Mac (самопроверка, без созвона)").tag(3)
                 if case .app(_, let name) = model.settings.audioSource { Text(name).tag(2) }
             }
             Picker("Язык", selection: $model.settings.language) {
@@ -90,11 +91,13 @@ struct AudioSettingsView: View {
             case .auto: 0
             case .allSystem: 1
             case .app: 2
+            case .microphone: 3
             }
         } set: { tag in
             switch tag {
             case 0: model.settings.audioSource = .auto
             case 1: model.settings.audioSource = .allSystem
+            case 3: model.settings.audioSource = .microphone
             default: break
             }
         }
