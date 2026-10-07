@@ -1,6 +1,6 @@
 # ADR-0001: Стек и архитектура Interview Copilot v1
 
-Статус: **accepted** (2026-10-06) · Дата: 2026-10-06 · Владелец: itmax04 · Связи: [intent](../changes/COPILOT-01/intent.md), [spec](../changes/COPILOT-01/spec.md)
+Статус: **accepted** (2026-10-06), итоговые решения дописаны 2026-10-07 (P-04, P-06, P-12, P-13) · Дата: 2026-10-06 · Владелец: itmax04 · Связи: [intent](../changes/COPILOT-01/intent.md), [spec](../changes/COPILOT-01/spec.md)
 
 ## Контекст
 - Личное приложение для macOS, один пользователь, MacBook Air M1 с 8 ГБ памяти, macOS 15.7.2.
@@ -113,6 +113,21 @@
   Чтобы заголовки ggml двух версий не встречались в одном модуле Swift, эмбеддинги вынесены в цель `CopilotEmbeddings`.
 - Перед выходом модели освобождаются явно (`applicationWillTerminate`): иначе ggml-metal падает в статических деструкторах
   (`copilot-eval exit-check`).
+
+### П. 7 — языковые модели (P-07…P-12)
+- Raw HTTP + SSE без SDK, как и решено. Anthropic — по skill `claude-api`: `thinking: between_tools` + `effort: low`
+  для подсказок и ручного вызова (R-13), адаптивное рассуждение для скриншотов, `fallbacks: "default"`
+  (`server-side-fallback-2026-07-01`), `cache_control` на системной части.
+- Gemini: заголовок `x-goog-api-key`, `thinkingLevel: low` (повтор без него, если модель уровень не знает).
+  Запасная модель того же провайдера — `gemini-flash-lite-latest` (основная `gemini-3.8-flash` на бесплатном ключе
+  отвечала 503/429/медленнее 4 с). `ProviderHealth`: модель с таймаутом/429/5xx на 5 минут в конец очереди.
+- Любая HTTP-ошибка — переход к следующему провайдеру; 400/401/403 у этого провайдера больше не пробуются.
+
+### Итог по зависимостям
+Только разрешённые: whisper.cpp XCFramework (`b5454`), llama.cpp XCFramework (`b11446`), Yams 6.2.2, Carbon.
+Модели: whisper medium q5_0 (по умолчанию), small q5_1, large-v3-turbo q5_0 (не используется по умолчанию),
+bge-m3 Q8_0 (по умолчанию), embeddinggemma-300M / -2 Q8_0 (кандидаты, не используются) — из ggerganov/whisper.cpp и ggml-org,
+SHA256 в `models.sha256`. Новых зависимостей вне списка нет.
 
 ## Последствия
 - (+) Минимальная память, нативное поведение, доступ ко всем нужным системным API.
