@@ -110,6 +110,16 @@ struct UsageMeterTests {
         #expect(abs(p.cost(provider: .deepseek, model: "deepseek-flash", usage: million, at: utc("2026-10-06T12:00:00Z"), geminiFreeTier: true) - 0.75) < 1e-9)
     }
 
+    @Test func cachedTokensNotDoubleCounted() {
+        let p = Self.pricing
+        // Gemini: promptTokenCount уже включает кэш → 1М входа, из них 1М из кэша = цена кэша, а не вход + кэш.
+        let g = p.cost(provider: .gemini, model: "gemini-3.8-flash", usage: TokenUsage(input: 1_000_000, output: 0, cachedInput: 1_000_000), at: Date(), geminiFreeTier: false)
+        #expect(abs(g - 0.75) < 1e-9)
+        // Anthropic: input_tokens без кэша, кэш отдельно.
+        let a = p.cost(provider: .anthropic, model: "claude-sonnet-5-5", usage: TokenUsage(input: 1_000_000, output: 0, cachedInput: 1_000_000), at: Date(), geminiFreeTier: true)
+        #expect(abs(a - 2.2) < 1e-9)
+    }
+
     @Test func countersAndStatusLine() {
         var clock = utc("2026-10-06T12:00:00Z")
         let meter = UsageMeter(pricing: Self.pricing, storage: nil, now: { clock })
@@ -131,6 +141,9 @@ struct UsageMeterTests {
         s.monthlyBudgetUSD = 0.05
         #expect(meter.record(provider: .anthropic, model: "claude-sonnet-5-5", usage: TokenUsage(input: 10_000, output: 1000), settings: s) == false)
         #expect(meter.record(provider: .anthropic, model: "claude-sonnet-5-5", usage: TokenUsage(input: 10_000, output: 1000), settings: s) == true)
+        // После «Включить снова» владельцем лимит не срабатывает повторно в этом месяце (ревью P-13).
+        #expect(meter.record(provider: .gemini, model: "gemini-3.8-flash", usage: TokenUsage(input: 1, output: 1), settings: s) == false)
+        #expect(meter.record(provider: .anthropic, model: "claude-sonnet-5-5", usage: TokenUsage(input: 10_000, output: 1000), settings: s) == false)
         // Бесплатный Gemini в лимит не входит.
         let free = UsageMeter(pricing: Self.pricing, storage: nil, now: { Date() })
         for _ in 0..<100 { #expect(free.record(provider: .gemini, model: "gemini-3.8-flash", usage: TokenUsage(input: 100_000, output: 10_000), settings: s) == false) }

@@ -80,6 +80,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
     private var utteranceUsesSessionLanguage = false
     private var lowConfidenceStreak = 0
     private var partialBusy = false
+    /// Что сейчас распознаётся: прерывать можно только частичный прогон, итог чужой реплики — нельзя.
+    private var runningPartial = false
+    /// Номер «эпохи»: пауза увеличивает его, и итоги, поставленные в очередь до паузы, не выдаются (S-08).
+    private var epoch = 0
     private var lastPartialAt: Int64 = 0
     private var paused = false
 
@@ -123,12 +127,14 @@ public final class StreamingTranscriber: @unchecked Sendable {
 
     /// Пауза (S-08): незавершённая реплика отбрасывается, ничего не распознаётся.
     public func setPaused(_ value: Bool) {
-        lock.withLock {
+        let cancel = lock.withLock { () -> Bool in
             paused = value
             utteranceStart = nil
             vad.reset()
+            if value { epoch += 1 }
+            return value
         }
-        if value { recognizer.cancel() }
+        if cancel { recognizer.cancel() }
     }
 
     /// Новые сэмплы собеседника. Вызывается из очереди захвата; буфер пополняет вызывающий код.
@@ -190,12 +196,14 @@ public final class StreamingTranscriber: @unchecked Sendable {
 
         if let u = startedUtterance { onEvent(.speechStarted(utterance: u)) }
         if let (u, start, end) = finalRange {
-            // Итог важнее частичного: прерываем текущий частичный прогон.
-            recognizer.cancel()
+            // Итог важнее частичного: прерываем текущий прогон, только если это частичный текст
+            // (итог предыдущей реплики прерывать нельзя — его текст пропал бы).
+            if lock.withLock({ runningPartial }) { recognizer.cancel() }
             let hangoverNs = UInt64(config.vad.hangoverMs) * 1_000_000
             let phraseEnd = now > hangoverNs ? now - hangoverNs : now
             onEvent(.speechEnded(utterance: u, at: phraseEnd))
-            work.async { [weak self] in self?.runFinal(utterance: u, from: start, to: end, phraseEnd: phraseEnd) }
+            let scheduledEpoch = lock.withLock { epoch }
+            work.async { [weak self] in self?.runFinal(utterance: u, from: start, to: end, phraseEnd: phraseEnd, epoch: scheduledEpoch) }
         }
         if let (u, start, end, needsLanguage) = partialRequest {
             work.async { [weak self] in self?.runPartial(utterance: u, from: start, to: end, detectLanguage: needsLanguage) }
@@ -207,7 +215,8 @@ public final class StreamingTranscriber: @unchecked Sendable {
     }
 
     private func runPartial(utterance u: Int, from start: Int64, to end: Int64, detectLanguage: Bool) {
-        defer { lock.withLock { partialBusy = false } }
+        lock.withLock { runningPartial = true }
+        defer { lock.withLock { partialBusy = false; runningPartial = false } }
         // Реплика уже закрыта — частичный текст не нужен.
         guard lock.withLock({ u == utterance && utteranceStart != nil }) else { return }
         let audio = buffer.read(from: start, to: end)
@@ -286,7 +295,8 @@ public final class StreamingTranscriber: @unchecked Sendable {
                              ukMinusRu: uk.averageTokenProbability - ru.averageTokenProbability, transcription: winner)
     }
 
-    private func runFinal(utterance u: Int, from start: Int64, to end: Int64, phraseEnd: UInt64) {
+    private func runFinal(utterance u: Int, from start: Int64, to end: Int64, phraseEnd: UInt64, epoch scheduledEpoch: Int) {
+        guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return } // пауза после конца фразы — не выдаём
         let audio = buffer.read(from: start, to: end)
         guard !audio.isEmpty else { return }
         var lang = lock.withLock { () -> String? in
@@ -335,6 +345,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             }
             // Тишина и шум: whisper иногда «слышит» речь там, где её нет.
             guard !result.text.isEmpty, result.noSpeechProbability < 0.8 else { return }
+            guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
             lock.withLock {
                 recentFinals.append((result.language, result.text))
                 if recentFinals.count > 6 { recentFinals.removeFirst() }

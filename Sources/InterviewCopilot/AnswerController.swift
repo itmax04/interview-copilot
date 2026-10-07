@@ -158,7 +158,7 @@ final class AnswerController {
                     let ms = Self.now() - turn.speechEndedAt
                     firstMs = ms
                     // AC-03: turn_end → first_token.
-                    Log.metrics.notice("first_token turn=\(turn.id) provider=\(provider?.rawValue ?? "?", privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(ms)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt))")
+                    Log.metrics.notice("first_token turn=\(turn.id) kind=\(request.purpose.rawValue, privacy: .public) provider=\(provider?.rawValue ?? "?", privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(ms)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt))")
                 case .text(let t):
                     text += t
                     // «—» — не вопрос: панель не меняется (R-11). Ждём, пока станет ясно.

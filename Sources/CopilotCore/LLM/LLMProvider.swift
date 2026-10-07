@@ -82,7 +82,9 @@ public enum LLMError: Error, Equatable, CustomStringConvertible {
     /// Триггер перехода к следующему провайдеру (R-09).
     public var triggersFallback: Bool {
         switch self {
-        case .http(let status, _): status == 429 || status >= 500 || isInvalidKey || status == 402
+        // Любая HTTP-ошибка — к следующему провайдеру (404 из-за опечатки в ID модели тоже, S-04);
+        // 400/401/403 у этого провайдера больше не пробуются (R-09).
+        case .http: true
         case .network, .firstTokenTimeout, .refusal, .noKey, .badResponse: true
         case .cancelled: false
         }

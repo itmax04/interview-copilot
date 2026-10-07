@@ -12,7 +12,11 @@ final class FakeRecognizer: SpeechRecognizer, @unchecked Sendable {
     /// Средняя вероятность токенов по языку (для выбора uk/ru).
     var tokenProbability: [String: Float] = ["uk": 0.9, "ru": 0.7, "en": 0.6]
 
+    /// Задержка распознавания (имитация модели), с.
+    var delay: Double = 0
+
     func transcribe(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription {
+        if delay > 0 { Thread.sleep(forTimeInterval: delay) }
         lock.withLock { transcribeCalls.append((samples.count, language)) }
         let lang = language ?? detected
         return Transcription(text: text, language: lang, languageProbabilities: [:],
@@ -159,6 +163,18 @@ struct StreamingTranscriberTests {
         try? await Task.sleep(for: .milliseconds(200))
         #expect(!sink.events.contains { if case .final = $0 { true } else { false } })
         #expect(fake.transcribeCalls.isEmpty)
+    }
+
+    @Test func pauseRightAfterPhraseDropsQueuedFinal() async {
+        // Ревью P-13: итог, поставленный в очередь до паузы, не выдаётся (S-08).
+        let (t, buffer, fake, sink) = make(language: "ru")
+        fake.delay = 0.3
+        feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
+        feed(t, buffer, EnergyVADTests.tone(ms: 1500, amplitude: 0.3))
+        feed(t, buffer, EnergyVADTests.noise(ms: 400, amplitude: 0.001)) // фраза закончилась → итог в очереди
+        t.setPaused(true)
+        try? await Task.sleep(for: .milliseconds(1500))
+        #expect(!sink.events.contains { if case .final = $0 { true } else { false } })
     }
 
     @Test func twoUtterancesAreNumbered() async {

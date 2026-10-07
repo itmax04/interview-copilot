@@ -20,7 +20,8 @@ import sys
 PATTERNS = {
     "AC-01 phrase_end → transcript_final": (re.compile(r"transcript_final .*phrase_end_to_final_ms=(\d+)"), 1000),
     "AC-02 turn_end → card_shown": (re.compile(r"card_shown .*ms_from_turn_end=(\d+)"), 500),
-    "AC-03 turn_end → first_token": (re.compile(r"first_token .*ms_from_turn_end=(\d+)"), 2500),
+    # Только подсказки на ход (kind=hint): ручные запросы к сильной модели и скриншоты в AC-03 не входят.
+    "AC-03 turn_end → first_token": (re.compile(r"first_token turn=\d+ kind=hint .*ms_from_turn_end=(\d+)"), 2500),
 }
 
 

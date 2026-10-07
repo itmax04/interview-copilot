@@ -36,6 +36,7 @@ final class TurnController {
     }
 
     func handle(_ event: TranscriptEvent) {
+        guard timer != nil else { return } // пауза: события не копятся (S-08)
         switch event {
         case .speechStarted:
             detector.interviewerStartedSpeaking(at: Self.now())
@@ -50,6 +51,7 @@ final class TurnController {
     }
 
     func ownerSpeaking(_ speaking: Bool, at t: Double) {
+        guard timer != nil else { return }
         detector.setOwnerSpeaking(speaking, at: t)
     }
 

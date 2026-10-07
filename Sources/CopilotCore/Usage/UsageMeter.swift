@@ -56,7 +56,8 @@ public struct Pricing: Codable, Sendable {
         guard let p = price(for: model) else { return 0 }
         var multiplier = 1.0
         if provider == .deepseek, let off = p.offPeakMultiplier, !isDeepSeekPeak(date) { multiplier = off }
-        let uncached = max(0, usage.input - (provider == .deepseek ? usage.cachedInput : 0))
+        // У Gemini и DeepSeek число входных токенов уже включает кэшированные; у Anthropic кэш считается отдельно.
+        let uncached = max(0, usage.input - (provider == .anthropic ? 0 : usage.cachedInput))
         let cachedCost = Double(usage.cachedInput) * p.cachedInput
         return (Double(uncached) * p.input + Double(usage.output) * p.output + cachedCost) / 1_000_000 * multiplier
     }
@@ -124,11 +125,15 @@ public final class UsageMeter: @unchecked Sendable {
         defer { lock.unlock(); save() }
         rollover()
         let cost = pricing.cost(provider: provider, model: model, usage: usage, at: now(), geminiFreeTier: settings.geminiFreeTier)
+        let before = state.monthPaidCost
         state.dayCost += cost
         state.monthCost += cost
         if ChainFactory.isPaid(provider, settings: settings) { state.monthPaidCost += cost }
         state.dayRequests[provider.rawValue, default: 0] += 1
-        return settings.monthlyBudgetUSD > 0 && state.monthPaidCost >= settings.monthlyBudgetUSD
+        // Только переход через лимит: после «Включить снова» владельцем платные провайдеры не выключаются
+        // повторно до следующего месяца (R-18 Budget: «до подтверждения владельцем»).
+        let limit = settings.monthlyBudgetUSD
+        return limit > 0 && before < limit && state.monthPaidCost >= limit
     }
 
     public func recordError(provider: ProviderID, error: LLMError) {

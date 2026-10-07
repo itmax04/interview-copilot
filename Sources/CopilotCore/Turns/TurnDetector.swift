@@ -4,9 +4,9 @@ import Foundation
 public struct Turn: Sendable, Equatable {
     public var id: Int
     public var text: String
-    /// Конец речи собеседника (мс, монотонное время) — начало отсчёта метрик AC-02/AC-03 (`turn_end`).
+    /// Конец речи собеседника (мс, монотонное время).
     public var speechEndedAt: Double
-    /// Когда ход признан завершённым (мс).
+    /// Когда ход признан завершённым (мс) — `turn_end`, начало отсчёта метрик AC-02/AC-03 («после завершения хода»).
     public var firedAt: Double
     /// ⌃⌥↩ «Answer now» — ход по команде владельца.
     public var forced: Bool
@@ -146,6 +146,9 @@ public struct TurnDetector: Sendable {
         pending.removeAll()
         lastSpeechEnd = nil
         interviewerSpeaking = false
+        interviewerStoppedAt = nil
+        ownerSpeaking = false
+        ownerStartedAt = nil
         suppressed = false
     }
 

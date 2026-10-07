@@ -40,7 +40,12 @@ public enum PromptBuilder {
     }
 
     /// Пользовательская часть: до 3 карточек, последние 6 реплик, текущий вопрос (R-11).
-    public static func user(question: String, transcript: [String], cards: [CardScore], baseCard: BankCard?) -> String {
+    public static func user(question: String, transcript: [String], cards: [CardScore], baseCard: BankCard?,
+                            redactPII: Bool = false) -> String {
+        // Карточки — тоже часть профиля (R-21): фильтр R-12 применяется и к ним.
+        func clean(_ s: String) -> String { redactPII ? PIIFilter.redact(s) : s }
+        let cards = cards.map { CardScore(card: BankCard(id: $0.card.id, questions: $0.card.questions.map(clean), answer: clean($0.card.answer), tags: $0.card.tags), score: $0.score) }
+        let baseCard = baseCard.map { BankCard(id: $0.id, questions: $0.questions.map(clean), answer: clean($0.answer), tags: $0.tags) }
         var parts: [String] = []
         let shown = Array(cards.prefix(3))
         if !shown.isEmpty || baseCard != nil {
@@ -65,7 +70,7 @@ public enum PromptBuilder {
     public static func hintRequest(question: String, transcript: [String], cards: [CardScore], baseCard: BankCard?,
                                    profile: Profile, redactPII: Bool) -> LLMRequest {
         LLMRequest(system: system(profile: profile, redactPII: redactPII),
-                   messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard))],
+                   messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard, redactPII: redactPII))],
                    maxTokens: 400, purpose: .hint)
     }
 
@@ -73,7 +78,7 @@ public enum PromptBuilder {
     public static func strongRequest(question: String, transcript: [String], cards: [CardScore], baseCard: BankCard?,
                                      profile: Profile, redactPII: Bool) -> LLMRequest {
         LLMRequest(system: system(profile: profile, redactPII: redactPII),
-                   messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard))],
+                   messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard, redactPII: redactPII))],
                    maxTokens: 1024, purpose: .strong)
     }
 

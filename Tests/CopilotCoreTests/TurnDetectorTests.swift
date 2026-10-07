@@ -146,6 +146,20 @@ struct TurnDetectorTests {
         #expect(run(&d, from: 1500, until: 4000) == nil) // всё ещё говорит
     }
 
+    @Test func resetClearsStaleState() {
+        // Ревью P-13: после паузы владелец «не говорит», а ⌃⌥↩ не ждёт старой фразы.
+        var d = TurnDetector()
+        d.interviewerStartedSpeaking(at: 0)
+        d.interviewerStoppedSpeaking(at: 1000)
+        d.setOwnerSpeaking(true, at: 2000)
+        d.reset()
+        #expect(d.force(at: 3000) == nil) // нет текста и не ждём итог старой фразы
+        d.interviewerStartedSpeaking(at: 4000)
+        d.interviewerStoppedSpeaking(at: 6000)
+        d.phraseFinal("Tell me about your strengths.", speechEnd: 6000)
+        #expect(run(&d, from: 6000, until: 8000)?.forced == false) // автоответ не подавлен
+    }
+
     @Test func unfinishedHeuristics() {
         #expect(TurnDetector.looksUnfinished("Tell me about the project which"))
         #expect(TurnDetector.looksUnfinished("Розкажіть про проєкт, що"))

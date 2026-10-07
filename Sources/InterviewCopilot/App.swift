@@ -265,7 +265,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func togglePause() {
         let pausing = listening.phase == .listening
         listening.togglePause()
-        if pausing { turns.stop() } else { turns.start() }
+        if pausing {
+            // S-08: при паузе ничего не отправляется — текущая генерация отменяется.
+            answers.cancel()
+            turns.stop()
+        } else {
+            turns.start()
+        }
     }
 
     private func handle(_ action: MenuAction) {

@@ -222,6 +222,12 @@ struct ProviderChainTests {
         #expect(events.contains(.finished(.deepseek, model: "deepseek-model"))) // метка фактической модели (S-04)
     }
 
+    @Test func notFoundModelFallsBack() async {
+        // Опечатка в ID модели → 404 → следующий провайдер (S-04), а не «Модели недоступны».
+        let events = await run(ProviderChain(steps: [step(.gemini, .fail(.http(status: 404, message: "model not found"))), step(.deepseek, .reply(["ok"]))]))
+        #expect(text(events) == "ok")
+    }
+
     @Test func invalidKeyIsNotRetriedOnSameProvider() async {
         let events = await run(ProviderChain(steps: [step(.gemini, .fail(.http(status: 403, message: ""))), step(.anthropic, .reply(["ok"]))]))
         #expect(events.filter { if case .attempt(.gemini, _) = $0 { true } else { false } }.count == 1)
@@ -431,8 +437,26 @@ struct PromptBuilderTests {
     }
 
     @Test func piiFilterKeepsVersionsAndYears() {
-        let t = "Swift 6.2, 2019–2022, 1,2 млн пользователей, iOS 17.4"
-        #expect(PIIFilter.redact(t) == t)
+        // Регрессии из ревью P-13: годы, числа и названия технологий не должны считаться телефонами и ссылками.
+        for t in ["Swift 6.2, 2019–2022, 1,2 млн пользователей, iOS 17.4", "2019-2022", "2019 - 2022",
+                  "1 200 000 пользователей", "ASP.NET Core, Socket.io, Vue.config, Node.js"] {
+            #expect(PIIFilter.redact(t) == t, "\(t) → \(PIIFilter.redact(t))")
+        }
+    }
+
+    @Test func piiFilterCatchesContacts() {
+        let phone = "+380 67 " + "123 45 67"
+        let local = "(067) 123-" + "45-67"
+        let t = "\(phone), \(local), ivan@example.com, https://example.com/me, linkedin.com/in/ivan, www.example.org"
+        let r = PIIFilter.redact(t)
+        #expect(!r.contains("123") && !r.contains("@") && !r.contains("linkedin") && !r.contains("example.org"), "\(r)")
+    }
+
+    @Test func cardsAreRedactedToo() {
+        let card = BankCard(id: "c", questions: ["Q"], answer: "Пишите на ivan@example.com")
+        let u = PromptBuilder.user(question: "q", transcript: [], cards: [CardScore(card: card, score: 0.9)], baseCard: card, redactPII: true)
+        #expect(!u.contains("ivan@example.com"))
+        #expect(PromptBuilder.user(question: "q", transcript: [], cards: [], baseCard: card, redactPII: false).contains("ivan@example.com"))
     }
 
     @Test func screenshotPromptSections() {
