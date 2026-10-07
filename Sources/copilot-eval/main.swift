@@ -70,7 +70,9 @@ case "stt-stream":
     // меряется «конец фразы → итоговый текст» (синтетическая оценка AC-01).
     args.removeFirst()
     let lang = option("--lang")
-    guard args.count >= 2 else { fail("usage: copilot-eval stt-stream <model.bin> <file.wav>... [--lang xx]") }
+    // --gain 0.033 — имитация тихого собеседника в Meet (−30 дБ).
+    let gain = Float(option("--gain") ?? "1") ?? 1
+    guard args.count >= 2 else { fail("usage: copilot-eval stt-stream <model.bin> <file.wav>... [--lang xx] [--gain k]") }
     let engine: WhisperEngine
     do { engine = try WhisperEngine(modelPath: args[0]) } catch { fail("\(error)", code: 1) }
     let buffer = AudioRingBuffer(seconds: 30)
@@ -108,7 +110,7 @@ case "stt-stream":
     }
     play(silence)
     for path in args.dropFirst() {
-        do { play(try AudioFileReader.read16kMono(URL(fileURLWithPath: path))) } catch { fail("\(path): \(error)", code: 1) }
+        do { play(try AudioFileReader.read16kMono(URL(fileURLWithPath: path)).map { $0 * gain }) } catch { fail("\(path): \(error)", code: 1) }
         play(silence)
     }
     Thread.sleep(forTimeInterval: 2)

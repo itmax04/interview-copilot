@@ -34,6 +34,21 @@ struct WhisperEngineTests {
         #expect(r.noSpeechProbability == 1)
     }
 
+    @Test(.enabled(if: hasModel)) func quietSpeechIsStillRecognized() throws {
+        // Тихий собеседник в Meet (−50 dBFS): ослабляем фикстуру в 30 раз (−30 дБ).
+        let engine = try WhisperEngine(modelPath: Self.modelPath)
+        let quiet = try AudioFileReader.read16kMono(Self.audioDir.appendingPathComponent("ru-about-me.wav")).map { $0 / 30 }
+        let r = try engine.transcribe(quiet, language: "ru", prompt: nil, reducedContext: true)
+        #expect(r.text.lowercased().contains("себе"))
+    }
+
+    @Test func normalizationCapsGain() {
+        let loud: [Float] = [0.6, -0.6]
+        #expect(WhisperEngine.normalized(loud) == loud)
+        let quiet: [Float] = [0.001, -0.001]
+        #expect(abs((WhisperEngine.normalized(quiet).first ?? 0) - 0.04) < 1e-6) // ×40 максимум
+    }
+
     @Test func missingModelThrows() {
         #expect(throws: WhisperError.self) { try WhisperEngine(modelPath: "/nonexistent/model.bin") }
     }

@@ -39,7 +39,14 @@ public final class StreamingTranscriber: @unchecked Sendable {
         public var preRoll: Double = 0.3
         /// Предельная длина реплики: whisper работает окнами по 30 с, буфер — 30 с (R-04).
         public var maxUtterance: Double = 25
-        public var vad = EnergyVAD.Config()
+        /// VAD собеседника: звук Meet бывает очень тихим (живой созвон H-4: речь −47…−53 dBFS при фоне −85…−90),
+        /// поэтому абсолютный порог ниже, чем по умолчанию, а основную работу делает порог «шум + 10 дБ».
+        public var vad: EnergyVAD.Config = {
+            var c = EnergyVAD.Config()
+            c.minSpeechDB = -62
+            c.hangoverMs = 350
+            return c
+        }()
 
         public init() {}
     }

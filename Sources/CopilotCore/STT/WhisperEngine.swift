@@ -44,7 +44,16 @@ public protocol SpeechRecognizer: AnyObject, Sendable {
 public final class WhisperEngine: SpeechRecognizer, @unchecked Sendable {
     public static let supportedLanguages = ["uk", "ru", "en"]
     /// Ниже этого уровня (dBFS по всему фрагменту) речи нет.
-    public static let silenceDB: Float = -55
+    public static let silenceDB: Float = -68
+
+    /// Тихий звук (созвон с тихим собеседником) поднимается до пика 0,5, но не больше чем в 40 раз (+32 дБ).
+    static func normalized(_ samples: [Float]) -> [Float] {
+        var peak: Float = 0
+        for s in samples { peak = max(peak, abs(s)) }
+        guard peak > 0, peak < 0.25 else { return samples }
+        let gain = min(0.5 / peak, 40)
+        return samples.map { $0 * gain }
+    }
 
     public let modelPath: String
     private let ctx: OpaquePointer
@@ -107,7 +116,7 @@ public final class WhisperEngine: SpeechRecognizer, @unchecked Sendable {
         let started = DispatchTime.now()
 
         // whisper требует не меньше ~1 с звука; короткие фрагменты дополняются тишиной.
-        var samples = input
+        var samples = Self.normalized(input)
         let minSamples = 16_000 + 1_600
         if samples.count < minSamples { samples += [Float](repeating: 0, count: minSamples - samples.count) }
         let audioSeconds = Double(input.count) / 16_000
@@ -190,7 +199,7 @@ public final class WhisperEngine: SpeechRecognizer, @unchecked Sendable {
     public func detectLanguage(_ input: [Float]) throws -> (String, [String: Float]) {
         lock.lock()
         defer { lock.unlock() }
-        var samples = input
+        var samples = Self.normalized(input)
         if samples.count < 17_600 { samples += [Float](repeating: 0, count: 17_600 - samples.count) }
         return try detectLanguageLocked(samples)
     }

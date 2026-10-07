@@ -307,6 +307,30 @@ struct ProviderChainTests {
         #expect(chain.steps.map(\.model) == ["gemini-3.8-flash", "gemini-flash-lite-latest", "deepseek-flash", "claude-sonnet-5-5"])
     }
 
+    @Test func slowModelIsSkippedNextTime() async {
+        let health = ProviderHealth()
+        let steps = [
+            ProviderChain.Step(provider: MockProvider(id: .gemini, behavior: .hang), model: "slow", key: "k"),
+            ProviderChain.Step(provider: MockProvider(id: .gemini, behavior: .reply(["ok"])), model: "lite", key: "k"),
+        ]
+        let first = await run(ProviderChain(steps: steps, firstTokenTimeout: 0.2, health: health))
+        #expect(first.contains(.providerFailed(.gemini, .firstTokenTimeout)))
+        // Второй ход: медленная модель в конце очереди — сразу отвечает запасная.
+        let second = await run(ProviderChain(steps: steps, firstTokenTimeout: 0.2, health: health))
+        #expect(second.first == .attempt(.gemini, model: "lite"))
+        #expect(text(second) == "ok")
+    }
+
+    @Test func invalidKeyDoesNotCoolDown() {
+        let health = ProviderHealth()
+        health.reportFailure(.gemini, "m", .http(status: 401, message: ""))
+        #expect(!health.isCoolingDown(.gemini, "m"))
+        health.reportFailure(.gemini, "m", .http(status: 503, message: ""))
+        #expect(health.isCoolingDown(.gemini, "m"))
+        health.reportSuccess(.gemini, "m")
+        #expect(!health.isCoolingDown(.gemini, "m"))
+    }
+
     @Test func budgetSuspendsPaidProviders() {
         var s = AppSettings()
         s.paidProvidersSuspended = true

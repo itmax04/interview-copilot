@@ -19,6 +19,39 @@ public enum ChainEvent: Sendable, Equatable {
     case exhausted(reason: String)
 }
 
+/// Память о недавно отказавших моделях: модель, не ответившая вовремя или вернувшая 429/5xx, пропускается
+/// несколько минут, чтобы каждый ход не терял 4 с на её таймауте (живой созвон H-4: gemini-3.8-flash раз за разом
+/// не отвечала за 4 с, первые слова приходили через 4,8 с вместо ≤ 2,5 с).
+public final class ProviderHealth: @unchecked Sendable {
+    public static let shared = ProviderHealth()
+    private let lock = NSLock()
+    private var until: [String: Date] = [:]
+    public var cooldown: TimeInterval = 300
+
+    public init() {}
+
+    static func key(_ p: ProviderID, _ model: String) -> String { "\(p.rawValue)/\(model)" }
+
+    public func isCoolingDown(_ p: ProviderID, _ model: String, now: Date = Date()) -> Bool {
+        lock.withLock { (until[Self.key(p, model)] ?? .distantPast) > now }
+    }
+
+    public func reportFailure(_ p: ProviderID, _ model: String, _ error: LLMError, now: Date = Date()) {
+        switch error {
+        case .firstTokenTimeout, .http(429, _), .network: break
+        case .http(let s, _) where s >= 500: break
+        default: return
+        }
+        lock.withLock { until[Self.key(p, model)] = now.addingTimeInterval(cooldown) }
+    }
+
+    public func reportSuccess(_ p: ProviderID, _ model: String) {
+        lock.withLock { until[Self.key(p, model)] = nil }
+    }
+
+    public func reset() { lock.withLock { until.removeAll() } }
+}
+
 /// Цепочка провайдеров с автопереходом — R-09.
 /// Порядок из настроек, провайдеры без ключа пропускаются; переход при 429/5xx, сетевой ошибке, отказе модели,
 /// неверном ключе (400/401/403 — без повтора у того же провайдера) и если первый токен не пришёл за `firstTokenTimeout`.
@@ -37,10 +70,12 @@ public struct ProviderChain: Sendable {
 
     public var steps: [Step]
     public var firstTokenTimeout: Double
+    public var health: ProviderHealth?
 
-    public init(steps: [Step], firstTokenTimeout: Double = 4) {
+    public init(steps: [Step], firstTokenTimeout: Double = 4, health: ProviderHealth? = nil) {
         self.steps = steps
         self.firstTokenTimeout = firstTokenTimeout
+        self.health = health
     }
 
     /// Запуск. Отмена задачи-потребителя (новый ход, R-10) прерывает текущий запрос.
@@ -49,7 +84,13 @@ public struct ProviderChain: Sendable {
             let task = Task {
                 let start = DispatchTime.now().uptimeNanoseconds
                 var reasons: [String] = []
-                let usable = steps.filter { $0.key?.isEmpty == false }
+                var usable = steps.filter { $0.key?.isEmpty == false }
+                // Недавно отказавшие модели — в конец очереди (не выкидываем: вдруг все остальные тоже не отвечают).
+                if let health {
+                    let fresh = usable.filter { !health.isCoolingDown($0.provider.id, $0.model) }
+                    let cooling = usable.filter { health.isCoolingDown($0.provider.id, $0.model) }
+                    usable = fresh + cooling
+                }
                 if usable.isEmpty {
                     continuation.yield(.exhausted(reason: "нет ключей"))
                     continuation.finish()
@@ -67,6 +108,7 @@ public struct ProviderChain: Sendable {
                     attemptIndex += 1
                     do {
                         try await Self.runStep(step, request: request, timeout: firstTokenTimeout, start: start, continuation: continuation)
+                        health?.reportSuccess(pid, step.model)
                         continuation.finish()
                         return
                     } catch let error as LLMError {
@@ -75,6 +117,7 @@ public struct ProviderChain: Sendable {
                         if case .http(_, let m) = error { detail = m }
                         Log.llm.error("provider \(pid.rawValue, privacy: .public) model=\(step.model, privacy: .public) failed: \(error.description, privacy: .public) \(String(detail.prefix(200)), privacy: .public)")
                         continuation.yield(.providerFailed(pid, error))
+                        health?.reportFailure(pid, step.model, error)
                         reasons.append("\(pid.displayName) \(step.model): \(error.description)")
                         if error.isInvalidKey { invalidKey.insert(pid) }
                         guard error.triggersFallback else { break }
@@ -188,7 +231,7 @@ public enum ChainFactory {
                 steps.append(ProviderChain.Step(provider: provider, model: backup, key: key))
             }
         }
-        return ProviderChain(steps: steps, firstTokenTimeout: settings.firstTokenTimeout)
+        return ProviderChain(steps: steps, firstTokenTimeout: settings.firstTokenTimeout, health: .shared)
     }
 
     /// Сильная модель (S-05, S-06): только она, без цепочки. Без ключа — nil (кнопка неактивна).
