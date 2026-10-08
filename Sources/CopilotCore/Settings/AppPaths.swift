@@ -17,6 +17,8 @@ public enum AppPaths {
         return root.appendingPathComponent("models", isDirectory: true)
     }
 
+    public static var parakeetModels: URL { models.appendingPathComponent("parakeet-tdt-0.6b-v3", isDirectory: true) }
+
     public static var profile: URL { root.appendingPathComponent("profile", isDirectory: true) }
     public static var sessions: URL { root.appendingPathComponent("sessions", isDirectory: true) }
     public static var cache: URL { root.appendingPathComponent("cache", isDirectory: true) }

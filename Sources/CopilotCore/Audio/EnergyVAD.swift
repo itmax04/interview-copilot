@@ -48,14 +48,27 @@ public struct EnergyVAD: Sendable {
     /// Подать сэмплы; возвращает изменения состояния (true — началась речь, false — закончилась) по порядку.
     @discardableResult
     public mutating func process(_ samples: [Float]) -> [Bool] {
+        processEvents(samples).map(\.isSpeech)
+    }
+
+    /// Позиция перехода — конец обработанного кадра относительно начала этого блока.
+    public struct Event: Sendable, Equatable {
+        public let isSpeech: Bool
+        public let sampleOffset: Int
+    }
+
+    public mutating func processEvents(_ samples: [Float]) -> [Event] {
+        let carried = pending.count
         pending.append(contentsOf: samples)
-        var changes: [Bool] = []
+        var changes: [Event] = []
         let n = frameSize
         var offset = 0
         while pending.count - offset >= n {
             let frame = pending[offset..<(offset + n)]
             offset += n
-            if let change = processFrame(Self.rmsDB(frame)) { changes.append(change) }
+            if let change = processFrame(Self.rmsDB(frame)) {
+                changes.append(Event(isSpeech: change, sampleOffset: offset - carried))
+            }
         }
         pending.removeFirst(offset)
         return changes

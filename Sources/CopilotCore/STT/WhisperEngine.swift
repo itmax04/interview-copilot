@@ -34,9 +34,15 @@ public struct Transcription: Sendable, Equatable {
 
 /// Распознавание речи — абстракция для тестов `StreamingTranscriber` без модели.
 public protocol SpeechRecognizer: AnyObject, Sendable {
+    /// Мультиязычный движок распознаёт напрямую, без отдельных прогонов uk/ru.
+    var nativeMultilingual: Bool { get }
     func transcribe(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription
     func detectLanguage(_ samples: [Float]) throws -> (String, [String: Float])
     func cancel()
+}
+
+public extension SpeechRecognizer {
+    var nativeMultilingual: Bool { false }
 }
 
 /// Обёртка C API whisper.cpp (ADR-0001 п. 5, R-03). Один экземпляр — один контекст; вызовы сериализуются.
@@ -147,8 +153,9 @@ public final class WhisperEngine: SpeechRecognizer, @unchecked Sendable {
         params.suppress_nst = true
         params.temperature = 0
         params.temperature_inc = 0 // без повторов с повышенной температурой: важнее задержка (AC-01)
-        // Ограничение длины: защита от зацикливания («що ми збираємо, що ми збираємо…»), которое ещё и стоит секунды.
-        params.max_tokens = Int32(min(220, Int(audioSeconds * 8) + 16))
+        // Короткий предварительный прогон ограничен по длине. Итог не режем по эвристике
+        // «8 токенов/с»: в быстрой речи и кириллице она может обрезать правильные слова.
+        params.max_tokens = reducedContext ? Int32(min(220, Int(audioSeconds * 8) + 16)) : 0
         if reducedContext {
             // 1500 кадров = 30 с; берём длину звука + запас, кратно 64 (известная практика whisper.cpp stream).
             let frames = Int((Double(samples.count) / 16_000 * 50).rounded(.up)) + 64
@@ -254,4 +261,3 @@ public final class WhisperEngine: SpeechRecognizer, @unchecked Sendable {
         return words.joined(separator: " ")
     }
 }
-

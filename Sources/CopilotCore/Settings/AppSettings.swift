@@ -71,6 +71,10 @@ public struct ModelIDs: Codable, Equatable, Sendable {
     }
 }
 
+public enum RecognitionBackend: String, Codable, CaseIterable, Sendable {
+    case parakeet, whisper
+}
+
 /// Все настройки приложения — R-18. Значения по умолчанию взяты из spec.md.
 public struct AppSettings: Codable, Equatable, Sendable {
     // Models
@@ -82,8 +86,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var firstTokenTimeout: Double = 4
 
     // Audio
-    /// Файл модели whisper в `…/InterviewCopilot/models/` (ADR-0001 п. 5: small по замерам P-04).
+    public var recognitionBackend: RecognitionBackend = .parakeet
+    /// Файл модели Whisper в `…/InterviewCopilot/models/`.
     public var whisperModel = AppSettings.defaultWhisperModel
+    /// Полный акустический контекст для итогового текста; быстрый предварительный текст сохраняется.
+    public var recognitionAccuracy = true
     public var audioSource: AudioSourceSetting = .auto
     /// Подсказывать распознаванию формулировки из базы вопросов (initial prompt). По замеру P-12 на сжатом звуке
     /// результат смешанный (одни фразы точнее, другие переводятся/повторяются) — выключено по умолчанию.
@@ -127,7 +134,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     /// Версия схемы настроек: при чтении старых значений по умолчанию они обновляются (см. `migrated()`).
     public var schemaVersion = AppSettings.currentSchema
-    public static let currentSchema = 4
+    public static let currentSchema = 5
 
     public init() {}
 
@@ -146,11 +153,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
             if s.whisperModel == "ggml-small-q5_1.bin" { s.whisperModel = AppSettings.defaultWhisperModel }
             s.schemaVersion = 4
         }
+        if s.schemaVersion < 5 {
+            if s.whisperModel == "ggml-medium-q5_0.bin" { s.whisperModel = AppSettings.defaultWhisperModel }
+            s.schemaVersion = 5
+        }
         return s
     }
 
-    /// medium: на сжатом звуке Meet small ошибается (H-4), medium распознаёт верно за 0,4–0,7 с (ADR-0001).
-    public static let defaultWhisperModel = "ggml-medium-q5_0.bin"
+    /// large-v3-turbo: локальный тест 2026-10-08 дал меньше ошибок, чем medium.
+    public static let defaultWhisperModel = "ggml-large-v3-turbo-q5_0.bin"
     public static let defaultEmbeddingModel = "bge-m3-q8_0.gguf"
     public static let pauseThresholdRange = 400...1500
     public static let bankThresholdRange = 0.5...0.99
@@ -188,7 +199,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         chain = v(.chain, d.chain)
         strongProvider = v(.strongProvider, d.strongProvider)
         firstTokenTimeout = v(.firstTokenTimeout, d.firstTokenTimeout)
+        recognitionBackend = v(.recognitionBackend, d.recognitionBackend)
         whisperModel = v(.whisperModel, d.whisperModel)
+        recognitionAccuracy = v(.recognitionAccuracy, d.recognitionAccuracy)
         audioSource = v(.audioSource, d.audioSource)
         recognitionPromptFromBank = v(.recognitionPromptFromBank, d.recognitionPromptFromBank)
         language = v(.language, d.language)

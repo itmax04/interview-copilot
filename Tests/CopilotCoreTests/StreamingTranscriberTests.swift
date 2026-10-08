@@ -5,8 +5,10 @@ import Testing
 /// Подменный распознаватель: возвращает длину звука и язык, считает вызовы.
 final class FakeRecognizer: SpeechRecognizer, @unchecked Sendable {
     private let lock = NSLock()
-    private(set) var transcribeCalls: [(samples: Int, language: String?)] = []
+    private var calls: [(samples: Int, language: String?, reducedContext: Bool, peak: Float)] = []
+    var transcribeCalls: [(samples: Int, language: String?, reducedContext: Bool, peak: Float)] { lock.withLock { calls } }
     private(set) var detectCalls = 0
+    var nativeMultilingual = false
     var detected = "uk"
     var text = "привіт"
     /// Средняя вероятность токенов по языку (для выбора uk/ru).
@@ -17,7 +19,7 @@ final class FakeRecognizer: SpeechRecognizer, @unchecked Sendable {
 
     func transcribe(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription {
         if delay > 0 { Thread.sleep(forTimeInterval: delay) }
-        lock.withLock { transcribeCalls.append((samples.count, language)) }
+        lock.withLock { calls.append((samples.count, language, reducedContext, samples.map { abs($0) }.max() ?? 0)) }
         let lang = language ?? detected
         return Transcription(text: text, language: lang, languageProbabilities: [:],
                              audioSeconds: Double(samples.count) / 16_000, elapsedMs: 1, noSpeechProbability: 0,
@@ -76,7 +78,11 @@ struct StreamingTranscriberTests {
     @Test func utteranceProducesStartPartialAndFinal() async {
         let (t, buffer, fake, sink) = make()
         feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
-        feed(t, buffer, EnergyVADTests.tone(ms: 2500, amplitude: 0.3))
+        feed(t, buffer, EnergyVADTests.tone(ms: 2000, amplitude: 0.3))
+        // Даём первой задаче освободить очередь, затем приходят новые сэмплы настоящего потока.
+        try? await Task.sleep(for: .milliseconds(50))
+        feed(t, buffer, EnergyVADTests.tone(ms: 500, amplitude: 0.3))
+        #expect(await sink.waitFor { $0.contains { if case .partial = $0 { true } else { false } } })
         feed(t, buffer, EnergyVADTests.noise(ms: 600, amplitude: 0.001))
         let ok = await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } }
         #expect(ok)
@@ -188,4 +194,74 @@ struct StreamingTranscriberTests {
         let finals = sink.events.compactMap { e -> Int? in if case .final(let u, _, _, _, _) = e { u } else { nil } }
         #expect(finals == [1, 2])
     }
+    @Test func queuedFinalKeepsAudioAndLanguageAfterBufferWraps() async {
+        let (t, buffer, fake, sink) = make(language: "en")
+        fake.delay = 0.3
+        feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
+        feed(t, buffer, EnergyVADTests.tone(ms: 1500, amplitude: 0.3))
+        feed(t, buffer, EnergyVADTests.noise(ms: 600, amplitude: 0.001))
+        t.setLanguage("ru")
+        feed(t, buffer, EnergyVADTests.tone(ms: 1500, amplitude: 0.3))
+        feed(t, buffer, EnergyVADTests.noise(ms: 600, amplitude: 0.001))
+        // Новые 31 с вытесняют обе фразы, пока модель занята. Итоги обязаны сохранить их звук.
+        buffer.append([Float](repeating: 0, count: 31 * 16_000))
+        #expect(await sink.waitFor { $0.filter { if case .final = $0 { true } else { false } }.count == 2 })
+        let languages = sink.events.compactMap { e -> String? in
+            if case .final(_, _, let language, _, _) = e { language } else { nil }
+        }
+        #expect(languages == ["en", "ru"])
+        let finals = fake.transcribeCalls.filter { !$0.reducedContext }
+        #expect(finals.count == 2)
+        #expect(finals.allSatisfy { $0.samples >= 24_000 && $0.peak > 0.25 })
+    }
+
+    @Test func oneAudioBlockCanContainTwoCompleteUtterances() async {
+        let (t, buffer, fake, sink) = make(language: "en")
+        let phrase = EnergyVADTests.tone(ms: 800, amplitude: 0.3)
+            + EnergyVADTests.noise(ms: 600, amplitude: 0.001)
+        let audio = EnergyVADTests.noise(ms: 300, amplitude: 0.001) + phrase + phrase
+        buffer.append(audio)
+        t.process(audio)
+        #expect(await sink.waitFor { $0.filter { if case .final = $0 { true } else { false } }.count == 2 })
+        let calls = fake.transcribeCalls
+        #expect(calls.count == 2)
+        #expect(calls.allSatisfy { $0.samples > 12_800 && $0.samples < 24_000 })
+        #expect(!calls.contains { $0.reducedContext })
+        #expect(sink.events.prefix(4).map { e -> String in
+            switch e {
+            case .speechStarted(let u): "start\(u)"
+            case .speechEnded(let u, _): "end\(u)"
+            default: "text"
+            }
+        } == ["start1", "end1", "start2", "end2"])
+    }
+
+    @Test func fastModeCanStillUseReducedFinalContext() async {
+        let buffer = AudioRingBuffer(seconds: 30)
+        let fake = FakeRecognizer()
+        let sink = EventSink()
+        var config = StreamingTranscriber.Config()
+        config.finalReducedContext = true
+        config.partialInterval = 100
+        let t = StreamingTranscriber(recognizer: fake, buffer: buffer, config: config) { sink.add($0) }
+        t.setLanguage("en")
+        feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
+        feed(t, buffer, EnergyVADTests.tone(ms: 800, amplitude: 0.3))
+        feed(t, buffer, EnergyVADTests.noise(ms: 600, amplitude: 0.001))
+        #expect(await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } })
+        #expect(fake.transcribeCalls.count == 1)
+        #expect(fake.transcribeCalls.first?.reducedContext == true)
+    }
+
+    @Test func nativeMultilingualDoesNotRunWhisperLanguageComparison() async {
+        let (t, buffer, fake, sink) = make()
+        fake.nativeMultilingual = true
+        feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
+        feed(t, buffer, EnergyVADTests.tone(ms: 2200, amplitude: 0.3))
+        feed(t, buffer, EnergyVADTests.noise(ms: 600, amplitude: 0.001))
+        #expect(await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } })
+        #expect(fake.detectCalls == 0)
+        #expect(fake.transcribeCalls.allSatisfy { $0.language == nil })
+    }
+
 }

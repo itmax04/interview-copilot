@@ -37,6 +37,8 @@ final class ListeningController {
 
     private var transcriber: StreamingTranscriber?
     private var loadingModel = false
+    private var recognizerGeneration = 0
+    private var stopping = false
 
     /// Буфер последних 30 с звука собеседника (R-04). Читает распознавание (P-04).
     let buffer = AudioRingBuffer(seconds: 30)
@@ -82,6 +84,7 @@ final class ListeningController {
 
     /// Запуск при старте приложения и после выдачи разрешений.
     func start() {
+        stopping = false
         // Микрофону разрешение «Запись экрана» не нужно.
         guard usesMicrophone || Permissions.screenCaptureGranted else {
             setPhase(.noPermission)
@@ -181,6 +184,8 @@ final class ListeningController {
 
     /// Остановка и освобождение модели перед выходом.
     func shutdown() {
+        stopping = true
+        recognizerGeneration += 1
         transcriberBox.set(nil)
         transcriber?.setPaused(true)
         transcriber = nil
@@ -203,10 +208,22 @@ final class ListeningController {
         transcriber?.setLanguage(model.settings.language.whisperCode)
     }
 
-    /// Загрузка модели whisper в фоне (≈0,5 с для small). Без модели слушание идёт, но текста нет.
+    /// Смена модели или режима точности: старая очередь больше не выдаёт текст.
+    func recognitionSettingsChanged() {
+        recognizerGeneration += 1
+        transcriberBox.set(nil)
+        transcriber?.setPaused(true)
+        transcriber = nil
+        partialText = nil
+        loadRecognizer()
+    }
+
+    /// Загрузка выбранного локального движка в фоне. Без модели слушание идёт, но текста нет.
     private func loadRecognizer() {
-        guard transcriber == nil, !loadingModel else { return }
-        let path = AppPaths.model(model.settings.whisperModel).path
+        guard !stopping, transcriber == nil, !loadingModel else { return }
+        let useParakeet = model.settings.recognitionBackend == .parakeet
+            && FileManager.default.fileExists(atPath: AppPaths.parakeetModels.path)
+        let path = useParakeet ? AppPaths.parakeetModels.path : AppPaths.model(model.settings.whisperModel).path
         guard FileManager.default.fileExists(atPath: path) else {
             sttStatus = "Нет модели распознавания: \(model.settings.whisperModel) (scripts/fetch-models.sh)"
             Log.stt.error("whisper model missing: \(self.model.settings.whisperModel, privacy: .public)")
@@ -215,26 +232,44 @@ final class ListeningController {
         loadingModel = true
         sttStatus = "Загружаю модель распознавания…"
         let buffer = self.buffer
-        let language = model.settings.language.whisperCode
+        let reducedContext = !model.settings.recognitionAccuracy
+        let generation = recognizerGeneration
         Task { [weak self] in
-            let result = await Task.detached(priority: .userInitiated) { Result { try WhisperEngine(modelPath: path) } }.value
-            self?.recognizerLoaded(result, path: path, buffer: buffer, language: language)
+            let result: Result<any SpeechRecognizer, Error> = await Task.detached(priority: .userInitiated) {
+                do {
+                    let engine: any SpeechRecognizer
+                    if useParakeet { engine = try await ParakeetEngine.load(from: URL(fileURLWithPath: path)) }
+                    else { engine = try WhisperEngine(modelPath: path) }
+                    return .success(engine)
+                } catch { return .failure(error) }
+            }.value
+            self?.recognizerLoaded(result, path: path, buffer: buffer, reducedContext: reducedContext, generation: generation)
         }
     }
 
-    private func recognizerLoaded(_ result: Result<WhisperEngine, Error>, path: String, buffer: AudioRingBuffer, language: String?) {
+    private func recognizerLoaded(_ result: Result<any SpeechRecognizer, Error>, path: String, buffer: AudioRingBuffer, reducedContext: Bool, generation: Int) {
         loadingModel = false
+        guard !stopping else { return }
+        guard generation == recognizerGeneration else { loadRecognizer(); return }
         switch result {
         case .success(let engine):
-            let t = StreamingTranscriber(recognizer: engine, buffer: buffer) { [weak self] event in
-                Task { @MainActor in self?.handle(event) }
+            var config = StreamingTranscriber.Config()
+            config.finalReducedContext = reducedContext
+            let t = StreamingTranscriber(recognizer: engine, buffer: buffer, config: config) { [weak self] event in
+                Task { @MainActor in
+                    guard let self, self.recognizerGeneration == generation else { return }
+                    self.handle(event)
+                }
             }
-            t.setLanguage(language)
+            t.setLanguage(model.settings.language.whisperCode)
             t.setPromptProvider(promptProvider)
             t.setPaused(phase == .paused)
             transcriberBox.set(t)
             transcriber = t
-            sttStatus = "Распознавание: \((path as NSString).lastPathComponent)"
+            let name = engine.nativeMultilingual ? "Parakeet v3" : (path as NSString).lastPathComponent
+            let fallback = model.settings.recognitionBackend == .parakeet && !engine.nativeMultilingual
+                ? " (Parakeet не установлен, используется Whisper)" : ""
+            sttStatus = "Распознавание: \(name)\(fallback)"
         case .failure(let error):
             sttStatus = "Ошибка модели: \(error)"
         }

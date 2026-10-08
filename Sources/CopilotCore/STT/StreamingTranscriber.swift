@@ -27,6 +27,8 @@ public final class StreamingTranscriber: @unchecked Sendable {
     public struct Config: Sendable {
         /// Как часто обновлять частичный текст, с.
         public var partialInterval: Double = 0.8
+        /// Итог использует полный контекст; частичный текст остаётся быстрым.
+        public var finalReducedContext = false
         /// С какой длины реплики определять язык, с.
         public var languageDetectAfter: Double = 1.2
         /// Уточнять язык, пока уверенность ниже порога, каждые `languageRefineStep` с звука, но не дольше `languageRefineUntil`.
@@ -137,50 +139,68 @@ public final class StreamingTranscriber: @unchecked Sendable {
         if cancel { recognizer.cancel() }
     }
 
-    /// Новые сэмплы собеседника. Вызывается из очереди захвата; буфер пополняет вызывающий код.
+    private struct FinalRequest: Sendable {
+        let utterance: Int
+        let audio: [Float]
+        let language: String?
+        let languageWasExplicit: Bool
+        let usesSessionLanguage: Bool
+        let phraseEnd: UInt64
+        let epoch: Int
+    }
+
+    /// Новые сэмплы собеседника. Буфер пополняет вызывающий код.
     public func process(_ samples: [Float]) {
         let sr = Double(buffer.sampleRate)
-        var startedUtterance: Int?
-        var finalRange: (Int, Int64, Int64)?
+        var events: [TranscriptEvent] = []
+        var finals: [FinalRequest] = []
         var partialRequest: (Int, Int64, Int64, Bool)?
         let now = DispatchTime.now().uptimeNanoseconds
 
         lock.lock()
-        if paused {
-            lock.unlock()
-            return
-        }
+        if paused { lock.unlock(); return }
         let end = buffer.endPosition
-        for change in vad.process(samples) {
-            if change {
+        let blockStart = end - Int64(samples.count)
+        func finish(at boundary: Int64, from start: Int64) {
+            let lag = Double(end - boundary) / sr + Double(config.vad.hangoverMs) / 1000
+            let lagNs = UInt64(max(0, lag) * 1_000_000_000)
+            let phraseEnd = now > lagNs ? now - lagNs : now
+            // Сохраняем звук и язык сейчас: очередь может ждать дольше срока кольцевого буфера.
+            finals.append(FinalRequest(utterance: utterance, audio: buffer.read(from: start, to: boundary),
+                                       language: language ?? utteranceLanguage, languageWasExplicit: language != nil,
+                                       usesSessionLanguage: utteranceUsesSessionLanguage,
+                                       phraseEnd: phraseEnd, epoch: epoch))
+            events.append(.speechEnded(utterance: utterance, at: phraseEnd))
+        }
+        for change in vad.processEvents(samples) {
+            let boundary = blockStart + Int64(change.sampleOffset)
+            if change.isSpeech {
                 utterance += 1
-                utteranceStart = max(buffer.startPosition, end - Int64(samples.count) - Int64(config.preRoll * sr))
+                utteranceStart = max(buffer.startPosition, boundary - Int64(config.preRoll * sr))
                 utteranceUsesSessionLanguage = language == nil && sessionLanguage != nil
                 utteranceLanguage = language ?? sessionLanguage
                 utteranceLanguageConfidence = utteranceLanguage == nil ? 0 : 1
                 languageDetectedAtLength = 0
                 utteranceSlavic = false
-                // Язык разговора uk или ru: детектор пропускаем, но uk/ru по-прежнему сравниваем (прерываемо) —
-                // собеседник может перейти с русского на украинский.
                 if utteranceUsesSessionLanguage, sessionLanguage == "uk" || sessionLanguage == "ru" {
                     utteranceSlavic = true
                     utteranceLanguageConfidence = 0.5
                 }
-                lastPartialAt = end
-                startedUtterance = utterance
+                lastPartialAt = boundary
+                events.append(.speechStarted(utterance: utterance))
             } else if let start = utteranceStart {
-                finalRange = (utterance, start, end)
+                finish(at: boundary, from: start)
                 utteranceStart = nil
             }
         }
         if let start = utteranceStart {
             let length = Double(end - start) / sr
             if length >= config.maxUtterance {
-                // Слишком длинная реплика — закрываем и сразу начинаем следующую.
-                finalRange = (utterance, start, end)
+                finish(at: end, from: start)
                 utterance += 1
                 utteranceStart = end
-                startedUtterance = utterance
+                lastPartialAt = end
+                events.append(.speechStarted(utterance: utterance))
             } else if !partialBusy, Double(end - lastPartialAt) / sr >= config.partialInterval {
                 partialBusy = true
                 lastPartialAt = end
@@ -194,16 +214,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
         }
         lock.unlock()
 
-        if let u = startedUtterance { onEvent(.speechStarted(utterance: u)) }
-        if let (u, start, end) = finalRange {
-            // Итог важнее частичного: прерываем текущий прогон, только если это частичный текст
-            // (итог предыдущей реплики прерывать нельзя — его текст пропал бы).
-            if lock.withLock({ runningPartial }) { recognizer.cancel() }
-            let hangoverNs = UInt64(config.vad.hangoverMs) * 1_000_000
-            let phraseEnd = now > hangoverNs ? now - hangoverNs : now
-            onEvent(.speechEnded(utterance: u, at: phraseEnd))
-            let scheduledEpoch = lock.withLock { epoch }
-            work.async { [weak self] in self?.runFinal(utterance: u, from: start, to: end, phraseEnd: phraseEnd, epoch: scheduledEpoch) }
+        for event in events { onEvent(event) }
+        if !finals.isEmpty, lock.withLock({ runningPartial }) { recognizer.cancel() }
+        for request in finals {
+            work.async { [weak self] in self?.runFinal(request) }
         }
         if let (u, start, end, needsLanguage) = partialRequest {
             work.async { [weak self] in self?.runPartial(utterance: u, from: start, to: end, detectLanguage: needsLanguage) }
@@ -220,6 +234,18 @@ public final class StreamingTranscriber: @unchecked Sendable {
         // Реплика уже закрыта — частичный текст не нужен.
         guard lock.withLock({ u == utterance && utteranceStart != nil }) else { return }
         let audio = buffer.read(from: start, to: end)
+        if recognizer.nativeMultilingual {
+            let specified = lock.withLock { language }
+            guard let result = try? recognizer.transcribe(audio, language: specified, prompt: nil, reducedContext: true),
+                  !isClosed(u), !result.text.isEmpty else { return }
+            lock.withLock {
+                guard u == utterance else { return }
+                utteranceLanguage = result.language
+                utteranceLanguageConfidence = 1
+            }
+            onEvent(.partial(utterance: u, text: result.text))
+            return
+        }
         var resolved: Transcription?
         let slavicKnown = lock.withLock { utteranceSlavic }
         if detectLanguage, let r = resolveLanguage(audio, skipDetector: slavicKnown, isCancelled: { [weak self] in
@@ -295,15 +321,15 @@ public final class StreamingTranscriber: @unchecked Sendable {
                              ukMinusRu: uk.averageTokenProbability - ru.averageTokenProbability, transcription: winner)
     }
 
-    private func runFinal(utterance u: Int, from start: Int64, to end: Int64, phraseEnd: UInt64, epoch scheduledEpoch: Int) {
-        guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return } // пауза после конца фразы — не выдаём
-        let audio = buffer.read(from: start, to: end)
+    private func runFinal(_ request: FinalRequest) {
+        let u = request.utterance
+        let scheduledEpoch = request.epoch
+        let phraseEnd = request.phraseEnd
+        guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
+        let audio = request.audio
         guard !audio.isEmpty else { return }
-        var lang = lock.withLock { () -> String? in
-            if language != nil { return language }
-            return u == utterance ? utteranceLanguage : nil
-        }
-        if lang == nil {
+        var lang = recognizer.nativeMultilingual && !request.languageWasExplicit ? nil : request.language
+        if lang == nil && !recognizer.nativeMultilingual {
             // Короткая реплика: язык не успели определить во время речи.
             if let known = lock.withLock({ lastLanguage }) {
                 lang = known // короткая реплика — язык прошлой, без лишних прогонов
@@ -318,12 +344,12 @@ public final class StreamingTranscriber: @unchecked Sendable {
             }
         }
         do {
-            let result = try recognizer.transcribe(audio, language: lang, prompt: prompt(for: lang), reducedContext: true)
+            let result = try recognizer.transcribe(audio, language: lang, prompt: prompt(for: lang), reducedContext: config.finalReducedContext)
             let seconds = Double(audio.count) / Double(buffer.sampleRate)
             lock.withLock {
                 lastLanguage = result.language
                 guard language == nil, u == utterance || utteranceStart == nil else { return }
-                if utteranceUsesSessionLanguage {
+                if request.usesSessionLanguage {
                     // Две длинные реплики подряд с низкой уверенностью — возможно, собеседник сменил язык: снова определяем.
                     if seconds >= 1.5 && result.averageTokenProbability < 0.7 {
                         lowConfidenceStreak += 1

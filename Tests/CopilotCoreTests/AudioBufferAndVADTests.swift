@@ -98,4 +98,16 @@ struct EnergyVADTests {
         let db = EnergyVAD.rmsDB([Float](repeating: 0.5, count: 100)[...])
         #expect(abs(db - (-6.02)) < 0.1)
     }
+    @Test func eventOffsetsIncludeCarriedPartialFrame() {
+        var vad = EnergyVAD()
+        let prefix = [Float](repeating: 0, count: 160)
+        vad.process(prefix)
+        let samples = [Float](repeating: 0, count: 4640)
+            + Self.tone(ms: 400, amplitude: 0.3)
+            + [Float](repeating: 0, count: 6400)
+        let changes = vad.processEvents(samples)
+        #expect(changes.map(\.isSpeech) == [true, false])
+        #expect(changes.map(\.sampleOffset) == [5600, 15840])
+    }
+
 }

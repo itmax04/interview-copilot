@@ -1,4 +1,4 @@
-// swift-tools-version:6.0
+// swift-tools-version:6.2
 import PackageDescription
 
 // Стек и разрешённые зависимости — docs/decisions/ADR-0001-stack.md (п. 2, 9).
@@ -12,6 +12,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "6.2.2"),
+        .package(url: "https://github.com/FluidInference/FluidAudio.git", exact: "0.17.7", traits: []),
     ],
     targets: [
         // whisper.cpp — готовый XCFramework из релизов (ADR-0001 п. 5); SHA256 = сумма архива из GitHub Releases.
@@ -32,7 +33,8 @@ let package = Package(
         ),
         .target(
             name: "CopilotCore",
-            dependencies: [.product(name: "Yams", package: "Yams"), "whisper"]
+            dependencies: [.product(name: "Yams", package: "Yams"),
+                           .product(name: "FluidAudio", package: "FluidAudio"), "whisper"]
         ),
         .executableTarget(
             name: "InterviewCopilot",

@@ -34,7 +34,8 @@ func finish(_ code: Int32) -> Never {
 }
 
 switch args.first {
-case "stt":
+case "stt", "stt-parakeet":
+    let useParakeet = args.first == "stt-parakeet"
     args.removeFirst()
     let lang = option("--lang")
     let repeats = Int(option("--repeat") ?? "1") ?? 1
@@ -42,8 +43,11 @@ case "stt":
     guard args.count >= 2 else { fail("usage: copilot-eval stt <model.bin> <file.wav>... [--lang xx] [--full-context] [--repeat N]") }
     let memBefore = ProcessMemory.footprintMB()
     let loadStart = Date()
-    let engine: WhisperEngine
-    do { engine = try WhisperEngine(modelPath: args[0]) } catch { fail("\(error)", code: 1) }
+    let engine: any SpeechRecognizer
+    do {
+        if useParakeet { engine = try await ParakeetEngine.load(from: URL(fileURLWithPath: args[0])) }
+        else { engine = try WhisperEngine(modelPath: args[0]) }
+    } catch { fail("\(error)", code: 1) }
     print(String(format: "model=%@ load_ms=%.0f mem_after_load_mb=%.0f (before %.0f)",
                  (args[0] as NSString).lastPathComponent, Date().timeIntervalSince(loadStart) * 1000,
                  ProcessMemory.footprintMB(), memBefore))
@@ -53,7 +57,7 @@ case "stt":
         do { samples = try AudioFileReader.read16kMono(URL(fileURLWithPath: path)) } catch { fail("\(path): \(error)", code: 1) }
         for _ in 0..<repeats {
             do {
-                let r = try engine.transcribe(samples, language: lang, reducedContext: !fullContext)
+                let r = try engine.transcribe(samples, language: lang, prompt: nil, reducedContext: !fullContext)
                 peak = max(peak, ProcessMemory.footprintMB())
                 let probs = r.languageProbabilities.sorted { $0.key < $1.key }
                     .map { String(format: "%@=%.2f", $0.key, $0.value) }.joined(separator: " ")
@@ -73,18 +77,28 @@ case "stt-stream":
     // --gain 0.033 — имитация тихого собеседника в Meet (−30 дБ).
     let gain = Float(option("--gain") ?? "1") ?? 1
     let usePrompt = flag("--prompt-bank")
+    let useParakeet = flag("--parakeet")
+    let fast = flag("--fast")
     guard args.count >= 2 else { fail("usage: copilot-eval stt-stream <model.bin> <file.wav>... [--lang xx] [--gain k]") }
-    let engine: WhisperEngine
-    do { engine = try WhisperEngine(modelPath: args[0]) } catch { fail("\(error)", code: 1) }
+    let engine: any SpeechRecognizer
+    do {
+        if useParakeet { engine = try await ParakeetEngine.load(from: URL(fileURLWithPath: args[0])) }
+        else { engine = try WhisperEngine(modelPath: args[0]) }
+    } catch { fail("\(error)", code: 1) }
     let buffer = AudioRingBuffer(seconds: 30)
     final class Collector: @unchecked Sendable {
         let lock = NSLock()
         var latencies: [Double] = []
         var partials = 0
+        var ended = 0
     }
     let collector = Collector()
-    let transcriber = StreamingTranscriber(recognizer: engine, buffer: buffer) { event in
+    var config = StreamingTranscriber.Config()
+    config.finalReducedContext = fast
+    let transcriber = StreamingTranscriber(recognizer: engine, buffer: buffer, config: config) { event in
         switch event {
+        case .speechEnded:
+            collector.lock.withLock { collector.ended += 1 }
         case .partial:
             collector.lock.withLock { collector.partials += 1 }
         case .final(let u, let text, let language, let phraseEnd, let emitted):
@@ -117,11 +131,17 @@ case "stt-stream":
         do { play(try AudioFileReader.read16kMono(URL(fileURLWithPath: path)).map { $0 * gain }) } catch { fail("\(path): \(error)", code: 1) }
         play(silence)
     }
-    Thread.sleep(forTimeInterval: 2)
+    let deadline = Date().addingTimeInterval(30)
+    while Date() < deadline && collector.lock.withLock({ collector.latencies.count < collector.ended }) {
+        try? await Task.sleep(for: .milliseconds(20))
+    }
+    let pending = collector.lock.withLock { collector.ended - collector.latencies.count }
     let l = collector.lock.withLock { collector.latencies.sorted() }
     let median = l.isEmpty ? 0 : (l.count % 2 == 1 ? l[l.count / 2] : (l[l.count / 2 - 1] + l[l.count / 2]) / 2)
     print(String(format: "finals=%d partials=%d median_ms=%.0f max_ms=%.0f peak_mem_mb=%.0f",
                  l.count, collector.lock.withLock { collector.partials }, median, l.last ?? 0, ProcessMemory.footprintMB()))
+    if pending > 0 { fail("stt-stream: \(pending) final result(s) did not arrive", code: 1) }
+    finish(0)
 case "turn":
     // Eval `turn` (R-05): evals/turn/cases.jsonl → преждевременные/пропущенные ходы, задержка.
     args.removeFirst()

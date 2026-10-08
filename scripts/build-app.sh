@@ -29,10 +29,10 @@ APP="$STAGE/$APP_NAME.app"
 if [ -z "$IDENTITY" ]; then
   IDENTITY="${CANDIDATES[0]}"
   cat >&2 <<MSG
-error: сертификат подписи «$IDENTITY» не найден в Связке ключей.
+error: сертификат подписи «${IDENTITY}» не найден в Связке ключей.
 Создайте его по инструкции точки H-1 (docs/changes/COPILOT-01/plan.md):
 «Связка ключей» → меню «Связка ключей» → «Ассистент сертификации» → «Создать сертификат…»,
-имя «$IDENTITY», тип удостоверения «Самоподписанный корневой», тип сертификата «Подписание кода».
+имя «${IDENTITY}», тип удостоверения «Самоподписанный корневой», тип сертификата «Подписание кода».
 MSG
   exit 1
 fi
@@ -51,6 +51,7 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 find "$ROOT/Resources" -maxdepth 1 -type f ! -name Info.plist -exec cp {} "$APP/Contents/Resources/" \;
 cp -R "$ROOT/profile.example" "$APP/Contents/Resources/profile.example"
 cp "$ROOT/models.sha256" "$APP/Contents/Resources/models.sha256"
+cp "$ROOT/parakeet-models.json" "$APP/Contents/Resources/parakeet-models.json"
 
 # Иконка рисуется самим приложением (ParrotIcon), затем iconutil собирает .icns.
 "$BIN" --export-iconset "$STAGE/AppIcon.iconset"
@@ -58,12 +59,14 @@ iconutil -c icns "$STAGE/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.ic
 
 # Нативные библиотеки (whisper/llama XCFramework), если есть, кладутся в Frameworks.
 BIN_DIR="$(dirname "$BIN")"
+# Ресурсы FluidAudio относятся к синтезу речи LuxTTS. Parakeet их не использует;
+# модели ASR находятся в Application Support, поэтому bundle TTS сюда не копируется.
 if compgen -G "$BIN_DIR/*.framework" > /dev/null; then
   mkdir -p "$APP/Contents/Frameworks"
   cp -R "$BIN_DIR"/*.framework "$APP/Contents/Frameworks/"
 fi
 
-echo "==> подпись «$IDENTITY»"
+echo "==> подпись «${IDENTITY}»"
 xattr -cr "$APP"
 if [ -d "$APP/Contents/Frameworks" ]; then
   find "$APP/Contents/Frameworks" -maxdepth 1 -name "*.framework" -exec \

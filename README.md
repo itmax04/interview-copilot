@@ -20,6 +20,7 @@
 
 ## Быстрый запуск
 ```bash
+scripts/fetch-parakeet.py      # локальный Parakeet v3, фиксированная версия и SHA256
 scripts/fetch-models.sh        # модели whisper и эмбеддингов, проверка SHA256 (или мастер первого запуска)
 scripts/build-app.sh           # сборка и подпись dist/InterviewCopilot.app
 open dist/InterviewCopilot.app # попугай в строке меню; панель — ⌃⌥H
@@ -32,7 +33,8 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
 - **Listening — <app>**: источник звука (Auto: Zoom → Chrome → Telegram, конкретное приложение, весь системный звук
   или **Microphone (practice, no call)** — говорите сами в микрофон Mac, без созвона, для тренировки и проверки).
 - **Mode**: Question bank only / Bank + hint / Generate every answer.
-- **Language**: Auto (UK/RU/EN) или конкретный язык — если язык собеседования известен, выберите его: точнее и быстрее.
+- **Settings → Audio**: Parakeet v3 (основной локальный движок) или Whisper; для Whisper — large-v3-turbo и «Точный итоговый текст». Смена движка не требует перезапуска.
+- **Language**: Auto (UK/RU/EN) или конкретный язык — для Whisper известный язык точнее и быстрее. Parakeet сохраняет мультиязычный текст; настройка задаёт метку языка.
 - **Question bank…** — `~/Library/Application Support/InterviewCopilot/profile/questions.yaml`
   (формат — spec R-06; по 2+ формулировки на язык для каждой карточки). **Edit resume & stories…** — папка профиля.
 - Горячие клавиши (переназначаются в Settings → Hotkeys): ⌃⌥↩ ответить сейчас, ⌃⌥S скриншот, ⌃⌥H панель,
@@ -41,17 +43,17 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
   срок истории, вид панели, бюджет на платных провайдеров.
 
 ## Проверка
-- Быстрая: `swift build && swift test` (143 теста).
+- Быстрая: `swift build && swift test` (151 тест).
 - Полная: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh`.
 - Evals: `scripts/run-evals.sh [bank|turn]` — пороги и baseline в [evals/README.md](evals/README.md).
 - Метрики созвона: `scripts/metrics.py --last 30m` (AC-01…AC-03), память: `scripts/footprint-monitor.sh 10` (AC-05).
 - Живые проверки из приложения: `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`
   и `--smoke-screenshot evals/fixtures/two-sum.png` (тратят квоту Gemini).
-- CLI: `swift run -c release copilot-eval <stt|stt-stream|turn|bank|exit-check>`.
+- CLI: `swift run -c release copilot-eval <stt|stt-parakeet|stt-stream|turn|bank|exit-check>`.
 - Что и как тестировать дальше — [docs/changes/COPILOT-01/test-plan.md](docs/changes/COPILOT-01/test-plan.md).
 
 ## Структура
-- `Sources/CopilotCore/` — логика: `Audio/` (захват ScreenCaptureKit, VAD, буфер), `STT/` (whisper), `Turns/` (конец вопроса),
+- `Sources/CopilotCore/` — логика: `Audio/` (захват ScreenCaptureKit, VAD, буфер), `STT/` (Parakeet v3 / Whisper), `Turns/` (конец вопроса),
   `Bank/` (база, поиск, профиль), `LLM/` (провайдеры, цепочка, промпт), `Answer/`, `Privacy/`, `Capture/` (скриншот),
   `Storage/` (история), `Usage/` (расход), `Hotkeys/`, `Menu/`, `Models/` (загрузка моделей), `Settings/`, `Logging/`.
 - `Sources/CopilotEmbeddings/` — эмбеддинги на llama.cpp (отдельно от whisper из-за заголовков ggml).
@@ -66,7 +68,7 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
 ## Ограничения и безопасность
 - API-ключи — только в Связке ключей macOS. Не в коде, не в логах, не в чате, не в Git (`scripts/secret-scan.sh`).
 - Личный профиль и история сессий — в `~/Library/Application Support/InterviewCopilot/`, в Git не попадают.
-- Аудио на диск не записывается (буфер ≤ 30 с в памяти); сохраняется только текст сессий (срок хранения настраивается).
+- Аудио на диск не записывается (кольцевой буфер ≤ 30 с в памяти; закрытые фразы дополнительно сохраняются в памяти очереди до обработки); сохраняется только текст сессий (срок хранения настраивается).
 - В логах только события и задержки, без текста реплик и ответов.
 - Точность расшифровки зависит от звука: сжатый звук Meet с телефона распознаётся хуже (см. report.md, AC-10).
 - Репозиторий приватный: `itmax04/interview-copilot`.

@@ -72,10 +72,31 @@ struct AudioSettingsView: View {
             Picker("Язык", selection: $model.settings.language) {
                 ForEach(RecognitionLanguage.allCases, id: \.self) { Text($0.menuTitle).tag($0) }
             }
-            Text("Если язык собеседования известен заранее, выберите его: распознавание точнее и быстрее, чем в Auto.")
+            Text("Для Whisper выбор известного языка помогает распознаванию. Для Parakeet язык задаёт метку расшифровки, текст остаётся мультиязычным.")
                 .font(.footnote).foregroundStyle(.secondary)
+            Picker("Движок распознавания", selection: $model.settings.recognitionBackend) {
+                Text("Parakeet v3 — локально").tag(RecognitionBackend.parakeet)
+                Text("Whisper — локально").tag(RecognitionBackend.whisper)
+            }
+            if model.settings.recognitionBackend == .whisper {
+                Picker("Модель распознавания", selection: $model.settings.whisperModel) {
+                    Text("Whisper large-v3-turbo").tag("ggml-large-v3-turbo-q5_0.bin")
+                    Text("Whisper medium").tag("ggml-medium-q5_0.bin")
+                    Text("Whisper small").tag("ggml-small-q5_1.bin")
+                    if !["ggml-large-v3-turbo-q5_0.bin", "ggml-medium-q5_0.bin", "ggml-small-q5_1.bin"].contains(model.settings.whisperModel) {
+                        Text(model.settings.whisperModel).tag(model.settings.whisperModel)
+                    }
+                }
+                Toggle("Точный итоговый текст", isOn: $model.settings.recognitionAccuracy)
+                Text("Итог распознаётся с полным контекстом. Предварительный текст появляется раньше; итог может занять больше времени.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else {
+                Text("Распознаёт русский, украинский и английский без отдельного определения языка. Аудио обрабатывается на Mac.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
             Toggle("Подсказывать распознаванию формулировки из базы вопросов", isOn: $model.settings.recognitionPromptFromBank)
-            Text("Экспериментально: на сжатом звуке помогает одним фразам и мешает другим.")
+                .disabled(model.settings.recognitionBackend == .parakeet)
+            Text("Для Whisper, экспериментально: на сжатом звуке помогает одним фразам и мешает другим.")
                 .font(.footnote).foregroundStyle(.secondary)
             VStack(alignment: .leading) {
                 Text("Пауза конца вопроса T: \(model.settings.pauseThresholdMs) мс")

@@ -14,6 +14,7 @@ struct SettingsStoreTests {
         let (store, defaults, suite) = makeStore()
         defer { defaults.removePersistentDomain(forName: suite) }
         let s = store.load()
+        #expect(s.recognitionBackend == .parakeet)
         #expect(s.mode == .bankAndHint)                       // R-08
         #expect(s.chain == [.gemini, .deepseek, .anthropic])   // R-09
         #expect(s.firstTokenTimeout == 4)                      // R-09
@@ -34,6 +35,9 @@ struct SettingsStoreTests {
         var s = AppSettings()
         s.mode = .generateAlways
         s.language = .uk
+        s.recognitionAccuracy = false
+        s.recognitionBackend = .whisper
+        s.whisperModel = "ggml-large-v3-turbo-q5_0.bin"
         s.audioSource = .microphone
         s.modelIDs.gemini = "gemini-x"
         s.panelFontSize = .large
@@ -70,6 +74,7 @@ struct SettingsStoreTests {
         let s = store.load()
         #expect(s.mode == .bankOnly)
         #expect(s.pauseThresholdMs == 700)
+        #expect(s.recognitionAccuracy)
     }
 
     @Test func oldDefaultThresholdIsMigrated() {
@@ -97,4 +102,15 @@ struct SettingsStoreTests {
         #expect(!json.contains("apikey"))
         #expect(!json.contains("secret"))
     }
+    @Test func previousWhisperDefaultUpgradesButCurrentSelectionIsPreserved() throws {
+        let old = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"schemaVersion":4,"whisperModel":"ggml-medium-q5_0.bin"}"#.utf8))
+        #expect(old.migrated().whisperModel == AppSettings.defaultWhisperModel)
+        var current = AppSettings()
+        current.whisperModel = "ggml-medium-q5_0.bin"
+        #expect(current.migrated().whisperModel == current.whisperModel)
+        var custom = old
+        custom.whisperModel = "custom.bin"
+        #expect(custom.migrated().whisperModel == "custom.bin")
+    }
+
 }
