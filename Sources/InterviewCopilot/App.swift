@@ -27,7 +27,7 @@ enum InterviewCopilotMain {
         }
 
         let app = NSApplication.shared
-        let delegate = AppDelegate()
+        let delegate = AppDelegate(testCallOnly: args.contains("--test-call"))
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
         app.run()
@@ -36,7 +36,10 @@ enum InterviewCopilotMain {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private let testCallOnly: Bool
+    init(testCallOnly: Bool = false) { self.testCallOnly = testCallOnly; super.init() }
     private let model = AppModel()
+    private lazy var testCall = TestCallController(listening: listening)
     private lazy var listening = ListeningController(model: model)
     private var menuBar: MenuBarController?
     private lazy var settingsWindow = SettingsWindowController(model: model, hotkeyFailures: { [weak self] in
@@ -69,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         // Модели освобождаются до выхода: иначе ggml-metal падает в статических деструкторах.
+        testCall.stopServer()
         sessions.finish()
         bank.shutdown()
         listening.shutdown()
@@ -97,10 +101,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.onChange = { [weak self] in self?.settingsChanged() }
         listening.onChange = { [weak self] in self?.refreshUI() }
         listening.onTranscript = { [weak self] event in
-            self?.turns.handle(event)
-            if case .final(let u, let text, let lang, _, _) = event { self?.sessions.addUtterance(id: u, text: text, language: lang) }
+            guard let self else { return }
+            if self.testCall.active { self.testCall.handleTranscript(event); return }
+            guard !self.testCallOnly else { return }
+            self.turns.handle(event)
+            if case .final(let u, let text, let lang, _, _) = event { self.sessions.addUtterance(id: u, text: text, language: lang) }
         }
-        listening.onOwnerSpeaking = { [weak self] speaking, t in self?.turns.ownerSpeaking(speaking, at: t) }
+        listening.onOwnerSpeaking = { [weak self] speaking, t in
+            guard let self, !self.testCall.active else { return }
+            self.turns.ownerSpeaking(speaking, at: t)
+        }
+        testCall.onBegin = { [weak self] in
+            self?.answers.cancel()
+            self?.turns.stop()
+        }
+        testCall.onEnd = { [weak self] in
+            guard let self else { return }
+            if self.testCallOnly {
+                // Служебный локальный запуск не включает облачные ответы после закрытия теста.
+                self.listening.togglePause()
+            } else if self.listening.phase != .paused { self.turns.start() }
+            self.refreshUI()
+        }
+        testCall.onPermissions = { [weak self] in self?.permissionsWindow.show() }
         turns.onTurn = { [weak self] turn in self?.turnCompleted(turn) }
 
         panelModel.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
@@ -127,6 +150,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.refreshUI()
         }
         answers.onAnswer = { [weak self] record in self?.sessions.addAnswer(record) }
+        if testCallOnly {
+            testCall.start()
+            refreshUI()
+            return
+        }
         sessions.start(source: nil, retentionDays: model.settings.historyRetentionDays)
         bank.start(embeddingModel: model.settings.embeddingModel)
 
@@ -159,6 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if !force && s.audioSource != old.audioSource { listening.sourceSettingChanged() }
         if !force && (s.recognitionBackend != old.recognitionBackend || s.whisperModel != old.whisperModel || s.recognitionAccuracy != old.recognitionAccuracy) {
+            testCall.recognitionChanged()
             listening.recognitionSettingsChanged()
         }
         if !force && s.language != old.language { listening.languageSettingChanged() }
@@ -205,10 +234,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func turnCompleted(_ turn: Turn) {
+        guard !testCall.active, !testCallOnly else { return }
         answers.handle(turn)
     }
 
     private func handle(_ action: HotkeyAction) {
+        if (testCall.active || testCallOnly) && [.answerNow, .strongModel, .screenshot].contains(action) { return }
         switch action {
         case .answerNow: turns.forceTurn()
         case .togglePanel: togglePanel()
@@ -272,13 +303,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // S-08: при паузе ничего не отправляется — текущая генерация отменяется.
             answers.cancel()
             turns.stop()
-        } else {
+        } else if !testCall.active && !testCallOnly {
             turns.start()
         }
     }
 
     private func handle(_ action: MenuAction) {
+        if (testCall.active || testCallOnly) && [.answerNow, .screenshot].contains(action) { return }
         switch action {
+        case .practice:
+            testCall.start()
         case .settings:
             settingsWindow.show()
         case .quit:

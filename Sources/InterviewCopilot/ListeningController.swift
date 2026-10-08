@@ -45,7 +45,59 @@ final class ListeningController {
     private var capture: SystemAudioCapture?
     /// Микрофон как источник (режим самопроверки, запрос владельца 2026-10-07).
     private var micSource: MicrophoneCapture?
-    private var usesMicrophone: Bool { model.settings.audioSource == .microphone }
+    private var testSource: AudioSourceSetting?
+    private var effectiveSource: AudioSourceSetting { testSource ?? model.settings.audioSource }
+    private var usesMicrophone: Bool { effectiveSource == .microphone }
+    var recognitionReady: Bool { transcriber != nil && phase == .listening }
+    private var pausedBeforeTest = false
+    private var transcriptBeforeTest: [TranscriptLine] = []
+    private let deliveryEpoch = TranscriptDeliveryEpoch()
+
+    func beginTestCallCapture(_ source: AudioSourceSetting) async {
+        if testSource == nil {
+            pausedBeforeTest = phase == .paused
+            transcriptBeforeTest = transcript
+            transcript = []
+        }
+        deliveryEpoch.advance()
+        transcriber?.setPaused(true)
+        testSource = source
+        mic?.stop()
+        ownerSpeaking = false
+        transcriber?.setPaused(false)
+        transcriber?.setLanguage(nil)
+        transcriber?.setPromptProvider(nil)
+        loadRecognizer()
+        startLevelReporting()
+        await applySource(restart: true)
+    }
+
+    func resetTestCallPhrase() {
+        deliveryEpoch.advance()
+        transcriber?.setPaused(true)
+        transcriber?.setPaused(false)
+    }
+
+    func endTestCallCapture() async {
+        deliveryEpoch.advance()
+        transcriber?.setPaused(true)
+        testSource = nil
+        transcriber?.setLanguage(model.settings.language.whisperCode)
+        transcriber?.setPromptProvider(promptProvider)
+        transcript = transcriptBeforeTest
+        transcriptBeforeTest = []
+        partialText = nil
+        if pausedBeforeTest {
+            await capture?.stop()
+            micSource?.stop()
+            source = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
+            setPhase(.paused)
+        } else {
+            if !usesMicrophone { startMic() }
+            await applySource(restart: true)
+            transcriber?.setPaused(false)
+        }
+    }
     private var mic: MicActivityDetector?
     private let model: AppModel
     private var observers: [NSObjectProtocol] = []
@@ -127,12 +179,12 @@ final class ListeningController {
 
     private func runningAppsChanged() {
         guard phase != .paused, phase != .noPermission else { return }
-        let resolved = AudioSourceResolver.resolve(model.settings.audioSource, running: Self.runningApps())
+        let resolved = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
         if resolved != source { Task { await applySource(restart: false) } }
     }
 
     private func applySource(restart: Bool) async {
-        let resolved = AudioSourceResolver.resolve(model.settings.audioSource, running: Self.runningApps())
+        let resolved = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
         if resolved == .microphone {
             // Режим самопроверки: системный звук не нужен, микрофон — «собеседник»; определение речи владельца выключено.
             await capture?.stop()
@@ -198,14 +250,14 @@ final class ListeningController {
     /// Подсказка распознаванию из базы (настройка Audio → «Подсказывать словарь базы»).
     func setRecognitionPrompt(_ provider: (@Sendable (String) -> String?)?) {
         promptProvider = provider
-        transcriber?.setPromptProvider(provider)
+        transcriber?.setPromptProvider(testSource == nil ? provider : nil)
     }
 
     private var promptProvider: (@Sendable (String) -> String?)?
 
     /// Язык распознавания из настроек (R-03).
     func languageSettingChanged() {
-        transcriber?.setLanguage(model.settings.language.whisperCode)
+        transcriber?.setLanguage(testSource == nil ? model.settings.language.whisperCode : nil)
     }
 
     /// Смена модели или режима точности: старая очередь больше не выдаёт текст.
@@ -255,14 +307,16 @@ final class ListeningController {
         case .success(let engine):
             var config = StreamingTranscriber.Config()
             config.finalReducedContext = reducedContext
+            let deliveryEpoch = self.deliveryEpoch
             let t = StreamingTranscriber(recognizer: engine, buffer: buffer, config: config) { [weak self] event in
+                let eventEpoch = deliveryEpoch.current()
                 Task { @MainActor in
-                    guard let self, self.recognizerGeneration == generation else { return }
+                    guard let self, self.recognizerGeneration == generation, deliveryEpoch.current() == eventEpoch else { return }
                     self.handle(event)
                 }
             }
-            t.setLanguage(model.settings.language.whisperCode)
-            t.setPromptProvider(promptProvider)
+            t.setLanguage(testSource == nil ? model.settings.language.whisperCode : nil)
+            t.setPromptProvider(testSource == nil ? promptProvider : nil)
             t.setPaused(phase == .paused)
             transcriberBox.set(t)
             transcriber = t
@@ -323,7 +377,7 @@ final class ListeningController {
     }
 
     private func startMic() {
-        guard Permissions.microphone == .granted else { return }
+        guard testSource == nil, Permissions.microphone == .granted else { return }
         if mic == nil {
             mic = MicActivityDetector { [weak self] speaking in
                 let t = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
@@ -387,4 +441,12 @@ final class LevelMeter: @unchecked Sendable {
             return v
         }
     }
+}
+
+/// Не допускает доставки событий старой фразы после сброса или выхода из теста.
+final class TranscriptDeliveryEpoch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func advance() { lock.withLock { value += 1 } }
+    func current() -> Int { lock.withLock { value } }
 }

@@ -26,9 +26,9 @@ struct MenuLayoutTests {
         #expect(item(.screenshot).hotkey?.displayString == "⌃⌥S")
         #expect(item(.settings).shortcut == .command(","))
         #expect(item(.quit).shortcut == .command("q"))
-        // Practice mode неактивен, с пометкой «soon».
-        #expect(item(.practice).enabled == false)
-        #expect(item(.practice).badge == "soon")
+        // Локальный тестовый звонок доступен из меню.
+        #expect(item(.practice).enabled == true)
+        #expect(item(.practice).badge == nil)
         // Подпись языка (UK/RU/EN).
         #expect(item(.language).title == "Language: Auto (UK/RU/EN)")
         // A-4: строка статуса — счётчик запросов, не квота.

@@ -123,7 +123,7 @@ public enum MenuLayout {
                 MenuItemSpec(.questionBank, s.bankError ?? "Question bank (\(s.bankCardCount) cards)…",
                              symbol: s.bankError == nil ? "book" : "exclamationmark.triangle"),
                 MenuItemSpec(.editProfile, "Edit resume & stories…", symbol: "doc.text"),
-                MenuItemSpec(.practice, "Practice mode…", symbol: "scope", enabled: false, badge: "soon"),
+                MenuItemSpec(.practice, "Тестовый звонок…", symbol: "phone"),
             ],
             [
                 MenuItemSpec(.answerNow, "Answer now", symbol: "bolt", hotkey: s.hotkey(.answerNow)),

@@ -32,6 +32,8 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
 ## Как пользоваться
 - **Listening — <app>**: источник звука (Auto: Zoom → Chrome → Telegram, конкретное приложение, весь системный звук
   или **Microphone (practice, no call)** — говорите сами в микрофон Mac, без созвона, для тренировки и проверки).
+- **Тестовый звонок…**: локальная вкладка браузера с 15 фразами RU/UK/EN, сравнением текста, подсветкой ошибок, задержкой и JSON-отчётом. Используется настоящий захват звука браузера. Генерация ответов и запись фраз в историю выключены; прежний источник и пауза восстанавливаются после завершения.
+- Запуск только бесплатного теста: `open -n dist/InterviewCopilot.app --args --test-call`. Перед запуском закройте предыдущий экземпляр. Этот режим не запускает проверку облачных моделей, базу вопросов и генерацию.
 - **Mode**: Question bank only / Bank + hint / Generate every answer.
 - **Settings → Audio**: Parakeet v3 (основной локальный движок) или Whisper; для Whisper — large-v3-turbo и «Точный итоговый текст». Смена движка не требует перезапуска.
 - **Language**: Auto (UK/RU/EN) или конкретный язык — для Whisper известный язык точнее и быстрее. Parakeet сохраняет мультиязычный текст; настройка задаёт метку языка.
@@ -43,7 +45,7 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
   срок истории, вид панели, бюджет на платных провайдеров.
 
 ## Проверка
-- Быстрая: `swift build && swift test` (151 тест).
+- Быстрая: `swift build && swift test` (157 тестов).
 - Полная: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh`.
 - Evals: `scripts/run-evals.sh [bank|turn]` — пороги и baseline в [evals/README.md](evals/README.md).
 - Метрики созвона: `scripts/metrics.py --last 30m` (AC-01…AC-03), память: `scripts/footprint-monitor.sh 10` (AC-05).

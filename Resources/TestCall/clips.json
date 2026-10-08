@@ -1,0 +1,107 @@
+[
+  {
+    "id": "ru-about-me",
+    "language": "ru",
+    "title": "Обычный вопрос",
+    "text": "Расскажите, пожалуйста, о себе и о своём опыте работы.",
+    "file": "ru-about-me.wav"
+  },
+  {
+    "id": "ru-negation",
+    "language": "ru",
+    "title": "Отрицание",
+    "text": "Я не прошу перечислять все ваши проекты. Меня интересует только один пример, в котором вы не согласились с решением руководителя и предложили другой подход.",
+    "file": "ru-negation.wav"
+  },
+  {
+    "id": "ru-long-quiet",
+    "language": "ru",
+    "title": "Тихая речь",
+    "text": "Расскажите о случае, когда требования к проекту изменились после начала работы. Как вы объяснили команде, что нужно изменить, и как проверили результат?",
+    "file": "ru-long-quiet.wav"
+  },
+  {
+    "id": "ru-long-compressed",
+    "language": "ru",
+    "title": "Сжатый звук звонка",
+    "text": "Расскажите о случае, когда требования к проекту изменились после начала работы. Как вы объяснили команде, что нужно изменить, и как проверили результат?",
+    "file": "ru-long-compressed.wav"
+  },
+  {
+    "id": "uk-about-me",
+    "language": "uk",
+    "title": "Обычный вопрос",
+    "text": "Розкажіть, будь ласка, про себе і про свій досвід роботи.",
+    "file": "uk-about-me.wav"
+  },
+  {
+    "id": "uk-negation",
+    "language": "uk",
+    "title": "Отрицание",
+    "text": "Я не прошу назвати всі ваші проєкти. Мене цікавить лише один приклад, у якому ви не погодилися з рішенням керівника та запропонували інший підхід.",
+    "file": "uk-negation.wav"
+  },
+  {
+    "id": "uk-long-quiet",
+    "language": "uk",
+    "title": "Тихая речь",
+    "text": "Розкажіть про випадок, коли вимоги до проєкту змінилися після початку роботи. Як ви пояснили команді, що потрібно змінити, і як перевірили результат?",
+    "file": "uk-long-quiet.wav"
+  },
+  {
+    "id": "uk-long-compressed",
+    "language": "uk",
+    "title": "Сжатый звук звонка",
+    "text": "Розкажіть про випадок, коли вимоги до проєкту змінилися після початку роботи. Як ви пояснили команді, що потрібно змінити, і як перевірили результат?",
+    "file": "uk-long-compressed.wav"
+  },
+  {
+    "id": "en-about-me",
+    "language": "en",
+    "title": "Обычный вопрос",
+    "text": "Could you tell me a little bit about yourself and your background?",
+    "file": "en-about-me.wav"
+  },
+  {
+    "id": "en-negation",
+    "language": "en",
+    "title": "Отрицание",
+    "text": "I am not asking you to list all your projects. I would like just one example where you disagreed with your manager and suggested a different approach.",
+    "file": "en-negation.wav"
+  },
+  {
+    "id": "en-long-quiet",
+    "language": "en",
+    "title": "Тихая речь",
+    "text": "Tell me about a time when the project requirements changed after you had started. How did you explain the changes to your team, and how did you check the final result?",
+    "file": "en-long-quiet.wav"
+  },
+  {
+    "id": "en-long-compressed",
+    "language": "en",
+    "title": "Сжатый звук звонка",
+    "text": "Tell me about a time when the project requirements changed after you had started. How did you explain the changes to your team, and how did you check the final result?",
+    "file": "en-long-compressed.wav"
+  },
+  {
+    "id": "ru-technical",
+    "language": "ru",
+    "title": "Термины и число",
+    "text": "Мы используем PostgreSQL, Redis и Kubernetes. После обновления версии два точка четыре запросы стали медленнее. Что вы проверите сначала?",
+    "file": "ru-technical.wav"
+  },
+  {
+    "id": "uk-technical",
+    "language": "uk",
+    "title": "Термины и число",
+    "text": "Ми використовуємо PostgreSQL, Redis і Kubernetes. Після оновлення версії два крапка чотири запити стали повільнішими. Що ви перевірите спочатку?",
+    "file": "uk-technical.wav"
+  },
+  {
+    "id": "en-technical",
+    "language": "en",
+    "title": "Термины и число",
+    "text": "We use PostgreSQL, Redis and Kubernetes. After updating to version two point four, the requests became slower. What would you check first?",
+    "file": "en-technical.wav"
+  }
+]
