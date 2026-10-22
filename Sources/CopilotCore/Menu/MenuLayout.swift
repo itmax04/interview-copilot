@@ -20,7 +20,7 @@ public struct Shortcut: Sendable, Equatable {
 public enum MenuAction: String, Sendable, Equatable {
     case listeningSource, togglePause
     case mode, models, language
-    case profile, questionBank, editProfile, practice
+    case profile, questionBank, editProfile, practice, aiInterview
     case answerNow, screenshot, togglePanel, sessionHistory
     case status
     case settings, quit
@@ -124,6 +124,7 @@ public enum MenuLayout {
                              symbol: s.bankError == nil ? "book" : "exclamationmark.triangle"),
                 MenuItemSpec(.editProfile, "Edit resume & stories…", symbol: "doc.text"),
                 MenuItemSpec(.practice, "Тестовый звонок…", symbol: "phone"),
+                MenuItemSpec(.aiInterview, "ИИ-собеседование…", symbol: "person.wave.2"),
             ],
             [
                 MenuItemSpec(.answerNow, "Answer now", symbol: "bolt", hotkey: s.hotkey(.answerNow)),

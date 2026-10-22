@@ -8,7 +8,7 @@ struct MenuLayoutTests {
         #expect(sections.map { $0.map(\.action) } == [
             [.listeningSource, .togglePause],
             [.mode, .models, .language],
-            [.profile, .questionBank, .editProfile, .practice],
+            [.profile, .questionBank, .editProfile, .practice, .aiInterview],
             [.answerNow, .screenshot, .togglePanel, .sessionHistory],
             [.status],
             [.settings, .quit],
@@ -29,6 +29,9 @@ struct MenuLayoutTests {
         // Локальный тестовый звонок доступен из меню.
         #expect(item(.practice).enabled == true)
         #expect(item(.practice).badge == nil)
+        // ИИ-собеседование голосом (COPILOT-03).
+        #expect(item(.aiInterview).enabled == true)
+        #expect(item(.aiInterview).title == "ИИ-собеседование…")
         // Подпись языка (UK/RU/EN).
         #expect(item(.language).title == "Language: Auto (UK/RU/EN)")
         // A-4: строка статуса — счётчик запросов, не квота.

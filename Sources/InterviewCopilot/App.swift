@@ -27,7 +27,7 @@ enum InterviewCopilotMain {
         }
 
         let app = NSApplication.shared
-        let delegate = AppDelegate(testCallOnly: args.contains("--test-call"))
+        let delegate = AppDelegate(testCallOnly: args.contains("--test-call"), openInterviewer: args.contains("--ai-interview"))
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
         app.run()
@@ -37,9 +37,15 @@ enum InterviewCopilotMain {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let testCallOnly: Bool
-    init(testCallOnly: Bool = false) { self.testCallOnly = testCallOnly; super.init() }
+    private let openInterviewer: Bool
+    init(testCallOnly: Bool = false, openInterviewer: Bool = false) {
+        self.testCallOnly = testCallOnly
+        self.openInterviewer = openInterviewer && !testCallOnly
+        super.init()
+    }
     private let model = AppModel()
     private lazy var testCall = TestCallController(listening: listening)
+    private lazy var interviewer = InterviewerController(listening: listening, model: model, profile: { [bank] in bank.profile })
     private lazy var listening = ListeningController(model: model)
     private var menuBar: MenuBarController?
     private lazy var settingsWindow = SettingsWindowController(model: model, hotkeyFailures: { [weak self] in
@@ -73,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Модели освобождаются до выхода: иначе ggml-metal падает в статических деструкторах.
         testCall.stopServer()
+        interviewer.stopServer()
         sessions.finish()
         bank.shutdown()
         listening.shutdown()
@@ -104,6 +111,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             if self.testCall.active { self.testCall.handleTranscript(event); return }
             guard !self.testCallOnly else { return }
+            // ИИ-собеседование: вопрос сверяется с текстом модели и при этом идёт в обычные подсказки, как на созвоне.
+            if self.interviewer.active { self.interviewer.handleCallTranscript(event) }
             self.turns.handle(event)
             if case .final(let u, let text, let lang, _, _) = event { self.sessions.addUtterance(id: u, text: text, language: lang) }
         }
@@ -124,6 +133,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.refreshUI()
         }
         testCall.onPermissions = { [weak self] in self?.permissionsWindow.show() }
+        listening.onOwnerTranscript = { [weak self] event in self?.interviewer.handleOwnerTranscript(event) }
+        interviewer.onEnd = { [weak self] in self?.refreshUI() }
+        interviewer.onPermissions = { [weak self] in self?.permissionsWindow.show() }
+        interviewer.onUsage = { [weak self] provider, modelID, u in self?.recordUsage(provider, modelID, u) }
+        interviewer.onProviderError = { [weak self] provider, error in
+            self?.usage.recordError(provider: provider, error: error)
+            self?.refreshUI()
+        }
         turns.onTurn = { [weak self] turn in self?.turnCompleted(turn) }
 
         panelModel.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
@@ -135,16 +152,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.refreshUI()
         }
         answers.transcript = { [weak self] in self?.listening.transcript.map(\.text) ?? [] }
-        answers.onUsage = { [weak self] provider, modelID, u in
-            guard let self else { return }
-            let s = self.model.settings
-            if self.usage.record(provider: provider, model: modelID, usage: u, settings: s), !s.paidProvidersSuspended {
-                // Лимит месяца: платные провайдеры выключаются до подтверждения владельцем (R-18 Budget).
-                self.model.settings.paidProvidersSuspended = true
-                Log.app.notice("monthly budget reached, paid providers suspended")
-            }
-            self.refreshUI()
-        }
+        answers.onUsage = { [weak self] provider, modelID, u in self?.recordUsage(provider, modelID, u) }
         answers.onProviderError = { [weak self] provider, error in
             self?.usage.recordError(provider: provider, error: error)
             self?.refreshUI()
@@ -172,6 +180,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             permissionsWindow.show()
         }
         startDownloadProgressMirror()
+        if openInterviewer { interviewer.start() }
+    }
+
+    private func recordUsage(_ provider: ProviderID, _ modelID: String, _ u: TokenUsage) {
+        let s = model.settings
+        if usage.record(provider: provider, model: modelID, usage: u, settings: s), !s.paidProvidersSuspended {
+            // Лимит месяца: платные провайдеры выключаются до подтверждения владельцем (R-18 Budget).
+            model.settings.paidProvidersSuspended = true
+            Log.app.notice("monthly budget reached, paid providers suspended")
+        }
+        refreshUI()
     }
 
     private func settingsChanged() {
@@ -188,6 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !force && s.audioSource != old.audioSource { listening.sourceSettingChanged() }
         if !force && (s.recognitionBackend != old.recognitionBackend || s.whisperModel != old.whisperModel || s.recognitionAccuracy != old.recognitionAccuracy) {
             testCall.recognitionChanged()
+            interviewer.recognitionChanged()
             listening.recognitionSettingsChanged()
         }
         if !force && s.language != old.language { listening.languageSettingChanged() }
@@ -312,7 +332,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if (testCall.active || testCallOnly) && [.answerNow, .screenshot].contains(action) { return }
         switch action {
         case .practice:
+            guard !interviewer.active else { return }
             testCall.start()
+        case .aiInterview:
+            guard !testCall.active else { return }
+            interviewer.start()
         case .settings:
             settingsWindow.show()
         case .quit:

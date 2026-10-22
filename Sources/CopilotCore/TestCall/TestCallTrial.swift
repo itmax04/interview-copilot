@@ -6,6 +6,10 @@ public struct TestCallClip: Codable, Sendable, Equatable {
     public let title: String
     public let text: String
     public let file: String
+
+    public init(id: String, language: String, title: String, text: String, file: String) {
+        self.id = id; self.language = language; self.title = title; self.text = text; self.file = file
+    }
 }
 
 public struct TestCallResult: Codable, Sendable, Equatable {

@@ -28,6 +28,8 @@ final class ListeningController {
     var onTranscript: ((TranscriptEvent) -> Void)?
     /// Владелец начал/перестал говорить; время — мс монотонных часов (R-02, S-07).
     var onOwnerSpeaking: ((Bool, Double) -> Void)?
+    /// ИИ-собеседование: распознавание ответа владельца с микрофона (COPILOT-03, R-32). В расшифровку собеседника не попадает.
+    var onOwnerTranscript: ((TranscriptEvent) -> Void)?
 
     struct TranscriptLine: Identifiable, Equatable {
         let id: Int
@@ -52,6 +54,42 @@ final class ListeningController {
     private var pausedBeforeTest = false
     private var transcriptBeforeTest: [TranscriptLine] = []
     private let deliveryEpoch = TranscriptDeliveryEpoch()
+    /// Какой источник сейчас идёт в распознавание во время ИИ-собеседования; nil — обычная работа.
+    private let route = AudioRouteBox()
+    private(set) var interviewRoute: AudioRoute?
+
+    /// ИИ-собеседование (COPILOT-03): звук браузера — вопрос интервьюера, как на созвоне;
+    /// микрофон — ответ владельца. В распознавание одновременно идёт только один источник.
+    func beginInterviewCapture(_ source: AudioSourceSetting) async -> String? {
+        if Permissions.microphone == .notDetermined { _ = await Permissions.requestMicrophone() }
+        guard Permissions.microphone == .granted else { return "Нет разрешения на микрофон для Interview Copilot" }
+        route.set(.call)
+        interviewRoute = .call
+        await beginTestCallCapture(source)
+        let micSource = self.micSource ?? makeMicSource()
+        self.micSource = micSource
+        do { try micSource.start() } catch { return "Микрофон: \(error)" }
+        let t = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
+        onOwnerSpeaking?(false, t)
+        return nil
+    }
+
+    /// Переключение «вопрос → ответ» и обратно. Незаконченные фрагменты прошлого источника отбрасываются.
+    func setInterviewRoute(_ value: AudioRoute) {
+        guard interviewRoute != nil, interviewRoute != value else { return }
+        route.set(value)
+        interviewRoute = value
+        partialText = nil
+        resetTestCallPhrase()
+    }
+
+    func endInterviewCapture() async {
+        guard interviewRoute != nil else { return }
+        micSource?.stop()
+        route.set(nil)
+        interviewRoute = nil
+        await endTestCallCapture()
+    }
 
     func beginTestCallCapture(_ source: AudioSourceSetting) async {
         if testSource == nil {
@@ -183,7 +221,7 @@ final class ListeningController {
         if resolved != source { Task { await applySource(restart: false) } }
     }
 
-    private func applySource(restart: Bool) async {
+    private func applySource(restart: Bool, attempt: Int = 0) async {
         let resolved = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
         if resolved == .microphone {
             // Режим самопроверки: системный звук не нужен, микрофон — «собеседник»; определение речи владельца выключено.
@@ -228,7 +266,14 @@ final class ListeningController {
             setPhase(.listening)
         } catch AudioCaptureError.noPermission {
             setPhase(.noPermission)
+        } catch AudioCaptureError.sourceNotRunning(_) where attempt < 8 {
+            // Только что запущенное приложение (Chrome для теста) ScreenCaptureKit видит с задержкой — повторяем.
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !stopping else { return }
+            await applySource(restart: restart, attempt: attempt + 1)
         } catch {
+            // Источник не найден: запуск приложения позже снова вызовет захват (runningAppsChanged).
+            if case AudioCaptureError.sourceNotRunning = error { source = .none }
             Log.audio.error("capture start failed: \(String(describing: error), privacy: .public)")
             setPhase(.error(String(describing: error)))
         }
@@ -331,6 +376,10 @@ final class ListeningController {
     }
 
     private func handle(_ event: TranscriptEvent) {
+        if interviewRoute == .owner {
+            onOwnerTranscript?(event)
+            return
+        }
         switch event {
         case .speechStarted, .speechEnded:
             break
@@ -353,7 +402,9 @@ final class ListeningController {
         let buffer = self.buffer
         let meter = levelMeter
         let box = transcriberBox
+        let route = self.route
         return SystemAudioCapture(onSamples: { samples in
+            guard route.accepts(.call) else { return }
             buffer.append(samples)
             meter.add(samples)
             box.get()?.process(samples)
@@ -369,7 +420,9 @@ final class ListeningController {
         let buffer = self.buffer
         let meter = levelMeter
         let box = transcriberBox
+        let route = self.route
         return MicrophoneCapture { samples in
+            guard route.accepts(.owner) else { return }
             buffer.append(samples)
             meter.add(samples)
             box.get()?.process(samples)
@@ -415,6 +468,22 @@ final class ListeningController {
         phase = new
         onChange?()
     }
+}
+
+enum AudioRoute: Equatable, Sendable {
+    /// Звук созвона (браузер) — речь собеседника.
+    case call
+    /// Микрофон — ответ владельца.
+    case owner
+}
+
+/// Маршрут доступен из очередей захвата.
+final class AudioRouteBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: AudioRoute?
+    func set(_ v: AudioRoute?) { lock.withLock { value = v } }
+    /// Без маршрута (обычная работа) принимается любой запущенный источник.
+    func accepts(_ r: AudioRoute) -> Bool { lock.withLock { value == nil || value == r } }
 }
 
 final class TranscriberBox: @unchecked Sendable {

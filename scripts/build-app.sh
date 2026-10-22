@@ -50,6 +50,7 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 # Ресурсы приложения (pricing.json и т.п.) и пример профиля для первого запуска (R-21).
 find "$ROOT/Resources" -maxdepth 1 -type f ! -name Info.plist -exec cp {} "$APP/Contents/Resources/" \;
 cp -R "$ROOT/Resources/TestCall" "$APP/Contents/Resources/TestCall"
+cp -R "$ROOT/Resources/Interviewer" "$APP/Contents/Resources/Interviewer"
 mkdir -p "$APP/Contents/Resources/TestCall/audio"
 cp "$ROOT/evals/audio/test-call/"*.wav "$APP/Contents/Resources/TestCall/audio/"
 cp -R "$ROOT/profile.example" "$APP/Contents/Resources/profile.example"
