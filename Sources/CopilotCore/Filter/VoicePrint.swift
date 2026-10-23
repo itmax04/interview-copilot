@@ -69,8 +69,11 @@ public struct VoicePrint: Codable, Equatable, Sendable {
 /// CAM++ (FluidAudio) с синхронным вызовом из очереди распознавания.
 public final class VoiceEmbedder: @unchecked Sendable {
     public static let modelFolder = "campplus-coreml"
-    /// Короче — отпечаток ненадёжен: реплика не проверяется (R-03).
+    /// Короче — отпечаток ненадёжен: реплика проверяется мягче (`shortMargin`); короче `minShortSeconds` — не проверяется.
+    /// Живой тест 2026-10-23: «До свидания» из видео (< 1 с) проходило без проверки и складывалось в «вопрос».
     public static let minSeconds = 1.0
+    public static let minShortSeconds = 0.5
+    public static let shortMargin: Float = 0.1
 
     private let embedder: CampPlusEmbedder
     private let lock = NSLock()
@@ -124,11 +127,17 @@ public final class VoiceEmbedder: @unchecked Sendable {
         return print
     }
 
-    /// Сходство реплики с отпечатком; nil — реплика короче `minSeconds` или ошибка модели (не отбрасываем).
+    /// Сходство реплики с отпечатком; nil — речи меньше `minShortSeconds` или ошибка модели (не отбрасываем).
     public func similarity(of samples: [Float], to print: VoicePrint) -> Float? {
+        measure(samples, to: print)?.similarity
+    }
+
+    /// Сходство и длительность речи (для мягкого порога коротких реплик).
+    public func measure(_ samples: [Float], to print: VoicePrint) -> (similarity: Float, speechSeconds: Double)? {
         let speech = Self.speechOnly(samples)
-        guard Double(speech.count) / 16_000 >= Self.minSeconds, let e = embed(speech) else { return nil }
-        return print.similarity(to: e)
+        let seconds = Double(speech.count) / 16_000
+        guard seconds >= Self.minShortSeconds, let e = embed(speech) else { return nil }
+        return (print.similarity(to: e), seconds)
     }
 
     /// Только кадры 20 мс громче −45 dBFS (паузы и тишина не размывают отпечаток).
@@ -176,8 +185,9 @@ public final class VoiceGateBox: @unchecked Sendable {
     public func check(_ samples: [Float]) -> (similarity: Float, accepted: Bool)? {
         let s = current
         guard s.active, let embedder = s.embedder, let print = s.print,
-              let similarity = embedder.similarity(of: samples, to: print) else { return nil }
-        let threshold = s.threshold > 0 ? s.threshold : print.recommendedThreshold
-        return (similarity, similarity >= threshold)
+              let measured = embedder.measure(samples, to: print) else { return nil }
+        var threshold = s.threshold > 0 ? s.threshold : print.recommendedThreshold
+        if measured.speechSeconds < VoiceEmbedder.minSeconds { threshold -= VoiceEmbedder.shortMargin }
+        return (measured.similarity, measured.similarity >= threshold)
     }
 }

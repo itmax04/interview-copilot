@@ -438,10 +438,14 @@ public final class StreamingTranscriber: @unchecked Sendable {
             }
             guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
             // R-03: чужой голос — серой строкой, без хода и подсказки.
-            if let check = lock.withLock({ voiceGate }), let verdict = check(audio), !verdict.accepted {
-                Log.metrics.notice("filtered reason=voice utt=\(u) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
-                onEvent(.foreignVoice(utterance: u, text: result.text, similarity: verdict.similarity, phraseEnd: phraseEnd))
-                return
+            if let check = lock.withLock({ voiceGate }), let verdict = check(audio) {
+                guard verdict.accepted else {
+                    Log.metrics.notice("filtered reason=voice utt=\(u) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
+                    onEvent(.foreignVoice(utterance: u, text: result.text, similarity: verdict.similarity, phraseEnd: phraseEnd))
+                    return
+                }
+                // Сходство принятых реплик — чтобы видеть обе стороны порога на живом голосе.
+                Log.metrics.notice("voice_ok utt=\(u) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
             }
             lock.withLock {
                 recentFinals.append((result.language, result.text))
