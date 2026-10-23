@@ -124,6 +124,12 @@ struct AudioSettingsView: View {
             Text("Українська или Русский — проходят оба языка; English — только английский; Auto — украинский, русский, английский. "
                  + "В звонке целая английская фраза интервьюера проходит; в микрофоне — только термины. Серую строку можно нажать (или ⌃⌥↩), чтобы ответить.")
                 .font(.footnote).foregroundStyle(.secondary)
+            if model.settings.languageFilter && model.settings.recognitionBackend == .whisper && model.settings.language != .auto {
+                // Живой тест H-1 (2026-10-23): английское видео при Whisper + «Українська» стало украинским текстом.
+                Label("С Whisper и выбранным языком любая речь записывается этим языком — английское видео станет «украинским» текстом, и фильтр его не увидит. Для фильтра выберите движок Parakeet.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange).font(.footnote)
+            }
             Toggle("Нейросетевой детектор речи (Silero): шум без речи не становится репликой", isOn: $model.settings.neuralSpeechGate)
             Text("Нужна модель Silero VAD (scripts/fetch-filter-models.py). Конец фразы не замедляет: проверяется уже закрытая реплика.")
                 .font(.footnote).foregroundStyle(.secondary)
