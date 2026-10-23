@@ -64,6 +64,12 @@ final class AnswerController {
         let settings = model.settings
         generation = Task { [weak self] in
             guard let self else { return }
+            // «Без профиля» (R-40): база не ищется, модель отвечает сама.
+            guard settings.useProfile else {
+                self.lastMatch = nil
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings)
+                return
+            }
             guard let match = await self.bank.match(turn.text, threshold: settings.bankThreshold) else {
                 // Базы нет (нет модели эмбеддингов) — генерация без карточек, если можно.
                 self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings)
@@ -81,14 +87,14 @@ final class AnswerController {
         let modelsAvailable = settings.chain.contains { p in
             model.hasKey[p] == true && !(settings.paidProvidersSuspended && ChainFactory.isPaid(p, settings: settings))
         }
-        switch AnswerRouter.decide(mode: settings.mode, match: match, modelsAvailable: modelsAvailable) {
+        switch AnswerRouter.decide(mode: settings.mode, match: match, modelsAvailable: modelsAvailable, useProfile: settings.useProfile) {
         case .bankCard(let card):
             showCard(card, turn: turn)
         case .noMatch(let top):
-            showNoMatch(top, turn: turn, reason: modelsAvailable || settings.mode == .bankOnly ? nil : "Модели недоступны: нет ключей")
+            showNoMatch(top, turn: turn, reason: modelsAvailable || (settings.mode == .bankOnly && settings.useProfile) ? nil : "Модели недоступны: нет ключей")
         case .generate(let base, let top):
             let request = PromptBuilder.hintRequest(question: turn.text, transcript: transcript(), cards: top, baseCard: base,
-                                                    profile: bank.profile, redactPII: settings.piiFilterEnabled,
+                                                    profile: settings.useProfile ? bank.profile : nil, redactPII: settings.piiFilterEnabled,
                                                     answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text))
             let secrets = model.secrets
             let providers = self.providers
@@ -224,8 +230,9 @@ final class AnswerController {
             return
         }
         generation?.cancel()
-        let request = PromptBuilder.strongRequest(question: turn.text, transcript: transcript(), cards: lastMatch?.top ?? [],
-                                                  baseCard: lastMatch?.matched?.card, profile: bank.profile,
+        let request = PromptBuilder.strongRequest(question: turn.text, transcript: transcript(), cards: settings.useProfile ? lastMatch?.top ?? [] : [],
+                                                  baseCard: settings.useProfile ? lastMatch?.matched?.card : nil,
+                                                  profile: settings.useProfile ? bank.profile : nil,
                                                   redactPII: settings.piiFilterEnabled,
                                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text))
         // Задержка для сильной модели считаем от нажатия.

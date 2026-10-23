@@ -29,6 +29,13 @@ struct InterviewerTests {
         #expect(r.messages[4].text.contains("question 3 of 3. It is the last question."))
     }
 
+    @Test func withoutProfileInterviewsForGeneralDeveloperRole() {
+        // R-40: «Без профиля» — пустые резюме и вакансия, общие вопросы.
+        let s = InterviewerPrompt.system(profile: Profile(name: "Без профиля"), language: "ru", redactPII: true)
+        #expect(s.contains("If neither is given"))
+        #expect(s.contains("software developer role"))
+    }
+
     @Test func spokenTextDropsMarkupAndSpeakerLabel() {
         #expect(InterviewerPrompt.spoken("Interviewer: **Расскажите**  о «себе».\n") == "Расскажите о себе.")
         #expect(InterviewerPrompt.spoken("# Що вас мотивує?") == "Що вас мотивує?")

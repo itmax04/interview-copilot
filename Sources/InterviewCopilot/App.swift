@@ -45,7 +45,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     private let model = AppModel()
     private lazy var testCall = TestCallController(listening: listening)
-    private lazy var interviewer = InterviewerController(listening: listening, model: model, profile: { [bank] in bank.profile })
+    // «Без профиля» (R-40): интервьюер не видит резюме и вакансию и задаёт общие вопросы.
+    private lazy var interviewer = InterviewerController(listening: listening, model: model, profile: { [bank, model] in
+        model.settings.useProfile ? bank.profile : Profile(name: MenuLayout.noProfileTitle)
+    })
     private lazy var listening = ListeningController(model: model)
     private var menuBar: MenuBarController?
     private lazy var settingsWindow = SettingsWindowController(model: model, hotkeyFailures: { [weak self] in
@@ -94,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.onSelectSource = { [weak self] value in self?.model.settings.audioSource = value }
         menuBar.onSelectMode = { [weak self] mode in self?.model.settings.mode = mode }
         menuBar.onSelectLanguage = { [weak self] lang in self?.model.settings.language = lang }
+        menuBar.onSelectUseProfile = { [weak self] use in self?.model.settings.useProfile = use }
         menuBar.onSelectStrongModel = { [weak self] p in self?.model.settings.strongProvider = p }
         menuBar.providersWithKeys = { [weak self] in
             Set(ProviderID.allCases.filter { self?.model.hasKey[$0] == true })

@@ -16,6 +16,7 @@ struct SettingsStoreTests {
         let s = store.load()
         #expect(s.recognitionBackend == .parakeet)
         #expect(s.mode == .bankAndHint)                       // R-08
+        #expect(s.useProfile)                                  // R-40: по умолчанию с профилем
         #expect(s.chain == [.groq, .cerebras, .gemini, .deepseek, .anthropic])   // R-09, R-36: быстрые первыми
         #expect(s.hedgeAfter == 1.5)                           // R-36
         #expect(s.firstTokenTimeout == 4)                      // R-09
@@ -35,6 +36,7 @@ struct SettingsStoreTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         var s = AppSettings()
         s.mode = .generateAlways
+        s.useProfile = false
         s.language = .uk
         s.recognitionAccuracy = false
         s.recognitionBackend = .whisper

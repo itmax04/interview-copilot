@@ -75,4 +75,10 @@ struct MenuLayoutTests {
         #expect(items.contains { $0.title == "Question bank (17 cards)…" })
         #expect(items.contains { $0.title == "Screenshot → Claude" })
     }
+
+    @Test func noProfileTitle() {
+        // R-40: «Без профиля» вместо названия профиля.
+        let items = MenuLayout.sections(for: MenuState(profileName: "Senior iOS", useProfile: false)).flatMap { $0 }
+        #expect(items.contains { $0.title == "Profile: Без профиля" })
+    }
 }

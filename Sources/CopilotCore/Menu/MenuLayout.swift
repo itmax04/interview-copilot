@@ -63,6 +63,8 @@ public struct MenuState: Sendable, Equatable {
     public var chain: [ProviderID]
     public var language: RecognitionLanguage
     public var profileName: String
+    /// false — «Без профиля» (R-40): заголовок пункта Profile показывает это вместо названия профиля.
+    public var useProfile: Bool
     public var bankCardCount: Int
     public var strongModelName: String
     public var statusLine: String
@@ -73,7 +75,7 @@ public struct MenuState: Sendable, Equatable {
 
     public init(listening: ListeningStatus = .idle, mode: AnswerMode = .bankAndHint,
                 chain: [ProviderID] = [.gemini, .deepseek, .anthropic], language: RecognitionLanguage = .auto,
-                profileName: String = "Example", bankCardCount: Int = 0, strongModelName: String = "Claude",
+                profileName: String = "Example", useProfile: Bool = true, bankCardCount: Int = 0, strongModelName: String = "Claude",
                 statusLine: String = "Today: $0.00 · Gemini: 0 req",
                 hotkeys: [HotkeyAction: HotkeyBinding] = [:], panelVisible: Bool = false) {
         self.listening = listening
@@ -81,6 +83,7 @@ public struct MenuState: Sendable, Equatable {
         self.chain = chain
         self.language = language
         self.profileName = profileName
+        self.useProfile = useProfile
         self.bankCardCount = bankCardCount
         self.strongModelName = strongModelName
         self.statusLine = statusLine
@@ -94,6 +97,8 @@ public struct MenuState: Sendable, Equatable {
 }
 
 public enum MenuLayout {
+    /// Пункт подменю Profile и заголовок, когда профиль не используется (R-40).
+    public static let noProfileTitle = "Без профиля"
     /// Секции меню сверху вниз; между секциями — разделители. Состав и порядок — R-15.
     public static func sections(for s: MenuState) -> [[MenuItemSpec]] {
         let listeningTitle: String
@@ -119,7 +124,7 @@ public enum MenuLayout {
                 MenuItemSpec(.language, "Language: \(s.language.menuTitle)", symbol: "globe", submenu: true),
             ],
             [
-                MenuItemSpec(.profile, "Profile: \(s.profileName)", symbol: "person", submenu: true),
+                MenuItemSpec(.profile, "Profile: \(s.useProfile ? s.profileName : MenuLayout.noProfileTitle)", symbol: "person", submenu: true),
                 MenuItemSpec(.questionBank, s.bankError ?? "Question bank (\(s.bankCardCount) cards)…",
                              symbol: s.bankError == nil ? "book" : "exclamationmark.triangle"),
                 MenuItemSpec(.editProfile, "Edit resume & stories…", symbol: "doc.text"),

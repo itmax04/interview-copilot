@@ -12,7 +12,12 @@ public enum AnswerDecision: Equatable, Sendable {
 
 public enum AnswerRouter {
     /// `modelsAvailable` — есть ли хоть один провайдер с ключом; без них действует S-02 (S-04).
-    public static func decide(mode: AnswerMode, match: BankMatch, modelsAvailable: Bool) -> AnswerDecision {
+    /// `useProfile == false` — «Без профиля» (R-40): база — часть профиля и не используется, модель отвечает на каждый ход
+    /// независимо от режима.
+    public static func decide(mode: AnswerMode, match: BankMatch, modelsAvailable: Bool, useProfile: Bool = true) -> AnswerDecision {
+        guard useProfile else {
+            return modelsAvailable ? .generate(base: nil, top: []) : .noMatch(top: [])
+        }
         switch mode {
         case .bankOnly:
             if let m = match.matched { return .bankCard(m) }

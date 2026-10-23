@@ -12,6 +12,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     var onSelectSource: (AudioSourceSetting) -> Void = { _ in }
     var onSelectMode: (AnswerMode) -> Void = { _ in }
     var onSelectLanguage: (RecognitionLanguage) -> Void = { _ in }
+    /// Profile → название профиля (true) или «Без профиля» (false), R-40.
+    var onSelectUseProfile: (Bool) -> Void = { _ in }
     var onSelectStrongModel: (ProviderID) -> Void = { _ in }
     /// Провайдеры с сохранённым ключом (подменю Models).
     var providersWithKeys: () -> Set<ProviderID> = { [] }
@@ -79,11 +81,6 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     /// Подменю; пункты подключаются к настройкам на P-08.
     private func submenu(for action: MenuAction) -> NSMenu {
         let sub = NSMenu()
-        func add(_ title: String, checked: Bool = false) {
-            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            item.state = checked ? .on : .off
-            sub.addItem(item)
-        }
         switch action {
         case .listeningSource:
             let (setting, running) = sourceMenuData()
@@ -126,7 +123,10 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 sub.addItem(actionItem(lang.menuTitle, checked: lang == state.language) { [weak self] in self?.onSelectLanguage(lang) })
             }
         case .profile:
-            add(state.profileName, checked: true)
+            sub.addItem(actionItem(state.profileName, checked: state.useProfile) { [weak self] in self?.onSelectUseProfile(true) })
+            sub.addItem(actionItem("\(MenuLayout.noProfileTitle) — модель отвечает сама", checked: !state.useProfile) { [weak self] in
+                self?.onSelectUseProfile(false)
+            })
             sub.addItem(.separator())
             let open = NSMenuItem(title: "Open profile folder", action: #selector(itemSelected(_:)), keyEquivalent: "")
             open.target = self

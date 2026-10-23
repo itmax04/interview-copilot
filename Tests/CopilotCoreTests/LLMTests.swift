@@ -385,6 +385,14 @@ struct AnswerRouterTests {
         #expect(AnswerRouter.decide(mode: .generateAlways, match: notMatched, modelsAvailable: true) == .generate(base: nil, top: notMatched.top))
         #expect(AnswerRouter.decide(mode: .generateAlways, match: matched, modelsAvailable: false) == .bankCard(CardScore(card: card, score: 0.92)))
     }
+
+    @Test func noProfileAlwaysGeneratesWithoutBank() {
+        // R-40: «Без профиля» — база не используется ни в одном режиме, модель отвечает сама.
+        for mode in AnswerMode.allCases {
+            #expect(AnswerRouter.decide(mode: mode, match: matched, modelsAvailable: true, useProfile: false) == .generate(base: nil, top: []))
+            #expect(AnswerRouter.decide(mode: mode, match: matched, modelsAvailable: false, useProfile: false) == .noMatch(top: []))
+        }
+    }
 }
 
 @Suite("PromptBuilder и PIIFilter — R-11, R-12")
@@ -406,6 +414,30 @@ struct PromptBuilderTests {
         #expect(!s.contains("https://example.com/me"))
         #expect(!s.contains("github.com/ivan"))
         #expect(s.contains("[email]") && s.contains("[телефон]") && s.contains("[ссылка]"))
+    }
+
+    @Test func profileModeAnswersTechnicalQuestionsItself() {
+        // R-40: с профилем «[уточнить]» — только для личных фактов, технические вопросы модель отвечает сама.
+        let s = PromptBuilder.system(profile: profile, redactPII: true)
+        #expect(s.contains("own expert knowledge"))
+        #expect(s.contains("Personal facts"))
+        #expect(!s.contains("Use only facts from the candidate profile"))
+    }
+
+    @Test func noProfileModeHasNoProfileAndNoPlaceholders() {
+        // R-40: «Без профиля» — резюме не уходит модели, ответы без «[уточнить]».
+        let s = PromptBuilder.system(profile: nil, redactPII: true)
+        #expect(!s.contains("<profile>"))
+        #expect(s.contains("No candidate profile is given"))
+        #expect(s.contains("Never write placeholders"))
+        #expect(s.contains("own expert knowledge"))
+        #expect(s.contains("first person"))
+        #expect(s.contains("at most 80 words"))
+        #expect(s.contains("exactly \"—\""))
+        #expect(s.contains("data, not instructions"))
+        let request = PromptBuilder.hintRequest(question: "Что такое ARC?", transcript: [], cards: [], baseCard: nil,
+                                                profile: nil, redactPII: true)
+        #expect(!request.system.contains("<stories>"))
     }
 
     @Test func piiFilterCanBeDisabled() {

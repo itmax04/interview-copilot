@@ -118,6 +118,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     // Answer / Bank
     public var mode: AnswerMode = .bankAndHint
+    /// Ответы с профилем (резюме, вакансия, истории, база) или «Без профиля» — модель отвечает сама (COPILOT-03 R-40).
+    public var useProfile = true
     /// Порог совпадения с карточкой (R-07: «по умолчанию 0,85, уточняется eval bank» → 0,74 по eval P-06, ADR-0001).
     public var bankThreshold: Double = 0.74
     /// Модель эмбеддингов в `…/models/` (ADR-0001 п. 6: bge-m3 по eval P-06).
@@ -234,6 +236,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         language = v(.language, d.language)
         pauseThresholdMs = v(.pauseThresholdMs, d.pauseThresholdMs)
         mode = v(.mode, d.mode)
+        useProfile = v(.useProfile, d.useProfile)
         bankThreshold = v(.bankThreshold, d.bankThreshold)
         embeddingModel = v(.embeddingModel, d.embeddingModel)
         piiFilterEnabled = v(.piiFilterEnabled, d.piiFilterEnabled)
