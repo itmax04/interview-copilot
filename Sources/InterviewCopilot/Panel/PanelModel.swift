@@ -61,6 +61,8 @@ final class PanelModel {
 
     /// Действия кнопок панели — подключает AppDelegate.
     var onCopy: (() -> Void)?
+    /// Самопроверка: идёт запись ответа владельца (⌃⌥A, COPILOT-06).
+    var ownerAnswering = false
     /// Клик по серой строке — ответить на неё (COPILOT-05 S-08).
     var onAnswerFiltered: ((String) -> Void)?
     var onStrongModel: (() -> Void)?

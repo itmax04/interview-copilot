@@ -34,7 +34,8 @@ public enum PromptBuilder {
         as one continuous conversation: stay consistent with earlier answers and do not contradict or repeat them. When the \
         interviewer refers back to something said earlier, use the matching exchange to clarify or extend it. Never invent \
         what the candidate said earlier: if the referenced answer is not in the history, answer the question directly \
-        without claiming "as I said before".
+        without claiming "as I said before". When an exchange only has a suggestion shown on screen, it may not have \
+        been said: keep facts (numbers, technologies, names) consistent with it, but never claim the candidate said it.
         """
         let tail = """
         - If the interviewer's latest utterance is not a question and needs no answer, reply with exactly "\(noAnswerMarker)".
@@ -111,7 +112,9 @@ public enum PromptBuilder {
         // COPILOT-06: история интервью — последние обмены и найденные старые (данные, фильтр ПД R-12).
         func block(_ tag: String, _ items: [MemoryContext.Item]) -> String {
             let lines = items.map { item -> String in
-                let answer = item.answer.isEmpty ? "(answer not recorded)" : clean(item.answer)
+                let answer = !item.answer.isEmpty ? clean(item.answer)
+                    : item.shownHint.isEmpty ? "(answer not recorded)"
+                    : "(answer not recorded; suggestion shown on screen, may not have been said: \(clean(item.shownHint)))"
                 return "[\(item.minutesAgo) min ago] Interviewer: \(clean(item.question))\nCandidate: \(answer)"
             }
             return "<\(tag)>\n" + lines.joined(separator: "\n") + "\n</\(tag)>"

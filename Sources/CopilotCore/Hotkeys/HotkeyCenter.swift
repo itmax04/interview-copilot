@@ -4,6 +4,9 @@ import Foundation
 /// Действия с глобальными горячими клавишами — R-17.
 public enum HotkeyAction: String, Codable, CaseIterable, Sendable {
     case answerNow, screenshot, togglePanel, togglePause, strongModel
+    /// Самопроверка «Микрофон Mac»: речь — ответ владельца, а не вопрос (COPILOT-06). Новые действия — только в конец:
+    /// номер действия — его индекс в `allCases`.
+    case ownerAnswer
 
     public var title: String {
         switch self {
@@ -12,6 +15,7 @@ public enum HotkeyAction: String, Codable, CaseIterable, Sendable {
         case .togglePanel: "Показать / скрыть панель"
         case .togglePause: "Пауза"
         case .strongModel: "Сильная модель"
+        case .ownerAnswer: "Сейчас отвечаю я (самопроверка)"
         }
     }
 }
@@ -35,6 +39,7 @@ public struct HotkeyBinding: Codable, Equatable, Hashable, Sendable {
         .togglePanel: HotkeyBinding(keyCode: UInt32(kVK_ANSI_H), modifiers: ctrlOpt),
         .togglePause: HotkeyBinding(keyCode: UInt32(kVK_ANSI_P), modifiers: ctrlOpt),
         .strongModel: HotkeyBinding(keyCode: UInt32(kVK_ANSI_C), modifiers: ctrlOpt),
+        .ownerAnswer: HotkeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: ctrlOpt),
     ]
 
     static let keyNames: [UInt32: String] = {

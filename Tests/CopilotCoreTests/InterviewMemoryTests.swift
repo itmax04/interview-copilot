@@ -63,6 +63,29 @@ struct InterviewMemoryTests {
         #expect(m.context(for: "Вернёмся к зарплате", embed: embed).isEmpty)
     }
 
+    @Test func shownHintStandsInForUnrecordedAnswer() {
+        let m = InterviewMemory()
+        m.addQuestion("Які у вас зарплатні очікування?")
+        m.setHint("**Очікую 120‑150 тис. гривень на місяць.**\n- Орієнтуюсь на ринок.", forQuestion: "Які у вас зарплатні очікування?")
+        m.addQuestion("Як ви навчаєте молодших?")
+        m.addAnswer("Проводжу код-рев'ю.")
+        m.setHint("• Менторські сесії", forQuestion: "Як ви навчаєте молодших?")
+        let c = m.context(for: "Уточніть, це до податків?")
+        // Ответа нет — видна показанная подсказка (без разметки); ответ есть — подсказка не нужна.
+        #expect(c.recent.first?.shownHint == "Очікую 120‑150 тис. гривень на місяць. - Орієнтуюсь на ринок.")
+        #expect(c.recent.last?.shownHint == "")
+        let u = PromptBuilder.user(question: "Уточніть, це до податків?", transcript: [], cards: [], baseCard: nil, memory: c)
+        #expect(u.contains("(answer not recorded; suggestion shown on screen, may not have been said: Очікую 120‑150 тис. гривень"))
+        #expect(u.contains("Candidate: Проводжу код-рев'ю."))
+        #expect(PromptBuilder.system(profile: nil, redactPII: true).contains("never claim the candidate said it"))
+    }
+
+    @Test func ownerAnswerHotkeyIsControlOptionA() {
+        // Новое действие — в конце allCases: номера прежних горячих клавиш не меняются.
+        #expect(HotkeyAction.allCases.last == .ownerAnswer)
+        #expect(HotkeyBinding.defaults[.ownerAnswer]?.displayString == "⌃⌥A")
+    }
+
     @Test func revisedTextReplacesDraftInQuestion() {
         let m = InterviewMemory()
         m.addQuestion("Уточни додаться ваша зарплата чипенет до сплата податки.")

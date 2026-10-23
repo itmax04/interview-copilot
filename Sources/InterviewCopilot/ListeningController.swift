@@ -97,6 +97,23 @@ final class ListeningController {
     /// Что владелец уже сказал — только в памяти (Q6).
     private var candidateContext = CandidateContext()
 
+    /// Самопроверка: «сейчас отвечаю я» (⌃⌥A, COPILOT-06) — речь с микрофона идёт ответом в память, а не вопросом.
+    private(set) var ownerAnswering = false
+
+    /// Переключить режим ответа. Только в «Микрофон Mac»: на созвоне ответы слышны отдельным каналом сами.
+    @discardableResult
+    func toggleOwnerAnswering() -> Bool {
+        guard testSource == nil, source == .microphone else {
+            ownerAnswering = false
+            return false
+        }
+        ownerAnswering.toggle()
+        partialText = nil
+        Log.app.info("owner answering \(self.ownerAnswering ? "on" : "off", privacy: .public)")
+        onChange?()
+        return true
+    }
+
     /// Новое интервью (COPILOT-06): фразы прошлого не переносятся.
     func clearCandidateContext() { candidateContext.clear() }
 
@@ -435,6 +452,7 @@ final class ListeningController {
             return
         }
         source = resolved
+        if resolved != .microphone { ownerAnswering = false }
         applyVADConfig()
         if resolved == .none {
             await capture?.stop()
@@ -605,6 +623,21 @@ final class ListeningController {
     private func handle(_ event: TranscriptEvent) {
         if interviewRoute == .owner {
             onOwnerTranscript?(event)
+            return
+        }
+        // Самопроверка, режим ответа (⌃⌥A): итог — ответ владельца в память; для хода — как шум, вопросов нет.
+        if ownerAnswering, source == .microphone {
+            switch event {
+            case .final(_, let text, _, let phraseEnd, _):
+                candidateContext.add(text, at: Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
+                onOwnerSaid?(text)
+                Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=self-test")
+                onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))
+            case .foreignVoice(_, _, _, let phraseEnd):
+                onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))
+            default:
+                break   // промежуточный текст ответа не показываем как реплику интервьюера
+            }
             return
         }
         switch event {

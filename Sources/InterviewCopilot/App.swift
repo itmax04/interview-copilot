@@ -298,6 +298,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar?.state = state
 
         panelModel.sourceName = listening.source.displayName
+        panelModel.ownerAnswering = listening.ownerAnswering
         panelModel.setTranscript(listening.transcript, partial: listening.partialText)
         switch listening.phase {
         case .noPermission: panelModel.state = .noPermission
@@ -372,6 +373,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .togglePanel: togglePanel()
         case .togglePause: togglePause()
         case .strongModel: answers.askStrongModel()
+        case .ownerAnswer:
+            if !listening.toggleOwnerAnswering() { Log.app.info("owner answer hotkey ignored: not self-test source") }
+            refreshUI()
         case .screenshot: takeScreenshot()
         }
     }

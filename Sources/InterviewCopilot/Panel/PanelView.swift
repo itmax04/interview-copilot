@@ -140,6 +140,12 @@ private struct InterviewerView: View {
                 .font(.system(size: model.fontSize - 3, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.6))
                 .textCase(.uppercase)
+            if model.ownerAnswering {
+                // COPILOT-06: самопроверка — речь сейчас записывается как ваш ответ.
+                Label("Ваш ответ записывается — ⌃⌥A, чтобы закончить", systemImage: "mic.fill")
+                    .foregroundStyle(.orange)
+                    .accessibilityLabel("Идёт запись вашего ответа. Control Option A — закончить")
+            }
             if model.lines.isEmpty && model.partial == nil {
                 Text(model.state == .paused ? "Пауза: ничего не слушаю и не отправляю." : "Жду, когда собеседник заговорит…")
                     .foregroundStyle(.white.opacity(0.6))

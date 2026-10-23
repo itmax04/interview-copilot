@@ -29,10 +29,13 @@ public struct MemoryContext: Sendable, Equatable {
         public var minutesAgo: Int
         public var question: String
         public var answer: String
-        public init(minutesAgo: Int, question: String, answer: String) {
+        /// Ответ не записан — подсказка, которую видел владелец (может быть не сказана): факты держать согласованными.
+        public var shownHint: String
+        public init(minutesAgo: Int, question: String, answer: String, shownHint: String = "") {
             self.minutesAgo = minutesAgo
             self.question = question
             self.answer = answer
+            self.shownHint = shownHint
         }
     }
 
@@ -62,6 +65,17 @@ public final class InterviewMemory: @unchecked Sendable {
     /// Лимиты текста одного обмена в промпте.
     public static let maxQuestionChars = 300
     public static let maxAnswerChars = 500
+    /// Показанная подсказка вместо незаписанного ответа — короче: только опорные факты.
+    public static let maxHintChars = 300
+
+    /// Подсказка без разметки, в одну строку.
+    static func plainHint(_ hint: String?) -> String {
+        guard let hint else { return "" }
+        let flat = hint.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "•", with: ";")
+            .split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return String(flat.prefix(maxHintChars))
+    }
 
     private let lock = NSLock()
     private var exchanges: [SessionExchange] = []
@@ -133,7 +147,8 @@ public final class InterviewMemory: @unchecked Sendable {
         func item(_ e: SessionExchange) -> MemoryContext.Item {
             .init(minutesAgo: max(0, Int(now.timeIntervalSince(e.askedAt) / 60)),
                   question: String(e.question.prefix(Self.maxQuestionChars)),
-                  answer: String(e.answerText.prefix(Self.maxAnswerChars)))
+                  answer: String(e.answerText.prefix(Self.maxAnswerChars)),
+                  shownHint: e.answer.isEmpty ? Self.plainHint(e.hint) : "")
         }
         let recent = Array(history.suffix(Self.recentCount))
         let older = Array(history.dropLast(Self.recentCount))
