@@ -115,6 +115,22 @@ public final class StreamingTranscriber: @unchecked Sendable {
 
     private var promptProvider: (@Sendable (String) -> String?)?
 
+    /// Детектор для источника «Микрофон Mac» (COPILOT-05): шум комнаты у микрофона −46…−58 dBFS, голос рядом −25…−30 dBFS.
+    /// Порог −62 dBFS (тихий звук Meet) открывал реплики на шуме, и Whisper превращал их в слова («Дякую!»).
+    public static let microphoneVAD: EnergyVAD.Config = {
+        var c = Config().vad
+        c.minSpeechDB = -45
+        return c
+    }()
+
+    /// Сменить детектор речи (источник звука сменился): незаконченная реплика отбрасывается.
+    public func setVADConfig(_ vadConfig: EnergyVAD.Config) {
+        lock.withLock {
+            vad = EnergyVAD(config: vadConfig)
+            utteranceStart = nil
+        }
+    }
+
     /// Проверка «в реплике есть речь» перед распознаванием итога (COPILOT-05 R-02); nil — без проверки.
     public func setSpeechGate(_ gate: (@Sendable ([Float]) -> Bool)?) {
         lock.withLock { speechGate = gate }
@@ -373,6 +389,12 @@ public final class StreamingTranscriber: @unchecked Sendable {
         do {
             let result = try recognizer.transcribe(audio, language: lang, prompt: prompt(for: lang), reducedContext: config.finalReducedContext)
             let seconds = Double(audio.count) / Double(buffer.sampleRate)
+            // Выдумки Whisper на тишине и шуме («Дякую!», «Спасибо за просмотр») — как отброшенный шум (COPILOT-05).
+            if HallucinationFilter.isLikely(result.text, audioSeconds: seconds) {
+                Log.metrics.notice("filtered reason=hallucination utt=\(u) audio_ms=\(Int(seconds * 1000))")
+                onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+                return
+            }
             lock.withLock {
                 lastLanguage = result.language
                 guard language == nil, u == utterance || utteranceStart == nil else { return }

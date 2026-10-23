@@ -215,11 +215,12 @@ case "filter":
             let started = Date()
             prob = gate.speechProbability(samples)
             vadMs.append(Date().timeIntervalSince(started) * 1000)
-            if prob < threshold { outcome = "none" }
+            if !gate.isSpeech(samples) { outcome = "none" }
         }
         if outcome != "none" {
             text = (try? engine.transcribe(samples, language: setting.whisperCode, prompt: nil, reducedContext: false).text) ?? ""
-            if text.trimmingCharacters(in: .whitespaces).isEmpty { outcome = "none" }
+            if text.trimmingCharacters(in: .whitespaces).isEmpty
+                || HallucinationFilter.isLikely(text, audioSeconds: Double(samples.count) / 16_000) { outcome = "none" }
             else if useLang, case .drop = LanguageGate(setting: setting, terms: terms).check(text, channel: channel) { outcome = "drop" }
         }
         switch expect {

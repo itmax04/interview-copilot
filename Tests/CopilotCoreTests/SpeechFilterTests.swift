@@ -131,3 +131,32 @@ struct SpeechGateTests {
         #expect(gate.speechProbability(speech) >= 0.5)
     }
 }
+
+@Suite("Микрофон: шум комнаты и выдумки Whisper — COPILOT-05, живой лог 2026-10-23")
+struct MicrophoneNoiseTests {
+    /// Шум у микрофона −50 dBFS (комната): со старым порогом (−62) открывал реплику, с порогом микрофона — нет.
+    @Test func roomNoiseDoesNotOpenUtteranceWithMicrophoneThreshold() {
+        // Амплитуда ~0,0045 ≈ −47 dBFS по пику, RMS ниже: уровень шума комнаты из лога (−46…−58).
+        let room = EnergyVADTests.tone(ms: 1500, amplitude: 0.0045)
+        let quiet = EnergyVADTests.noise(ms: 3000, amplitude: 0.0001)
+        var callVAD = EnergyVAD(config: StreamingTranscriber.Config().vad)
+        _ = callVAD.process(quiet)
+        #expect(callVAD.process(room).contains(true))
+        var micVAD = EnergyVAD(config: StreamingTranscriber.microphoneVAD)
+        _ = micVAD.process(quiet)
+        #expect(!micVAD.process(room).contains(true))
+        // Голос рядом с микрофоном (−25…−30 dBFS) по-прежнему речь.
+        #expect(micVAD.process(EnergyVADTests.tone(ms: 1000, amplitude: 0.05)).contains(true))
+    }
+
+    @Test func whisperHallucinationsAreDroppedOnlyWhenShort() {
+        #expect(HallucinationFilter.isLikely("Дякую!", audioSeconds: 0.9))
+        #expect(HallucinationFilter.isLikely("  Спасибо за просмотр. ", audioSeconds: 1.5))
+        #expect(HallucinationFilter.isLikely("Thank you.", audioSeconds: 0.7))
+        #expect(HallucinationFilter.isLikely("Продолжение следует...", audioSeconds: 2))
+        // Длинная реплика или «спасибо» внутри фразы — настоящая речь.
+        #expect(!HallucinationFilter.isLikely("Дякую!", audioSeconds: 3.5))
+        #expect(!HallucinationFilter.isLikely("Спасибо, а теперь расскажите о себе", audioSeconds: 2))
+        #expect(!HallucinationFilter.isLikely("", audioSeconds: 0.5))
+    }
+}

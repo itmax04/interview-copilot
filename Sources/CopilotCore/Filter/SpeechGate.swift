@@ -38,25 +38,36 @@ public final class SileroSpeechGate: @unchecked Sendable {
 
     /// Наибольшая вероятность речи по кускам 256 мс (0…1). Синхронно — вызывается из очереди распознавания.
     public func speechProbability(_ samples: [Float]) -> Float {
-        guard !samples.isEmpty else { return 0 }
+        speechStats(samples).max
+    }
+
+    /// Наибольшая вероятность и число кусков 256 мс с речью (вероятность ≥ порога).
+    public func speechStats(_ samples: [Float]) -> (max: Float, speechChunks: Int) {
+        let probabilities = chunkProbabilities(samples)
+        return (probabilities.max() ?? 0, probabilities.filter { $0 >= threshold }.count)
+    }
+
+    /// Речь — если её хотя бы 2 куска (≈ 0,5 с) или один кусок с уверенностью ≥ 0,9. Одиночный всплеск шума
+    /// (живой лог 2026-10-23: короткие отрезки 0,66–1,2 с превращались в «Дякую!») — не речь.
+    public func isSpeech(_ samples: [Float]) -> Bool {
+        let stats = speechStats(samples)
+        return stats.speechChunks >= 2 || stats.max >= 0.9
+    }
+
+    private func chunkProbabilities(_ samples: [Float]) -> [Float] {
+        guard !samples.isEmpty else { return [] }
         lock.lock()
         defer { lock.unlock() }
         let manager = self.manager
         let done = DispatchSemaphore(value: 0)
-        final class Box: @unchecked Sendable { var value: Float = 1 }
+        final class Box: @unchecked Sendable { var value: [Float] = [1] }
         let box = Box()
         Task.detached(priority: .userInitiated) {
             // Ошибка модели не должна терять вопрос: считаем, что речь есть.
-            if let results = try? await manager.process(samples) {
-                box.value = results.map(\.probability).max() ?? 0
-            }
+            if let results = try? await manager.process(samples) { box.value = results.map(\.probability) }
             done.signal()
         }
         done.wait()
         return box.value
-    }
-
-    public func isSpeech(_ samples: [Float]) -> Bool {
-        speechProbability(samples) >= threshold
     }
 }

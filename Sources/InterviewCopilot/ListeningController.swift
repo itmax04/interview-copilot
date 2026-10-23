@@ -87,6 +87,11 @@ final class ListeningController {
         return speechGate == nil ? "Загружаю Silero…" : "Silero загружена"
     }
 
+    /// Порог громкости по источнику: у микрофона шум комнаты громче, чем тишина в звуке звонка (COPILOT-05).
+    private func applyVADConfig() {
+        transcriber?.setVADConfig(source == .microphone ? StreamingTranscriber.microphoneVAD : StreamingTranscriber.Config().vad)
+    }
+
     private func applySpeechGate() {
         let gate = model.settings.neuralSpeechGate && testSource == nil ? speechGate : nil
         transcriber?.setSpeechGate(gate.map { g in { @Sendable samples in g.isSpeech(samples) } })
@@ -285,6 +290,7 @@ final class ListeningController {
             ownerSpeaking = false
             onOwnerSpeaking?(false, Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
             source = resolved
+            applyVADConfig()
             let micSource = self.micSource ?? makeMicSource()
             self.micSource = micSource
             do {
@@ -305,6 +311,7 @@ final class ListeningController {
             return
         }
         source = resolved
+        applyVADConfig()
         if resolved == .none {
             await capture?.stop()
             setPhase(.idle)
@@ -415,6 +422,7 @@ final class ListeningController {
         case .success(let engine):
             var config = StreamingTranscriber.Config()
             config.finalReducedContext = reducedContext
+            if source == .microphone { config.vad = StreamingTranscriber.microphoneVAD }
             let deliveryEpoch = self.deliveryEpoch
             let t = StreamingTranscriber(recognizer: engine, buffer: buffer, config: config) { [weak self] event in
                 let eventEpoch = deliveryEpoch.current()
