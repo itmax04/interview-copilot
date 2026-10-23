@@ -61,12 +61,17 @@ final class AnswerController {
         generation?.cancel()
         lastQuestion = turn
         panel.question = turn.text
-        // COPILOT-04 R-01: ответ на этот текст уже готовится — показываем его, без нового запроса.
-        if let d = draft, d.text == turn.text, d.generating {
+        // COPILOT-04 R-01: ответ на этот текст уже готовится (или запрос ещё собирается — чтение ключей) —
+        // ход забирает его, без нового запроса. Если опережающий запрос решит, что нужна карточка базы, ход пойдёт обычным путём.
+        if let d = draft, d.text == turn.text, !d.declined {
             adopt(d, turn: turn)
             return
         }
         cancelDraft()
+        answerNormally(turn)
+    }
+
+    private func answerNormally(_ turn: Turn) {
         let settings = model.settings
         generation = Task { [weak self] in
             guard let self else { return }
@@ -248,6 +253,10 @@ final class AnswerController {
         var fallbackTop: [CardScore] = []
         /// Решено генерировать и запрос к модели запущен (карточка базы опережающего запроса не требует).
         var generating = false
+        /// Генерация не нужна (карточка базы или нет моделей) — ход отвечает обычным путём.
+        var declined = false
+        /// Ход, забравший запрос до решения: если запрос откажется, ход уйдёт обычным путём.
+        var adoptedTurn: Turn?
         var task: Task<Void, Never>?
         private var buffered: [ChainEvent] = []
         private var consumer: (@MainActor (ChainEvent) -> Void)?
@@ -286,10 +295,15 @@ final class AnswerController {
         d.task = Task { [weak self] in
             guard let self else { return }
             if settings.useProfile, let match = await self.bank.match(text, threshold: settings.bankThreshold) { d.match = match }
-            guard !Task.isCancelled, self.draft === d else { return }
+            guard !Task.isCancelled, self.draft === d || d.adopted else { return }
+            if d.adoptedTurn != nil, settings.useProfile { self.lastMatch = d.match }
             guard case .generate(let base, let top) = AnswerRouter.decide(mode: settings.mode, match: d.match,
                                                                            modelsAvailable: self.modelsAvailable(settings),
-                                                                           useProfile: settings.useProfile) else { return }
+                                                                           useProfile: settings.useProfile) else {
+                d.declined = true
+                if let turn = d.adoptedTurn, self.lastQuestion?.id == turn.id { self.answerNormally(turn) }
+                return
+            }
             let request = self.hintRequest(question: text, base: base, top: top, settings: settings)
             d.fallbackTop = top
             let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
@@ -314,8 +328,9 @@ final class AnswerController {
 
     private func adopt(_ d: Draft, turn: Turn) {
         draft = nil
+        d.adoptedTurn = turn
         if model.settings.useProfile { lastMatch = d.match } else { lastMatch = nil }
-        Log.metrics.notice("draft_used turn=\(turn.id) started_ms_from_speech_end=\(Int(d.startedAt - turn.speechEndedAt)) lead_ms=\(Int(turn.firedAt - d.startedAt))")
+        Log.metrics.notice("draft_used turn=\(turn.id) started_ms_from_speech_end=\(Int(d.startedAt - turn.speechEndedAt)) lead_ms=\(Int(turn.firedAt - d.startedAt)) generating=\(d.generating)")
         generation = d.task
         d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, strong: false, speculative: true))
     }
