@@ -232,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !force && s.language != old.language { listening.languageSettingChanged() }
         if force || s.neuralSpeechGate != old.neuralSpeechGate { listening.speechGateSettingChanged() }
         if force || s.ownerVoiceOnly != old.ownerVoiceOnly || s.ownerVoiceThreshold != old.ownerVoiceThreshold { listening.voiceSettingsChanged() }
+        if force || s.micNoiseSuppression != old.micNoiseSuppression { listening.noiseSuppressionSettingChanged() }
         if force { updateFilterTerms() }
         if force || s.pauseThresholdMs != old.pauseThresholdMs || s.questionPauseMs != old.questionPauseMs {
             turns.setThreshold(s.pauseThresholdMs, questionMs: s.questionPauseMs)

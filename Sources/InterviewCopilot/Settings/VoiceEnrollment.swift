@@ -171,6 +171,9 @@ struct VoiceSettingsSection: View {
                 Text("Нажмите кнопку (или Enter) и прочитайте вслух текст, который появится. Сам звук не сохраняется — только «отпечаток» из чисел.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
+            Toggle("Шумоподавление микрофона LocalVQE (экспериментально)", isOn: $model.settings.micNoiseSuppression)
+            Text("По замеру распознавание с ним хуже (3,9% → 6,3% ошибок в словах): Parakeet сам устойчив к шуму. Для шума в комнате лучше системный Voice Isolation (Пункт управления → Режим микрофона).")
+                .font(.footnote).foregroundStyle(.secondary)
             Toggle("Порог сходства — автоматически по образцу", isOn: autoThreshold)
             if model.settings.ownerVoiceThreshold > 0 {
                 VStack(alignment: .leading) {

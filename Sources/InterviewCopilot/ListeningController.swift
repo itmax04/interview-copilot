@@ -76,9 +76,27 @@ final class ListeningController {
 
     /// Голос проверяется в режиме «Микрофон Mac» и в ответе владельца на ИИ-собеседовании (R-01, Q13).
     private func updateVoiceGateActive() {
-        let active = model.settings.ownerVoiceOnly
-            && ((testSource == nil && source == .microphone) || interviewRoute == .owner)
-        voiceGate.update { $0.active = active }
+        let micChannel = (testSource == nil && source == .microphone) || interviewRoute == .owner
+        voiceGate.update { $0.active = model.settings.ownerVoiceOnly && micChannel }
+        enhancerBox.update { $0.active = model.settings.micNoiseSuppression && micChannel }
+    }
+
+    /// Шумоподавление микрофона LocalVQE (R-04, по умолчанию выключено): модель загружается при включении.
+    let enhancerBox = EnhancerBox()
+    private var enhancerLoading = false
+
+    func noiseSuppressionSettingChanged() {
+        updateVoiceGateActive()
+        guard model.settings.micNoiseSuppression, enhancerBox.current.enhancer == nil, !enhancerLoading,
+              SpeechEnhancer.isInstalled(in: AppPaths.models) else { return }
+        enhancerLoading = true
+        Task { [weak self] in
+            let enhancer = await Task.detached(priority: .utility) { try? SpeechEnhancer.load(from: AppPaths.models) }.value
+            guard let self else { return }
+            self.enhancerLoading = false
+            if enhancer == nil { Log.stt.error("LocalVQE load failed") }
+            self.enhancerBox.update { $0.enhancer = enhancer }
+        }
     }
 
     var voiceStatus: String {
@@ -480,6 +498,8 @@ final class ListeningController {
             t.setSpeechGate(gate.map { g in { @Sendable samples in g.isSpeech(samples) } })
             let voiceGate = self.voiceGate
             t.setVoiceGate { samples in voiceGate.check(samples) }
+            let enhancerBox = self.enhancerBox
+            t.setAudioEnhancer { samples in enhancerBox.enhance(samples) }
             t.setPaused(phase == .paused)
             transcriberBox.set(t)
             transcriber = t

@@ -1,0 +1,302 @@
+[
+ {
+  "file": "ru-0-clean.wav",
+  "lang": "ru",
+  "noise": "clean",
+  "text": "Расскажите, пожалуйста, о своём последнем проекте."
+ },
+ {
+  "file": "ru-0-street-5db.wav",
+  "lang": "ru",
+  "noise": "street-5db",
+  "text": "Расскажите, пожалуйста, о своём последнем проекте."
+ },
+ {
+  "file": "ru-0-music-5db.wav",
+  "lang": "ru",
+  "noise": "music-5db",
+  "text": "Расскажите, пожалуйста, о своём последнем проекте."
+ },
+ {
+  "file": "ru-0-keyboard-5db.wav",
+  "lang": "ru",
+  "noise": "keyboard-5db",
+  "text": "Расскажите, пожалуйста, о своём последнем проекте."
+ },
+ {
+  "file": "ru-0-tv-10db.wav",
+  "lang": "ru",
+  "noise": "tv-10db",
+  "text": "Расскажите, пожалуйста, о своём последнем проекте."
+ },
+ {
+  "file": "ru-1-clean.wav",
+  "lang": "ru",
+  "noise": "clean",
+  "text": "Как вы решаете конфликты в команде?"
+ },
+ {
+  "file": "ru-1-street-5db.wav",
+  "lang": "ru",
+  "noise": "street-5db",
+  "text": "Как вы решаете конфликты в команде?"
+ },
+ {
+  "file": "ru-1-music-5db.wav",
+  "lang": "ru",
+  "noise": "music-5db",
+  "text": "Как вы решаете конфликты в команде?"
+ },
+ {
+  "file": "ru-1-keyboard-5db.wav",
+  "lang": "ru",
+  "noise": "keyboard-5db",
+  "text": "Как вы решаете конфликты в команде?"
+ },
+ {
+  "file": "ru-1-tv-10db.wav",
+  "lang": "ru",
+  "noise": "tv-10db",
+  "text": "Как вы решаете конфликты в команде?"
+ },
+ {
+  "file": "ru-2-clean.wav",
+  "lang": "ru",
+  "noise": "clean",
+  "text": "Почему вы хотите сменить место работы?"
+ },
+ {
+  "file": "ru-2-street-5db.wav",
+  "lang": "ru",
+  "noise": "street-5db",
+  "text": "Почему вы хотите сменить место работы?"
+ },
+ {
+  "file": "ru-2-music-5db.wav",
+  "lang": "ru",
+  "noise": "music-5db",
+  "text": "Почему вы хотите сменить место работы?"
+ },
+ {
+  "file": "ru-2-keyboard-5db.wav",
+  "lang": "ru",
+  "noise": "keyboard-5db",
+  "text": "Почему вы хотите сменить место работы?"
+ },
+ {
+  "file": "ru-2-tv-10db.wav",
+  "lang": "ru",
+  "noise": "tv-10db",
+  "text": "Почему вы хотите сменить место работы?"
+ },
+ {
+  "file": "ru-3-clean.wav",
+  "lang": "ru",
+  "noise": "clean",
+  "text": "Какие задачи вы решали на прошлой работе?"
+ },
+ {
+  "file": "ru-3-street-5db.wav",
+  "lang": "ru",
+  "noise": "street-5db",
+  "text": "Какие задачи вы решали на прошлой работе?"
+ },
+ {
+  "file": "ru-3-music-5db.wav",
+  "lang": "ru",
+  "noise": "music-5db",
+  "text": "Какие задачи вы решали на прошлой работе?"
+ },
+ {
+  "file": "ru-3-keyboard-5db.wav",
+  "lang": "ru",
+  "noise": "keyboard-5db",
+  "text": "Какие задачи вы решали на прошлой работе?"
+ },
+ {
+  "file": "ru-3-tv-10db.wav",
+  "lang": "ru",
+  "noise": "tv-10db",
+  "text": "Какие задачи вы решали на прошлой работе?"
+ },
+ {
+  "file": "uk-4-clean.wav",
+  "lang": "uk",
+  "noise": "clean",
+  "text": "Розкажіть, будь ласка, про свій останній проєкт."
+ },
+ {
+  "file": "uk-4-street-5db.wav",
+  "lang": "uk",
+  "noise": "street-5db",
+  "text": "Розкажіть, будь ласка, про свій останній проєкт."
+ },
+ {
+  "file": "uk-4-music-5db.wav",
+  "lang": "uk",
+  "noise": "music-5db",
+  "text": "Розкажіть, будь ласка, про свій останній проєкт."
+ },
+ {
+  "file": "uk-4-keyboard-5db.wav",
+  "lang": "uk",
+  "noise": "keyboard-5db",
+  "text": "Розкажіть, будь ласка, про свій останній проєкт."
+ },
+ {
+  "file": "uk-4-tv-10db.wav",
+  "lang": "uk",
+  "noise": "tv-10db",
+  "text": "Розкажіть, будь ласка, про свій останній проєкт."
+ },
+ {
+  "file": "uk-5-clean.wav",
+  "lang": "uk",
+  "noise": "clean",
+  "text": "Як ви вирішуєте конфлікти в команді?"
+ },
+ {
+  "file": "uk-5-street-5db.wav",
+  "lang": "uk",
+  "noise": "street-5db",
+  "text": "Як ви вирішуєте конфлікти в команді?"
+ },
+ {
+  "file": "uk-5-music-5db.wav",
+  "lang": "uk",
+  "noise": "music-5db",
+  "text": "Як ви вирішуєте конфлікти в команді?"
+ },
+ {
+  "file": "uk-5-keyboard-5db.wav",
+  "lang": "uk",
+  "noise": "keyboard-5db",
+  "text": "Як ви вирішуєте конфлікти в команді?"
+ },
+ {
+  "file": "uk-5-tv-10db.wav",
+  "lang": "uk",
+  "noise": "tv-10db",
+  "text": "Як ви вирішуєте конфлікти в команді?"
+ },
+ {
+  "file": "uk-6-clean.wav",
+  "lang": "uk",
+  "noise": "clean",
+  "text": "Чому ви хочете змінити місце роботи?"
+ },
+ {
+  "file": "uk-6-street-5db.wav",
+  "lang": "uk",
+  "noise": "street-5db",
+  "text": "Чому ви хочете змінити місце роботи?"
+ },
+ {
+  "file": "uk-6-music-5db.wav",
+  "lang": "uk",
+  "noise": "music-5db",
+  "text": "Чому ви хочете змінити місце роботи?"
+ },
+ {
+  "file": "uk-6-keyboard-5db.wav",
+  "lang": "uk",
+  "noise": "keyboard-5db",
+  "text": "Чому ви хочете змінити місце роботи?"
+ },
+ {
+  "file": "uk-6-tv-10db.wav",
+  "lang": "uk",
+  "noise": "tv-10db",
+  "text": "Чому ви хочете змінити місце роботи?"
+ },
+ {
+  "file": "en-7-clean.wav",
+  "lang": "en",
+  "noise": "clean",
+  "text": "Tell me about your most recent project."
+ },
+ {
+  "file": "en-7-street-5db.wav",
+  "lang": "en",
+  "noise": "street-5db",
+  "text": "Tell me about your most recent project."
+ },
+ {
+  "file": "en-7-music-5db.wav",
+  "lang": "en",
+  "noise": "music-5db",
+  "text": "Tell me about your most recent project."
+ },
+ {
+  "file": "en-7-keyboard-5db.wav",
+  "lang": "en",
+  "noise": "keyboard-5db",
+  "text": "Tell me about your most recent project."
+ },
+ {
+  "file": "en-7-tv-10db.wav",
+  "lang": "en",
+  "noise": "tv-10db",
+  "text": "Tell me about your most recent project."
+ },
+ {
+  "file": "en-8-clean.wav",
+  "lang": "en",
+  "noise": "clean",
+  "text": "How do you handle disagreements in your team?"
+ },
+ {
+  "file": "en-8-street-5db.wav",
+  "lang": "en",
+  "noise": "street-5db",
+  "text": "How do you handle disagreements in your team?"
+ },
+ {
+  "file": "en-8-music-5db.wav",
+  "lang": "en",
+  "noise": "music-5db",
+  "text": "How do you handle disagreements in your team?"
+ },
+ {
+  "file": "en-8-keyboard-5db.wav",
+  "lang": "en",
+  "noise": "keyboard-5db",
+  "text": "How do you handle disagreements in your team?"
+ },
+ {
+  "file": "en-8-tv-10db.wav",
+  "lang": "en",
+  "noise": "tv-10db",
+  "text": "How do you handle disagreements in your team?"
+ },
+ {
+  "file": "en-9-clean.wav",
+  "lang": "en",
+  "noise": "clean",
+  "text": "Why are you looking for a new job?"
+ },
+ {
+  "file": "en-9-street-5db.wav",
+  "lang": "en",
+  "noise": "street-5db",
+  "text": "Why are you looking for a new job?"
+ },
+ {
+  "file": "en-9-music-5db.wav",
+  "lang": "en",
+  "noise": "music-5db",
+  "text": "Why are you looking for a new job?"
+ },
+ {
+  "file": "en-9-keyboard-5db.wav",
+  "lang": "en",
+  "noise": "keyboard-5db",
+  "text": "Why are you looking for a new job?"
+ },
+ {
+  "file": "en-9-tv-10db.wav",
+  "lang": "en",
+  "noise": "tv-10db",
+  "text": "Why are you looking for a new job?"
+ }
+]

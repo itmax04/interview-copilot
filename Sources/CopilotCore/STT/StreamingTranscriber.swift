@@ -149,6 +149,13 @@ public final class StreamingTranscriber: @unchecked Sendable {
     }
 
     private var voiceGate: VoiceCheck?
+
+    /// Очистка звука закрытой реплики перед распознаванием (COPILOT-05 R-04); nil — без очистки.
+    public func setAudioEnhancer(_ enhancer: (@Sendable ([Float]) -> [Float]?)?) {
+        lock.withLock { audioEnhancer = enhancer }
+    }
+
+    private var audioEnhancer: (@Sendable ([Float]) -> [Float]?)?
     private var recentFinals: [(language: String, text: String)] = []
 
     func prompt(for language: String?) -> String? {
@@ -372,7 +379,8 @@ public final class StreamingTranscriber: @unchecked Sendable {
         let scheduledEpoch = request.epoch
         let phraseEnd = request.phraseEnd
         guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
-        let audio = request.audio
+        var audio = request.audio
+        if !audio.isEmpty, let enhance = lock.withLock({ audioEnhancer }), let cleaned = enhance(audio) { audio = cleaned }
         guard !audio.isEmpty else {
             onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
             return

@@ -247,6 +247,44 @@ case "filter":
                  wanted.lost, wanted.total, lostRate * 100, termsKept.ok, termsKept.total, termsLatin, noise.utterances, noise.total,
                  vadMs.sorted().dropFirst(vadMs.count / 2).first ?? 0, pass ? "PASS" : "FAIL"))
     finish(pass ? 0 : 1)
+case "enhance":
+    // Eval `enhance` (COPILOT-05 R-04): ошибки Parakeet по словам на шумных фразах с LocalVQE и без.
+    args.removeFirst()
+    let manifest = args.first ?? "evals/filter/noisy-cases.json"
+    let dir = URL(fileURLWithPath: option("--dir") ?? "evals/audio/noisy")
+    guard let data = FileManager.default.contents(atPath: manifest),
+          let cases = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]] else { fail("\(manifest): нет манифеста (scripts/make-noisy-fixtures.py)", code: 1) }
+    let engine: ParakeetEngine
+    do { engine = try await ParakeetEngine.load(from: AppPaths.parakeetModels) } catch { fail("Parakeet: \(error)", code: 1) }
+    let enhancer: SpeechEnhancer
+    do { enhancer = try SpeechEnhancer.load(from: AppPaths.models) } catch { fail("LocalVQE: \(error) (scripts/fetch-filter-models.py)", code: 1) }
+    var raw: [String: (errors: Int, words: Int)] = [:], clean: [String: (errors: Int, words: Int)] = [:]
+    var msPerSecond: [Double] = []
+    for c in cases {
+        guard let file = c["file"], let text = c["text"], let noise = c["noise"], let lang = c["lang"],
+              let samples = try? AudioFileReader.read16kMono(dir.appendingPathComponent(file)) else { continue }
+        let started = Date()
+        guard let enhanced = enhancer.enhance(samples) else { fail("\(file): LocalVQE не обработал", code: 1) }
+        msPerSecond.append(Date().timeIntervalSince(started) * 1000 / (Double(samples.count) / 16_000))
+        let a = (try? engine.transcribe(samples, language: lang, prompt: nil, reducedContext: false).text) ?? ""
+        let b = (try? engine.transcribe(enhanced, language: lang, prompt: nil, reducedContext: false).text) ?? ""
+        let ca = TranscriptComparison(reference: text, recognized: a), cb = TranscriptComparison(reference: text, recognized: b)
+        raw[noise, default: (0, 0)].errors += ca.errors; raw[noise, default: (0, 0)].words += ca.referenceWords
+        clean[noise, default: (0, 0)].errors += cb.errors; clean[noise, default: (0, 0)].words += cb.referenceWords
+        if flag("--verbose") { print("\(file): raw=\(ca.errors) vqe=\(cb.errors) · \(a.prefix(50)) | \(b.prefix(50))") }
+    }
+    var totalRaw = (0, 0), totalClean = (0, 0)
+    for noise in raw.keys.sorted() {
+        let r = raw[noise]!, e = clean[noise]!
+        totalRaw = (totalRaw.0 + r.errors, totalRaw.1 + r.words); totalClean = (totalClean.0 + e.errors, totalClean.1 + e.words)
+        print(String(format: "  %-13@ без LocalVQE %5.1f%% (%d/%d) · с LocalVQE %5.1f%% (%d/%d)", noise as NSString,
+                     Double(r.errors) * 100 / Double(max(r.words, 1)), r.errors, r.words, Double(e.errors) * 100 / Double(max(e.words, 1)), e.errors, e.words))
+    }
+    let better = totalClean.0 < totalRaw.0
+    print(String(format: "enhance: WER без %.1f%% · с LocalVQE %.1f%% · %.0f мс на 1 с звука · %@",
+                 Double(totalRaw.0) * 100 / Double(max(totalRaw.1, 1)), Double(totalClean.0) * 100 / Double(max(totalClean.1, 1)),
+                 msPerSecond.sorted()[msPerSecond.count / 2], better ? "ЛУЧШЕ" : "НЕ ЛУЧШЕ"))
+    finish(0)
 case "voice-enroll":
     // Образец голоса из файла (COPILOT-05 R-03): copilot-eval voice-enroll <файл 16 кГц моно> [--dry-run].
     // Сохраняет отпечаток туда же, куда и запись в Settings → Audio; звук не копируется.

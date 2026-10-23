@@ -81,6 +81,54 @@
           "sha256": "09f13054339581673c8b5745954471945a61fea54441b6e55f934f041611143a"
         }
       ]
+    },
+    {
+      "repo": "FluidInference/localvqe-coreml",
+      "revision": "4205430781c240397073d6f7bf676fb4c732fc12",
+      "license": "apache-2.0",
+      "folder": "localvqe-coreml",
+      "files": [
+        {
+          "path": "localvqe-v1.3-4.8M-16ms.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "b38b26719f7fdb1d37d0ea66e2a72c0cb2f111105b606636d733b958ea3d7892"
+        },
+        {
+          "path": "localvqe-v1.3-4.8M-16ms.mlmodelc/coremldata.bin",
+          "size": 3528,
+          "sha256": "795709e1ad528f94a7d76226e0e408d1897ee0a6603d32fdfad9ffb5b668fd22"
+        },
+        {
+          "path": "localvqe-v1.3-4.8M-16ms.mlmodelc/model.mil",
+          "size": 311978,
+          "sha256": "8dddf32c801cdb90329e43748a46e9321ef2b14c8d41d6515c541c81a43cbbf4"
+        },
+        {
+          "path": "localvqe-v1.3-4.8M-16ms.mlmodelc/weights/weight.bin",
+          "size": 19281728,
+          "sha256": "fc5f290cbfb497718d9d9568ee965c352bfe4663bab49b30a10e91f8fcfff826"
+        },
+        {
+          "path": "localvqe-v1.3-4.8M-256ms.mlmodelc/analytics/coremldata.bin",
+          "size": 243,
+          "sha256": "a0e97d957f54c9a144993bfbb9d3d8320def9de35a77844e20fbf0703fa461c6"
+        },
+        {
+          "path": "localvqe-v1.3-4.8M-256ms.mlmodelc/coremldata.bin",
+          "size": 3531,
+          "sha256": "9ac719cbfbc018ce1f1168062ee1629b77bd86f4881567bca8668591817f402f"
+        },
+        {
+          "path": "localvqe-v1.3-4.8M-256ms.mlmodelc/model.mil",
+          "size": 349829,
+          "sha256": "11da4803a13bcc357550904fcbfeb4a169b0c4b38e529787aeed8a9b233c528c"
+        },
+        {
+          "path": "localvqe-v1.3-4.8M-256ms.mlmodelc/weights/weight.bin",
+          "size": 19281728,
+          "sha256": "fc5f290cbfb497718d9d9568ee965c352bfe4663bab49b30a10e91f8fcfff826"
+        }
+      ]
     }
   ]
 }

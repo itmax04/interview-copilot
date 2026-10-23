@@ -136,6 +136,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var ownerVoiceOnly = true
     /// Порог сходства с отпечатком голоса; 0 — персональный по образцу (`VoicePrint.recommendedThreshold`).
     public var ownerVoiceThreshold: Double = 0
+    /// Шумоподавление реплики микрофона LocalVQE (COPILOT-05 R-04). Выключено: на eval `enhance` Parakeet с ним
+    /// ошибается чаще (3,9% → 6,3% слов); для шума комнаты — системный Voice Isolation.
+    public var micNoiseSuppression = false
 
     // Answer / Bank
     public var mode: AnswerMode = .bankAndHint
@@ -265,6 +268,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         neuralSpeechGate = v(.neuralSpeechGate, d.neuralSpeechGate)
         ownerVoiceOnly = v(.ownerVoiceOnly, d.ownerVoiceOnly)
         ownerVoiceThreshold = v(.ownerVoiceThreshold, d.ownerVoiceThreshold)
+        micNoiseSuppression = v(.micNoiseSuppression, d.micNoiseSuppression)
         mode = v(.mode, d.mode)
         useProfile = v(.useProfile, d.useProfile)
         bankThreshold = v(.bankThreshold, d.bankThreshold)

@@ -231,3 +231,36 @@ struct VoicePrintTests {
         #expect(own > other + 0.1)
     }
 }
+
+@Suite("Шумоподавление микрофона — COPILOT-05 R-04")
+struct EnhancerTests {
+    @Test func offByDefaultAfterMeasurement() {
+        #expect(!AppSettings().micNoiseSuppression)   // eval enhance: с LocalVQE ошибок больше
+        #expect(EnhancerBox().enhance([0.1, 0.2]) == nil)
+    }
+
+    @Test func enhancedAudioGoesToRecognizer() async {
+        let buffer = AudioRingBuffer(seconds: 30)
+        let fake = FakeRecognizer()
+        let sink = EventSink()
+        var config = StreamingTranscriber.Config()
+        config.partialInterval = 10
+        let t = StreamingTranscriber(recognizer: fake, buffer: buffer, config: config) { sink.add($0) }
+        t.setLanguage("uk")
+        t.setAudioEnhancer { samples in samples.map { $0 * 0.5 } }   // «очистка» вдвое тише — видно по пику
+        for chunk in [EnergyVADTests.noise(ms: 300, amplitude: 0.001), EnergyVADTests.tone(ms: 1500, amplitude: 0.3),
+                      EnergyVADTests.noise(ms: 700, amplitude: 0.001)] {
+            var i = 0
+            while i < chunk.count {
+                let part = Array(chunk[i..<min(i + 320, chunk.count)])
+                buffer.append(part)
+                t.process(part)
+                i += 320
+            }
+        }
+        #expect(await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } })
+        // Распознаватель получил очищенный звук: пик 0,15 вместо исходных 0,3.
+        let peak = fake.transcribeCalls.last?.peak ?? 0
+        #expect(peak > 0.14 && peak < 0.16)
+    }
+}
