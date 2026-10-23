@@ -7,7 +7,8 @@ struct KeysSettingsView: View {
 
     var body: some View {
         Form {
-            ForEach(ProviderID.allCases, id: \.self) { provider in
+            // Быстрые провайдеры — первыми, как в цепочке (R-36): поле Groq видно без прокрутки.
+            ForEach(Self.order, id: \.self) { provider in
                 KeyRow(model: model, provider: provider)
             }
             Section {
@@ -20,6 +21,9 @@ struct KeysSettingsView: View {
         }
         .formStyle(.grouped)
     }
+
+    static let order: [ProviderID] = [.groq, .cerebras, .gemini, .deepseek, .anthropic]
+        + ProviderID.allCases.filter { ![.groq, .cerebras, .gemini, .deepseek, .anthropic].contains($0) }
 }
 
 private struct KeyRow: View {
