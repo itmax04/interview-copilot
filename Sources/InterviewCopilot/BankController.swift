@@ -116,6 +116,12 @@ final class BankController {
         }
     }
 
+    /// Эмбеддинг произвольного текста той же моделью (bge-m3) — поиск по истории интервью (COPILOT-06).
+    var embedFunction: (@Sendable (String) -> [Float]?)? {
+        guard let builder else { return nil }
+        return { text in try? builder.embedQuery(text) }
+    }
+
     /// Поиск по базе (R-07). Эмбеддинг хода считается в фоне.
     func match(_ text: String, threshold: Double) async -> BankMatch? {
         guard let builder, let index else { return nil }

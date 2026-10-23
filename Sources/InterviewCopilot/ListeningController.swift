@@ -92,8 +92,13 @@ final class ListeningController {
     private let ownerBuffer = AudioRingBuffer(seconds: 30)
     private let ownerBox = TranscriberBox()
     private let ownerActive = LockedFlag()
+    /// Фраза владельца прошла фильтры — в память интервью (COPILOT-06).
+    var onOwnerSaid: ((String) -> Void)?
     /// Что владелец уже сказал — только в памяти (Q6).
     private var candidateContext = CandidateContext()
+
+    /// Новое интервью (COPILOT-06): фразы прошлого не переносятся.
+    func clearCandidateContext() { candidateContext.clear() }
 
     /// До 3 последних фраз владельца для промпта (R-07).
     var candidateSaid: [String] {
@@ -135,6 +140,7 @@ final class ListeningController {
         if voiceGate.current.print == nil, model.settings.languageFilter,
            case .drop = LanguageGate(setting: model.settings.language, terms: terms).check(text, channel: .mic) { return }
         candidateContext.add(text, at: Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
+        onOwnerSaid?(text)
         Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text))")
     }
 

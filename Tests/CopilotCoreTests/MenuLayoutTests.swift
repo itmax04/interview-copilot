@@ -9,7 +9,7 @@ struct MenuLayoutTests {
             [.listeningSource, .togglePause],
             [.mode, .models, .language],
             [.profile, .questionBank, .editProfile, .practice, .aiInterview],
-            [.answerNow, .screenshot, .togglePanel, .sessionHistory],
+            [.answerNow, .screenshot, .togglePanel, .newInterview, .sessionHistory],
             [.status],
             [.settings, .quit],
         ])

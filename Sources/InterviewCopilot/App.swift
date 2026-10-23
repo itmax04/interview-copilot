@@ -176,7 +176,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.usage.recordError(provider: provider, error: error)
             self?.refreshUI()
         }
-        answers.onAnswer = { [weak self] record in self?.sessions.addAnswer(record) }
+        answers.onAnswer = { [weak self] record in
+            guard let self else { return }
+            self.sessions.addAnswer(record)
+            // COPILOT-06: подсказка — в обмен этого вопроса (для разбора после звонка).
+            if !record.text.isEmpty { self.memory.setHint(record.text, forQuestion: record.turn.text); self.saveMemory() }
+        }
+        // COPILOT-06: память интервью вместо отдельного блока «что кандидат сказал» — ответы уже в обменах.
+        answers.memory = memory
+        answers.embed = { [weak self] in self?.bank.embedFunction }
+        answers.candidateSaid = { [] }
+        listening.onOwnerSaid = { [weak self] text in
+            self?.memory.addAnswer(text)
+            self?.saveMemory()
+        }
         if testCallOnly {
             testCall.start()
             refreshUI()
@@ -267,6 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshUI() {
+        checkCallSourceChange()
         var state = model.menuState(listening: listening.listeningStatus, profileName: bank.profile.name,
                                     cardCount: bank.cards.count)
         state.bankError = bank.error
@@ -293,7 +307,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func turnCompleted(_ turn: Turn) {
         guard !testCall.active, !testCallOnly else { return }
+        // COPILOT-06: тишина дольше 30 минут — это уже другое интервью.
+        if let last = lastTurnAt, Date().timeIntervalSince(last) > Self.newInterviewAfterSilence { startNewInterview(reason: "silence") }
+        lastTurnAt = Date()
+        memory.addQuestion(turn.text)
+        saveMemory()
         answers.handle(turn)
+    }
+
+    // MARK: Память интервью (COPILOT-06)
+
+    let memory = InterviewMemory()
+    private var lastTurnAt: Date?
+    private var lastCallSource: String?
+    static let newInterviewAfterSilence: TimeInterval = 30 * 60
+
+    private func saveMemory() {
+        sessions.updateExchanges(memory.all)
+    }
+
+    /// Новое интервью: прошлое сохраняется в историю, память очищается (R-06 COPILOT-06).
+    func startNewInterview(reason: String) {
+        sessions.finish()
+        memory.reset()
+        listening.clearCandidateContext()
+        lastTurnAt = nil
+        sessions.start(source: listening.source.displayName, retentionDays: model.settings.historyRetentionDays)
+        Log.app.info("new interview: \(reason, privacy: .public)")
+        refreshUI()
+    }
+
+    /// Смена приложения звонка (например, Zoom → Telegram) — новое интервью.
+    private func checkCallSourceChange() {
+        let name: String? = switch listening.source {
+        case .app(let app): app.bundleID
+        case .allSystem: "all-system"
+        default: nil
+        }
+        guard let name else { return }
+        if let previous = lastCallSource, previous != name, !memory.all.isEmpty { startNewInterview(reason: "source") }
+        lastCallSource = name
     }
 
     /// Опережающий запрос (COPILOT-04 R-01): ответ готовится до истечения паузы, показывается при ходе с тем же текстом.
@@ -389,6 +442,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             togglePause()
         case .sessionHistory:
             historyWindow.show()
+        case .newInterview:
+            startNewInterview(reason: "menu")
         case .togglePanel:
             togglePanel()
         case .answerNow:

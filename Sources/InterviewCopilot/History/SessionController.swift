@@ -27,6 +27,13 @@ final class SessionController {
         scheduleSave()
     }
 
+    /// Обмены интервью с ответами владельца (COPILOT-06) — снимок памяти текущего интервью.
+    func updateExchanges(_ exchanges: [SessionExchange]) {
+        guard current != nil else { return }
+        current?.exchanges = exchanges
+        scheduleSave()
+    }
+
     func addAnswer(_ r: AnswerController.AnswerRecord) {
         guard current != nil, r.turn.id >= 0 || r.turn.text == "Скриншот задачи" else { return }
         current?.turns.append(.init(id: r.turn.id, question: r.turn.text, answer: r.text, source: r.source, model: r.model,
@@ -46,7 +53,7 @@ final class SessionController {
     }
 
     func saveNow() {
-        guard let s = current, !(s.utterances.isEmpty && s.turns.isEmpty) else { return }
+        guard let s = current, !(s.utterances.isEmpty && s.turns.isEmpty && s.exchanges.isEmpty) else { return }
         do { try store.save(s) } catch { Log.app.error("session save failed: \(error.localizedDescription, privacy: .public)") }
     }
 

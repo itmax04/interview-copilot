@@ -16,6 +16,17 @@ final class AnswerController {
     var transcript: () -> [String] = { [] }
     /// Что владелец уже сказал на созвоне (COPILOT-05 R-07).
     var candidateSaid: () -> [String] = { [] }
+    /// Память интервью (COPILOT-06): последние обмены и найденные по смыслу старые.
+    var memory: InterviewMemory?
+    /// Эмбеддинг текста (bge-m3 базы) для поиска по истории; nil — модель не загружена.
+    var embed: () -> (@Sendable (String) -> [Float]?)? = { nil }
+
+    /// Контекст истории для вопроса — в фоне (эмбеддинги), без главного потока.
+    private func memoryContext(for question: String) async -> MemoryContext {
+        guard let memory else { return MemoryContext() }
+        let embed = self.embed()
+        return await Task.detached(priority: .userInitiated) { memory.context(for: question, embed: embed) }.value
+    }
     /// Учёт токенов и запросов (P-10).
     var onUsage: ((ProviderID, String, TokenUsage) -> Void)?
     /// Провайдер ответил ошибкой (для строки статуса «Gemini: limit»).
@@ -102,11 +113,12 @@ final class AnswerController {
         }
     }
 
-    private func hintRequest(question: String, base: BankCard?, top: [CardScore], settings: AppSettings) -> LLMRequest {
+    private func hintRequest(question: String, base: BankCard?, top: [CardScore], settings: AppSettings,
+                             memory: MemoryContext = MemoryContext()) -> LLMRequest {
         PromptBuilder.hintRequest(question: question, transcript: transcript(), cards: top, baseCard: base,
                                   profile: settings.useProfile ? bank.profile : nil, redactPII: settings.piiFilterEnabled,
                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question),
-                                  candidateSaid: candidateSaid())
+                                  candidateSaid: candidateSaid(), memory: memory)
     }
 
     private func route(_ turn: Turn, match: BankMatch, settings: AppSettings) {
@@ -117,13 +129,15 @@ final class AnswerController {
         case .noMatch(let top):
             showNoMatch(top, turn: turn, reason: modelsAvailable || (settings.mode == .bankOnly && settings.useProfile) ? nil : "Модели недоступны: нет ключей")
         case .generate(let base, let top):
-            let request = hintRequest(question: turn.text, base: base, top: top, settings: settings)
             let secrets = model.secrets
             let providers = self.providers
             generation = Task { [weak self] in
-                // Ключи читаются не на главном потоке.
+                guard let self else { return }
+                // История интервью (COPILOT-06) и ключи — не на главном потоке.
+                let memory = await self.memoryContext(for: turn.text)
+                let request = self.hintRequest(question: turn.text, base: base, top: top, settings: settings, memory: memory)
                 let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
-                guard let self, !Task.isCancelled, self.lastQuestion?.id == turn.id else { return }
+                guard !Task.isCancelled, self.lastQuestion?.id == turn.id else { return }
                 self.generate(turn: turn, chain: chain, request: request, fallbackTop: top)
             }
         }
@@ -307,7 +321,8 @@ final class AnswerController {
                 if let turn = d.adoptedTurn, self.lastQuestion?.id == turn.id { self.answerNormally(turn) }
                 return
             }
-            let request = self.hintRequest(question: text, base: base, top: top, settings: settings)
+            let memory = await self.memoryContext(for: text)
+            let request = self.hintRequest(question: text, base: base, top: top, settings: settings, memory: memory)
             d.fallbackTop = top
             let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
             guard !Task.isCancelled, self.draft === d || d.adopted else { return }
@@ -357,11 +372,12 @@ final class AnswerController {
             let chain = await Task.detached {
                 ChainFactory.strong(settings: settings, secrets: secrets, providers: providers, fallbackToGemini: false)
             }.value
-            self?.askStrongModel(turn: turn, settings: settings, chain: chain)
+            let memory = await self?.memoryContext(for: turn.text) ?? MemoryContext()
+            self?.askStrongModel(turn: turn, settings: settings, chain: chain, memory: memory)
         }
     }
 
-    private func askStrongModel(turn: Turn, settings: AppSettings, chain: ProviderChain?) {
+    private func askStrongModel(turn: Turn, settings: AppSettings, chain: ProviderChain?, memory: MemoryContext) {
         guard let chain else {
             panel.answerSource = panel.strongModelHint
             return
@@ -372,7 +388,7 @@ final class AnswerController {
                                                   profile: settings.useProfile ? bank.profile : nil,
                                                   redactPII: settings.piiFilterEnabled,
                                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text),
-                                                  candidateSaid: candidateSaid())
+                                                  candidateSaid: candidateSaid(), memory: memory)
         // Задержка для сильной модели считаем от нажатия.
         let manual = Turn(id: turn.id, text: turn.text, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         generate(turn: manual, chain: chain, request: request, fallbackTop: lastMatch?.top ?? [], strong: true)

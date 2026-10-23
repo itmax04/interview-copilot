@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Прогон evals (evals/README.md): scripts/run-evals.sh [bank|turn|filter-text|filter|voice]  (без аргумента — все наборы).
+# Прогон evals (evals/README.md): scripts/run-evals.sh [bank|turn|filter-text|memory|filter|voice]  (без аргумента — все наборы).
 # Результат: сводка в stdout и JSON-лог в evals/results/ (в Git не попадает). Код возврата 1, если порог не выполнен.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -9,7 +9,7 @@ BIN="$(swift build -c release --show-bin-path)/copilot-eval"
 mkdir -p evals/results
 STAMP="$(date +%Y-%m-%d-%H%M%S)"
 # filter-text — без моделей; filter (Parakeet + Silero) и voice (CAM++) — отдельно: scripts/run-evals.sh filter voice
-suites=("${@:-turn bank filter-text}")
+suites=("${@:-turn bank filter-text memory}")
 status=0
 for suite in ${suites[@]}; do
   out="evals/results/$suite-$STAMP.txt"

@@ -1,0 +1,168 @@
+import Foundation
+
+/// Память одного интервью — COPILOT-06. Обмены «вопрос интервьюера → что ответил владелец → подсказка модели».
+/// Короткая память — последние обмены целиком; долгая — поиск похожих старых обменов по эмбеддингам (bge-m3, локально).
+/// В промпт идёт только реально сказанное (R-05): ничего не пересказывается моделью.
+public struct SessionExchange: Codable, Equatable, Sendable, Identifiable {
+    public var id: Int
+    public var question: String
+    /// Фразы владельца после вопроса, по порядку (с микрофона на созвоне, COPILOT-05 R-07).
+    public var answer: [String]
+    /// Подсказка, которую показала модель (для разбора после звонка; в промпт не идёт).
+    public var hint: String?
+    public var askedAt: Date
+
+    public init(id: Int, question: String, answer: [String] = [], hint: String? = nil, askedAt: Date) {
+        self.id = id
+        self.question = question
+        self.answer = answer
+        self.hint = hint
+        self.askedAt = askedAt
+    }
+
+    public var answerText: String { answer.joined(separator: " ") }
+}
+
+/// Что из истории идёт в запрос к модели.
+public struct MemoryContext: Sendable, Equatable {
+    public struct Item: Sendable, Equatable {
+        public var minutesAgo: Int
+        public var question: String
+        public var answer: String
+        public init(minutesAgo: Int, question: String, answer: String) {
+            self.minutesAgo = minutesAgo
+            self.question = question
+            self.answer = answer
+        }
+    }
+
+    /// Последние обмены по порядку.
+    public var recent: [Item] = []
+    /// Старые обмены, найденные по смыслу вопроса.
+    public var earlier: [Item] = []
+    /// Интервьюер явно ссылается на сказанное раньше.
+    public var backReference = false
+
+    public init(recent: [Item] = [], earlier: [Item] = [], backReference: Bool = false) {
+        self.recent = recent
+        self.earlier = earlier
+        self.backReference = backReference
+    }
+
+    public var isEmpty: Bool { recent.isEmpty && earlier.isEmpty }
+}
+
+public final class InterviewMemory: @unchecked Sendable {
+    /// Решение владельца «средне»: 4 последних обмена целиком + 3 найденных старых (~+1,5 тыс. токенов на запрос).
+    public static let recentCount = 4
+    public static let retrievedCount = 3
+    /// Порог сходства bge-m3 для «та же тема»; при явной отсылке к прошлому — мягче (подбор — eval `memory`).
+    public static let minScore: Float = 0.55
+    public static let backReferenceMinScore: Float = 0.35
+    /// Лимиты текста одного обмена в промпте.
+    public static let maxQuestionChars = 300
+    public static let maxAnswerChars = 500
+
+    private let lock = NSLock()
+    private var exchanges: [SessionExchange] = []
+    private var embeddings: [Int: [Float]] = [:]
+    private var nextID = 1
+
+    public private(set) var sessionID = UUID()
+
+    public init() {}
+
+    /// Новое интервью: память очищается (R-06 COPILOT-06 — сессии не смешиваются).
+    public func reset() {
+        lock.withLock {
+            exchanges.removeAll()
+            embeddings.removeAll()
+            nextID = 1
+            sessionID = UUID()
+        }
+    }
+
+    public var all: [SessionExchange] { lock.withLock { exchanges } }
+
+    @discardableResult
+    public func addQuestion(_ text: String, at date: Date = Date()) -> Int {
+        lock.withLock {
+            let e = SessionExchange(id: nextID, question: text, askedAt: date)
+            nextID += 1
+            exchanges.append(e)
+            return e.id
+        }
+    }
+
+    /// Фраза владельца относится к последнему вопросу. До первого вопроса — не сохраняется (нечему отвечать).
+    public func addAnswer(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        lock.withLock {
+            guard !exchanges.isEmpty else { return }
+            exchanges[exchanges.count - 1].answer.append(trimmed)
+            embeddings[exchanges[exchanges.count - 1].id] = nil   // ответ изменился — эмбеддинг пересчитать
+        }
+    }
+
+    public func setHint(_ text: String, forQuestion question: String) {
+        lock.withLock {
+            guard let i = exchanges.lastIndex(where: { $0.question == question }) else { return }
+            exchanges[i].hint = text
+        }
+    }
+
+    /// Контекст для вопроса. `embed` — эмбеддинг текста (bge-m3); без него — только последние обмены.
+    /// Текущий вопрос (последний обмен с этим же текстом) в историю не входит.
+    public func context(for question: String, now: Date = Date(), embed: ((String) -> [Float]?)? = nil) -> MemoryContext {
+        var history = all
+        if let last = history.last, last.question == question, last.answer.isEmpty { history.removeLast() }
+        let backReference = ReferenceDetector.isBackReference(question)
+        func item(_ e: SessionExchange) -> MemoryContext.Item {
+            .init(minutesAgo: max(0, Int(now.timeIntervalSince(e.askedAt) / 60)),
+                  question: String(e.question.prefix(Self.maxQuestionChars)),
+                  answer: String(e.answerText.prefix(Self.maxAnswerChars)))
+        }
+        let recent = Array(history.suffix(Self.recentCount))
+        let older = Array(history.dropLast(Self.recentCount))
+        var context = MemoryContext(recent: recent.map(item), backReference: backReference)
+        guard !older.isEmpty, let embed, let query = embed(question) else { return context }
+        let minScore = backReference ? Self.backReferenceMinScore : Self.minScore
+        var scored: [(SessionExchange, Float)] = []
+        for e in older {
+            guard let v = embedding(for: e, embed: embed) else { continue }
+            let score = zip(query, v).reduce(0) { $0 + $1.0 * $1.1 }
+            if score >= minScore { scored.append((e, score)) }
+        }
+        let top = scored.sorted { $0.1 > $1.1 }.prefix(Self.retrievedCount).map(\.0).sorted { $0.id < $1.id }
+        context.earlier = top.map(item)
+        return context
+    }
+
+    private func embedding(for e: SessionExchange, embed: (String) -> [Float]?) -> [Float]? {
+        if let cached = lock.withLock({ embeddings[e.id] }) { return cached }
+        guard let v = embed("\(e.question) \(e.answerText)") else { return nil }
+        lock.withLock { embeddings[e.id] = v }
+        return v
+    }
+}
+
+/// Отсылки к сказанному раньше (uk / ru / en) — COPILOT-06 R-03.
+public enum ReferenceDetector {
+    static let markers: [String] = [
+        // ru
+        "вернёмся", "вернемся", "вернуться к", "ранее", "раньше", "вы говорили", "вы сказали", "вы упоминали", "вы упомянули",
+        "предыдущ", "в начале", "как вы сказали", "уточните", "подробнее о", "возвращаясь",
+        // uk
+        "повернімося", "повернемося", "повернутися до", "раніше", "ви казали", "ви сказали", "ви згадували", "ви згадали",
+        "попередн", "на початку", "як ви сказали", "уточніть", "детальніше про",
+        // en
+        "go back to", "back to", "earlier", "previous", "you mentioned", "you said", "you told", "at the beginning",
+        "as you said", "elaborate on", "more about what you",
+    ]
+
+    public static func isBackReference(_ text: String) -> Bool {
+        let lower = text.lowercased()
+        return markers.contains { lower.contains($0) }
+    }
+}

@@ -36,13 +36,15 @@ report() { # $1 — категория, stdin — строки git grep. Выз�
 }
 
 # git grep: опции идут до шаблона, ревизии — после. $1 — режим: worktree | index | history.
+# --threads=1: многопоточный вывод иногда разрывал строку, и «ivan@example.com» превращался в «ivan@example.co»
+# (ложная находка, COPILOT-06).
 ggrep() {
   local mode="$1" pattern="$2"; shift 2
   case "$mode" in
-    worktree) git grep -I -n --untracked ${GREP_EXTRA[@]+"${GREP_EXTRA[@]}"} -E "$pattern" -- "$@" ;;
-    index)    git grep -I -n --cached ${GREP_EXTRA[@]+"${GREP_EXTRA[@]}"} -E "$pattern" -- "$@" ;;
+    worktree) git grep -I -n --threads=1 --untracked ${GREP_EXTRA[@]+"${GREP_EXTRA[@]}"} -E "$pattern" -- "$@" ;;
+    index)    git grep -I -n --threads=1 --cached ${GREP_EXTRA[@]+"${GREP_EXTRA[@]}"} -E "$pattern" -- "$@" ;;
     history)  git rev-list --all | while read -r rev; do
-                git grep -I -n ${GREP_EXTRA[@]+"${GREP_EXTRA[@]}"} -E "$pattern" "$rev" -- "$@"
+                git grep -I -n --threads=1 ${GREP_EXTRA[@]+"${GREP_EXTRA[@]}"} -E "$pattern" "$rev" -- "$@"
               done ;;
   esac 2>/dev/null || true
 }

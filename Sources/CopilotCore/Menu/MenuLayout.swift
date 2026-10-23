@@ -21,7 +21,7 @@ public enum MenuAction: String, Sendable, Equatable {
     case listeningSource, togglePause
     case mode, models, language
     case profile, questionBank, editProfile, practice, aiInterview
-    case answerNow, screenshot, togglePanel, sessionHistory
+    case answerNow, screenshot, togglePanel, newInterview, sessionHistory
     case status
     case settings, quit
 }
@@ -136,6 +136,8 @@ public enum MenuLayout {
                 MenuItemSpec(.screenshot, "Screenshot → \(s.strongModelName)", symbol: "camera", hotkey: s.hotkey(.screenshot)),
                 MenuItemSpec(.togglePanel, s.panelVisible ? "Hide panel" : "Show panel", symbol: "macwindow",
                              hotkey: s.hotkey(.togglePanel)),
+                // COPILOT-06: память интервью начинается заново, прошлое сохраняется в историю.
+                MenuItemSpec(.newInterview, "Новое интервью", symbol: "arrow.counterclockwise"),
                 MenuItemSpec(.sessionHistory, "Session history…", symbol: "clock"),
             ],
             [

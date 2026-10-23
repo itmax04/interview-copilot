@@ -285,6 +285,45 @@ case "enhance":
                  Double(totalRaw.0) * 100 / Double(max(totalRaw.1, 1)), Double(totalClean.0) * 100 / Double(max(totalClean.1, 1)),
                  msPerSecond.sorted()[msPerSecond.count / 2], better ? "ЛУЧШЕ" : "НЕ ЛУЧШЕ"))
     finish(0)
+case "memory":
+    // Eval `memory` (COPILOT-06): находит ли поиск по истории нужный старый обмен (bge-m3), и не тянет ли лишнее.
+    args.removeFirst()
+    let path = args.first ?? "evals/memory/session.json"
+    guard let data = FileManager.default.contents(atPath: path),
+          let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+          let exchanges = root["exchanges"] as? [[String: String]], let queries = root["queries"] as? [[String: Any]]
+    else { fail("\(path): нет набора", code: 1) }
+    let spec = EmbeddingModels.spec(for: AppSettings.defaultEmbeddingModel)
+    let embedder: LlamaEmbedder
+    do { embedder = try LlamaEmbedder(modelPath: AppPaths.model(spec.file).path, prefix: spec.prefix) } catch { fail("\(error)", code: 1) }
+    let embed: @Sendable (String) -> [Float]? = { text in (try? embedder.embed([text]))?.first }
+    let verbose = flag("--verbose")
+    var hits = 0, refs = 0, falseOld = 0, unrelated = 0
+    for q in queries {
+        guard let text = q["q"] as? String else { continue }
+        // История к моменту вопроса: все 14 обменов; последние 4 идут в короткую память, остальное — поиск.
+        let memory = InterviewMemory()
+        let start = Date().addingTimeInterval(-40 * 60)
+        for (i, e) in exchanges.enumerated() {
+            memory.addQuestion(e["q"] ?? "", at: start.addingTimeInterval(Double(i) * 150))
+            memory.addAnswer(e["a"] ?? "")
+        }
+        let context = memory.context(for: text, embed: embed)
+        let found = context.earlier.map(\.question) + context.recent.map(\.question)
+        if let expect = q["expect"] as? Int {
+            refs += 1
+            let target = exchanges[expect - 1]["q"] ?? ""
+            if found.contains(target) { hits += 1 }
+            if verbose || !found.contains(target) { print("\(found.contains(target) ? "ok  " : "MISS") [\(context.backReference ? "отсылка" : "без отсылки")] \(text.prefix(60)) → \(context.earlier.map { $0.question.prefix(30) })") }
+        } else {
+            unrelated += 1
+            if !context.earlier.isEmpty { falseOld += 1 }
+            if verbose || !context.earlier.isEmpty { print("\(context.earlier.isEmpty ? "ok  " : "EXTRA") (новая тема) \(text.prefix(60)) → \(context.earlier.map { $0.question.prefix(30) })") }
+        }
+    }
+    let pass = hits == refs && falseOld <= 1
+    print("memory: возвраты к теме найдены \(hits)/\(refs) · новые темы с лишним старым \(falseOld)/\(unrelated) \(pass ? "PASS" : "FAIL")")
+    finish(pass ? 0 : 1)
 case "voice-enroll":
     // Образец голоса из файла (COPILOT-05 R-03): copilot-eval voice-enroll <файл 16 кГц моно> [--dry-run].
     // Сохраняет отпечаток туда же, куда и запись в Settings → Audio; звук не копируется.

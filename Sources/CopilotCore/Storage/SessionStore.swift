@@ -45,11 +45,27 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
     public var source: String?
     public var utterances: [Utterance] = []
     public var turns: [TurnRecord] = []
+    /// Обмены интервью с ответами владельца (COPILOT-06; решение владельца — сохранять в историю, срок R-18).
+    public var exchanges: [SessionExchange] = []
 
     public init(id: String, startedAt: Date, source: String?) {
         self.id = id
         self.startedAt = startedAt
         self.source = source
+    }
+
+    enum CodingKeys: String, CodingKey { case id, startedAt, endedAt, source, utterances, turns, exchanges }
+
+    // Старые файлы истории без новых полей читаются (COPILOT-06).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        startedAt = try c.decode(Date.self, forKey: .startedAt)
+        endedAt = try c.decodeIfPresent(Date.self, forKey: .endedAt)
+        source = try c.decodeIfPresent(String.self, forKey: .source)
+        utterances = try c.decodeIfPresent([Utterance].self, forKey: .utterances) ?? []
+        turns = try c.decodeIfPresent([TurnRecord].self, forKey: .turns) ?? []
+        exchanges = try c.decodeIfPresent([SessionExchange].self, forKey: .exchanges) ?? []
     }
 }
 
