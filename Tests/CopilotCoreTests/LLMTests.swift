@@ -505,3 +505,69 @@ struct PromptBuilderTests {
         #expect(r.purpose == .screenshot)
     }
 }
+
+/// Свой OpenAI-совместимый API (COPILOT-04 R-06). Последовательно: адрес хранится в общем `CustomEndpoint.shared`.
+@Suite("Свой API — COPILOT-04 R-06", .serialized)
+struct CustomProviderTests {
+    @Test func baseURLAcceptsHttpsAndLocalhostOnly() {
+        #expect(ProviderEndpoints.customBaseURL("https://openrouter.ai/api/v1/")?.absoluteString == "https://openrouter.ai/api/v1")
+        #expect(ProviderEndpoints.customBaseURL(" https://api.openai.com/v1/chat/completions ")?.absoluteString == "https://api.openai.com/v1")
+        #expect(ProviderEndpoints.customBaseURL("http://localhost:11434/v1")?.absoluteString == "http://localhost:11434/v1")
+        #expect(ProviderEndpoints.customBaseURL("http://127.0.0.1:1234/v1") != nil)
+        #expect(ProviderEndpoints.customBaseURL("http://example.com/v1") == nil)   // ключ ушёл бы открытым текстом (R-23)
+        #expect(ProviderEndpoints.customBaseURL("openrouter.ai") == nil)
+        #expect(ProviderEndpoints.customBaseURL("") == nil)
+    }
+
+    @Test func requestUsesConfiguredURLAndGenericParameters() throws {
+        defer { CustomEndpoint.shared.baseURL = nil }
+        CustomEndpoint.shared.baseURL = ProviderEndpoints.customBaseURL("https://openrouter.ai/api/v1")
+        let r = try OpenAICompatibleProvider(.custom).makeRequest(sampleRequest, model: "openai/gpt-4o-mini", key: "k-test")
+        #expect(r.url?.absoluteString == "https://openrouter.ai/api/v1/chat/completions")
+        #expect(r.value(forHTTPHeaderField: "Authorization") == "Bearer k-test")
+        let body = try #require(JSONSerialization.jsonObject(with: r.httpBody ?? Data()) as? [String: Any])
+        #expect(body["model"] as? String == "openai/gpt-4o-mini")
+        #expect(body["max_tokens"] as? Int == 400)
+        #expect(body["temperature"] as? Double == 0.4)
+        #expect(body["include_reasoning"] == nil && body["max_completion_tokens"] == nil)
+    }
+
+    @Test func openAIHostGetsMaxCompletionTokensWithoutTemperature() throws {
+        defer { CustomEndpoint.shared.baseURL = nil }
+        CustomEndpoint.shared.baseURL = ProviderEndpoints.customBaseURL("https://api.openai.com/v1")
+        let r = try OpenAICompatibleProvider(.custom).makeRequest(sampleRequest, model: "gpt-5-mini", key: "k-test")
+        let body = try #require(JSONSerialization.jsonObject(with: r.httpBody ?? Data()) as? [String: Any])
+        #expect(body["max_completion_tokens"] as? Int == 400)
+        #expect(body["max_tokens"] == nil && body["temperature"] == nil)
+    }
+
+    @Test func withoutURLNothingIsSent() async {
+        CustomEndpoint.shared.baseURL = nil
+        #expect(throws: LLMError.self) { try OpenAICompatibleProvider(.custom).makeRequest(sampleRequest, model: "m", key: "k") }
+        let check = await KeyVerifier(transport: MockTransport(status: 200, json: "{}")).verify(.custom, key: "k-test")
+        #expect(check == .failed(message: "не задан адрес API (https://…/v1)"))
+    }
+
+    @Test func chainIncludesCustomOnlyWhenConfigured() {
+        defer { CustomEndpoint.shared.baseURL = nil }
+        var s = AppSettings()
+        s.chain = [.custom, .gemini]
+        let secrets = InMemorySecretStore([.custom: "c", .gemini: "g"])
+        #expect(ChainFactory.chain(settings: s, secrets: secrets, providers: ChainFactory.providers()).steps.map(\.provider.id) == [.gemini, .gemini])
+        s.customBaseURL = "https://openrouter.ai/api/v1"
+        #expect(!ChainFactory.customConfigured(s))       // нет модели
+        s.modelIDs.custom = "openai/gpt-4o-mini"
+        let steps = ChainFactory.chain(settings: s, secrets: secrets, providers: ChainFactory.providers()).steps
+        #expect(steps.first?.provider.id == .custom && steps.first?.model == "openai/gpt-4o-mini")
+        #expect(!ChainFactory.isPaid(.custom, settings: s))
+    }
+
+    @Test func settingsKeepCustomFields() throws {
+        var s = AppSettings()
+        s.customBaseURL = "https://api.together.xyz/v1"
+        s.modelIDs.custom = "meta-llama/Llama-3.3-70B-Instruct-Turbo"
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(s))
+        #expect(decoded.customBaseURL == s.customBaseURL && decoded.modelIDs.custom == s.modelIDs.custom)
+        #expect(AppSettings().normalized().chain.last == .custom)   // старые настройки: свой API — в конце цепочки
+    }
+}

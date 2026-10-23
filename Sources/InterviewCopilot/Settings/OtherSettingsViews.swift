@@ -21,6 +21,7 @@ struct ModelsSettingsView: View {
                 TextField("Anthropic", text: $model.settings.modelIDs.anthropic)
                 TextField("Groq", text: $model.settings.modelIDs.groq)
                 TextField("Cerebras", text: $model.settings.modelIDs.cerebras)
+                TextField("Свой API", text: $model.settings.modelIDs.custom)
             }
             Section("Цепочка автоперехода") {
                 ForEach(Array(model.settings.chain.enumerated()), id: \.element) { index, provider in

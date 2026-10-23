@@ -36,10 +36,12 @@ public struct ModelIDs: Codable, Equatable, Sendable {
     /// Groq: gpt-oss-120b — бесплатный тариф 1000 запросов в день (console.groq.com/docs/rate-limits, 2026-10-23).
     public var groq = "openai/gpt-oss-120b"
     public var cerebras = "gpt-oss-120b"
+    /// Свой API (COPILOT-04 R-06): ID модели у провайдера, например `openai/gpt-4o-mini` в OpenRouter. По умолчанию пусто.
+    public var custom = ""
 
     public init() {}
 
-    enum CodingKeys: String, CodingKey { case gemini, geminiBackup, deepseek, anthropic, groq, cerebras }
+    enum CodingKeys: String, CodingKey { case gemini, geminiBackup, deepseek, anthropic, groq, cerebras, custom }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -50,6 +52,7 @@ public struct ModelIDs: Codable, Equatable, Sendable {
         anthropic = (try? c.decodeIfPresent(String.self, forKey: .anthropic)) ?? d.anthropic
         groq = (try? c.decodeIfPresent(String.self, forKey: .groq)) ?? d.groq
         cerebras = (try? c.decodeIfPresent(String.self, forKey: .cerebras)) ?? d.cerebras
+        custom = (try? c.decodeIfPresent(String.self, forKey: .custom)) ?? d.custom
     }
 
     /// ID для запроса: без пробелов; пустое поле в настройках означает ID по умолчанию.
@@ -66,6 +69,7 @@ public struct ModelIDs: Codable, Equatable, Sendable {
             case .anthropic: anthropic
             case .groq: groq
             case .cerebras: cerebras
+            case .custom: custom
             }
         }
         set {
@@ -75,6 +79,7 @@ public struct ModelIDs: Codable, Equatable, Sendable {
             case .anthropic: anthropic = newValue
             case .groq: groq = newValue
             case .cerebras: cerebras = newValue
+            case .custom: custom = newValue
             }
         }
     }
@@ -89,11 +94,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
     // Models
     public var modelIDs = ModelIDs()
     /// Самые быстрые — первыми (R-36): Groq и Cerebras отвечают за доли секунды, Gemini Free бывает перегружен.
-    public var chain: [ProviderID] = [.groq, .cerebras, .gemini, .deepseek, .anthropic]
+    /// Свой API (COPILOT-04 R-06) — в конце; без адреса и модели пропускается.
+    public var chain: [ProviderID] = [.groq, .cerebras, .gemini, .deepseek, .anthropic, .custom]
     /// Параллельный запуск (R-36): если модель молчит столько секунд, запрос сразу уходит следующей; побеждает первая ответившая.
     public var hedgeAfter: Double = 1.5
     /// Сильная модель для ⌃⌥C и скриншотов (S-05, S-06).
     public var strongProvider: ProviderID = .anthropic
+    /// Адрес своего OpenAI-совместимого API (COPILOT-04 R-06), например `https://openrouter.ai/api/v1`. Пусто — не используется.
+    public var customBaseURL = ""
     /// Таймаут первого токена, с (R-09: 4 с).
     public var firstTokenTimeout: Double = 4
 
@@ -232,6 +240,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         chain = v(.chain, d.chain)
         hedgeAfter = v(.hedgeAfter, d.hedgeAfter)
         strongProvider = v(.strongProvider, d.strongProvider)
+        customBaseURL = v(.customBaseURL, d.customBaseURL)
         firstTokenTimeout = v(.firstTokenTimeout, d.firstTokenTimeout)
         recognitionBackend = v(.recognitionBackend, d.recognitionBackend)
         whisperModel = v(.whisperModel, d.whisperModel)

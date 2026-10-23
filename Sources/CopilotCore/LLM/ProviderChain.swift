@@ -221,13 +221,21 @@ public enum ChainFactory {
     public static func providers(transport: StreamingTransport = URLSessionStreamingTransport()) -> [ProviderID: LLMProvider] {
         [.gemini: GeminiProvider(transport: transport), .deepseek: DeepSeekProvider(transport: transport),
          .anthropic: AnthropicProvider(transport: transport),
-         .groq: OpenAICompatibleProvider(.groq, transport: transport), .cerebras: OpenAICompatibleProvider(.cerebras, transport: transport)]
+         .groq: OpenAICompatibleProvider(.groq, transport: transport), .cerebras: OpenAICompatibleProvider(.cerebras, transport: transport),
+         .custom: OpenAICompatibleProvider(.custom, transport: transport)]
+    }
+
+    /// Свой API в цепочке, только если заданы адрес (HTTPS или localhost) и модель (R-06).
+    public static func customConfigured(_ settings: AppSettings) -> Bool {
+        ProviderEndpoints.customBaseURL(settings.customBaseURL) != nil
+            && !settings.modelIDs.custom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     public static func isPaid(_ p: ProviderID, settings: AppSettings) -> Bool {
         switch p {
         // Groq — бесплатный тариф; Cerebras — пробные кредиты (R-36): месячный бюджет их не выключает.
-        case .groq, .cerebras: false
+        // Свой API (COPILOT-04 R-06): цен приложение не знает — бюджет его не выключает, расход владелец видит у провайдера.
+        case .groq, .cerebras, .custom: false
         case .gemini: !settings.geminiFreeTier
         case .deepseek, .anthropic: true
         }
@@ -236,8 +244,10 @@ public enum ChainFactory {
     public static func chain(settings: AppSettings, secrets: SecretStore,
                              providers: [ProviderID: LLMProvider]) -> ProviderChain {
         var steps: [ProviderChain.Step] = []
+        CustomEndpoint.shared.update(from: settings)
         for p in settings.chain {
             guard let provider = providers[p] else { continue }
+            if p == .custom, !customConfigured(settings) { continue }
             if settings.paidProvidersSuspended && isPaid(p, settings: settings) { continue }
             let key = try? secrets.get(p)
             steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: key))
@@ -257,8 +267,10 @@ public enum ChainFactory {
         var order = [settings.strongProvider]
         if fallbackToGemini && settings.strongProvider != .gemini { order.append(.gemini) }
         var steps: [ProviderChain.Step] = []
+        CustomEndpoint.shared.update(from: settings)
         for p in order {
             guard let provider = providers[p], let key = try? secrets.get(p), !key.isEmpty else { continue }
+            if p == .custom, !customConfigured(settings) { continue }
             if settings.paidProvidersSuspended && isPaid(p, settings: settings) { continue }
             steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: key))
             let backup = settings.modelIDs.geminiBackup.trimmingCharacters(in: .whitespaces)

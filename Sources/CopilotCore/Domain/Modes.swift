@@ -45,6 +45,8 @@ public enum ProviderID: String, Codable, CaseIterable, Sendable {
     case groq
     /// Cerebras (R-36): очень быстрый; постоянного бесплатного тарифа нет — пробные кредиты.
     case cerebras
+    /// Свой OpenAI-совместимый API (COPILOT-04 R-06): адрес и модель — в настройках, ключ — в Связке ключей.
+    case custom
 
     public var displayName: String {
         switch self {
@@ -53,11 +55,12 @@ public enum ProviderID: String, Codable, CaseIterable, Sendable {
         case .anthropic: "Claude"
         case .groq: "Groq"
         case .cerebras: "Cerebras"
+        case .custom: "Свой API"
         }
     }
 
     /// OpenAI-совместимый Chat Completions (`data[].id` в списке моделей, Bearer-ключ).
-    public var isOpenAICompatible: Bool { self == .deepseek || self == .groq || self == .cerebras }
+    public var isOpenAICompatible: Bool { self == .deepseek || self == .groq || self == .cerebras || self == .custom }
 }
 
 /// Состояние слушания для строки «● Listening — <app>» — R-15.

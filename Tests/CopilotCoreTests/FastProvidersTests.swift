@@ -111,7 +111,7 @@ struct FastProvidersTests {
         old.schemaVersion = 5
         old.chain = [.gemini, .deepseek, .anthropic]
         let s = old.migrated().normalized()
-        #expect(s.chain == [.groq, .cerebras, .gemini, .deepseek, .anthropic])
+        #expect(s.chain == [.groq, .cerebras, .gemini, .deepseek, .anthropic, .custom])   // свой API — в конце (COPILOT-04 R-06)
         #expect(!ChainFactory.isPaid(.groq, settings: s))
         #expect(!ChainFactory.isPaid(.cerebras, settings: s))
         #expect(s.modelIDs.effective(.groq) == "openai/gpt-oss-120b")

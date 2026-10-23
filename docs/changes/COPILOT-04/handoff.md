@@ -25,6 +25,12 @@ ID: COPILOT-04-handoff · Обновлено: 2026-10-23 · Ветка: `feat/co
 - Вывод: для цели ≤ 1 с нужен Parakeet (итог ~0,5 с); модель установлена полностью (23 файла).
 Дальше упирается в паузу VAD (350 мс) и итог Parakeet (~150 мс) — кандидаты в следующую задачу.
 
+## R-06 свой API (2026-10-23)
+Провайдер `custom`, блок в Keys, поле модели в Models, строка меню без ненастроенного своего API.
+`swift test` 201 тест PASS (два прогона подряд; в первом прогоне до правки ожиданий один раз упал
+`slowButStartedStreamIsNotTimedOut` — тест по таймингу, при повторах PASS). NOT RUN: живой запрос через свой ключ.
+Версия 0.1.10 (build 11).
+
 ## Проверки
 `swift build` PASS; `swift test` 195 тестов PASS (+6); eval turn 0% / 0%, mean 596 мс; eval bank 94,9% / 0%;
 secret scan 0 findings; `scripts/build-app.sh` + `codesign --verify --strict` — в итоговом сообщении сессии.

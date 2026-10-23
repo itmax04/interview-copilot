@@ -17,7 +17,7 @@ struct SettingsStoreTests {
         #expect(s.recognitionBackend == .parakeet)
         #expect(s.mode == .bankAndHint)                       // R-08
         #expect(s.useProfile)                                  // R-40: по умолчанию с профилем
-        #expect(s.chain == [.groq, .cerebras, .gemini, .deepseek, .anthropic])   // R-09, R-36: быстрые первыми
+        #expect(s.chain == [.groq, .cerebras, .gemini, .deepseek, .anthropic, .custom])   // R-09, R-36: быстрые первыми; COPILOT-04 R-06
         #expect(s.hedgeAfter == 1.5)                           // R-36
         #expect(s.firstTokenTimeout == 4)                      // R-09
         #expect(s.pauseThresholdMs == 700)                     // R-05
@@ -63,7 +63,7 @@ struct SettingsStoreTests {
         #expect(saved.panelOpacity == 0.7)
         #expect(saved.panelWidth == 520)
         #expect(saved.bankThreshold == 0.99)
-        #expect(saved.chain == [.anthropic, .gemini, .deepseek, .groq, .cerebras])
+        #expect(saved.chain == [.anthropic, .gemini, .deepseek, .groq, .cerebras, .custom])
         // Пустое поле не подменяется при вводе, но для запроса берётся ID по умолчанию.
         #expect(saved.modelIDs.deepseek == "   ")
         #expect(saved.modelIDs.effective(.deepseek) == "deepseek-flash")

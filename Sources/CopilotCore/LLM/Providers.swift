@@ -356,6 +356,9 @@ public struct OpenAICompatibleProvider: LLMProvider {
         guard request.messages.allSatisfy({ $0.images.isEmpty }) else {
             throw LLMError.badResponse("\(id.displayName) не принимает изображения")
         }
+        if id == .custom, CustomEndpoint.shared.baseURL == nil {
+            throw LLMError.badResponse("Свой API: не задан адрес (Settings → Keys)")
+        }
         var r = URLRequest(url: ProviderEndpoints.openAIBase(id).appendingPathComponent("chat/completions"))
         r.httpMethod = "POST"
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -363,6 +366,16 @@ public struct OpenAICompatibleProvider: LLMProvider {
         var messages: [[String: Any]] = [["role": "system", "content": request.system]]
         for m in request.messages { messages.append(["role": m.role.rawValue, "content": m.text]) }
         var body: [String: Any] = ["model": model, "messages": messages, "stream": true]
+        if id == .custom {
+            // Свой API (R-06): только общие параметры Chat Completions. `max_tokens` понимают OpenRouter, Together,
+            // Mistral, Ollama, LM Studio; у OpenAI — `max_completion_tokens`, а температуру рассуждающие модели не принимают.
+            let isOpenAI = ProviderEndpoints.openAIBase(id).host?.hasSuffix("openai.com") == true
+            body[isOpenAI ? "max_completion_tokens" : "max_tokens"] = request.maxTokens + (Self.isReasoning(model) ? 1024 : 0)
+            if Self.isReasoning(model) { body["reasoning_effort"] = request.purpose == .screenshot ? "medium" : "low" }
+            if request.purpose == .hint, !isOpenAI { body["temperature"] = 0.4 }
+            r.httpBody = try JSONSerialization.data(withJSONObject: body)
+            return r
+        }
         if Self.isReasoning(model) {
             body["reasoning_effort"] = request.purpose == .screenshot ? "medium" : "low"
             body["max_completion_tokens"] = request.maxTokens + 1024

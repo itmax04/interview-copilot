@@ -227,6 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             turns.setThreshold(s.pauseThresholdMs, questionMs: s.questionPauseMs)
         }
         turns.draftsEnabled = s.speculativeAnswers
+        CustomEndpoint.shared.update(from: s)   // адрес своего API для «Проверить» (COPILOT-04 R-06)
         if !s.speculativeAnswers { answers.cancelDraft() }
         if !force && s.embeddingModel != old.embeddingModel { bank.embeddingModelChanged(s.embeddingModel) }
         if force || s.recognitionPromptFromBank != old.recognitionPromptFromBank { updateRecognitionPrompt() }

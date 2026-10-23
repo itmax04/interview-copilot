@@ -26,6 +26,9 @@ public struct KeyVerifier: Sendable {
     public func verify(_ provider: ProviderID, key: String) async -> KeyCheckResult {
         let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return .failed(message: "нет ключа") }
+        if provider == .custom, CustomEndpoint.shared.baseURL == nil {
+            return .failed(message: "не задан адрес API (https://…/v1)")
+        }
         do {
             let (data, response) = try await transport.data(for: ProviderEndpoints.listModels(provider, key: key))
             switch response.statusCode {
@@ -55,7 +58,7 @@ public struct KeyVerifier: Sendable {
             return models.compactMap { $0["name"] as? String }.map {
                 $0.hasPrefix("models/") ? String($0.dropFirst("models/".count)) : $0
             }
-        case .deepseek, .anthropic, .groq, .cerebras:
+        case .deepseek, .anthropic, .groq, .cerebras, .custom:
             let models = json["data"] as? [[String: Any]] ?? []
             return models.compactMap { $0["id"] as? String }
         }

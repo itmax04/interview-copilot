@@ -128,7 +128,9 @@ final class AppModel {
     }
 
     func menuState(listening: ListeningStatus, profileName: String = "Profile", cardCount: Int = 0) -> MenuState {
-        MenuState(listening: listening, mode: settings.mode, chain: settings.chain, language: settings.language,
+        // Свой API без адреса и модели в строке «Models: …» не показывается (COPILOT-04 R-06).
+        MenuState(listening: listening, mode: settings.mode,
+                  chain: settings.chain.filter { $0 != .custom || ChainFactory.customConfigured(settings) }, language: settings.language,
                   profileName: profileName, useProfile: settings.useProfile, bankCardCount: cardCount,
                   strongModelName: settings.strongProvider.displayName)
     }
