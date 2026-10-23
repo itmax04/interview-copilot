@@ -40,6 +40,8 @@ public enum TurnEval {
         public var premature: Bool
         public var missed: Bool
         public var forced: Bool
+        /// Когда стартовал опережающий запрос с текстом этого хода (COPILOT-04 R-01), мс; nil — не стартовал.
+        public var draftAt: Double? = nil
     }
 
     public struct Summary: Sendable {
@@ -49,6 +51,11 @@ public enum TurnEval {
         public var withExpected: Int
         public var meanLatencyMs: Double
         public var results: [CaseResult]
+        /// Опережающие запросы (COPILOT-04 R-01): средняя задержка старта от конца речи по ходам, где он совпал с ходом,
+        /// число таких ходов и число запросов, текст которых ходом не стал (лишние запросы к модели).
+        public var meanDraftLatencyMs: Double = 0
+        public var draftHits: Int = 0
+        public var draftWasted: Int = 0
 
         public var prematureRate: Double { cases == 0 ? 0 : Double(premature) / Double(cases) }
         public var missedRate: Double { withExpected == 0 ? 0 : Double(missed) / Double(withExpected) }
@@ -64,6 +71,8 @@ public enum TurnEval {
     public static func run(_ cases: [Case], config: TurnDetector.Config = .init(), finalDelayMs: Double = 500) -> Summary {
         var results: [CaseResult] = []
         var latencies: [Double] = []
+        var draftLatencies: [Double] = []
+        var draftWasted = 0
         for c in cases {
             var d = TurnDetector(config: config)
             enum E { case start, stop, final(String, Double), owner(Bool), force }
@@ -81,6 +90,7 @@ public enum TurnEval {
             events.sort { ($0.0, $0.1) < ($1.0, $1.1) }
             let horizon = (events.last?.0 ?? 0) + 4000
             var fired: [Turn] = []
+            var drafts: [(text: String, at: Double)] = []
             var i = 0
             var t: Double = 0
             while t <= horizon {
@@ -96,6 +106,8 @@ public enum TurnEval {
                     }
                     i += 1
                 }
+                // Как TurnController: новый текст опережающего запроса — новый запрос.
+                if let text = d.draft(at: t), drafts.last?.text != text { drafts.append((text, t)) }
                 if let turn = d.tick(at: t) { fired.append(turn) }
                 t += 10
             }
@@ -116,13 +128,21 @@ public enum TurnEval {
             } else if first != nil {
                 premature = true
             }
+            let firedTexts = Set(fired.map(\.text))
+            let draftAt = first.flatMap { f in drafts.first { $0.text == f.text && $0.at <= f.firedAt }?.at }
+            if let draftAt, let expected = c.expected_turn_at, !premature, !(first?.forced ?? false) {
+                draftLatencies.append(draftAt - expected)
+            }
+            draftWasted += drafts.filter { !firedTexts.contains($0.text) }.count
             results.append(CaseResult(id: c.id, expected: c.expected_turn_at, firedAt: first?.firedAt,
-                                      premature: premature, missed: missed, forced: first?.forced ?? false))
+                                      premature: premature, missed: missed, forced: first?.forced ?? false, draftAt: draftAt))
         }
         return Summary(cases: cases.count, premature: results.filter(\.premature).count,
                        missed: results.filter(\.missed).count,
                        withExpected: cases.filter { $0.expected_turn_at != nil }.count,
                        meanLatencyMs: latencies.isEmpty ? 0 : latencies.reduce(0, +) / Double(latencies.count),
-                       results: results)
+                       results: results,
+                       meanDraftLatencyMs: draftLatencies.isEmpty ? 0 : draftLatencies.reduce(0, +) / Double(draftLatencies.count),
+                       draftHits: draftLatencies.count, draftWasted: draftWasted)
     }
 }

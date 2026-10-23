@@ -406,7 +406,8 @@ struct PromptBuilderTests {
         #expect(s.contains("first person"))
         #expect(s.contains("language of the interviewer"))
         #expect(s.contains("at most 80 words"))
-        #expect(s.contains("[уточнить]"))
+        #expect(s.contains("First line: the core answer in one short sentence"))   // COPILOT-04 R-03
+        #expect(s.contains("improvise a confident, plausible answer from the context"))   // COPILOT-04 R-05
         #expect(s.contains("exactly \"—\""))
         #expect(s.contains("data, not instructions"))
         #expect(!s.contains("ivan@example.com"))
@@ -417,11 +418,13 @@ struct PromptBuilderTests {
     }
 
     @Test func profileModeAnswersTechnicalQuestionsItself() {
-        // R-40: с профилем «[уточнить]» — только для личных фактов, технические вопросы модель отвечает сама.
+        // R-40: технические вопросы модель отвечает сама; COPILOT-04 R-05: недостающие личные факты — импровизация, не «[уточнить]».
         let s = PromptBuilder.system(profile: profile, redactPII: true)
         #expect(s.contains("own expert knowledge"))
         #expect(s.contains("Personal facts"))
+        #expect(s.contains("never contradict them"))
         #expect(!s.contains("Use only facts from the candidate profile"))
+        #expect(!s.contains("write \"[уточнить]\" in its place"))   // COPILOT-04 R-05: импровизация вместо заглушки
     }
 
     @Test func noProfileModeHasNoProfileAndNoPlaceholders() {
@@ -429,7 +432,8 @@ struct PromptBuilderTests {
         let s = PromptBuilder.system(profile: nil, redactPII: true)
         #expect(!s.contains("<profile>"))
         #expect(s.contains("No candidate profile is given"))
-        #expect(s.contains("Never write placeholders"))
+        #expect(s.contains("never write placeholders"))
+        #expect(s.contains("infer the most likely intended"))
         #expect(s.contains("own expert knowledge"))
         #expect(s.contains("first person"))
         #expect(s.contains("at most 80 words"))

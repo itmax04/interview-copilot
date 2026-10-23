@@ -8,7 +8,12 @@ final class TurnController {
     private var timer: Timer?
     /// Вызывается при завершённом ходе (дальше — поиск по базе и генерация, P-06…P-08).
     var onTurn: ((Turn) -> Void)?
+    /// Опережающий запрос (COPILOT-04 R-01): текст законченной реплики до истечения паузы T.
+    var onDraft: ((String) -> Void)?
+    /// Выключено в настройках — `onDraft` не вызывается.
+    var draftsEnabled = true
     private(set) var lastTurn: Turn?
+    private var lastDraft: String?
 
     init(thresholdMs: Int) {
         detector = TurnDetector(config: TurnDetector.Config(thresholdMs: Double(thresholdMs)))
@@ -16,8 +21,9 @@ final class TurnController {
 
     static func now() -> Double { Double(DispatchTime.now().uptimeNanoseconds) / 1e6 }
 
-    func setThreshold(_ ms: Int) {
+    func setThreshold(_ ms: Int, questionMs: Int) {
         detector.config.thresholdMs = Double(ms)
+        detector.config.questionThresholdMs = Double(questionMs)
     }
 
     func start() {
@@ -33,6 +39,7 @@ final class TurnController {
         timer?.invalidate()
         timer = nil
         detector.reset()
+        lastDraft = nil
     }
 
     func handle(_ event: TranscriptEvent) {
@@ -69,6 +76,11 @@ final class TurnController {
 
     private func tick() {
         let now = Self.now()
+        if draftsEnabled, let text = detector.draft(at: now), text != lastDraft {
+            lastDraft = text
+            Log.metrics.notice("draft_start words=\(TurnDetectorWords.count(text)) at_ms=\(Int(now))")
+            onDraft?(text)
+        }
         if let turn = detector.tick(at: now) {
             emit(turn)
             finalsSinceTurn = 0
@@ -83,6 +95,7 @@ final class TurnController {
 
     private func emit(_ turn: Turn) {
         lastTurn = turn
+        lastDraft = nil
         // Метрика для AC-02/AC-03: отсчёт от конца речи (`turn_end`), текст не логируется (R-24).
         Log.metrics.notice("turn_end turn=\(turn.id) speech_end_ms=\(Int(turn.speechEndedAt)) fired_ms=\(Int(turn.firedAt)) forced=\(turn.forced) words=\(TurnDetectorWords.count(turn.text))")
         onTurn?(turn)

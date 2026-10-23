@@ -147,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.refreshUI()
         }
         turns.onTurn = { [weak self] turn in self?.turnCompleted(turn) }
+        turns.onDraft = { [weak self] text in self?.draftReady(text) }
 
         panelModel.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
         panelModel.onOpenPermissions = { [weak self] in self?.permissionsWindow.show() }
@@ -217,7 +218,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             listening.recognitionSettingsChanged()
         }
         if !force && s.language != old.language { listening.languageSettingChanged() }
-        if force || s.pauseThresholdMs != old.pauseThresholdMs { turns.setThreshold(s.pauseThresholdMs) }
+        if force || s.pauseThresholdMs != old.pauseThresholdMs || s.questionPauseMs != old.questionPauseMs {
+            turns.setThreshold(s.pauseThresholdMs, questionMs: s.questionPauseMs)
+        }
+        turns.draftsEnabled = s.speculativeAnswers
+        if !s.speculativeAnswers { answers.cancelDraft() }
         if !force && s.embeddingModel != old.embeddingModel { bank.embeddingModelChanged(s.embeddingModel) }
         if force || s.recognitionPromptFromBank != old.recognitionPromptFromBank { updateRecognitionPrompt() }
         panel.apply(s)
@@ -262,6 +267,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func turnCompleted(_ turn: Turn) {
         guard !testCall.active, !testCallOnly else { return }
         answers.handle(turn)
+    }
+
+    /// Опережающий запрос (COPILOT-04 R-01): ответ готовится до истечения паузы, показывается при ходе с тем же текстом.
+    private func draftReady(_ text: String) {
+        guard !testCall.active, !testCallOnly else { return }
+        answers.prefetch(text)
     }
 
     private func handle(_ action: HotkeyAction) {

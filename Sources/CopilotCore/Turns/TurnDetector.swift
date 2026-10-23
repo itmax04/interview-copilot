@@ -42,6 +42,11 @@ public struct TurnDetector: Sendable {
         public var staleFinalMs: Double = 8000
         /// «Собеседник говорит» дольше этого — событие конца речи потерялось (R-38).
         public var staleSpeechMs: Double = 30000
+        /// Явный вопрос (COPILOT-04 R-02): пауза короче T. Не больше T.
+        public var questionThresholdMs: Double = 350
+        /// Считать явным вопросом и фразу, начатую вопросительным словом («как», «почему», «how»…), а не только «?».
+        /// Выключено: на eval `turn` выигрыша не дало (те же 596 мс), а риск хода на оборванной фразе выше (handoff COPILOT-04).
+        public var questionStarters = false
 
         public init(thresholdMs: Double = 700) {
             self.thresholdMs = thresholdMs
@@ -146,9 +151,26 @@ public struct TurnDetector: Sendable {
         }
         let text = pendingText
         guard Self.wordCount(text) >= config.minWords else { return nil }
-        let wait = config.thresholdMs + (Self.looksUnfinished(text) ? config.continuationExtraMs : 0)
-        guard t - end >= wait else { return nil }
+        guard t - end >= waitMs(for: text) else { return nil }
         return fire(text: text, speechEnd: end, at: t, forced: false)
+    }
+
+    /// Сколько ждать после конца речи: фраза оборвана — дольше T, явный вопрос — короче (R-05, COPILOT-04 R-02).
+    func waitMs(for text: String) -> Double {
+        if Self.looksUnfinished(text) { return config.thresholdMs + config.continuationExtraMs }
+        if looksLikeQuestion(text) { return min(config.questionThresholdMs, config.thresholdMs) }
+        return config.thresholdMs
+    }
+
+    /// Текст для опережающего запроса (COPILOT-04 R-01): реплика выглядит законченной и, скорее всего, станет ходом,
+    /// но пауза T ещё не истекла. Модель начинает отвечать заранее; ход с тем же текстом забирает готовый ответ.
+    /// nil — собеседник говорит, итог фразы ещё распознаётся, владелец говорит, мало слов или фраза оборвана.
+    public func draft(at t: Double) -> String? {
+        guard !interviewerSpeaking, !suppressed, !ownerSpeaking, let end = lastSpeechEnd, !pending.isEmpty else { return nil }
+        if let stopped = interviewerStoppedAt, stopped > end { return nil }
+        let text = pendingText
+        guard Self.wordCount(text) >= config.minWords, !Self.looksUnfinished(text) else { return nil }
+        return text
     }
 
     /// ⌃⌥↩: немедленный ход по последней реплике, даже если условия не выполнены (R-05).
@@ -201,6 +223,23 @@ public struct TurnDetector: Sendable {
         "and", "or", "but", "so", "that", "which", "who", "when", "if", "because", "the", "a", "an", "to", "of",
         "in", "on", "at", "for", "with", "about", "your", "my", "is", "are", "was", "were", "how", "what",
     ]
+
+    /// Вопросительные слова в начале фразы (uk / ru / en) — только при `questionStarters`.
+    static let questionStarters: Set<String> = [
+        "как", "почему", "зачем", "что", "какой", "какая", "какое", "какие", "когда", "где", "сколько", "кто", "чем",
+        "як", "чому", "навіщо", "що", "який", "яка", "яке", "які", "коли", "де", "скільки", "хто", "чим", "чи",
+        "how", "why", "what", "which", "when", "where", "who", "can", "could", "would", "do", "does", "did", "have", "is", "are",
+    ]
+
+    /// Явный вопрос: последняя фраза заканчивается «?» (Parakeet ставит его по интонации) или, при `questionStarters`,
+    /// начинается вопросительным словом.
+    func looksLikeQuestion(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasSuffix("?") { return true }
+        guard config.questionStarters, let last = pending.last else { return false }
+        let first = last.split { $0.isWhitespace }.first.map { $0.lowercased().trimmingCharacters(in: .punctuationCharacters) } ?? ""
+        return Self.questionStarters.contains(first)
+    }
 
     static func looksUnfinished(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

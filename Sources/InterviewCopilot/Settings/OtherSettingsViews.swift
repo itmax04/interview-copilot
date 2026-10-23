@@ -115,6 +115,13 @@ struct AudioSettingsView: View {
                 Text("Пауза конца вопроса T: \(model.settings.pauseThresholdMs) мс")
                 Slider(value: pauseBinding, in: Double(AppSettings.pauseThresholdRange.lowerBound)...Double(AppSettings.pauseThresholdRange.upperBound), step: 50)
             }
+            VStack(alignment: .leading) {
+                Text("Пауза после вопроса со знаком «?»: \(model.settings.questionPauseMs) мс")
+                Slider(value: questionPauseBinding, in: Double(AppSettings.questionPauseRange.lowerBound)...Double(AppSettings.questionPauseRange.upperBound), step: 50)
+            }
+            Toggle("Начинать ответ заранее, не дожидаясь паузы", isOn: $model.settings.speculativeAnswers)
+            Text("Модель получает вопрос, как только готов его текст. Если собеседник продолжил, запрос отменяется и уходит заново — запросов к модели становится немного больше.")
+                .font(.footnote).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
     }
@@ -139,6 +146,10 @@ struct AudioSettingsView: View {
 
     private var pauseBinding: Binding<Double> {
         Binding { Double(model.settings.pauseThresholdMs) } set: { model.settings.pauseThresholdMs = Int($0) }
+    }
+
+    private var questionPauseBinding: Binding<Double> {
+        Binding { Double(model.settings.questionPauseMs) } set: { model.settings.questionPauseMs = Int($0) }
     }
 }
 

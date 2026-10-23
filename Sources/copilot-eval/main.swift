@@ -166,10 +166,13 @@ case "turn":
     let path = args.first ?? "evals/turn/cases.jsonl"
     let cases: [TurnEval.Case]
     do { cases = try TurnEval.load(URL(fileURLWithPath: path)) } catch { fail("\(path): \(error)", code: 1) }
-    let summary = TurnEval.run(cases, config: TurnDetector.Config(thresholdMs: threshold))
+    var config = TurnDetector.Config(thresholdMs: threshold)
+    if let q = option("--question-ms").flatMap(Double.init) { config.questionThresholdMs = q }
+    config.questionStarters = flag("--question-starters")
+    let summary = TurnEval.run(cases, config: config)
     if verbose {
         for r in summary.results {
-            print("\(r.id): expected=\(r.expected.map { String(Int($0)) } ?? "null") fired=\(r.firedAt.map { String(Int($0)) } ?? "none")\(r.forced ? " forced" : "")")
+            print("\(r.id): expected=\(r.expected.map { String(Int($0)) } ?? "null") fired=\(r.firedAt.map { String(Int($0)) } ?? "none")\(r.forced ? " forced" : "") draft=\(r.draftAt.map { String(Int($0)) } ?? "none")")
         }
     }
     for r in summary.results where r.premature || r.missed {
@@ -178,6 +181,10 @@ case "turn":
     print(String(format: "turn: cases=%d T=%.0fms premature=%d (%.1f%%, порог ≤10%%) missed=%d/%d (%.1f%%, порог ≤5%%) mean_latency_ms=%.0f %@",
                  summary.cases, threshold, summary.premature, summary.prematureRate * 100, summary.missed, summary.withExpected,
                  summary.missedRate * 100, summary.meanLatencyMs, summary.passed ? "PASS" : "FAIL"))
+    // COPILOT-04 R-01, R-04: когда модель получает вопрос — по опережающему запросу или по ходу.
+    print(String(format: "draft: hits=%d mean_start_ms=%.0f wasted_requests=%d (question_ms=%.0f, starters=%@)",
+                 summary.draftHits, summary.meanDraftLatencyMs, summary.draftWasted, config.questionThresholdMs,
+                 config.questionStarters ? "on" : "off"))
     finish(summary.passed ? 0 : 1)
 case "exit-check":
     // Проверка выхода через exit() после освобождения моделей (как applicationWillTerminate в приложении).

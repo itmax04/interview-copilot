@@ -115,6 +115,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var language: RecognitionLanguage = .auto
     /// Порог паузы T, мс (R-05: 700, диапазон 400–1500).
     public var pauseThresholdMs: Int = 700
+    /// Пауза после явного вопроса (фраза кончается «?»), мс; не больше T (COPILOT-04 R-02).
+    public var questionPauseMs: Int = 350
+    /// Опережающий запрос (COPILOT-04 R-01): модель начинает отвечать, как только готов текст законченной фразы,
+    /// не дожидаясь паузы T. Если собеседник продолжил, запрос отменяется — лишние запросы к модели.
+    public var speculativeAnswers = true
 
     // Answer / Bank
     public var mode: AnswerMode = .bankAndHint
@@ -188,6 +193,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public static let defaultWhisperModel = "ggml-large-v3-turbo-q5_0.bin"
     public static let defaultEmbeddingModel = "bge-m3-q8_0.gguf"
     public static let pauseThresholdRange = 400...1500
+    public static let questionPauseRange = 200...1500
     public static let bankThresholdRange = 0.5...0.99
     public static let firstTokenTimeoutRange = 1.0...15.0
     public static let hedgeAfterRange = 0.0...10.0
@@ -202,6 +208,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         s.firstTokenTimeout = s.firstTokenTimeout.clamped(to: Self.firstTokenTimeoutRange)
         s.hedgeAfter = s.hedgeAfter.clamped(to: Self.hedgeAfterRange)
         s.pauseThresholdMs = s.pauseThresholdMs.clamped(to: Self.pauseThresholdRange)
+        s.questionPauseMs = s.questionPauseMs.clamped(to: Self.questionPauseRange)
         s.bankThreshold = s.bankThreshold.clamped(to: Self.bankThresholdRange)
         s.historyRetentionDays = s.historyRetentionDays.clamped(to: Self.retentionRange)
         s.panelOpacity = s.panelOpacity.clamped(to: Self.panelOpacityRange)
@@ -235,6 +242,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         recognitionPromptFromBank = v(.recognitionPromptFromBank, d.recognitionPromptFromBank)
         language = v(.language, d.language)
         pauseThresholdMs = v(.pauseThresholdMs, d.pauseThresholdMs)
+        questionPauseMs = v(.questionPauseMs, d.questionPauseMs)
+        speculativeAnswers = v(.speculativeAnswers, d.speculativeAnswers)
         mode = v(.mode, d.mode)
         useProfile = v(.useProfile, d.useProfile)
         bankThreshold = v(.bankThreshold, d.bankThreshold)

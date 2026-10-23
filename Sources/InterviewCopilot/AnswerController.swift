@@ -61,6 +61,12 @@ final class AnswerController {
         generation?.cancel()
         lastQuestion = turn
         panel.question = turn.text
+        // COPILOT-04 R-01: ответ на этот текст уже готовится — показываем его, без нового запроса.
+        if let d = draft, d.text == turn.text, d.generating {
+            adopt(d, turn: turn)
+            return
+        }
+        cancelDraft()
         let settings = model.settings
         generation = Task { [weak self] in
             guard let self else { return }
@@ -82,20 +88,28 @@ final class AnswerController {
         }
     }
 
-    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings) {
-        // Решение — по наличию ключей (без чтения значений): карточка базы не должна ждать Связку ключей (AC-02).
-        let modelsAvailable = settings.chain.contains { p in
+    /// Решение — по наличию ключей (без чтения значений): карточка базы не должна ждать Связку ключей (AC-02).
+    private func modelsAvailable(_ settings: AppSettings) -> Bool {
+        settings.chain.contains { p in
             model.hasKey[p] == true && !(settings.paidProvidersSuspended && ChainFactory.isPaid(p, settings: settings))
         }
+    }
+
+    private func hintRequest(question: String, base: BankCard?, top: [CardScore], settings: AppSettings) -> LLMRequest {
+        PromptBuilder.hintRequest(question: question, transcript: transcript(), cards: top, baseCard: base,
+                                  profile: settings.useProfile ? bank.profile : nil, redactPII: settings.piiFilterEnabled,
+                                  answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question))
+    }
+
+    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings) {
+        let modelsAvailable = modelsAvailable(settings)
         switch AnswerRouter.decide(mode: settings.mode, match: match, modelsAvailable: modelsAvailable, useProfile: settings.useProfile) {
         case .bankCard(let card):
             showCard(card, turn: turn)
         case .noMatch(let top):
             showNoMatch(top, turn: turn, reason: modelsAvailable || (settings.mode == .bankOnly && settings.useProfile) ? nil : "Модели недоступны: нет ключей")
         case .generate(let base, let top):
-            let request = PromptBuilder.hintRequest(question: turn.text, transcript: transcript(), cards: top, baseCard: base,
-                                                    profile: settings.useProfile ? bank.profile : nil, redactPII: settings.piiFilterEnabled,
-                                                    answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text))
+            let request = hintRequest(question: turn.text, base: base, top: top, settings: settings)
             let secrets = model.secrets
             let providers = self.providers
             generation = Task { [weak self] in
@@ -142,6 +156,33 @@ final class AnswerController {
 
     private func generate(turn: Turn, chain: ProviderChain, request: LLMRequest, fallbackTop: [CardScore],
                           strong: Bool = false) {
+        let consume = makeConsumer(turn: turn, purpose: request.purpose, fallbackTop: fallbackTop, strong: strong)
+        generation = Task { [weak self] in
+            for await event in chain.run(request) {
+                if Task.isCancelled { return }
+                self?.account(event)
+                consume(event)
+            }
+        }
+    }
+
+    /// Расход и ошибки ключей учитываются там, где идёт запрос: и для ответа, и для опережающего запроса,
+    /// который так и не понадобился (R-20, COPILOT-04 R-01).
+    private func account(_ event: ChainEvent) {
+        switch event {
+        case .providerFailed(let p, let error):
+            if error.isInvalidKey { model.markInvalidKey(p, error) }
+            onProviderError?(p, error)
+        case .usage(let p, let m, let u):
+            onUsage?(p, m, u)
+        default:
+            break
+        }
+    }
+
+    /// Вывод ответа в панель (S-03, S-04, R-10). `speculative` — ответ начат опережающим запросом (метрика COPILOT-04).
+    private func makeConsumer(turn: Turn, purpose: LLMPurpose, fallbackTop: [CardScore], strong: Bool,
+                              speculative: Bool = false) -> @MainActor (ChainEvent) -> Void {
         let previous = (panel.state, panel.answerSource, panel.answerText, panel.answerTags, panel.badge)
         panel.state = .thinking
         panel.suggestions = []
@@ -150,55 +191,133 @@ final class AnswerController {
         var actualModel: String?
         var firstMs: Double?
         var usage: TokenUsage?
-        let task = Task { [weak self] in
+        return { [weak self] event in
             guard let self else { return }
-            for await event in chain.run(request) {
-                if Task.isCancelled { return }
-                switch event {
-                case .attempt(let p, let m):
-                    provider = p
-                    actualModel = m
-                case .model(let p, let m):
-                    provider = p
-                    actualModel = m
-                case .firstToken:
-                    let ms = Self.now() - turn.speechEndedAt
-                    firstMs = ms
-                    // AC-03: turn_end → first_token.
-                    Log.metrics.notice("first_token turn=\(turn.id) kind=\(request.purpose.rawValue, privacy: .public) provider=\(provider?.rawValue ?? "?", privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(ms)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt))")
-                case .text(let t):
-                    text += t
-                    // «—» — не вопрос: панель не меняется (R-11). Ждём, пока станет ясно.
-                    if PromptBuilder.isNoAnswer(text) || (text.count <= 2 && "—–-".contains(text.trimmingCharacters(in: .whitespaces))) { continue }
-                    self.panel.state = .answer
-                    self.panel.answerSource = "\(Self.label(provider, actualModel)) · \(strong ? "strong" : "generated")"
-                    self.panel.answerText = text
-                    self.panel.answerTags = []
-                    self.panel.badge = Self.label(provider, actualModel)
-                    if let firstMs { self.panel.latency = firstMs / 1000 }
-                case .restart:
-                    text = ""
-                case .providerFailed(let p, let error):
-                    if error.isInvalidKey { self.model.markInvalidKey(p, error) }
-                    self.onProviderError?(p, error)
-                case .usage(let p, let m, let u):
-                    usage = u
-                    self.onUsage?(p, m, u)
-                case .finished:
-                    if PromptBuilder.isNoAnswer(text) {
-                        (self.panel.state, self.panel.answerSource, self.panel.answerText, self.panel.answerTags, self.panel.badge) = previous
-                        Log.metrics.notice("not_a_question turn=\(turn.id)")
-                    } else {
-                        self.onAnswer?(AnswerRecord(turn: turn, source: provider?.rawValue ?? "?", model: actualModel, cardID: nil,
-                                                    text: text, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
-                    }
-                case .exhausted(let reason):
-                    // S-04: понятная ошибка и поведение S-02.
-                    self.showNoMatch(fallbackTop, turn: turn, reason: "Модели недоступны: \(reason)")
+            switch event {
+            case .attempt(let p, let m):
+                provider = p
+                actualModel = m
+            case .model(let p, let m):
+                provider = p
+                actualModel = m
+            case .firstToken:
+                // Для опережающего запроса — момент показа: токены могли прийти раньше хода.
+                let ms = Self.now() - turn.speechEndedAt
+                firstMs = ms
+                // AC-03: turn_end → first_token.
+                Log.metrics.notice("first_token turn=\(turn.id) kind=\(purpose.rawValue, privacy: .public) provider=\(provider?.rawValue ?? "?", privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(ms)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt)) speculative=\(speculative ? 1 : 0)")
+            case .text(let t):
+                text += t
+                // «—» — не вопрос: панель не меняется (R-11). Ждём, пока станет ясно.
+                if PromptBuilder.isNoAnswer(text) || (text.count <= 2 && "—–-".contains(text.trimmingCharacters(in: .whitespaces))) { return }
+                self.panel.state = .answer
+                self.panel.answerSource = "\(Self.label(provider, actualModel)) · \(strong ? "strong" : "generated")"
+                self.panel.answerText = text
+                self.panel.answerTags = []
+                self.panel.badge = Self.label(provider, actualModel)
+                if let firstMs { self.panel.latency = firstMs / 1000 }
+            case .restart:
+                text = ""
+            case .providerFailed:
+                break // учтено в `account`
+            case .usage(_, _, let u):
+                usage = u // учтено в `account`
+            case .finished:
+                if PromptBuilder.isNoAnswer(text) {
+                    (self.panel.state, self.panel.answerSource, self.panel.answerText, self.panel.answerTags, self.panel.badge) = previous
+                    Log.metrics.notice("not_a_question turn=\(turn.id)")
+                } else {
+                    self.onAnswer?(AnswerRecord(turn: turn, source: provider?.rawValue ?? "?", model: actualModel, cardID: nil,
+                                                text: text, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
                 }
+            case .exhausted(let reason):
+                // S-04: понятная ошибка и поведение S-02.
+                self.showNoMatch(fallbackTop, turn: turn, reason: "Модели недоступны: \(reason)")
             }
         }
-        generation = task
+    }
+
+    // MARK: Опережающий запрос (COPILOT-04 R-01)
+
+    /// Ответ модели, начатый до хода. События копятся, пока ход с тем же текстом не заберёт их (`attach`).
+    @MainActor
+    private final class Draft {
+        let text: String
+        let startedAt: Double
+        var match = BankMatch(matched: nil, top: [])
+        var fallbackTop: [CardScore] = []
+        /// Решено генерировать и запрос к модели запущен (карточка базы опережающего запроса не требует).
+        var generating = false
+        var task: Task<Void, Never>?
+        private var buffered: [ChainEvent] = []
+        private var consumer: (@MainActor (ChainEvent) -> Void)?
+
+        init(text: String, startedAt: Double) {
+            self.text = text
+            self.startedAt = startedAt
+        }
+
+        var adopted: Bool { consumer != nil }
+
+        func deliver(_ event: ChainEvent) {
+            if let consumer { consumer(event) } else { buffered.append(event) }
+        }
+
+        func attach(_ consumer: @escaping @MainActor (ChainEvent) -> Void) {
+            self.consumer = consumer
+            let pending = buffered
+            buffered = []
+            pending.forEach(consumer)
+        }
+    }
+
+    private var draft: Draft?
+
+    /// Начать отвечать на законченную реплику до истечения паузы T. Повтор с тем же текстом ничего не делает,
+    /// новый текст (собеседник продолжил) отменяет прежний запрос.
+    func prefetch(_ text: String) {
+        let settings = model.settings
+        guard settings.speculativeAnswers, draft?.text != text else { return }
+        cancelDraft()
+        let d = Draft(text: text, startedAt: Self.now())
+        draft = d
+        let secrets = model.secrets
+        let providers = self.providers
+        d.task = Task { [weak self] in
+            guard let self else { return }
+            if settings.useProfile, let match = await self.bank.match(text, threshold: settings.bankThreshold) { d.match = match }
+            guard !Task.isCancelled, self.draft === d else { return }
+            guard case .generate(let base, let top) = AnswerRouter.decide(mode: settings.mode, match: d.match,
+                                                                           modelsAvailable: self.modelsAvailable(settings),
+                                                                           useProfile: settings.useProfile) else { return }
+            let request = self.hintRequest(question: text, base: base, top: top, settings: settings)
+            d.fallbackTop = top
+            let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
+            guard !Task.isCancelled, self.draft === d || d.adopted else { return }
+            d.generating = true
+            for await event in chain.run(request) {
+                if Task.isCancelled { return }
+                self.account(event)
+                d.deliver(event)
+            }
+        }
+    }
+
+    /// Отменить опережающий запрос, который ход не забрал (пауза, новый текст, другой ход).
+    func cancelDraft() {
+        guard let d = draft else { return }
+        draft = nil
+        guard !d.adopted else { return }
+        d.task?.cancel()
+        Log.metrics.notice("draft_cancelled lead_ms=\(Int(Self.now() - d.startedAt)) generating=\(d.generating)")
+    }
+
+    private func adopt(_ d: Draft, turn: Turn) {
+        draft = nil
+        if model.settings.useProfile { lastMatch = d.match } else { lastMatch = nil }
+        Log.metrics.notice("draft_used turn=\(turn.id) started_ms_from_speech_end=\(Int(d.startedAt - turn.speechEndedAt)) lead_ms=\(Int(turn.firedAt - d.startedAt))")
+        generation = d.task
+        d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, strong: false, speculative: true))
     }
 
     static func label(_ p: ProviderID?, _ model: String?) -> String {
@@ -248,6 +367,7 @@ final class AnswerController {
 
     func cancel() {
         generation?.cancel()
+        cancelDraft()
     }
 
     private func copyAnswer() {
