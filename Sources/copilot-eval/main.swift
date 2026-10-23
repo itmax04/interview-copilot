@@ -247,6 +247,23 @@ case "filter":
                  wanted.lost, wanted.total, lostRate * 100, termsKept.ok, termsKept.total, termsLatin, noise.utterances, noise.total,
                  vadMs.sorted().dropFirst(vadMs.count / 2).first ?? 0, pass ? "PASS" : "FAIL"))
     finish(pass ? 0 : 1)
+case "voice-enroll":
+    // Образец голоса из файла (COPILOT-05 R-03): copilot-eval voice-enroll <файл 16 кГц моно> [--dry-run].
+    // Сохраняет отпечаток туда же, куда и запись в Settings → Audio; звук не копируется.
+    args.removeFirst()
+    let dryRun = flag("--dry-run")
+    guard let path = args.first else { fail("usage: copilot-eval voice-enroll <file.wav> [--dry-run]") }
+    let samples: [Float]
+    do { samples = try AudioFileReader.read16kMono(URL(fileURLWithPath: path)) } catch { fail("\(path): \(error)", code: 1) }
+    let embedder: VoiceEmbedder
+    do { embedder = try VoiceEmbedder.load(from: AppPaths.models) } catch { fail("CAM++: \(error) (scripts/fetch-filter-models.py)", code: 1) }
+    guard let voicePrint = embedder.makePrint(from: samples) else { fail("мало речи в образце (нужно ≥ 5 с громче −45 dBFS)", code: 1) }
+    print(String(format: "образец: %.1f с звука, %.1f с речи · разброс кусков %.2f · автопорог %.2f",
+                 Double(samples.count) / 16_000, voicePrint.speechSeconds, voicePrint.selfSimilarityMin, voicePrint.recommendedThreshold))
+    if dryRun { finish(0) }
+    do { try voicePrint.save() } catch { fail("сохранение: \(error)", code: 1) }
+    print("сохранено: \(VoicePrint.fileURL.path)")
+    finish(0)
 case "voice":
     // Eval `voice` (COPILOT-05 R-03, AC-03): отпечаток по образцу «владельца», сходство своих и чужих фраз.
     args.removeFirst()

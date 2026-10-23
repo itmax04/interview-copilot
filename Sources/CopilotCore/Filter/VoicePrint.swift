@@ -41,6 +41,8 @@ public struct VoicePrint: Codable, Equatable, Sendable {
     public func save(to url: URL = fileURL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(self).write(to: url, options: [.atomic, .completeFileProtection])
+        // Голосовые данные — только для владельца (R-08 COPILOT-05).
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
     public static func delete(at url: URL = fileURL) {
