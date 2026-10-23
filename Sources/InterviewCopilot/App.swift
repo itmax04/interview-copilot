@@ -123,7 +123,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self.interviewer.active { self.interviewer.handleCallTranscript(event) }
             self.turns.handle(event)
             if case .final(let u, let text, let lang, _, _) = event { self.sessions.addUtterance(id: u, text: text, language: lang) }
-            if case .revised(let u, let text, let lang) = event { self.sessions.reviseUtterance(id: u, text: text, language: lang) }
+            if case .final(let u, let text, _, _, _) = event {
+                self.fastText[u] = text
+                if self.fastText.count > 50, let oldest = self.fastText.keys.min() { self.fastText.removeValue(forKey: oldest) }
+            }
+            if case .revised(let u, let text, let lang) = event {
+                self.sessions.reviseUtterance(id: u, text: text, language: lang)
+                // COPILOT-06: уточнённый текст — и в память интервью (живой тест: туда попадал черновой Parakeet).
+                if let fast = self.fastText.removeValue(forKey: u) { self.memory.reviseText(fast, to: text); self.saveMemory() }
+            }
         }
         listening.onOwnerSpeaking = { [weak self] speaking, t in
             guard let self, !self.testCall.active else { return }
@@ -318,6 +326,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Память интервью (COPILOT-06)
 
     let memory = InterviewMemory()
+    /// Быстрый текст реплик до уточнения (R-37): по нему находим вопрос в памяти.
+    private var fastText: [Int: String] = [:]
     private var lastTurnAt: Date?
     private var lastCallSource: String?
     static let newInterviewAfterSilence: TimeInterval = 30 * 60

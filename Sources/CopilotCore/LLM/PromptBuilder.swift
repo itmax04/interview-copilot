@@ -119,9 +119,10 @@ public enum PromptBuilder {
         if !memory.earlier.isEmpty { parts.append(block("earlier_in_interview", memory.earlier)) }
         if !memory.recent.isEmpty { parts.append(block("interview_history", memory.recent)) }
         if memory.backReference {
-            parts.append(memory.earlier.isEmpty && memory.recent.isEmpty
-                ? "The interviewer refers to something said earlier, but it is not in the recorded history: do not invent it."
-                : "The interviewer refers to something said earlier: use the matching exchange above.")
+            // Живой тест COPILOT-06: «Ви згадували, що працювали з Kafka» при истории без Kafka — модель ответила «Так, …».
+            parts.append(memory.earlier.isEmpty
+                ? "The interviewer refers to something said earlier, but no earlier exchange on this topic was found in the recorded history: the candidate did not say it in this interview. Do not confirm the premise (no \"yes, as I said\"); answer the question directly."
+                : "The interviewer refers to something said earlier: use the matching exchange in <earlier_in_interview>. If it does not actually contain what the interviewer claims, do not confirm the premise.")
         }
         // COPILOT-05 R-07: что владелец уже ответил (данные, фильтр ПД R-12).
         if !candidateSaid.isEmpty {
