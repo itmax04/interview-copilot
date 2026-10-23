@@ -79,6 +79,63 @@ final class ListeningController {
         let micChannel = (testSource == nil && source == .microphone) || interviewRoute == .owner
         voiceGate.update { $0.active = model.settings.ownerVoiceOnly && micChannel }
         enhancerBox.update { $0.active = model.settings.micNoiseSuppression && micChannel }
+        updateOwnerChannel()
+    }
+
+    /// Настройка «Учитывать мои ответы в подсказках» изменилась.
+    func ownerSpeechSettingChanged() { updateOwnerChannel() }
+
+    // MARK: Речь владельца на созвоне (COPILOT-05 R-01, R-07)
+
+    /// Второй распознаватель: микрофон во время созвона. Тот же движок, без уточнения Whisper и без промежуточного текста.
+    private var ownerTranscriber: StreamingTranscriber?
+    private let ownerBuffer = AudioRingBuffer(seconds: 30)
+    private let ownerBox = TranscriberBox()
+    private let ownerActive = LockedFlag()
+    /// Что владелец уже сказал — только в памяти (Q6).
+    private var candidateContext = CandidateContext()
+
+    /// До 3 последних фраз владельца для промпта (R-07).
+    var candidateSaid: [String] {
+        candidateContext.recent(at: Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
+    }
+
+    /// Канал владельца работает на созвоне (звук приложения или весь системный звук), не в самопроверке и не в тестах.
+    private func updateOwnerChannel() {
+        let callSource: Bool = switch source {
+        case .app, .allSystem: true
+        default: false
+        }
+        let active = model.settings.ownerSpeechContext && testSource == nil && phase == .listening && callSource
+            && Permissions.microphone == .granted
+        guard ownerActive.value != active else { return }
+        ownerActive.set(active)
+        ownerTranscriber?.setPaused(!active)
+        if !active { candidateContext.clear() }
+        Log.audio.info("owner channel \(active ? "on" : "off", privacy: .public)")
+    }
+
+    /// Когда в звонке последний раз звучала речь (мс) и звучит ли сейчас — для отсева эха без образца голоса.
+    private var callSpeaking = false
+    private var callSpeechEndedAt: Double = 0
+    static let echoWindowMs: Double = 1500
+
+    private func handleOwner(_ event: TranscriptEvent) {
+        guard case .final(_, let text, _, let phraseEnd, _) = event else { return }
+        // Без образца голоса эхо интервьюера из динамиков неотличимо по языку: фраза микрофона, закончившаяся,
+        // пока в звонке шла речь или в пределах 1,5 с после неё, считается эхом (как правило эха TurnDetector, S-07).
+        if voiceGate.current.print == nil {
+            let end = Double(phraseEnd) / 1e6
+            if callSpeaking || end - callSpeechEndedAt < Self.echoWindowMs {
+                Log.metrics.notice("filtered reason=echo channel=mic")
+                return
+            }
+        }
+        // Без образца голоса — хотя бы фильтр языка микрофона: ТВ на другом языке не станет «ответом владельца».
+        if voiceGate.current.print == nil, model.settings.languageFilter,
+           case .drop = LanguageGate(setting: model.settings.language, terms: terms).check(text, channel: .mic) { return }
+        candidateContext.add(text, at: Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
+        Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text))")
     }
 
     /// Шумоподавление микрофона LocalVQE (R-04, по умолчанию выключено): модель загружается при включении.
@@ -409,6 +466,9 @@ final class ListeningController {
         transcriberBox.set(nil)
         transcriber?.setPaused(true)
         transcriber = nil
+        ownerBox.set(nil)
+        ownerTranscriber?.setPaused(true)
+        ownerTranscriber = nil
         micSource?.stop()
         mic?.stop()
         let capture = self.capture
@@ -426,6 +486,7 @@ final class ListeningController {
     /// Язык распознавания из настроек (R-03).
     func languageSettingChanged() {
         transcriber?.setLanguage(testSource == nil ? model.settings.language.whisperCode : nil)
+        ownerTranscriber?.setLanguage(model.settings.language.whisperCode)
     }
 
     /// Смена модели или режима точности: старая очередь больше не выдаёт текст.
@@ -434,6 +495,9 @@ final class ListeningController {
         transcriberBox.set(nil)
         transcriber?.setPaused(true)
         transcriber = nil
+        ownerBox.set(nil)
+        ownerTranscriber?.setPaused(true)
+        ownerTranscriber = nil
         partialText = nil
         loadRecognizer()
     }
@@ -503,6 +567,24 @@ final class ListeningController {
             t.setPaused(phase == .paused)
             transcriberBox.set(t)
             transcriber = t
+            var ownerConfig = StreamingTranscriber.Config()
+            ownerConfig.partialInterval = 3600        // промежуточный текст владельца не нужен
+            ownerConfig.allowRevision = false
+            ownerConfig.vad = StreamingTranscriber.microphoneVAD
+            let ot = StreamingTranscriber(recognizer: engine, buffer: ownerBuffer, config: ownerConfig) { [weak self] event in
+                Task { @MainActor in
+                    guard let self, self.recognizerGeneration == generation else { return }
+                    self.handleOwner(event)
+                }
+            }
+            ot.setLanguage(model.settings.language.whisperCode)
+            ot.setSpeechGate(gate.map { g in { @Sendable samples in g.isSpeech(samples) } })
+            // Эхо интервьюера из динамиков и чужие голоса отсекает отпечаток голоса (решение исполнителя, этап 4).
+            ot.setVoiceGate { samples in voiceGate.check(samples, ignoringActive: true) }
+            ot.setPaused(!ownerActive.value)
+            ownerBox.set(ot)
+            ownerTranscriber = ot
+            updateOwnerChannel()
             let name = engine is HybridRecognizer ? (model.settings.whisperReviseAllLanguages ? "Parakeet v3 + уточнение Whisper turbo" : "Parakeet v3 + Whisper turbo (UK)")
                 : engine.nativeMultilingual ? "Parakeet v3" : (path as NSString).lastPathComponent
             let fallback = model.settings.recognitionBackend == .parakeet && !engine.nativeMultilingual
@@ -520,8 +602,11 @@ final class ListeningController {
             return
         }
         switch event {
-        case .speechStarted, .speechEnded:
-            break
+        case .speechStarted:
+            callSpeaking = true
+        case .speechEnded(_, let at):
+            callSpeaking = false
+            callSpeechEndedAt = Double(at) / 1e6
         case .partial(_, let text):
             partialText = text
             onChange?()
@@ -628,6 +713,13 @@ final class ListeningController {
                     self?.onOwnerSpeaking?(speaking, t)
                 }
             }
+            // R-07: тот же микрофон — в распознавание речи владельца, пока канал включён.
+            let buffer = ownerBuffer, box = ownerBox, active = ownerActive
+            mic?.onSamples = { samples in
+                guard active.value else { return }
+                buffer.append(samples)
+                box.get()?.process(samples)
+            }
         }
         do { try mic?.start() } catch {
             Log.audio.error("mic start failed: \(error.localizedDescription, privacy: .public)")
@@ -655,6 +747,7 @@ final class ListeningController {
     private func setPhase(_ new: Phase) {
         guard phase != new else { return }
         phase = new
+        updateOwnerChannel()
         onChange?()
     }
 }
@@ -673,6 +766,14 @@ final class AudioRouteBox: @unchecked Sendable {
     func set(_ v: AudioRoute?) { lock.withLock { value = v } }
     /// Без маршрута (обычная работа) принимается любой запущенный источник.
     func accepts(_ r: AudioRoute) -> Bool { lock.withLock { value == nil || value == r } }
+}
+
+/// Флаг, доступный из очередей захвата.
+final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+    var value: Bool { lock.withLock { flag } }
+    func set(_ v: Bool) { lock.withLock { flag = v } }
 }
 
 final class TranscriberBox: @unchecked Sendable {

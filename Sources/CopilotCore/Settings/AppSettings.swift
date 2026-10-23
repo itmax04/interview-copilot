@@ -139,6 +139,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Шумоподавление реплики микрофона LocalVQE (COPILOT-05 R-04). Выключено: на eval `enhance` Parakeet с ним
     /// ошибается чаще (3,9% → 6,3% слов); для шума комнаты — системный Voice Isolation.
     public var micNoiseSuppression = false
+    /// Расшифровывать речь владельца на созвоне и передавать модели как контекст (COPILOT-05 R-07, Q6):
+    /// в панели и истории её нет; текст ответов уходит в модель вместе с вопросом.
+    public var ownerSpeechContext = true
 
     // Answer / Bank
     public var mode: AnswerMode = .bankAndHint
@@ -269,6 +272,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         ownerVoiceOnly = v(.ownerVoiceOnly, d.ownerVoiceOnly)
         ownerVoiceThreshold = v(.ownerVoiceThreshold, d.ownerVoiceThreshold)
         micNoiseSuppression = v(.micNoiseSuppression, d.micNoiseSuppression)
+        ownerSpeechContext = v(.ownerSpeechContext, d.ownerSpeechContext)
         mode = v(.mode, d.mode)
         useProfile = v(.useProfile, d.useProfile)
         bankThreshold = v(.bankThreshold, d.bankThreshold)

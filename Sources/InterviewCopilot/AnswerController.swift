@@ -14,6 +14,8 @@ final class AnswerController {
     private var lastMatch: BankMatch?
     /// Последние реплики собеседника для промпта (R-11: до 6).
     var transcript: () -> [String] = { [] }
+    /// Что владелец уже сказал на созвоне (COPILOT-05 R-07).
+    var candidateSaid: () -> [String] = { [] }
     /// Учёт токенов и запросов (P-10).
     var onUsage: ((ProviderID, String, TokenUsage) -> Void)?
     /// Провайдер ответил ошибкой (для строки статуса «Gemini: limit»).
@@ -103,7 +105,8 @@ final class AnswerController {
     private func hintRequest(question: String, base: BankCard?, top: [CardScore], settings: AppSettings) -> LLMRequest {
         PromptBuilder.hintRequest(question: question, transcript: transcript(), cards: top, baseCard: base,
                                   profile: settings.useProfile ? bank.profile : nil, redactPII: settings.piiFilterEnabled,
-                                  answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question))
+                                  answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question),
+                                  candidateSaid: candidateSaid())
     }
 
     private func route(_ turn: Turn, match: BankMatch, settings: AppSettings) {
@@ -368,7 +371,8 @@ final class AnswerController {
                                                   baseCard: settings.useProfile ? lastMatch?.matched?.card : nil,
                                                   profile: settings.useProfile ? bank.profile : nil,
                                                   redactPII: settings.piiFilterEnabled,
-                                                  answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text))
+                                                  answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text),
+                                                  candidateSaid: candidateSaid())
         // Задержка для сильной модели считаем от нажатия.
         let manual = Turn(id: turn.id, text: turn.text, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         generate(turn: manual, chain: chain, request: request, fallbackTop: lastMatch?.top ?? [], strong: true)

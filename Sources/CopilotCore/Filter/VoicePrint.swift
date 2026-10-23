@@ -182,9 +182,9 @@ public final class VoiceGateBox: @unchecked Sendable {
         return s.threshold > 0 ? s.threshold : print.recommendedThreshold
     }
 
-    public func check(_ samples: [Float]) -> (similarity: Float, accepted: Bool)? {
+    public func check(_ samples: [Float], ignoringActive: Bool = false) -> (similarity: Float, accepted: Bool)? {
         let s = current
-        guard s.active, let embedder = s.embedder, let print = s.print,
+        guard s.active || ignoringActive, let embedder = s.embedder, let print = s.print,
               let measured = embedder.measure(samples, to: print) else { return nil }
         var threshold = s.threshold > 0 ? s.threshold : print.recommendedThreshold
         if measured.speechSeconds < VoiceEmbedder.minSeconds { threshold -= VoiceEmbedder.shortMargin }

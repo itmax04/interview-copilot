@@ -22,6 +22,13 @@ public final class MicActivityDetector: @unchecked Sendable {
     private var speaking = false
     private var running = false
     private let onChange: @Sendable (Bool) -> Void
+    /// Звук микрофона 16 кГц моно для расшифровки речи владельца на созвоне (COPILOT-05 R-07); nil — только VAD.
+    private let samplesLock = NSLock()
+    private var _onSamples: (@Sendable ([Float]) -> Void)?
+    public var onSamples: (@Sendable ([Float]) -> Void)? {
+        get { samplesLock.withLock { _onSamples } }
+        set { samplesLock.withLock { _onSamples = newValue } }
+    }
 
     public init(onChange: @escaping @Sendable (Bool) -> Void = { _ in }) {
         self.onChange = onChange
@@ -74,5 +81,6 @@ public final class MicActivityDetector: @unchecked Sendable {
             return c
         }
         for c in changes { onChange(c) }
+        if let onSamples, !samples.isEmpty { onSamples(samples) }
     }
 }

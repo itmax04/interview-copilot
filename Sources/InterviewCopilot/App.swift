@@ -168,7 +168,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.updateFilterTerms()
             self?.refreshUI()
         }
-        answers.transcript = { [weak self] in self?.listening.transcript.map(\.text) ?? [] }
+        // В промпт — только реплики интервьюера, прошедшие фильтры (серые строки COPILOT-05 не идут).
+        answers.transcript = { [weak self] in self?.listening.transcript.filter { $0.filtered == nil }.map(\.text) ?? [] }
+        answers.candidateSaid = { [weak self] in self?.listening.candidateSaid ?? [] }
         answers.onUsage = { [weak self] provider, modelID, u in self?.recordUsage(provider, modelID, u) }
         answers.onProviderError = { [weak self] provider, error in
             self?.usage.recordError(provider: provider, error: error)
@@ -233,6 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if force || s.neuralSpeechGate != old.neuralSpeechGate { listening.speechGateSettingChanged() }
         if force || s.ownerVoiceOnly != old.ownerVoiceOnly || s.ownerVoiceThreshold != old.ownerVoiceThreshold { listening.voiceSettingsChanged() }
         if force || s.micNoiseSuppression != old.micNoiseSuppression { listening.noiseSuppressionSettingChanged() }
+        if !force && s.ownerSpeechContext != old.ownerSpeechContext { listening.ownerSpeechSettingChanged() }
         if force { updateFilterTerms() }
         if force || s.pauseThresholdMs != old.pauseThresholdMs || s.questionPauseMs != old.questionPauseMs {
             turns.setThreshold(s.pauseThresholdMs, questionMs: s.questionPauseMs)

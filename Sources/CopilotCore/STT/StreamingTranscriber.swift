@@ -37,6 +37,9 @@ public final class StreamingTranscriber: @unchecked Sendable {
         public var partialInterval: Double = 0.8
         /// Итог использует полный контекст; частичный текст остаётся быстрым.
         public var finalReducedContext = false
+        /// Уточнение итога Whisper (R-37). Канал микрофона владельца (COPILOT-05 R-07) его не просит: текст нужен
+        /// только как контекст подсказки, а Whisper занял бы процессор, нужный для вопросов интервьюера.
+        public var allowRevision = true
         /// С какой длины реплики определять язык, с.
         public var languageDetectAfter: Double = 1.2
         /// Уточнять язык, пока уверенность ниже порога, каждые `languageRefineStep` с звука, но не дольше `languageRefineUntil`.
@@ -462,7 +465,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             let emitted = DispatchTime.now().uptimeNanoseconds
             Log.metrics.notice("transcript_final utt=\(u) lang=\(result.language, privacy: .public) audio_ms=\(Int(result.audioSeconds * 1000)) stt_ms=\(Int(result.elapsedMs)) phrase_end_to_final_ms=\(Int((emitted - phraseEnd) / 1_000_000))")
             // Двухэтапный итог (R-37): быстрый текст сразу — ход и подсказка не ждут; уточнённый — следом.
-            let revise = recognizer.revisionNeeded(result, language: lang)
+            let revise = config.allowRevision && recognizer.revisionNeeded(result, language: lang)
             if revise { onEvent(.revising(utterance: u)) }
             onEvent(.final(utterance: u, text: result.text, language: result.language, phraseEnd: phraseEnd, emittedAt: emitted))
             if revise { scheduleRevision(utterance: u, audio: audio, language: lang, first: result, epoch: scheduledEpoch, phraseEnd: phraseEnd) }
