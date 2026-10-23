@@ -145,9 +145,25 @@ private struct InterviewerView: View {
                     .foregroundStyle(.white.opacity(0.6))
             }
             ForEach(model.lines) { line in
-                Text(line.text)
-                    .foregroundStyle(.white.opacity(line.id == model.lines.last?.id && model.partial == nil ? 0.95 : 0.65))
-                    .fixedSize(horizontal: false, vertical: true)
+                if let reason = line.filtered {
+                    // COPILOT-05 R-06, S-08: отфильтрованное — серым; клик — ответить всё равно.
+                    Button { model.onAnswerFiltered?(line.text) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(line.text).italic()
+                                .foregroundStyle(.white.opacity(0.35))
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("игнорировано: \(reason) · нажмите или ⌃⌥↩, чтобы ответить")
+                                .font(.system(size: model.fontSize - 4))
+                                .foregroundStyle(.white.opacity(0.35))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Игнорировано, \(reason): \(line.text). Ответить")
+                } else {
+                    Text(line.text)
+                        .foregroundStyle(.white.opacity(line.id == model.lines.last?.id && model.partial == nil ? 0.95 : 0.65))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             if let partial = model.partial {
                 (Text(partial) + Text(" ▍").foregroundColor(.white.opacity(0.6)))

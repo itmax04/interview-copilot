@@ -31,3 +31,6 @@ evals/results/
 
 # Системное
 .DS_Store
+
+# Синтетические смеси eval filter (COPILOT-05) — генерируются scripts/make-filter-fixtures.py
+/evals/audio/filter/

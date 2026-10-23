@@ -14,6 +14,10 @@ final class TurnController {
     var draftsEnabled = true
     private(set) var lastTurn: Turn?
     private var lastDraft: String?
+    /// Последняя отфильтрованная реплика (COPILOT-05 S-08): ⌃⌥↩ в течение 15 с отвечает на неё.
+    private var lastFiltered: (text: String, at: Double)?
+    private var lastFinalAt: Double = 0
+    static let filteredAnswerWindowMs: Double = 15_000
 
     init(thresholdMs: Int) {
         detector = TurnDetector(config: TurnDetector.Config(thresholdMs: Double(thresholdMs)))
@@ -56,6 +60,7 @@ final class TurnController {
             break
         case .final(_, let text, _, let phraseEnd, _):
             finalsSinceTurn += 1
+            lastFinalAt = Self.now()
             detector.phraseFinal(text, speechEnd: Double(phraseEnd) / 1e6)
             if let turn = detector.takeRequestedForce(at: Self.now()) { emit(turn) }
         }
@@ -66,9 +71,27 @@ final class TurnController {
         detector.setOwnerSpeaking(speaking, at: t)
     }
 
-    /// ⌃⌥↩ — «Answer now».
+    /// ⌃⌥↩ — «Answer now». Если последней была отфильтрованная реплика (не старше 15 с) — ответ на неё (COPILOT-05 S-08).
     func forceTurn() {
-        if let turn = detector.force(at: Self.now()) { emit(turn) }
+        let now = Self.now()
+        if let f = lastFiltered, now - f.at <= Self.filteredAnswerWindowMs, f.at > lastFinalAt {
+            lastFiltered = nil
+            emit(detector.forceText(f.text, at: now))
+            return
+        }
+        if let turn = detector.force(at: now) { emit(turn) }
+    }
+
+    /// Фильтр отбросил реплику (COPILOT-05 R-06): запоминаем для ⌃⌥↩.
+    func filtered(_ text: String) {
+        lastFiltered = (text, Self.now())
+    }
+
+    /// Клик по серой строке панели — ответ на неё (COPILOT-05 S-08).
+    func answerFiltered(_ text: String) {
+        guard timer != nil else { return }
+        lastFiltered = nil
+        emit(detector.forceText(text, at: Self.now()))
     }
 
     private var finalsSinceTurn = 0

@@ -158,6 +158,94 @@ case "stt-stream":
                  l.count, collector.lock.withLock { collector.partials }, median, l.last ?? 0, ProcessMemory.footprintMB()))
     if pending > 0 { fail("stt-stream: \(pending) final result(s) did not arrive", code: 1) }
     finish(0)
+case "filter-text":
+    // Eval `filter` по тексту (COPILOT-05 R-05): evals/filter/text-cases.jsonl → совпадение с ожиданием, без моделей.
+    args.removeFirst()
+    let path = args.first ?? "evals/filter/text-cases.jsonl"
+    guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { fail("\(path): нет файла", code: 1) }
+    let verbose = flag("--verbose")
+    var total = 0, ok = 0
+    var byTag: [String: (ok: Int, total: Int)] = [:]
+    for line in raw.split(separator: "\n") where !line.isEmpty {
+        guard let c = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: String],
+              let text = c["text"], let setting = c["setting"].flatMap(RecognitionLanguage.init(rawValue:)),
+              let channel = c["channel"].flatMap(LanguageGate.Channel.init(rawValue:)), let expect = c["expect"] else { continue }
+        let verdict = LanguageGate(setting: setting, terms: TermDictionary()).check(text, channel: channel)
+        let got: String = if case .keep = verdict { "keep" } else { "drop" }
+        total += 1
+        let tag = c["tag"] ?? "-"
+        var t = byTag[tag] ?? (0, 0)
+        t.total += 1
+        if got == expect { ok += 1; t.ok += 1 } else if verbose { print("FAIL [\(tag)] \(setting.rawValue)/\(channel.rawValue) expect=\(expect) got=\(got): \(text)") }
+        byTag[tag] = t
+    }
+    for (tag, t) in byTag.sorted(by: { $0.key < $1.key }) { print("  \(tag): \(t.ok)/\(t.total)") }
+    let passed = ok == total
+    print("filter-text: cases=\(total) correct=\(ok) \(passed ? "PASS" : "FAIL")")
+    finish(passed ? 0 : 1)
+case "filter":
+    // Eval `filter` по звуку (COPILOT-05 AC-01, AC-02, AC-04): Silero → Parakeet → фильтр языка, по одному файлу.
+    // Упрощение: файл — одна реплика (сегментация энергетическим детектором здесь не участвует).
+    args.removeFirst()
+    let manifest = args.first ?? "evals/filter/audio-cases.json"
+    let dir = URL(fileURLWithPath: option("--dir") ?? "evals/audio/filter")
+    let useGate = !flag("--no-vad")
+    let useLang = !flag("--no-lang")
+    let threshold = Float(option("--vad-threshold") ?? "0.5") ?? 0.5
+    let verbose = flag("--verbose")
+    guard let data = FileManager.default.contents(atPath: manifest),
+          let cases = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]] else { fail("\(manifest): нет манифеста (scripts/make-filter-fixtures.py)", code: 1) }
+    let engine: ParakeetEngine
+    do { engine = try await ParakeetEngine.load(from: AppPaths.parakeetModels) } catch { fail("Parakeet: \(error)", code: 1) }
+    let gate: SileroSpeechGate? = useGate ? (try? SileroSpeechGate.load(from: AppPaths.models, threshold: threshold)) : nil
+    if useGate && gate == nil { fail("Silero не установлена: scripts/fetch-filter-models.py", code: 1) }
+    let terms = TermDictionary()
+    var foreign = (filtered: 0, total: 0), wanted = (lost: 0, total: 0), noise = (utterances: 0, total: 0)
+    var termsKept = (ok: 0, total: 0), termsLatin = 0
+    var vadMs: [Double] = []
+    for c in cases {
+        guard let file = c["file"], let expect = c["expect"], let setting = c["setting"].flatMap(RecognitionLanguage.init(rawValue:)),
+              let channel = c["channel"].flatMap(LanguageGate.Channel.init(rawValue:)) else { continue }
+        let samples: [Float]
+        do { samples = try AudioFileReader.read16kMono(dir.appendingPathComponent(file)) } catch { fail("\(file): \(error)", code: 1) }
+        var outcome = "keep"
+        var prob: Float = 1
+        var text = ""
+        if let gate {
+            let started = Date()
+            prob = gate.speechProbability(samples)
+            vadMs.append(Date().timeIntervalSince(started) * 1000)
+            if prob < threshold { outcome = "none" }
+        }
+        if outcome != "none" {
+            text = (try? engine.transcribe(samples, language: setting.whisperCode, prompt: nil, reducedContext: false).text) ?? ""
+            if text.trimmingCharacters(in: .whitespaces).isEmpty { outcome = "none" }
+            else if useLang, case .drop = LanguageGate(setting: setting, terms: terms).check(text, channel: channel) { outcome = "drop" }
+        }
+        switch expect {
+        case "drop": foreign.total += 1; if outcome != "keep" { foreign.filtered += 1 }
+        case "keep": wanted.total += 1; if outcome != "keep" { wanted.lost += 1 }
+        default: noise.total += 1; if outcome != "none" { noise.utterances += 1 }
+        }
+        if c["tag"] == "terms" {
+            // AC-02 — фильтр не отбросил вопрос с терминами. Латиница в тексте — свойство распознавания (справочно).
+            termsKept.total += 1
+            if outcome == "keep" { termsKept.ok += 1 }
+            if text.unicodeScalars.contains(where: { $0.value < 0x80 && CharacterSet.letters.contains($0) }) { termsLatin += 1 }
+        }
+        let ok = (expect == outcome) || (expect == "drop" && outcome == "none")
+        if !ok || verbose {
+            print("\(ok ? "ok  " : "FAIL") \(file) expect=\(expect) got=\(outcome) vad=\(String(format: "%.2f", prob)) text=\(text.prefix(70))")
+        }
+    }
+    let foreignRate = foreign.total == 0 ? 1 : Double(foreign.filtered) / Double(foreign.total)
+    let lostRate = wanted.total == 0 ? 0 : Double(wanted.lost) / Double(wanted.total)
+    let pass = foreignRate >= 0.9 && lostRate <= 0.05 && noise.utterances <= 1 && termsKept.ok == termsKept.total
+    print(String(format: "filter: vad=%@ lang=%@ AC-01 foreign_filtered=%d/%d (%.0f%%, ≥90%%) wanted_lost=%d/%d (%.0f%%, ≤5%%) · AC-02 terms_kept=%d/%d (latin_in_text=%d) · AC-04 noise_utterances=%d/%d (≤1) · vad_ms_median=%.0f %@",
+                 useGate ? "on" : "off", useLang ? "on" : "off", foreign.filtered, foreign.total, foreignRate * 100,
+                 wanted.lost, wanted.total, lostRate * 100, termsKept.ok, termsKept.total, termsLatin, noise.utterances, noise.total,
+                 vadMs.sorted().dropFirst(vadMs.count / 2).first ?? 0, pass ? "PASS" : "FAIL"))
+    finish(pass ? 0 : 1)
 case "turn":
     // Eval `turn` (R-05): evals/turn/cases.jsonl → преждевременные/пропущенные ходы, задержка.
     args.removeFirst()

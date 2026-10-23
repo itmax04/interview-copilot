@@ -1,6 +1,6 @@
 # COPILOT-05: Intent — только речь участников интервью
 
-ID: COPILOT-05-intent · Статус: **draft** (ждёт H-0) · Версия: 1 · Дата: 2026-10-23 · Владелец: itmax04
+ID: COPILOT-05-intent · Статус: **accepted** (2026-10-23, «да принимаю начинай первый этап») · Версия: 1 · Дата: 2026-10-23 · Владелец: itmax04
 Связи: [spec.md](spec.md), [plan.md](plan.md), [handoff.md](handoff.md), [COPILOT-04](../COPILOT-04/spec.md),
 [COPILOT-03](../COPILOT-03/spec.md), [ADR-0001](../../decisions/ADR-0001-stack.md)
 Источник решений: мозговой штурм с владельцем 2026-10-23 (четыре блока вопросов, ответы — таблица ниже).

@@ -1,0 +1,214 @@
+{"text": "Как вы настраивали CI/CD и code review в GitLab?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Как вы настраивали CI/CD и code review в GitLab?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Как вы настраивали CI/CD и code review в GitLab?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Как вы настраивали CI/CD и code review в GitLab?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Как вы настраивали CI/CD и code review в GitLab?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Как вы настраивали CI/CD и code review в GitLab?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Какой у вас опыт с SwiftUI, Combine и async await?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Какой у вас опыт с SwiftUI, Combine и async await?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Какой у вас опыт с SwiftUI, Combine и async await?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Какой у вас опыт с SwiftUI, Combine и async await?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Какой у вас опыт с SwiftUI, Combine и async await?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Какой у вас опыт с SwiftUI, Combine и async await?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Почему вы выбрали MVVM, а не VIPER или TCA?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Почему вы выбрали MVVM, а не VIPER или TCA?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Почему вы выбрали MVVM, а не VIPER или TCA?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Почему вы выбрали MVVM, а не VIPER или TCA?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Почему вы выбрали MVVM, а не VIPER или TCA?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Почему вы выбрали MVVM, а не VIPER или TCA?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Расскажите, как вы искали memory leak через Instruments.", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Расскажите, как вы искали memory leak через Instruments.", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Расскажите, как вы искали memory leak через Instruments.", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Расскажите, как вы искали memory leak через Instruments.", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Расскажите, как вы искали memory leak через Instruments.", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Расскажите, как вы искали memory leak через Instruments.", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Сколько у вас было pull request в неделю и кто делал review?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Сколько у вас было pull request в неделю и кто делал review?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Сколько у вас было pull request в неделю и кто делал review?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Сколько у вас было pull request в неделю и кто делал review?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Сколько у вас было pull request в неделю и кто делал review?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Сколько у вас было pull request в неделю и кто делал review?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Как вы деплоили микросервисы в Kubernetes через Helm?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Как вы деплоили микросервисы в Kubernetes через Helm?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Как вы деплоили микросервисы в Kubernetes через Helm?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Как вы деплоили микросервисы в Kubernetes через Helm?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Как вы деплоили микросервисы в Kubernetes через Helm?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Как вы деплоили микросервисы в Kubernetes через Helm?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Объясните разницу между struct и class в Swift.", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Объясните разницу между struct и class в Swift.", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Объясните разницу между struct и class в Swift.", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Объясните разницу между struct и class в Swift.", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Объясните разницу между struct и class в Swift.", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Объясните разницу между struct и class в Swift.", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Работали ли вы с Kafka, Redis и PostgreSQL?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Работали ли вы с Kafka, Redis и PostgreSQL?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Работали ли вы с Kafka, Redis и PostgreSQL?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Работали ли вы с Kafka, Redis и PostgreSQL?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Работали ли вы с Kafka, Redis и PostgreSQL?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Работали ли вы с Kafka, Redis и PostgreSQL?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть, як ви використовували Kubernetes і Docker у production.", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть, як ви використовували Kubernetes і Docker у production.", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть, як ви використовували Kubernetes і Docker у production.", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть, як ви використовували Kubernetes і Docker у production.", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть, як ви використовували Kubernetes і Docker у production.", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть, як ви використовували Kubernetes і Docker у production.", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Чи працювали ви з REST API та GraphQL?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Чи працювали ви з REST API та GraphQL?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Чи працювали ви з REST API та GraphQL?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Чи працювали ви з REST API та GraphQL?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Чи працювали ви з REST API та GraphQL?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Чи працювали ви з REST API та GraphQL?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Як ви організовували unit та integration тести в CI?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Як ви організовували unit та integration тести в CI?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Як ви організовували unit та integration тести в CI?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Як ви організовували unit та integration тести в CI?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Як ви організовували unit та integration тести в CI?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Як ви організовували unit та integration тести в CI?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Що таке dependency injection і навіщо він потрібен?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Що таке dependency injection і навіщо він потрібен?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Що таке dependency injection і навіщо він потрібен?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Що таке dependency injection і навіщо він потрібен?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Що таке dependency injection і навіщо він потрібен?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Що таке dependency injection і навіщо він потрібен?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Як ви налаштовували push notifications у Firebase?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Як ви налаштовували push notifications у Firebase?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Як ви налаштовували push notifications у Firebase?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Як ви налаштовували push notifications у Firebase?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Як ви налаштовували push notifications у Firebase?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Як ви налаштовували push notifications у Firebase?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть про ваш досвід з React Native і TypeScript.", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть про ваш досвід з React Native і TypeScript.", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть про ваш досвід з React Native і TypeScript.", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть про ваш досвід з React Native і TypeScript.", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть про ваш досвід з React Native і TypeScript.", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Розкажіть про ваш досвід з React Native і TypeScript.", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Як ви вимірювали latency та throughput сервісу?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Як ви вимірювали latency та throughput сервісу?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Як ви вимірювали latency та throughput сервісу?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Як ви вимірювали latency та throughput сервісу?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Як ви вимірювали latency та throughput сервісу?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Як ви вимірювали latency та throughput сервісу?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Які патерни ви використовували: singleton, factory, observer?", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Які патерни ви використовували: singleton, factory, observer?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Які патерни ви використовували: singleton, factory, observer?", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Які патерни ви використовували: singleton, factory, observer?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Які патерни ви використовували: singleton, factory, observer?", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "terms"}
+{"text": "Які патерни ви використовували: singleton, factory, observer?", "setting": "auto", "channel": "call", "expect": "keep", "tag": "terms"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "en", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "en", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "en", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "auto", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "auto", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin.", "setting": "auto", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "en", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "en", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "en", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "auto", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "auto", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Der Zug nach München hat leider zwanzig Minuten Verspätung.", "setting": "auto", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "en", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "en", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "en", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "auto", "channel": "mic", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "auto", "channel": "call", "expect": "drop", "tag": "foreign-de"}
+{"text": "Wir sehen uns morgen um acht Uhr vor dem Kino.", "setting": "auto", "channel": "allSystem", "expect": "drop", "tag": "foreign-de"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "en", "channel": "mic", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "en", "channel": "call", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "en", "channel": "allSystem", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "auto", "channel": "mic", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "auto", "channel": "call", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport.", "setting": "auto", "channel": "allSystem", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "en", "channel": "mic", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "en", "channel": "call", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "en", "channel": "allSystem", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "auto", "channel": "mic", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "auto", "channel": "call", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Le match de football commence à vingt heures ce soir.", "setting": "auto", "channel": "allSystem", "expect": "drop", "tag": "foreign-fr"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "en", "channel": "mic", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "en", "channel": "call", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "en", "channel": "allSystem", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "auto", "channel": "mic", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "auto", "channel": "call", "expect": "drop", "tag": "foreign-es"}
+{"text": "Mañana vamos a la playa con toda la familia si hace buen tiempo.", "setting": "auto", "channel": "allSystem", "expect": "drop", "tag": "foreign-es"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "en", "channel": "mic", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "en", "channel": "call", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "en", "channel": "allSystem", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "auto", "channel": "mic", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "auto", "channel": "call", "expect": "drop", "tag": "foreign-pl"}
+{"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "auto", "channel": "allSystem", "expect": "drop", "tag": "foreign-pl"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "english-mic"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "english-mic"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "uk", "channel": "call", "expect": "keep", "tag": "english-call"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "english-mic"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "english-mic"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "ru", "channel": "call", "expect": "keep", "tag": "english-call"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "en", "channel": "mic", "expect": "keep", "tag": "english-allowed"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "english-allowed"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "english-mic"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "english-mic"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "uk", "channel": "call", "expect": "keep", "tag": "english-call"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "english-mic"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "english-mic"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "ru", "channel": "call", "expect": "keep", "tag": "english-call"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "en", "channel": "mic", "expect": "keep", "tag": "english-allowed"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "english-allowed"}
+{"text": "Pull request and code review", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "term-phrase"}
+{"text": "Pull request and code review", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "term-phrase"}
+{"text": "Yes, exactly.", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "term-phrase"}
+{"text": "Yes, exactly.", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "term-phrase"}
+{"text": "REST API", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "term-phrase"}
+{"text": "REST API", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "term-phrase"}
+{"text": "Okay, thanks", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "term-phrase"}
+{"text": "Okay, thanks", "setting": "ru", "channel": "mic", "expect": "keep", "tag": "term-phrase"}
+{"text": "Сегодня в новостях покажут погоду на завтра.", "setting": "en", "channel": "mic", "expect": "drop", "tag": "slavic-when-en"}
+{"text": "Сьогодні в новинах покажуть погоду на завтра.", "setting": "en", "channel": "mic", "expect": "drop", "tag": "slavic-when-en"}
+{"text": "Угу", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "short"}
+{"text": "Угу", "setting": "en", "channel": "mic", "expect": "keep", "tag": "short"}
+{"text": "Ну да", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "short"}
+{"text": "Ну да", "setting": "en", "channel": "mic", "expect": "keep", "tag": "short"}
+{"text": "Guten Tag", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "short"}
+{"text": "Guten Tag", "setting": "en", "channel": "mic", "expect": "keep", "tag": "short"}
+{"text": "Mm-hmm", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "short"}
+{"text": "Mm-hmm", "setting": "en", "channel": "mic", "expect": "keep", "tag": "short"}

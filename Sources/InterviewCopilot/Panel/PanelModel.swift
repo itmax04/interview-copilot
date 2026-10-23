@@ -21,6 +21,8 @@ final class PanelModel {
     struct Line: Identifiable, Equatable {
         let id: Int
         let text: String
+        /// Отфильтровано (COPILOT-05 R-06): «язык de» — серым, по клику — ответ.
+        var filtered: String? = nil
     }
 
     var state: State = .idle
@@ -53,12 +55,14 @@ final class PanelModel {
     }
 
     func setTranscript(_ finals: [ListeningController.TranscriptLine], partial: String?) {
-        lines = finals.suffix(3).map { Line(id: $0.id, text: $0.text) }
+        lines = finals.suffix(3).map { Line(id: $0.id, text: $0.text, filtered: $0.filtered) }
         self.partial = partial
     }
 
     /// Действия кнопок панели — подключает AppDelegate.
     var onCopy: (() -> Void)?
+    /// Клик по серой строке — ответить на неё (COPILOT-05 S-08).
+    var onAnswerFiltered: ((String) -> Void)?
     var onStrongModel: (() -> Void)?
     var onOpenSettings: (() -> Void)?
     var onRetry: (() -> Void)?

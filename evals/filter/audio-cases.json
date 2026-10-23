@@ -1,0 +1,450 @@
+[
+ {
+  "file": "q-ru-0.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "terms",
+  "text": "Как вы настраивали CI/CD и code review в GitLab?"
+ },
+ {
+  "file": "q-ru-0-music.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "Как вы настраивали CI/CD и code review в GitLab?"
+ },
+ {
+  "file": "q-ru-1.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "terms",
+  "text": "Какой у вас опыт с SwiftUI, Combine и async await?"
+ },
+ {
+  "file": "q-ru-1-music.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "Какой у вас опыт с SwiftUI, Combine и async await?"
+ },
+ {
+  "file": "q-ru-2.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "terms",
+  "text": "Работали ли вы с Kafka, Redis и PostgreSQL?"
+ },
+ {
+  "file": "q-ru-2-music.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "Работали ли вы с Kafka, Redis и PostgreSQL?"
+ },
+ {
+  "file": "q-ru-3.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "terms",
+  "text": "Почему вы выбрали MVVM, а не VIPER?"
+ },
+ {
+  "file": "q-ru-3-music.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "Почему вы выбрали MVVM, а не VIPER?"
+ },
+ {
+  "file": "q-uk-4.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "terms",
+  "text": "Розкажіть, як ви використовували Kubernetes і Docker у production."
+ },
+ {
+  "file": "q-uk-4-music.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "Розкажіть, як ви використовували Kubernetes і Docker у production."
+ },
+ {
+  "file": "q-uk-5.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "terms",
+  "text": "Чи працювали ви з REST API та GraphQL?"
+ },
+ {
+  "file": "q-uk-5-music.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "Чи працювали ви з REST API та GraphQL?"
+ },
+ {
+  "file": "q-uk-6.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "terms",
+  "text": "Як ви організовували unit та integration тести в CI?"
+ },
+ {
+  "file": "q-uk-6-music.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "Як ви організовували unit та integration тести в CI?"
+ },
+ {
+  "file": "q-uk-7.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "terms",
+  "text": "Що таке dependency injection і навіщо він потрібен?"
+ },
+ {
+  "file": "q-uk-7-music.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "Що таке dependency injection і навіщо він потрібен?"
+ },
+ {
+  "file": "q-en-8.wav",
+  "setting": "en",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question",
+  "text": "How did you set up code review and continuous integration in your team?"
+ },
+ {
+  "file": "q-en-8-music.wav",
+  "setting": "en",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "How did you set up code review and continuous integration in your team?"
+ },
+ {
+  "file": "q-en-9.wav",
+  "setting": "en",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question",
+  "text": "Tell me about a time you fixed a memory leak in production."
+ },
+ {
+  "file": "q-en-9-music.wav",
+  "setting": "en",
+  "channel": "mic",
+  "expect": "keep",
+  "tag": "question+music",
+  "text": "Tell me about a time you fixed a memory leak in production."
+ },
+ {
+  "file": "tv-de-0-uk.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-de",
+  "text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin."
+ },
+ {
+  "file": "tv-de-0-ru.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-de",
+  "text": "Heute Abend gibt es in den Nachrichten einen Bericht über das Wetter in Berlin."
+ },
+ {
+  "file": "tv-de-1-uk.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-de",
+  "text": "Der Zug nach München hat leider zwanzig Minuten Verspätung."
+ },
+ {
+  "file": "tv-de-1-ru.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-de",
+  "text": "Der Zug nach München hat leider zwanzig Minuten Verspätung."
+ },
+ {
+  "file": "tv-de-2-uk.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-de",
+  "text": "Wir sehen uns morgen um acht Uhr vor dem Kino."
+ },
+ {
+  "file": "tv-de-2-ru.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-de",
+  "text": "Wir sehen uns morgen um acht Uhr vor dem Kino."
+ },
+ {
+  "file": "tv-fr-3-uk.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-fr",
+  "text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport."
+ },
+ {
+  "file": "tv-fr-3-ru.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-fr",
+  "text": "Bonjour à tous, aujourd'hui nous allons parler de la météo et du sport."
+ },
+ {
+  "file": "tv-fr-4-uk.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-fr",
+  "text": "Le match de football commence à vingt heures ce soir."
+ },
+ {
+  "file": "tv-fr-4-ru.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-fr",
+  "text": "Le match de football commence à vingt heures ce soir."
+ },
+ {
+  "file": "tv-en-5-uk.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-en",
+  "text": "And now the weather forecast for the weekend: sunny with a light breeze."
+ },
+ {
+  "file": "tv-en-5-ru.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-en",
+  "text": "And now the weather forecast for the weekend: sunny with a light breeze."
+ },
+ {
+  "file": "tv-en-6-uk.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-en",
+  "text": "I really love watching football matches with my friends on Sunday."
+ },
+ {
+  "file": "tv-en-6-ru.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-en",
+  "text": "I really love watching football matches with my friends on Sunday."
+ },
+ {
+  "file": "tv-en-7-uk.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-en",
+  "text": "The traffic on the highway is very heavy this morning, so please drive carefully."
+ },
+ {
+  "file": "tv-en-7-ru.wav",
+  "setting": "ru",
+  "channel": "mic",
+  "expect": "drop",
+  "tag": "foreign-en",
+  "text": "The traffic on the highway is very heavy this morning, so please drive carefully."
+ },
+ {
+  "file": "noise-white-0.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-white",
+  "text": ""
+ },
+ {
+  "file": "noise-white-1.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-white",
+  "text": ""
+ },
+ {
+  "file": "noise-white-2.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-white",
+  "text": ""
+ },
+ {
+  "file": "noise-white-3.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-white",
+  "text": ""
+ },
+ {
+  "file": "noise-pink-0.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-pink",
+  "text": ""
+ },
+ {
+  "file": "noise-pink-1.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-pink",
+  "text": ""
+ },
+ {
+  "file": "noise-pink-2.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-pink",
+  "text": ""
+ },
+ {
+  "file": "noise-pink-3.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-pink",
+  "text": ""
+ },
+ {
+  "file": "noise-keyboard-0.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-keyboard",
+  "text": ""
+ },
+ {
+  "file": "noise-keyboard-1.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-keyboard",
+  "text": ""
+ },
+ {
+  "file": "noise-keyboard-2.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-keyboard",
+  "text": ""
+ },
+ {
+  "file": "noise-keyboard-3.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-keyboard",
+  "text": ""
+ },
+ {
+  "file": "noise-hum-0.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-hum",
+  "text": ""
+ },
+ {
+  "file": "noise-hum-1.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-hum",
+  "text": ""
+ },
+ {
+  "file": "noise-hum-2.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-hum",
+  "text": ""
+ },
+ {
+  "file": "noise-hum-3.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-hum",
+  "text": ""
+ },
+ {
+  "file": "noise-music-0.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-music",
+  "text": ""
+ },
+ {
+  "file": "noise-music-1.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-music",
+  "text": ""
+ },
+ {
+  "file": "noise-music-2.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-music",
+  "text": ""
+ },
+ {
+  "file": "noise-music-3.wav",
+  "setting": "uk",
+  "channel": "mic",
+  "expect": "none",
+  "tag": "noise-music",
+  "text": ""
+ }
+]

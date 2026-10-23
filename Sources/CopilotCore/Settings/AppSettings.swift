@@ -128,6 +128,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Опережающий запрос (COPILOT-04 R-01): модель начинает отвечать, как только готов текст законченной фразы,
     /// не дожидаясь паузы T. Если собеседник продолжил, запрос отменяется — лишние запросы к модели.
     public var speculativeAnswers = true
+    /// Фильтр языка (COPILOT-05 R-05): реплики на чужом языке — серым, английские термины сохраняются.
+    public var languageFilter = true
+    /// Нейросетевая проверка речи Silero (COPILOT-05 R-02): шум без речи не становится репликой. Нужна модель.
+    public var neuralSpeechGate = true
 
     // Answer / Bank
     public var mode: AnswerMode = .bankAndHint
@@ -253,6 +257,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         pauseThresholdMs = v(.pauseThresholdMs, d.pauseThresholdMs)
         questionPauseMs = v(.questionPauseMs, d.questionPauseMs)
         speculativeAnswers = v(.speculativeAnswers, d.speculativeAnswers)
+        languageFilter = v(.languageFilter, d.languageFilter)
+        neuralSpeechGate = v(.neuralSpeechGate, d.neuralSpeechGate)
         mode = v(.mode, d.mode)
         useProfile = v(.useProfile, d.useProfile)
         bankThreshold = v(.bankThreshold, d.bankThreshold)

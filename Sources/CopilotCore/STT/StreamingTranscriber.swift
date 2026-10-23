@@ -114,6 +114,13 @@ public final class StreamingTranscriber: @unchecked Sendable {
     }
 
     private var promptProvider: (@Sendable (String) -> String?)?
+
+    /// Проверка «в реплике есть речь» перед распознаванием итога (COPILOT-05 R-02); nil — без проверки.
+    public func setSpeechGate(_ gate: (@Sendable ([Float]) -> Bool)?) {
+        lock.withLock { speechGate = gate }
+    }
+
+    private var speechGate: (@Sendable ([Float]) -> Bool)?
     private var recentFinals: [(language: String, text: String)] = []
 
     func prompt(for language: String?) -> String? {
@@ -339,6 +346,12 @@ public final class StreamingTranscriber: @unchecked Sendable {
         guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
         let audio = request.audio
         guard !audio.isEmpty else {
+            onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+            return
+        }
+        // COPILOT-05 R-02: нейросетевая проверка — шум без речи не распознаётся и не становится репликой.
+        if let gate = lock.withLock({ speechGate }), !gate(audio) {
+            Log.metrics.notice("filtered reason=vad utt=\(u) audio_ms=\(audio.count / 16)")
             onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
             return
         }

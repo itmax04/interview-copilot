@@ -152,6 +152,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         turns.onTurn = { [weak self] turn in self?.turnCompleted(turn) }
         turns.onDraft = { [weak self] text in self?.draftReady(text) }
+        listening.onFiltered = { [weak self] text in self?.turns.filtered(text) }
+        panelModel.onAnswerFiltered = { [weak self] text in self?.turns.answerFiltered(text) }
 
         panelModel.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
         panelModel.onOpenPermissions = { [weak self] in self?.permissionsWindow.show() }
@@ -159,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         bank.onChange = { [weak self] in
             self?.updateRecognitionPrompt()
+            self?.updateFilterTerms()
             self?.refreshUI()
         }
         answers.transcript = { [weak self] in self?.listening.transcript.map(\.text) ?? [] }
@@ -223,6 +226,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             listening.recognitionSettingsChanged()
         }
         if !force && s.language != old.language { listening.languageSettingChanged() }
+        if force || s.neuralSpeechGate != old.neuralSpeechGate { listening.speechGateSettingChanged() }
+        if force { updateFilterTerms() }
         if force || s.pauseThresholdMs != old.pauseThresholdMs || s.questionPauseMs != old.questionPauseMs {
             turns.setThreshold(s.pauseThresholdMs, questionMs: s.questionPauseMs)
         }
@@ -234,6 +239,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.apply(s)
         answers.refreshStrongModelAvailability()
         lastSettings = s
+    }
+
+    /// Словарь терминов фильтра языка: встроенный + слова латиницей из резюме, вакансии и базы (COPILOT-05 R-05).
+    private func updateFilterTerms() {
+        let profile = bank.profile
+        let cardTexts = bank.cards.flatMap { $0.questions + [$0.answer] }
+        listening.setTerms(TermDictionary(extra: [profile.resume, profile.job, profile.stories] + cardTexts))
     }
 
     private func updateRecognitionPrompt() {

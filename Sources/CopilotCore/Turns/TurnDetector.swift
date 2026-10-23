@@ -186,6 +186,11 @@ public struct TurnDetector: Sendable {
         return fire(text: text, speechEnd: lastSpeechEnd ?? t, at: t, forced: true)
     }
 
+    /// Ход по тексту, который отбросил фильтр (COPILOT-05 S-08): владелец решил ответить на него сам.
+    public mutating func forceText(_ text: String, at t: Double) -> Turn {
+        fire(text: text, speechEnd: t, at: t, forced: true)
+    }
+
     /// Сброс (пауза S-08).
     public mutating func reset() {
         forceRequested = false

@@ -120,6 +120,13 @@ struct AudioSettingsView: View {
                 Text("Пауза после вопроса со знаком «?»: \(model.settings.questionPauseMs) мс")
                 Slider(value: questionPauseBinding, in: Double(AppSettings.questionPauseRange.lowerBound)...Double(AppSettings.questionPauseRange.upperBound), step: 50)
             }
+            Toggle("Фильтр языка: чужой язык — серым, английские термины сохраняются", isOn: $model.settings.languageFilter)
+            Text("Українська или Русский — проходят оба языка; English — только английский; Auto — украинский, русский, английский. "
+                 + "В звонке целая английская фраза интервьюера проходит; в микрофоне — только термины. Серую строку можно нажать (или ⌃⌥↩), чтобы ответить.")
+                .font(.footnote).foregroundStyle(.secondary)
+            Toggle("Нейросетевой детектор речи (Silero): шум без речи не становится репликой", isOn: $model.settings.neuralSpeechGate)
+            Text("Нужна модель Silero VAD (scripts/fetch-filter-models.py). Конец фразы не замедляет: проверяется уже закрытая реплика.")
+                .font(.footnote).foregroundStyle(.secondary)
             Toggle("Начинать ответ заранее, не дожидаясь паузы", isOn: $model.settings.speculativeAnswers)
             Text("Модель получает вопрос, как только готов его текст. Если собеседник продолжил, запрос отменяется и уходит заново — запросов к модели становится немного больше.")
                 .font(.footnote).foregroundStyle(.secondary)

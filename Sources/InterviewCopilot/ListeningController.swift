@@ -35,6 +35,61 @@ final class ListeningController {
         let id: Int
         let text: String
         let language: String
+        /// Причина фильтра («язык de») — строка серым, в подсказки не идёт (COPILOT-05 R-06).
+        var filtered: String? = nil
+    }
+
+    /// Фильтр отбросил реплику (COPILOT-05 R-06) — текст для ⌃⌥↩ «ответить всё равно».
+    var onFiltered: ((String) -> Void)?
+    /// Словарь терминов для фильтра языка: встроенный + резюме, вакансия, база (R-05).
+    private var terms = TermDictionary()
+    /// Silero (R-02): загружается один раз, применяется к распознаванию по настройке.
+    private var speechGate: SileroSpeechGate?
+    private var speechGateLoading = false
+
+    func setTerms(_ terms: TermDictionary) { self.terms = terms }
+
+    /// Канал для фильтра языка: звонок, весь системный звук или микрофон (R-01, Q8).
+    private var gateChannel: LanguageGate.Channel {
+        switch source {
+        case .allSystem: .allSystem
+        case .microphone: .mic
+        case .app, .none: .call
+        }
+    }
+
+    /// Причина отбросить реплику или nil. Тестовый звонок не фильтруется: он меряет само распознавание.
+    private func filterReason(_ text: String) -> String? {
+        guard testSource == nil, model.settings.languageFilter else { return nil }
+        let gate = LanguageGate(setting: model.settings.language, terms: terms)
+        guard case .drop(let language) = gate.check(text, channel: gateChannel) else { return nil }
+        Log.metrics.notice("filtered reason=lang channel=\(self.gateChannel.rawValue, privacy: .public) lang=\(language, privacy: .public)")
+        return "язык \(language)"
+    }
+
+    /// Загрузка Silero в фоне (если включено и модель установлена) и подключение к распознаванию.
+    func speechGateSettingChanged() {
+        guard model.settings.neuralSpeechGate else { applySpeechGate(); return }
+        guard speechGate == nil, !speechGateLoading, SileroSpeechGate.isInstalled(in: AppPaths.models) else { applySpeechGate(); return }
+        speechGateLoading = true
+        Task { [weak self] in
+            let gate = await Task.detached(priority: .utility) { try? SileroSpeechGate.load(from: AppPaths.models) }.value
+            guard let self else { return }
+            self.speechGateLoading = false
+            self.speechGate = gate
+            if gate == nil { Log.stt.error("silero vad load failed") }
+            self.applySpeechGate()
+        }
+    }
+
+    var speechGateStatus: String {
+        if !SileroSpeechGate.isInstalled(in: AppPaths.models) { return "Модель Silero не установлена: scripts/fetch-filter-models.py" }
+        return speechGate == nil ? "Загружаю Silero…" : "Silero загружена"
+    }
+
+    private func applySpeechGate() {
+        let gate = model.settings.neuralSpeechGate && testSource == nil ? speechGate : nil
+        transcriber?.setSpeechGate(gate.map { g in { @Sendable samples in g.isSpeech(samples) } })
     }
 
     private var transcriber: StreamingTranscriber?
@@ -370,6 +425,8 @@ final class ListeningController {
             }
             t.setLanguage(testSource == nil ? model.settings.language.whisperCode : nil)
             t.setPromptProvider(testSource == nil ? promptProvider : nil)
+            let gate = model.settings.neuralSpeechGate && testSource == nil ? speechGate : nil
+            t.setSpeechGate(gate.map { g in { @Sendable samples in g.isSpeech(samples) } })
             t.setPaused(phase == .paused)
             transcriberBox.set(t)
             transcriber = t
@@ -395,8 +452,17 @@ final class ListeningController {
         case .partial(_, let text):
             partialText = text
             onChange?()
-        case .final(let u, let text, let language, _, _):
+        case .final(let u, let text, let language, let phraseEnd, _):
             partialText = nil
+            if let reason = filterReason(text) {
+                // R-06: серой строкой; для хода и истории — как отброшенный шум.
+                transcript.append(TranscriptLine(id: u, text: text, language: language, filtered: reason))
+                if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
+                onChange?()
+                onFiltered?(text)
+                onTranscript?(.discarded(utterance: u, phraseEnd: phraseEnd))
+                return
+            }
             transcript.append(TranscriptLine(id: u, text: text, language: language))
             if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
             onChange?()
@@ -405,8 +471,10 @@ final class ListeningController {
         case .revised(let u, let text, let language):
             // Уточнённый итог (R-37) подменяет строку реплики в расшифровке.
             if let i = transcript.lastIndex(where: { $0.id == u }) {
-                transcript[i] = TranscriptLine(id: u, text: text, language: language)
+                transcript[i] = TranscriptLine(id: u, text: text, language: language, filtered: transcript[i].filtered)
                 onChange?()
+                // Отфильтрованная реплика остаётся отфильтрованной: ход по ней уже не ждут.
+                if transcript[i].filtered != nil { return }
             }
         }
         onTranscript?(event)
