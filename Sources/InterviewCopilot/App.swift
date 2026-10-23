@@ -27,7 +27,8 @@ enum InterviewCopilotMain {
         }
 
         let app = NSApplication.shared
-        let delegate = AppDelegate(testCallOnly: args.contains("--test-call"), openInterviewer: args.contains("--ai-interview"))
+        let delegate = AppDelegate(testCallOnly: args.contains("--test-call"), openInterviewer: args.contains("--ai-interview"),
+                                   openSettings: args.contains("--settings"))
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
         app.run()
@@ -38,9 +39,12 @@ enum InterviewCopilotMain {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let testCallOnly: Bool
     private let openInterviewer: Bool
-    init(testCallOnly: Bool = false, openInterviewer: Bool = false) {
+    /// `--settings`: открыть настройки (вкладка Keys) сразу при запуске — ввод ключей без мыши и меню.
+    private let openSettings: Bool
+    init(testCallOnly: Bool = false, openInterviewer: Bool = false, openSettings: Bool = false) {
         self.testCallOnly = testCallOnly
         self.openInterviewer = openInterviewer && !testCallOnly
+        self.openSettings = openSettings
         super.init()
     }
     private let model = AppModel()
@@ -187,6 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         startDownloadProgressMirror()
         if openInterviewer { interviewer.start() }
+        if openSettings { settingsWindow.show() }
     }
 
     private func recordUsage(_ provider: ProviderID, _ modelID: String, _ u: TokenUsage) {
