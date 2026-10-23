@@ -41,14 +41,23 @@ public enum ProviderID: String, Codable, CaseIterable, Sendable {
     case gemini
     case deepseek
     case anthropic
+    /// Groq (COPILOT-03, R-36): бесплатный тариф, первый токен за доли секунды.
+    case groq
+    /// Cerebras (R-36): очень быстрый; постоянного бесплатного тарифа нет — пробные кредиты.
+    case cerebras
 
     public var displayName: String {
         switch self {
         case .gemini: "Gemini"
         case .deepseek: "DeepSeek"
         case .anthropic: "Claude"
+        case .groq: "Groq"
+        case .cerebras: "Cerebras"
         }
     }
+
+    /// OpenAI-совместимый Chat Completions (`data[].id` в списке моделей, Bearer-ключ).
+    public var isOpenAICompatible: Bool { self == .deepseek || self == .groq || self == .cerebras }
 }
 
 /// Состояние слушания для строки «● Listening — <app>» — R-15.

@@ -88,7 +88,8 @@ final class AnswerController {
             showNoMatch(top, turn: turn, reason: modelsAvailable || settings.mode == .bankOnly ? nil : "Модели недоступны: нет ключей")
         case .generate(let base, let top):
             let request = PromptBuilder.hintRequest(question: turn.text, transcript: transcript(), cards: top, baseCard: base,
-                                                    profile: bank.profile, redactPII: settings.piiFilterEnabled)
+                                                    profile: bank.profile, redactPII: settings.piiFilterEnabled,
+                                                    answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text))
             let secrets = model.secrets
             let providers = self.providers
             generation = Task { [weak self] in
@@ -225,7 +226,8 @@ final class AnswerController {
         generation?.cancel()
         let request = PromptBuilder.strongRequest(question: turn.text, transcript: transcript(), cards: lastMatch?.top ?? [],
                                                   baseCard: lastMatch?.matched?.card, profile: bank.profile,
-                                                  redactPII: settings.piiFilterEnabled)
+                                                  redactPII: settings.piiFilterEnabled,
+                                                  answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text))
         // Задержка для сильной модели считаем от нажатия.
         let manual = Turn(id: turn.id, text: turn.text, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         generate(turn: manual, chain: chain, request: request, fallbackTop: lastMatch?.top ?? [], strong: true)

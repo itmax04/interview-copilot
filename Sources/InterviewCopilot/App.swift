@@ -115,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self.interviewer.active { self.interviewer.handleCallTranscript(event) }
             self.turns.handle(event)
             if case .final(let u, let text, let lang, _, _) = event { self.sessions.addUtterance(id: u, text: text, language: lang) }
+            if case .revised(let u, let text, let lang) = event { self.sessions.reviseUtterance(id: u, text: text, language: lang) }
         }
         listening.onOwnerSpeaking = { [weak self] speaking, t in
             guard let self, !self.testCall.active else { return }
@@ -205,7 +206,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotkeys?.register(Dictionary(uniqueKeysWithValues: HotkeyAction.allCases.map { ($0, s.hotkey($0)) }))
         }
         if !force && s.audioSource != old.audioSource { listening.sourceSettingChanged() }
-        if !force && (s.recognitionBackend != old.recognitionBackend || s.whisperModel != old.whisperModel || s.recognitionAccuracy != old.recognitionAccuracy || s.ukrainianWhisperFinal != old.ukrainianWhisperFinal) {
+        if !force && (s.recognitionBackend != old.recognitionBackend || s.whisperModel != old.whisperModel || s.recognitionAccuracy != old.recognitionAccuracy || s.ukrainianWhisperFinal != old.ukrainianWhisperFinal
+            || s.whisperReviseAllLanguages != old.whisperReviseAllLanguages) {
             testCall.recognitionChanged()
             interviewer.recognitionChanged()
             listening.recognitionSettingsChanged()

@@ -38,6 +38,10 @@ public struct TurnDetector: Sendable {
         /// Захват системного звука запаздывает относительно микрофона: «речь владельца», начавшаяся не раньше этого
         /// до начала речи собеседника, тоже считается эхом.
         public var echoLeadMs: Double = 500
+        /// Сколько ждать итог закончившейся фразы, прежде чем считать его потерянным (R-38).
+        public var staleFinalMs: Double = 8000
+        /// «Собеседник говорит» дольше этого — событие конца речи потерялось (R-38).
+        public var staleSpeechMs: Double = 30000
 
         public init(thresholdMs: Double = 700) {
             self.thresholdMs = thresholdMs
@@ -48,6 +52,7 @@ public struct TurnDetector: Sendable {
     private var pending: [String] = []
     private var lastSpeechEnd: Double?
     private var interviewerSpeaking = false
+    private var interviewerStartedAt: Double?
     private var interviewerStoppedAt: Double?
     private var ownerSpeaking = false
     private var ownerStartedAt: Double?
@@ -68,6 +73,7 @@ public struct TurnDetector: Sendable {
     /// Собеседник начал говорить: ожидание хода сбрасывается до конца новой фразы.
     public mutating func interviewerStartedSpeaking(at t: Double) {
         interviewerSpeaking = true
+        interviewerStartedAt = t
         suppressed = false
         // Микрофон услышал динамики раньше, чем захват системного звука, — это тоже эхо.
         if ownerSpeaking, let started = ownerStartedAt, t - started < config.echoLeadMs {
@@ -92,6 +98,18 @@ public struct TurnDetector: Sendable {
         lastSpeechEnd = speechEnd
     }
 
+    /// Реплика без текста (шум): если это была последняя закончившаяся фраза, её итога больше не ждём (R-38).
+    public mutating func phraseDiscarded(speechEnd: Double) {
+        if let stopped = interviewerStoppedAt, speechEnd >= stopped { interviewerStoppedAt = lastSpeechEnd }
+    }
+
+    /// Состояние для диагностики «итоги идут, а ходов нет» (R-38), без текста реплик.
+    public func debugState(at t: Double) -> String {
+        let awaiting = interviewerStoppedAt.map { $0 > (lastSpeechEnd ?? -1) } ?? false
+        return "pending_words=\(Self.wordCount(pendingText)) speaking=\(interviewerSpeaking) awaiting_final=\(awaiting) "
+            + "suppressed=\(suppressed) owner=\(ownerSpeaking) since_end_ms=\(lastSpeechEnd.map { Int(t - $0) } ?? -1)"
+    }
+
     /// Ход по запросу ⌃⌥↩, ожидавший итогового текста. Вызывать после `phraseFinal`.
     public mutating func takeRequestedForce(at t: Double) -> Turn? {
         guard forceRequested, !pending.isEmpty else { return nil }
@@ -113,9 +131,15 @@ public struct TurnDetector: Sendable {
 
     /// Проверка по времени. Возвращает ход, если условия R-05 выполнены.
     public mutating func tick(at t: Double) -> Turn? {
+        // Страховка (R-38): VAD закрывает фразу не позже 25 с; если конца речи нет дольше — событие потерялось.
+        if interviewerSpeaking, let started = interviewerStartedAt, t - started > config.staleSpeechMs { interviewerSpeaking = false }
         guard !interviewerSpeaking, !suppressed, let end = lastSpeechEnd, !pending.isEmpty else { return nil }
         // Собеседник уже договорил новую фразу, но её текст ещё распознаётся — ждём, иначе вопрос будет обрезан.
-        if let stopped = interviewerStoppedAt, stopped > end { return nil }
+        // Итог, не пришедший за `staleFinalMs`, больше не ждём (R-38).
+        if let stopped = interviewerStoppedAt, stopped > end {
+            guard t - stopped > config.staleFinalMs else { return nil }
+            interviewerStoppedAt = end
+        }
         if ownerSpeaking {
             suppressed = true
             return nil

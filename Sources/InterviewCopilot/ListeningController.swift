@@ -332,7 +332,9 @@ final class ListeningController {
         let reducedContext = !model.settings.recognitionAccuracy
         // Гибрид для украинского (R-35): итог украинской фразы — Whisper turbo с языком uk, если файл модели есть.
         let turbo = AppPaths.model("ggml-large-v3-turbo-q5_0.bin").path
-        let hybrid = useParakeet && model.settings.ukrainianWhisperFinal && FileManager.default.fileExists(atPath: turbo)
+        let hybrid = useParakeet && (model.settings.ukrainianWhisperFinal || model.settings.whisperReviseAllLanguages)
+            && FileManager.default.fileExists(atPath: turbo)
+        let reviseAll = model.settings.whisperReviseAllLanguages
         let generation = recognizerGeneration
         Task { [weak self] in
             let result: Result<any SpeechRecognizer, Error> = await Task.detached(priority: .userInitiated) {
@@ -340,7 +342,8 @@ final class ListeningController {
                     let engine: any SpeechRecognizer
                     if useParakeet {
                         let parakeet = try await ParakeetEngine.load(from: URL(fileURLWithPath: path))
-                        engine = hybrid ? HybridRecognizer(primary: parakeet, loadVerifier: { try WhisperEngine(modelPath: turbo) }) : parakeet
+                        engine = hybrid ? HybridRecognizer(primary: parakeet, reviseAllLanguages: reviseAll,
+                                                           loadVerifier: { try WhisperEngine(modelPath: turbo) }) : parakeet
                     } else { engine = try WhisperEngine(modelPath: path) }
                     return .success(engine)
                 } catch { return .failure(error) }
@@ -370,7 +373,7 @@ final class ListeningController {
             t.setPaused(phase == .paused)
             transcriberBox.set(t)
             transcriber = t
-            let name = engine is HybridRecognizer ? "Parakeet v3 + Whisper turbo (UK)"
+            let name = engine is HybridRecognizer ? (model.settings.whisperReviseAllLanguages ? "Parakeet v3 + уточнение Whisper turbo" : "Parakeet v3 + Whisper turbo (UK)")
                 : engine.nativeMultilingual ? "Parakeet v3" : (path as NSString).lastPathComponent
             let fallback = model.settings.recognitionBackend == .parakeet && !engine.nativeMultilingual
                 ? " (Parakeet не установлен, используется Whisper)" : ""
@@ -397,6 +400,14 @@ final class ListeningController {
             transcript.append(TranscriptLine(id: u, text: text, language: language))
             if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
             onChange?()
+        case .revising, .discarded:
+            break
+        case .revised(let u, let text, let language):
+            // Уточнённый итог (R-37) подменяет строку реплики в расшифровке.
+            if let i = transcript.lastIndex(where: { $0.id == u }) {
+                transcript[i] = TranscriptLine(id: u, text: text, language: language)
+                onChange?()
+            }
         }
         onTranscript?(event)
     }
@@ -415,11 +426,33 @@ final class ListeningController {
             meter.add(samples)
             box.get()?.process(samples)
         }, onStop: { [weak self] error in
-            Task { @MainActor in
-                guard let self else { return }
-                self.setPhase(.error(error?.localizedDescription ?? "Захват остановлен"))
-            }
+            Task { @MainActor in self?.captureStopped(error) }
         })
+    }
+
+    /// Время перезапусков захвата за последние 10 минут (R-39).
+    private var captureRestarts: [Date] = []
+
+    /// Захват остановили macOS или значок записи в строке меню (R-39). На собеседовании нельзя молча перестать слышать:
+    /// перезапускаем через 1 с, не больше 5 раз за 10 минут; дальше — понятная ошибка в панели.
+    private func captureStopped(_ error: Error?) {
+        guard !stopping, phase != .paused, phase != .noPermission else { return }
+        let reason = error?.localizedDescription ?? "?"
+        let now = Date()
+        captureRestarts = captureRestarts.filter { now.timeIntervalSince($0) < 600 }
+        guard captureRestarts.count < 5 else {
+            Log.audio.error("capture stopped, restarts exhausted: \(reason, privacy: .public)")
+            setPhase(.error("Захват звука остановлен macOS (\(reason)). Пауза → Продолжить, чтобы включить снова."))
+            return
+        }
+        captureRestarts.append(now)
+        Log.audio.notice("capture_restart attempt=\(self.captureRestarts.count) reason=\(reason, privacy: .public)")
+        setPhase(.error("Захват звука остановлен — перезапускаю…"))
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard let self, !self.stopping, self.phase != .paused else { return }
+            await self.applySource(restart: true)
+        }
     }
 
     private func makeMicSource() -> MicrophoneCapture {

@@ -332,3 +332,88 @@ public struct MockProvider: LLMProvider {
         }
     }
 }
+
+/// Groq и Cerebras — OpenAI-совместимый Chat Completions с SSE (COPILOT-03, R-36).
+/// Источники (2026-10-23): console.groq.com/docs/openai, /docs/reasoning; inference-docs.cerebras.ai/resources/openai,
+/// /api-reference/chat-completions.
+/// - gpt-oss — рассуждающая модель: `reasoning_effort` low/medium/high (подсказки — low); рассуждение тратит токены
+///   из `max_completion_tokens`, поэтому лимит увеличен. Groq: `include_reasoning: false` — текст рассуждения не приходит.
+/// - Qwen: `reasoning_effort: none` — без рассуждения.
+/// - `usage`: Cerebras — в последнем фрагменте; Groq — в `usage` или `x_groq.usage`. `stream_options` не отправляем.
+/// - Изображений модели не принимают: запрос со скриншотом сразу уходит следующему провайдеру.
+public struct OpenAICompatibleProvider: LLMProvider {
+    public let id: ProviderID
+    let transport: StreamingTransport
+
+    public init(_ id: ProviderID, transport: StreamingTransport = URLSessionStreamingTransport()) {
+        self.id = id
+        self.transport = transport
+    }
+
+    static func isReasoning(_ model: String) -> Bool { model.contains("gpt-oss") }
+
+    public func makeRequest(_ request: LLMRequest, model: String, key: String) throws -> URLRequest {
+        guard request.messages.allSatisfy({ $0.images.isEmpty }) else {
+            throw LLMError.badResponse("\(id.displayName) не принимает изображения")
+        }
+        var r = URLRequest(url: ProviderEndpoints.openAIBase(id).appendingPathComponent("chat/completions"))
+        r.httpMethod = "POST"
+        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        ProviderEndpoints.authorize(&r, provider: id, key: key)
+        var messages: [[String: Any]] = [["role": "system", "content": request.system]]
+        for m in request.messages { messages.append(["role": m.role.rawValue, "content": m.text]) }
+        var body: [String: Any] = ["model": model, "messages": messages, "stream": true]
+        if Self.isReasoning(model) {
+            body["reasoning_effort"] = request.purpose == .screenshot ? "medium" : "low"
+            body["max_completion_tokens"] = request.maxTokens + 1024
+            if id == .groq { body["include_reasoning"] = false }
+        } else {
+            if model.lowercased().contains("qwen") { body["reasoning_effort"] = "none" }
+            body["max_completion_tokens"] = request.maxTokens
+        }
+        if request.purpose == .hint { body["temperature"] = 0.4 }
+        r.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return r
+    }
+
+    public func stream(_ request: LLMRequest, model: String, key: String) -> AsyncThrowingStream<LLMEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let events = try await SSE.open(try makeRequest(request, model: model, key: key), transport: transport, key: key)
+                    var usage = TokenUsage()
+                    var stop: String?
+                    var announced = false
+                    for try await e in events {
+                        if e.data == "[DONE]" { break }
+                        guard let json = SSE.json(e.data) else { continue }
+                        if let error = json["error"] as? [String: Any] {
+                            throw LLMError.http(status: 503, message: error["message"] as? String ?? "stream error")
+                        }
+                        if !announced { continuation.yield(.model(json["model"] as? String ?? model)); announced = true }
+                        for choice in json["choices"] as? [[String: Any]] ?? [] {
+                            if let t = (choice["delta"] as? [String: Any])?["content"] as? String, !t.isEmpty {
+                                continuation.yield(.text(t))
+                            }
+                            if let reason = choice["finish_reason"] as? String {
+                                stop = reason
+                                if reason == "content_filter" { throw LLMError.refusal(reason) }
+                            }
+                        }
+                        let u = json["usage"] as? [String: Any] ?? (json["x_groq"] as? [String: Any])?["usage"] as? [String: Any]
+                        if let u {
+                            usage.input = u["prompt_tokens"] as? Int ?? usage.input
+                            usage.output = u["completion_tokens"] as? Int ?? usage.output
+                        }
+                    }
+                    continuation.yield(.usage(usage))
+                    continuation.yield(.done(stopReason: stop))
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}

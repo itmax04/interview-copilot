@@ -32,6 +32,8 @@ private struct KeyRow: View {
         case .gemini: "Gemini"
         case .deepseek: "DeepSeek"
         case .anthropic: "Anthropic"
+        case .groq: "Groq — бесплатно, console.groq.com/keys"
+        case .cerebras: "Cerebras — пробные кредиты, cloud.cerebras.ai"
         }
     }
 

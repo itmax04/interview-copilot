@@ -16,7 +16,8 @@ struct SettingsStoreTests {
         let s = store.load()
         #expect(s.recognitionBackend == .parakeet)
         #expect(s.mode == .bankAndHint)                       // R-08
-        #expect(s.chain == [.gemini, .deepseek, .anthropic])   // R-09
+        #expect(s.chain == [.groq, .cerebras, .gemini, .deepseek, .anthropic])   // R-09, R-36: быстрые первыми
+        #expect(s.hedgeAfter == 1.5)                           // R-36
         #expect(s.firstTokenTimeout == 4)                      // R-09
         #expect(s.pauseThresholdMs == 700)                     // R-05
         #expect(s.bankThreshold == 0.74)                       // R-07, порог по eval bank (P-06)
@@ -60,7 +61,7 @@ struct SettingsStoreTests {
         #expect(saved.panelOpacity == 0.7)
         #expect(saved.panelWidth == 520)
         #expect(saved.bankThreshold == 0.99)
-        #expect(saved.chain == [.anthropic, .gemini, .deepseek])
+        #expect(saved.chain == [.anthropic, .gemini, .deepseek, .groq, .cerebras])
         // Пустое поле не подменяется при вводе, но для запроса берётся ID по умолчанию.
         #expect(saved.modelIDs.deepseek == "   ")
         #expect(saved.modelIDs.effective(.deepseek) == "deepseek-flash")

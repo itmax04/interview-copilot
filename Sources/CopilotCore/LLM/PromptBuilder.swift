@@ -40,8 +40,14 @@ public enum PromptBuilder {
     }
 
     /// Пользовательская часть: до 3 карточек, последние 6 реплик, текущий вопрос (R-11).
+    /// Язык ответа (R-37): выбранный в меню, иначе украинский, если в вопросе есть і/ї/є/ґ. Быстрый итог Parakeet
+    /// у украинской речи бывает «русским» — без явного языка модель ответила бы по-русски.
+    public static func answerLanguage(setting: String?, question: String) -> String? {
+        setting ?? (HybridRecognizer.hasUkrainianLetters(question) ? "uk" : nil)
+    }
+
     public static func user(question: String, transcript: [String], cards: [CardScore], baseCard: BankCard?,
-                            redactPII: Bool = false) -> String {
+                            redactPII: Bool = false, answerLanguage: String? = nil) -> String {
         // Карточки — тоже часть профиля (R-21): фильтр R-12 применяется и к ним.
         func clean(_ s: String) -> String { redactPII ? PIIFilter.redact(s) : s }
         let cards = cards.map { CardScore(card: BankCard(id: $0.card.id, questions: $0.card.questions.map(clean), answer: clean($0.card.answer), tags: $0.card.tags), score: $0.score) }
@@ -63,22 +69,27 @@ public enum PromptBuilder {
         if !recent.isEmpty {
             parts.append("<transcript>\n" + recent.map { "Interviewer: \($0)" }.joined(separator: "\n") + "\n</transcript>")
         }
-        parts.append("Interviewer's current question:\n<question>\n\(question)\n</question>\n\nWrite the candidate's answer.")
+        var task = "Write the candidate's answer."
+        if let answerLanguage {
+            task += " Answer in \(InterviewerPrompt.languageName(answerLanguage)): the interview is in this language, "
+                + "and the transcript may contain recognition errors in another language."
+        }
+        parts.append("Interviewer's current question:\n<question>\n\(question)\n</question>\n\n\(task)")
         return parts.joined(separator: "\n\n")
     }
 
     public static func hintRequest(question: String, transcript: [String], cards: [CardScore], baseCard: BankCard?,
-                                   profile: Profile, redactPII: Bool) -> LLMRequest {
+                                   profile: Profile, redactPII: Bool, answerLanguage: String? = nil) -> LLMRequest {
         LLMRequest(system: system(profile: profile, redactPII: redactPII),
-                   messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard, redactPII: redactPII))],
+                   messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard, redactPII: redactPII, answerLanguage: answerLanguage))],
                    maxTokens: 400, purpose: .hint)
     }
 
     /// Сильная модель вручную (R-13): `max_tokens` 1024.
     public static func strongRequest(question: String, transcript: [String], cards: [CardScore], baseCard: BankCard?,
-                                     profile: Profile, redactPII: Bool) -> LLMRequest {
+                                     profile: Profile, redactPII: Bool, answerLanguage: String? = nil) -> LLMRequest {
         LLMRequest(system: system(profile: profile, redactPII: redactPII),
-                   messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard, redactPII: redactPII))],
+                   messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard, redactPII: redactPII, answerLanguage: answerLanguage))],
                    maxTokens: 1024, purpose: .strong)
     }
 

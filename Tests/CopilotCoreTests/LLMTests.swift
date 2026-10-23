@@ -310,7 +310,9 @@ struct ProviderChainTests {
 
     @Test func factoryAddsGeminiBackup() {
         let chain = ChainFactory.chain(settings: AppSettings(), secrets: InMemorySecretStore([.gemini: "g"]), providers: ChainFactory.providers())
-        #expect(chain.steps.map(\.model) == ["gemini-3.8-flash", "gemini-flash-lite-latest", "deepseek-flash", "claude-sonnet-5-5"])
+        #expect(chain.steps.map(\.model) == ["openai/gpt-oss-120b", "gpt-oss-120b", "gemini-3.8-flash", "gemini-flash-lite-latest",
+                                             "deepseek-flash", "claude-sonnet-5-5"])
+        #expect(chain.hedgeAfter == 1.5)
     }
 
     @Test func slowModelIsSkippedNextTime() async {
@@ -342,9 +344,10 @@ struct ProviderChainTests {
         s.paidProvidersSuspended = true
         let secrets = InMemorySecretStore([.gemini: "g", .deepseek: "d", .anthropic: "a"])
         let chain = ChainFactory.chain(settings: s, secrets: secrets, providers: ChainFactory.providers())
-        #expect(Set(chain.steps.map(\.provider.id)) == [.gemini]) // Gemini Free продолжает работать (R-18)
+        // Gemini Free, Groq и Cerebras продолжают работать (R-18, R-36); платные DeepSeek и Claude выключены.
+        #expect(Set(chain.steps.map(\.provider.id)) == [.groq, .cerebras, .gemini])
         s.geminiFreeTier = false
-        #expect(ChainFactory.chain(settings: s, secrets: secrets, providers: ChainFactory.providers()).steps.isEmpty)
+        #expect(Set(ChainFactory.chain(settings: s, secrets: secrets, providers: ChainFactory.providers()).steps.map(\.provider.id)) == [.groq, .cerebras])
     }
 
     @Test func strongModelNeedsAnthropicKey() {

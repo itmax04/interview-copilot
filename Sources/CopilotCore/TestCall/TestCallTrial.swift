@@ -32,6 +32,7 @@ public struct TestCallTrial: Sendable {
     public private(set) var partial = ""
     public private(set) var result: TestCallResult?
     private var pending: Set<Int> = []
+    private var revising: Set<Int> = []
     private var seen: Set<Int> = []
     private var finals: [Int: String] = [:]
     private var endedAt: Double?
@@ -40,7 +41,7 @@ public struct TestCallTrial: Sendable {
 
     public init(clip: TestCallClip) { self.clip = clip; id = UUID().uuidString }
     public var phase: String { result != nil ? "complete" : endedAt != nil ? "waiting" : "playing" }
-    public var text: String { finals.keys.sorted().compactMap { finals[$0] }.joined(separator: " ") }
+    public var text: String { finals.keys.sorted().compactMap { finals[$0] }.filter { !$0.isEmpty }.joined(separator: " ") }
     public var playbackEnded: Bool { endedAt != nil }
 
     public mutating func handle(_ event: TranscriptEvent) {
@@ -54,10 +55,21 @@ public struct TestCallTrial: Sendable {
         case .final(let u, let value, _, let end, let emitted):
             guard seen.contains(u) else { return }
             finals[u] = value
-            pending.remove(u)
+            if !revising.contains(u) { pending.remove(u) }
             partial = ""
             phraseEnd = max(phraseEnd, end)
             emittedAt = max(emittedAt, emitted)
+        case .revising(let u):
+            // Оценка — по уточнённому тексту (R-37); задержка — по быстрому итогу, который видит ход.
+            if seen.contains(u) { revising.insert(u) }
+        case .discarded(let u, _):
+            pending.remove(u)
+            revising.remove(u)
+        case .revised(let u, let value, _):
+            guard seen.contains(u) else { return }
+            finals[u] = value
+            revising.remove(u)
+            pending.remove(u)
         }
     }
 

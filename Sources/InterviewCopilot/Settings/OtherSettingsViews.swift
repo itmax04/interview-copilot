@@ -19,6 +19,8 @@ struct ModelsSettingsView: View {
                 TextField("Gemini (запасная)", text: $model.settings.modelIDs.geminiBackup)
                 TextField("DeepSeek", text: $model.settings.modelIDs.deepseek)
                 TextField("Anthropic", text: $model.settings.modelIDs.anthropic)
+                TextField("Groq", text: $model.settings.modelIDs.groq)
+                TextField("Cerebras", text: $model.settings.modelIDs.cerebras)
             }
             Section("Цепочка автоперехода") {
                 ForEach(Array(model.settings.chain.enumerated()), id: \.element) { index, provider in
@@ -43,6 +45,13 @@ struct ModelsSettingsView: View {
                 Stepper(value: $model.settings.firstTokenTimeout, in: AppSettings.firstTokenTimeoutRange, step: 0.5) {
                     Text("Таймаут первого токена: \(model.settings.firstTokenTimeout, specifier: "%.1f") с")
                 }
+                Stepper(value: $model.settings.hedgeAfter, in: AppSettings.hedgeAfterRange, step: 0.5) {
+                    Text(model.settings.hedgeAfter > 0
+                         ? "Параллельный запрос через: \(model.settings.hedgeAfter, specifier: "%.1f") с"
+                         : "Параллельный запрос: выключен")
+                }
+                Text("Если модель молчит это время, тот же запрос сразу уходит следующей в цепочке; показывается ответ той, что ответила первой. 0 — строго по очереди.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -94,7 +103,8 @@ struct AudioSettingsView: View {
                 Text("Распознаёт русский, украинский и английский без отдельного определения языка. Аудио обрабатывается на Mac.")
                     .font(.footnote).foregroundStyle(.secondary)
                 Toggle("Украинский итог — через Whisper turbo", isOn: $model.settings.ukrainianWhisperFinal)
-                Text("Parakeet не умеет закреплять язык, и украинская речь у него сползает в русскую. Итог украинской фразы (язык «Українська» в меню или украинские буквы в тексте) распознаётся Whisper large-v3-turbo с языком uk: точнее, но итог появляется на 1–3 с позже. Нужен файл модели turbo.")
+                Toggle("Уточнять через Whisper и русский/английский (термины, имена)", isOn: $model.settings.whisperReviseAllLanguages)
+                Text("Подсказка запускается сразу по быстрому тексту Parakeet. Через 2–3 с строку в расшифровке заменяет текст Whisper large-v3-turbo с закреплённым языком: украинский не сползает в русский, термины пишутся правильно. Нужен файл модели turbo; если Mac тормозит на созвоне — выключите второй переключатель.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Toggle("Подсказывать распознаванию формулировки из базы вопросов", isOn: $model.settings.recognitionPromptFromBank)

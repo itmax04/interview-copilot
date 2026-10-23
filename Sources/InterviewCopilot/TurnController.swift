@@ -42,9 +42,13 @@ final class TurnController {
             detector.interviewerStartedSpeaking(at: Self.now())
         case .speechEnded(_, let at):
             detector.interviewerStoppedSpeaking(at: Double(at) / 1e6)
-        case .partial:
+        case .discarded(_, let phraseEnd):
+            detector.phraseDiscarded(speechEnd: Double(phraseEnd) / 1e6)
+        case .partial, .revising, .revised:
+            // Ход — по быстрому итогу (R-37): уточнённый украинский текст подсказку не задерживает.
             break
         case .final(_, let text, _, let phraseEnd, _):
+            finalsSinceTurn += 1
             detector.phraseFinal(text, speechEnd: Double(phraseEnd) / 1e6)
             if let turn = detector.takeRequestedForce(at: Self.now()) { emit(turn) }
         }
@@ -60,8 +64,21 @@ final class TurnController {
         if let turn = detector.force(at: Self.now()) { emit(turn) }
     }
 
+    private var finalsSinceTurn = 0
+    private var lastStallLog: Double = 0
+
     private func tick() {
-        if let turn = detector.tick(at: Self.now()) { emit(turn) }
+        let now = Self.now()
+        if let turn = detector.tick(at: now) {
+            emit(turn)
+            finalsSinceTurn = 0
+            return
+        }
+        // Диагностика (R-38): итоги идут, а ходов нет — раз в минуту пишем, на каком условии стоит.
+        if finalsSinceTurn >= 5, now - lastStallLog > 60_000 {
+            lastStallLog = now
+            Log.metrics.notice("turn_stall finals_since_turn=\(self.finalsSinceTurn) \(self.detector.debugState(at: now), privacy: .public)")
+        }
     }
 
     private func emit(_ turn: Turn) {

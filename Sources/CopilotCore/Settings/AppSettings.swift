@@ -33,10 +33,13 @@ public struct ModelIDs: Codable, Equatable, Sendable {
     public var geminiBackup = "gemini-flash-lite-latest"
     public var deepseek = "deepseek-flash"
     public var anthropic = "claude-sonnet-5-5"
+    /// Groq: gpt-oss-120b — бесплатный тариф 1000 запросов в день (console.groq.com/docs/rate-limits, 2026-10-23).
+    public var groq = "openai/gpt-oss-120b"
+    public var cerebras = "gpt-oss-120b"
 
     public init() {}
 
-    enum CodingKeys: String, CodingKey { case gemini, geminiBackup, deepseek, anthropic }
+    enum CodingKeys: String, CodingKey { case gemini, geminiBackup, deepseek, anthropic, groq, cerebras }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -45,6 +48,8 @@ public struct ModelIDs: Codable, Equatable, Sendable {
         geminiBackup = (try? c.decodeIfPresent(String.self, forKey: .geminiBackup)) ?? d.geminiBackup
         deepseek = (try? c.decodeIfPresent(String.self, forKey: .deepseek)) ?? d.deepseek
         anthropic = (try? c.decodeIfPresent(String.self, forKey: .anthropic)) ?? d.anthropic
+        groq = (try? c.decodeIfPresent(String.self, forKey: .groq)) ?? d.groq
+        cerebras = (try? c.decodeIfPresent(String.self, forKey: .cerebras)) ?? d.cerebras
     }
 
     /// ID для запроса: без пробелов; пустое поле в настройках означает ID по умолчанию.
@@ -59,6 +64,8 @@ public struct ModelIDs: Codable, Equatable, Sendable {
             case .gemini: gemini
             case .deepseek: deepseek
             case .anthropic: anthropic
+            case .groq: groq
+            case .cerebras: cerebras
             }
         }
         set {
@@ -66,6 +73,8 @@ public struct ModelIDs: Codable, Equatable, Sendable {
             case .gemini: gemini = newValue
             case .deepseek: deepseek = newValue
             case .anthropic: anthropic = newValue
+            case .groq: groq = newValue
+            case .cerebras: cerebras = newValue
             }
         }
     }
@@ -79,7 +88,10 @@ public enum RecognitionBackend: String, Codable, CaseIterable, Sendable {
 public struct AppSettings: Codable, Equatable, Sendable {
     // Models
     public var modelIDs = ModelIDs()
-    public var chain: [ProviderID] = [.gemini, .deepseek, .anthropic]
+    /// Самые быстрые — первыми (R-36): Groq и Cerebras отвечают за доли секунды, Gemini Free бывает перегружен.
+    public var chain: [ProviderID] = [.groq, .cerebras, .gemini, .deepseek, .anthropic]
+    /// Параллельный запуск (R-36): если модель молчит столько секунд, запрос сразу уходит следующей; побеждает первая ответившая.
+    public var hedgeAfter: Double = 1.5
     /// Сильная модель для ⌃⌥C и скриншотов (S-05, S-06).
     public var strongProvider: ProviderID = .anthropic
     /// Таймаут первого токена, с (R-09: 4 с).
@@ -94,6 +106,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Parakeet: итог украинской фразы распознаётся Whisper large-v3-turbo с закреплённым языком `uk`
     /// (Parakeet сползает в русский, COPILOT-03 R-35). Нужен файл модели turbo.
     public var ukrainianWhisperFinal = true
+    /// Уточнять через Whisper и русский/английский итог — термины и имена (R-37). Подсказку не задерживает: она идёт по быстрому итогу.
+    public var whisperReviseAllLanguages = true
     public var audioSource: AudioSourceSetting = .auto
     /// Подсказывать распознаванию формулировки из базы вопросов (initial prompt). По замеру P-12 на сжатом звуке
     /// результат смешанный (одни фразы точнее, другие переводятся/повторяются) — выключено по умолчанию.
@@ -137,7 +151,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     /// Версия схемы настроек: при чтении старых значений по умолчанию они обновляются (см. `migrated()`).
     public var schemaVersion = AppSettings.currentSchema
-    public static let currentSchema = 5
+    public static let currentSchema = 6
 
     public init() {}
 
@@ -160,6 +174,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
             if s.whisperModel == "ggml-medium-q5_0.bin" { s.whisperModel = AppSettings.defaultWhisperModel }
             s.schemaVersion = 5
         }
+        if s.schemaVersion < 6 {
+            // Быстрые провайдеры (R-36) — в начало сохранённой цепочки.
+            s.chain = [.groq, .cerebras] + s.chain.filter { $0 != .groq && $0 != .cerebras }
+            s.schemaVersion = 6
+        }
         return s
     }
 
@@ -169,6 +188,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public static let pauseThresholdRange = 400...1500
     public static let bankThresholdRange = 0.5...0.99
     public static let firstTokenTimeoutRange = 1.0...15.0
+    public static let hedgeAfterRange = 0.0...10.0
     public static let retentionRange = 1...365
     public static let panelOpacityRange = 0.7...1.0
     public static let panelWidthRange = 300.0...520.0
@@ -178,6 +198,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public func normalized() -> AppSettings {
         var s = self
         s.firstTokenTimeout = s.firstTokenTimeout.clamped(to: Self.firstTokenTimeoutRange)
+        s.hedgeAfter = s.hedgeAfter.clamped(to: Self.hedgeAfterRange)
         s.pauseThresholdMs = s.pauseThresholdMs.clamped(to: Self.pauseThresholdRange)
         s.bankThreshold = s.bankThreshold.clamped(to: Self.bankThresholdRange)
         s.historyRetentionDays = s.historyRetentionDays.clamped(to: Self.retentionRange)
@@ -200,12 +221,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
         schemaVersion = v(.schemaVersion, 1)
         modelIDs = v(.modelIDs, d.modelIDs)
         chain = v(.chain, d.chain)
+        hedgeAfter = v(.hedgeAfter, d.hedgeAfter)
         strongProvider = v(.strongProvider, d.strongProvider)
         firstTokenTimeout = v(.firstTokenTimeout, d.firstTokenTimeout)
         recognitionBackend = v(.recognitionBackend, d.recognitionBackend)
         whisperModel = v(.whisperModel, d.whisperModel)
         recognitionAccuracy = v(.recognitionAccuracy, d.recognitionAccuracy)
         ukrainianWhisperFinal = v(.ukrainianWhisperFinal, d.ukrainianWhisperFinal)
+        whisperReviseAllLanguages = v(.whisperReviseAllLanguages, d.whisperReviseAllLanguages)
         audioSource = v(.audioSource, d.audioSource)
         recognitionPromptFromBank = v(.recognitionPromptFromBank, d.recognitionPromptFromBank)
         language = v(.language, d.language)

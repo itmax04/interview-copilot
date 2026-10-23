@@ -7,6 +7,7 @@ public struct AnswerCapture: Sendable {
     public private(set) var partial = ""
     private var finals: [Int: String] = [:]
     private var pending: Set<Int> = []
+    private var revising: Set<Int> = []
     private var speaking = false
     private var lastActivity: Double
     private var firstSpeech: Double?
@@ -43,9 +44,20 @@ public struct AnswerCapture: Sendable {
             if pending.contains(u) { partial = value }
         case .final(let u, let value, _, _, _):
             guard pending.contains(u) || finals[u] == nil else { return }
-            pending.remove(u)
+            if !revising.contains(u) { pending.remove(u) }
             finals[u] = value
             partial = ""
+            lastActivity = now
+        case .revising(let u):
+            revising.insert(u)
+            pending.insert(u)
+        case .discarded(let u, _):
+            pending.remove(u)
+            revising.remove(u)
+        case .revised(let u, let value, _):
+            guard revising.remove(u) != nil else { return }
+            finals[u] = value
+            pending.remove(u)
             lastActivity = now
         }
     }

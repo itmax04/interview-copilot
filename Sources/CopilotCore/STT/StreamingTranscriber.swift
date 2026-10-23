@@ -11,6 +11,12 @@ public enum TranscriptEvent: Sendable, Equatable {
     /// Итоговый текст реплики после паузы. `phraseEnd` — момент окончания речи, `emittedAt` — момент выдачи текста
     /// (оба — `DispatchTime.uptimeNanoseconds`); разница — метрика AC-01.
     case final(utterance: Int, text: String, language: String, phraseEnd: UInt64, emittedAt: UInt64)
+    /// После `final` этой реплики придёт уточнённый текст (R-37). Приходит до `final`.
+    case revising(utterance: Int)
+    /// Уточнённый итог (украинский — Whisper `uk`, R-35/R-37). Ход и подсказка уже запущены по быстрому `final`.
+    case revised(utterance: Int, text: String, language: String)
+    /// Реплика без текста (шум, тишина, ошибка распознавания): её итога ждать не нужно (R-38).
+    case discarded(utterance: Int, phraseEnd: UInt64)
 }
 
 /// Потоковое распознавание: VAD режет поток собеседника на реплики, пока человек говорит — частичный текст,
@@ -62,6 +68,8 @@ public final class StreamingTranscriber: @unchecked Sendable {
     private let onEvent: @Sendable (TranscriptEvent) -> Void
     private let buffer: AudioRingBuffer
     private let work = DispatchQueue(label: "com.itmax04.interviewcopilot.stt", qos: .userInitiated)
+    /// Уточнение итога (Whisper) идёт параллельно: следующая реплика не ждёт его (R-37).
+    private let revisionWork = DispatchQueue(label: "com.itmax04.interviewcopilot.stt-revision", qos: .userInitiated)
     private let lock = NSLock()
 
     // Состояние под lock.
@@ -136,7 +144,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
             if value { epoch += 1 }
             return value
         }
-        if cancel { recognizer.cancel() }
+        if cancel {
+            recognizer.cancel()
+            recognizer.cancelRevision()
+        }
     }
 
     private struct FinalRequest: Sendable {
@@ -327,7 +338,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
         let phraseEnd = request.phraseEnd
         guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
         let audio = request.audio
-        guard !audio.isEmpty else { return }
+        guard !audio.isEmpty else {
+            onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+            return
+        }
         var lang = recognizer.nativeMultilingual && !request.languageWasExplicit ? nil : request.language
         if lang == nil && !recognizer.nativeMultilingual {
             // Короткая реплика: язык не успели определить во время речи.
@@ -344,7 +358,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             }
         }
         do {
-            let result = try recognizer.transcribeFinal(audio, language: lang, prompt: prompt(for: lang), reducedContext: config.finalReducedContext)
+            let result = try recognizer.transcribe(audio, language: lang, prompt: prompt(for: lang), reducedContext: config.finalReducedContext)
             let seconds = Double(audio.count) / Double(buffer.sampleRate)
             lock.withLock {
                 lastLanguage = result.language
@@ -370,7 +384,11 @@ public final class StreamingTranscriber: @unchecked Sendable {
                 }
             }
             // Тишина и шум: whisper иногда «слышит» речь там, где её нет.
-            guard !result.text.isEmpty, result.noSpeechProbability < 0.8 else { return }
+            guard !result.text.isEmpty, result.noSpeechProbability < 0.8 else {
+                // Без этого события определение хода ждало бы итог шума до следующей фразы (R-38).
+                onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+                return
+            }
             guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
             lock.withLock {
                 recentFinals.append((result.language, result.text))
@@ -378,9 +396,31 @@ public final class StreamingTranscriber: @unchecked Sendable {
             }
             let emitted = DispatchTime.now().uptimeNanoseconds
             Log.metrics.notice("transcript_final utt=\(u) lang=\(result.language, privacy: .public) audio_ms=\(Int(result.audioSeconds * 1000)) stt_ms=\(Int(result.elapsedMs)) phrase_end_to_final_ms=\(Int((emitted - phraseEnd) / 1_000_000))")
+            // Двухэтапный итог (R-37): быстрый текст сразу — ход и подсказка не ждут; уточнённый — следом.
+            let revise = recognizer.revisionNeeded(result, language: lang)
+            if revise { onEvent(.revising(utterance: u)) }
             onEvent(.final(utterance: u, text: result.text, language: result.language, phraseEnd: phraseEnd, emittedAt: emitted))
+            if revise { scheduleRevision(utterance: u, audio: audio, language: lang, first: result, epoch: scheduledEpoch, phraseEnd: phraseEnd) }
         } catch {
             Log.stt.error("final transcription failed: \(String(describing: error), privacy: .public)")
+            onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+        }
+    }
+
+    /// Уточнение итога в отдельной очереди. При ошибке или паузе — исходный текст, чтобы ожидающие не зависли.
+    private func scheduleRevision(utterance u: Int, audio: [Float], language: String?, first: Transcription, epoch scheduledEpoch: Int,
+                                  phraseEnd: UInt64) {
+        revisionWork.async { [weak self] in
+            guard let self else { return }
+            var revised = first
+            if self.lock.withLock({ self.epoch == scheduledEpoch && !self.paused }),
+               let r = try? self.recognizer.revise(audio, language: HybridRecognizer.revisionLanguage(language: language, text: first.text),
+                                                   prompt: self.prompt(for: language)), !r.text.isEmpty {
+                revised = r
+            }
+            let ms = Int((DispatchTime.now().uptimeNanoseconds - phraseEnd) / 1_000_000)
+            Log.metrics.notice("transcript_revised utt=\(u) lang=\(revised.language, privacy: .public) changed=\(revised.text != first.text) phrase_end_to_revised_ms=\(ms)")
+            self.onEvent(.revised(utterance: u, text: revised.text, language: revised.language))
         }
     }
 }

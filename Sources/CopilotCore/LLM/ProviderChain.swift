@@ -71,26 +71,36 @@ public struct ProviderChain: Sendable {
     public var steps: [Step]
     public var firstTokenTimeout: Double
     public var health: ProviderHealth?
+    /// Параллельный запуск (R-36): если текущая попытка молчит `hedgeAfter` с, следующая стартует, не дожидаясь таймаута;
+    /// показывается та, что первой прислала текст. nil или 0 — строго по очереди.
+    public var hedgeAfter: Double?
 
-    public init(steps: [Step], firstTokenTimeout: Double = 4, health: ProviderHealth? = nil) {
+    public init(steps: [Step], firstTokenTimeout: Double = 4, health: ProviderHealth? = nil, hedgeAfter: Double? = nil) {
         self.steps = steps
         self.firstTokenTimeout = firstTokenTimeout
         self.health = health
+        self.hedgeAfter = hedgeAfter
+    }
+
+    /// Шаги с ключом; недавно отказавшие модели — в конец очереди (не выкидываем: вдруг остальные тоже не отвечают).
+    func orderedUsableSteps() -> [Step] {
+        var usable = steps.filter { $0.key?.isEmpty == false }
+        if let health {
+            let fresh = usable.filter { !health.isCoolingDown($0.provider.id, $0.model) }
+            let cooling = usable.filter { health.isCoolingDown($0.provider.id, $0.model) }
+            usable = fresh + cooling
+        }
+        return usable
     }
 
     /// Запуск. Отмена задачи-потребителя (новый ход, R-10) прерывает текущий запрос.
     public func run(_ request: LLMRequest) -> AsyncStream<ChainEvent> {
-        AsyncStream { continuation in
+        if let hedgeAfter, hedgeAfter > 0 { return runHedged(request, hedgeAfter: hedgeAfter) }
+        return AsyncStream { continuation in
             let task = Task {
                 let start = DispatchTime.now().uptimeNanoseconds
                 var reasons: [String] = []
-                var usable = steps.filter { $0.key?.isEmpty == false }
-                // Недавно отказавшие модели — в конец очереди (не выкидываем: вдруг все остальные тоже не отвечают).
-                if let health {
-                    let fresh = usable.filter { !health.isCoolingDown($0.provider.id, $0.model) }
-                    let cooling = usable.filter { health.isCoolingDown($0.provider.id, $0.model) }
-                    usable = fresh + cooling
-                }
+                let usable = orderedUsableSteps()
                 if usable.isEmpty {
                     continuation.yield(.exhausted(reason: "нет ключей"))
                     continuation.finish()
@@ -210,11 +220,17 @@ final class FirstTokenFlag: @unchecked Sendable {
 public enum ChainFactory {
     public static func providers(transport: StreamingTransport = URLSessionStreamingTransport()) -> [ProviderID: LLMProvider] {
         [.gemini: GeminiProvider(transport: transport), .deepseek: DeepSeekProvider(transport: transport),
-         .anthropic: AnthropicProvider(transport: transport)]
+         .anthropic: AnthropicProvider(transport: transport),
+         .groq: OpenAICompatibleProvider(.groq, transport: transport), .cerebras: OpenAICompatibleProvider(.cerebras, transport: transport)]
     }
 
     public static func isPaid(_ p: ProviderID, settings: AppSettings) -> Bool {
-        p != .gemini || !settings.geminiFreeTier
+        switch p {
+        // Groq — бесплатный тариф; Cerebras — пробные кредиты (R-36): месячный бюджет их не выключает.
+        case .groq, .cerebras: false
+        case .gemini: !settings.geminiFreeTier
+        case .deepseek, .anthropic: true
+        }
     }
 
     public static func chain(settings: AppSettings, secrets: SecretStore,
@@ -231,7 +247,8 @@ public enum ChainFactory {
                 steps.append(ProviderChain.Step(provider: provider, model: backup, key: key))
             }
         }
-        return ProviderChain(steps: steps, firstTokenTimeout: settings.firstTokenTimeout, health: .shared)
+        return ProviderChain(steps: steps, firstTokenTimeout: settings.firstTokenTimeout, health: .shared,
+                             hedgeAfter: settings.hedgeAfter)
     }
 
     /// Сильная модель (S-05, S-06): только она, без цепочки. Без ключа — nil (кнопка неактивна).
@@ -252,5 +269,163 @@ public enum ChainFactory {
         guard let first = steps.first else { return nil }
         // Скриншот без ключа Anthropic уходит в Gemini (S-06); ручной вызов — только сильная модель (S-05).
         return ProviderChain(steps: fallbackToGemini ? steps : [first], firstTokenTimeout: max(settings.firstTokenTimeout, 8))
+    }
+}
+
+// MARK: - Параллельный запуск (R-36)
+
+extension ProviderChain {
+    private enum Signal: Sendable {
+        case model(Int, String)
+        case text(Int, String)
+        case usage(Int, TokenUsage)
+        case done(Int)
+        case failed(Int, LLMError)
+        case hedge(Int)
+        case timeout(Int)
+    }
+
+    /// Попытки стартуют по очереди; следующая — сразу при ошибке или через `hedgeAfter` молчания текущей.
+    /// Одновременно не больше двух попыток. Победитель — первая с текстом; остальные отменяются, их текст не показывается.
+    /// Если победитель оборвался посреди ответа — `.restart` и следующая попытка.
+    func runHedged(_ request: LLMRequest, hedgeAfter: Double) -> AsyncStream<ChainEvent> {
+        AsyncStream { continuation in
+            let task = Task {
+                let start = DispatchTime.now().uptimeNanoseconds
+                let usable = orderedUsableSteps()
+                if usable.isEmpty {
+                    continuation.yield(.exhausted(reason: "нет ключей"))
+                    continuation.finish()
+                    return
+                }
+                let (inbox, post) = AsyncStream<Signal>.makeStream()
+                var tasks: [Int: Task<Void, Never>] = [:]
+                var models: [Int: String] = [:]
+                var usages: [Int: TokenUsage] = [:]
+                var next = 0
+                var winner: Int?
+                var hadWinner = false
+                var reasons: [String] = []
+                var invalidKey = Set<ProviderID>()
+
+                func launch() {
+                    while next < usable.count, invalidKey.contains(usable[next].provider.id) { next += 1 }
+                    guard next < usable.count else { return }
+                    let i = next
+                    next += 1
+                    let step = usable[i]
+                    models[i] = step.model
+                    let timeout = firstTokenTimeout
+                    tasks[i] = Task {
+                        let timers = Task {
+                            try? await Task.sleep(for: .seconds(hedgeAfter))
+                            if !Task.isCancelled { post.yield(.hedge(i)) }
+                            try? await Task.sleep(for: .seconds(max(0, timeout - hedgeAfter)))
+                            if !Task.isCancelled { post.yield(.timeout(i)) }
+                        }
+                        defer { timers.cancel() }
+                        do {
+                            for try await event in step.provider.stream(request, model: step.model, key: step.key ?? "") {
+                                if Task.isCancelled { return }
+                                switch event {
+                                case .model(let m): post.yield(.model(i, m))
+                                case .text(let t):
+                                    timers.cancel()
+                                    post.yield(.text(i, t))
+                                case .usage(let u): post.yield(.usage(i, u))
+                                case .done: break
+                                }
+                            }
+                            if !Task.isCancelled { post.yield(.done(i)) }
+                        } catch let e as LLMError {
+                            if !Task.isCancelled { post.yield(.failed(i, e)) }
+                        } catch {
+                            if !Task.isCancelled { post.yield(.failed(i, .network(error.localizedDescription))) }
+                        }
+                    }
+                }
+
+                func fail(_ i: Int, _ error: LLMError) {
+                    tasks[i]?.cancel()
+                    tasks[i] = nil
+                    let step = usable[i]
+                    let pid = step.provider.id
+                    var detail = ""
+                    if case .http(_, let m) = error { detail = m }
+                    Log.llm.error("provider \(pid.rawValue, privacy: .public) model=\(step.model, privacy: .public) failed: \(error.description, privacy: .public) \(String(detail.prefix(200)), privacy: .public)")
+                    continuation.yield(.providerFailed(pid, error))
+                    health?.reportFailure(pid, step.model, error)
+                    reasons.append("\(pid.displayName) \(step.model): \(error.description)")
+                    if error.isInvalidKey { invalidKey.insert(pid) }
+                }
+
+                launch()
+                for await signal in inbox {
+                    if Task.isCancelled { break }
+                    switch signal {
+                    case .model(let i, let m):
+                        models[i] = m
+                        if winner == i { continuation.yield(.model(usable[i].provider.id, m)) }
+                    case .text(let i, let t):
+                        if winner == nil, tasks[i] != nil {
+                            winner = i
+                            for (j, other) in tasks where j != i { other.cancel(); tasks[j] = nil }
+                            let pid = usable[i].provider.id
+                            continuation.yield(.attempt(pid, model: usable[i].model))
+                            if hadWinner { continuation.yield(.restart(pid)) }
+                            hadWinner = true
+                            continuation.yield(.model(pid, models[i] ?? usable[i].model))
+                            let ms = Double(DispatchTime.now().uptimeNanoseconds - start) / 1e6
+                            continuation.yield(.firstToken(pid, afterMs: ms))
+                        }
+                        if winner == i { continuation.yield(.text(t)) }
+                    case .usage(let i, let u):
+                        usages[i] = u
+                    case .done(let i):
+                        if winner == i {
+                            let pid = usable[i].provider.id
+                            let model = models[i] ?? usable[i].model
+                            if let u = usages[i] { continuation.yield(.usage(pid, model: model, u)) }
+                            health?.reportSuccess(pid, usable[i].model)
+                            continuation.yield(.finished(pid, model: model))
+                            for (_, t) in tasks { t.cancel() }
+                            continuation.finish()
+                            return
+                        } else if winner == nil, tasks[i] != nil {
+                            fail(i, .badResponse("пустой ответ"))
+                        }
+                    case .failed(let i, let e):
+                        guard tasks[i] != nil else { break }
+                        if winner == i { winner = nil }
+                        fail(i, e)
+                        if !e.triggersFallback {
+                            for (_, t) in tasks { t.cancel() }
+                            continuation.finish()
+                            return
+                        }
+                        if winner == nil, tasks.count == 1 { launch() }
+                    case .hedge(let i):
+                        // Текущая попытка молчит — запускаем следующую параллельно (не больше двух сразу).
+                        if winner == nil, tasks[i] != nil, tasks.count < 2 { launch() }
+                    case .timeout(let i):
+                        if winner == nil, tasks[i] != nil {
+                            fail(i, .firstTokenTimeout)
+                            if tasks.count == 1 { launch() }
+                        }
+                    }
+                    if winner == nil, tasks.isEmpty {
+                        launch()
+                        if tasks.isEmpty {
+                            continuation.yield(.exhausted(reason: reasons.joined(separator: "; ")))
+                            continuation.finish()
+                            return
+                        }
+                    }
+                }
+                for (_, t) in tasks { t.cancel() }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 }

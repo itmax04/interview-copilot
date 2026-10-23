@@ -20,6 +20,13 @@ final class SessionController {
         scheduleSave()
     }
 
+    /// Уточнённый итог реплики (R-37) заменяет её быстрый текст.
+    func reviseUtterance(id: Int, text: String, language: String) {
+        guard let i = current?.utterances.lastIndex(where: { $0.id == id }), let at = current?.utterances[i].at else { return }
+        current?.utterances[i] = .init(id: id, text: text, language: language, at: at)
+        scheduleSave()
+    }
+
     func addAnswer(_ r: AnswerController.AnswerRecord) {
         guard current != nil, r.turn.id >= 0 || r.turn.text == "Скриншот задачи" else { return }
         current?.turns.append(.init(id: r.turn.id, question: r.turn.text, answer: r.text, source: r.source, model: r.model,

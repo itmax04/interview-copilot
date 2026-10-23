@@ -55,7 +55,7 @@ public struct KeyVerifier: Sendable {
             return models.compactMap { $0["name"] as? String }.map {
                 $0.hasPrefix("models/") ? String($0.dropFirst("models/".count)) : $0
             }
-        case .deepseek, .anthropic:
+        case .deepseek, .anthropic, .groq, .cerebras:
             let models = json["data"] as? [[String: Any]] ?? []
             return models.compactMap { $0["id"] as? String }
         }

@@ -154,3 +154,113 @@ struct HybridRecognizerTests {
         func add() { value += 1 }
     }
 }
+
+@Suite("Шум, потерянные события, двухэтапный итог — R-37, R-38")
+struct TurnRobustnessTests {
+    func run(_ d: inout TurnDetector, from: Double, until: Double) -> Turn? {
+        var t = from
+        while t <= until {
+            if let turn = d.tick(at: t) { return turn }
+            t += 50
+        }
+        return nil
+    }
+
+    @Test func noiseAfterQuestionNoLongerBlocksTurn() {
+        var d = TurnDetector()
+        d.interviewerStartedSpeaking(at: 0)
+        d.interviewerStoppedSpeaking(at: 2000)
+        d.phraseFinal("Расскажите о вашем последнем проекте?", speechEnd: 2000)
+        // Кашель: VAD открыл и закрыл фразу, текста нет.
+        d.interviewerStartedSpeaking(at: 2200)
+        d.interviewerStoppedSpeaking(at: 2500)
+        #expect(d.tick(at: 3500) == nil) // ждём итог шума
+        d.phraseDiscarded(speechEnd: 2500)
+        let turn = run(&d, from: 3500, until: 4000)
+        #expect(turn?.text == "Расскажите о вашем последнем проекте?")
+        #expect(turn?.firedAt == 3500)
+    }
+
+    @Test func lostFinalAndLostSpeechEndExpire() {
+        var d = TurnDetector()
+        d.interviewerStartedSpeaking(at: 0)
+        d.phraseFinal("Почему вы хотите сменить работу?", speechEnd: 2000)
+        d.interviewerStartedSpeaking(at: 2300)
+        d.interviewerStoppedSpeaking(at: 2600) // итог этой фразы так и не пришёл
+        #expect(run(&d, from: 2700, until: 10_500) == nil)
+        #expect(run(&d, from: 10_600, until: 11_000) != nil) // > 8 с — больше не ждём
+
+        var stuck = TurnDetector()
+        stuck.interviewerStartedSpeaking(at: 0)
+        stuck.phraseFinal("Как вы решаете конфликты в команде?", speechEnd: 2000)
+        stuck.interviewerStartedSpeaking(at: 2100) // конец речи потерялся
+        #expect(run(&stuck, from: 2200, until: 31_000) == nil)
+        #expect(run(&stuck, from: 32_200, until: 33_000) != nil)
+    }
+
+    @Test func discardedNoiseFromEarlierPhraseDoesNotSkipNewerFinal() {
+        var d = TurnDetector()
+        d.interviewerStartedSpeaking(at: 0)
+        d.phraseFinal("Расскажите о себе подробнее", speechEnd: 1000)
+        d.interviewerStartedSpeaking(at: 1200)
+        d.interviewerStoppedSpeaking(at: 1400) // шум
+        d.interviewerStartedSpeaking(at: 1600)
+        d.interviewerStoppedSpeaking(at: 3000) // продолжение вопроса, итог ещё распознаётся
+        d.phraseDiscarded(speechEnd: 1400)
+        #expect(d.tick(at: 3900) == nil) // ждём итог продолжения, а не стреляем по половине вопроса
+    }
+
+    @Test func trialAndAnswerWaitForRevisedText() {
+        var trial = TestCallTrial(clip: TestCallClip(id: "c", language: "uk", title: "t", text: "Розкажіть про себе", file: ""))
+        trial.handle(.speechStarted(utterance: 1))
+        trial.handle(.speechStarted(utterance: 2))
+        trial.handle(.revising(utterance: 1))
+        trial.handle(.final(utterance: 1, text: "Расскажите про себе", language: "ru", phraseEnd: 1_000_000_000, emittedAt: 1_500_000_000))
+        trial.handle(.discarded(utterance: 2, phraseEnd: 2_000_000_000))
+        trial.endPlayback(at: 10)
+        trial.tick(at: 11)
+        #expect(trial.result == nil) // ждём уточнения
+        trial.handle(.revised(utterance: 1, text: "Розкажіть про себе", language: "uk"))
+        trial.tick(at: 11.1)
+        #expect(trial.result?.errors == 0)
+        #expect(trial.result?.latencyMs == 500) // задержка — по быстрому итогу
+
+        var a = AnswerCapture(startedAt: 0)
+        a.handle(.speechStarted(utterance: 5), at: 1)
+        a.handle(.revising(utterance: 5), at: 3)
+        a.handle(.final(utterance: 5, text: "Я працюю", language: "uk", phraseEnd: 0, emittedAt: 0), at: 3)
+        a.requestFinish(at: 3)
+        #expect(!a.isComplete(at: 4))
+        a.handle(.revised(utterance: 5, text: "Я працюю в команді", language: "uk"), at: 5)
+        #expect(a.isComplete(at: 5) && a.text == "Я працюю в команді")
+    }
+
+    @Test func answerLanguageFollowsMenuOrUkrainianLetters() {
+        #expect(PromptBuilder.answerLanguage(setting: "en", question: "Розкажіть") == "en")
+        #expect(PromptBuilder.answerLanguage(setting: nil, question: "Розкажіть про себе") == "uk")
+        #expect(PromptBuilder.answerLanguage(setting: nil, question: "Расскажите о себе") == nil)
+        let u = PromptBuilder.user(question: "Расскажите про проэкт", transcript: [], cards: [], baseCard: nil, answerLanguage: "uk")
+        #expect(u.contains("Answer in Ukrainian"))
+    }
+}
+
+@Suite("Уточнение всех языков — R-37")
+struct ReviseAllLanguagesTests {
+    @Test func revisionLanguageFollowsMenuOrAlphabet() {
+        #expect(HybridRecognizer.revisionLanguage(language: "en", text: "Привіт") == "en")
+        #expect(HybridRecognizer.revisionLanguage(language: nil, text: "Розкажіть про себе") == "uk")
+        #expect(HybridRecognizer.revisionLanguage(language: nil, text: "Мы используем поуст Griskl") == "ru")
+        #expect(HybridRecognizer.revisionLanguage(language: nil, text: "We use PostGur SQL") == "en")
+    }
+
+    @Test func reviseAllAppliesToRussianAndEnglish() {
+        let fake = HybridRecognizerTests.Fake("x")
+        let only = HybridRecognizer(primary: fake, loadVerifier: { fake })
+        let all = HybridRecognizer(primary: fake, reviseAllLanguages: true, loadVerifier: { fake })
+        let ru = Transcription(text: "Мы используем Редис", language: "ru", languageProbabilities: [:], audioSeconds: 1, elapsedMs: 1, noSpeechProbability: 0)
+        #expect(!only.revisionNeeded(ru, language: nil))
+        #expect(all.revisionNeeded(ru, language: nil))
+        var empty = ru; empty.text = ""
+        #expect(!all.revisionNeeded(empty, language: nil))
+    }
+}

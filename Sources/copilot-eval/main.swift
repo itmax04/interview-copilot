@@ -90,7 +90,13 @@ case "stt-stream":
     guard args.count >= 2 else { fail("usage: copilot-eval stt-stream <model.bin> <file.wav>... [--lang xx] [--gain k]") }
     let engine: any SpeechRecognizer
     do {
-        if useParakeet { engine = try await ParakeetEngine.load(from: URL(fileURLWithPath: args[0])) }
+        if useParakeet {
+            let parakeet = try await ParakeetEngine.load(from: URL(fileURLWithPath: args[0]))
+            // --hybrid <whisper.bin>: двухэтапный итог как в приложении (R-35, R-37).
+            if let whisper = option("--hybrid") {
+                engine = HybridRecognizer(primary: parakeet, loadVerifier: { try WhisperEngine(modelPath: whisper) })
+            } else { engine = parakeet }
+        }
         else { engine = try WhisperEngine(modelPath: args[0]) }
     } catch { fail("\(error)", code: 1) }
     let buffer = AudioRingBuffer(seconds: 30)
@@ -113,6 +119,8 @@ case "stt-stream":
             let ms = Double(emitted - phraseEnd) / 1e6
             collector.lock.withLock { collector.latencies.append(ms) }
             print(String(format: "final utt=%d lang=%@ phrase_end_to_final_ms=%.0f text=%@", u, language, ms, text))
+        case .revised(let u, let text, let language):
+            print(String(format: "revised utt=%d lang=%@ text=%@", u, language, text))
         default: break
         }
     }
