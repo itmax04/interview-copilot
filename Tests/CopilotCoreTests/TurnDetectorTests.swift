@@ -89,7 +89,8 @@ struct TurnDetectorTests {
         let cases = try lines.map { try JSONDecoder().decode(TurnEval.Case.self, from: Data($0.utf8)) }
         let summary = TurnEval.run(cases)
         #expect(summary.premature == 0 && summary.missed == 0)
-        #expect(summary.draftHits == 2)
+        // «?»: ход наступает сразу по итогу (500 мс) — опережающий запрос не нужен; gap: запрос на 200 мс раньше хода.
+        #expect(summary.draftHits == 1)
         #expect(summary.meanDraftLatencyMs == 500)   // итог Parakeet через 500 мс после конца речи
         #expect(summary.draftWasted == 1)            // первая фраза gap-случая ходом не стала
         #expect(summary.results.first?.firedAt == 2500)

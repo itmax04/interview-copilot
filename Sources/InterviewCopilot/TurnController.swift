@@ -76,15 +76,16 @@ final class TurnController {
 
     private func tick() {
         let now = Self.now()
-        if draftsEnabled, let text = detector.draft(at: now), text != lastDraft {
-            lastDraft = text
-            Log.metrics.notice("draft_start words=\(TurnDetectorWords.count(text)) at_ms=\(Int(now))")
-            onDraft?(text)
-        }
         if let turn = detector.tick(at: now) {
             emit(turn)
             finalsSinceTurn = 0
             return
+        }
+        // Опережающий запрос — только если ход ещё не наступил: итог, пришедший после паузы, сразу даёт ход.
+        if draftsEnabled, let text = detector.draft(at: now), text != lastDraft {
+            lastDraft = text
+            Log.metrics.notice("draft_start words=\(TurnDetectorWords.count(text)) at_ms=\(Int(now))")
+            onDraft?(text)
         }
         // Диагностика (R-38): итоги идут, а ходов нет — раз в минуту пишем, на каком условии стоит.
         if finalsSinceTurn >= 5, now - lastStallLog > 60_000 {

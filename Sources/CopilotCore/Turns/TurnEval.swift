@@ -106,9 +106,12 @@ public enum TurnEval {
                     }
                     i += 1
                 }
-                // Как TurnController: новый текст опережающего запроса — новый запрос.
-                if let text = d.draft(at: t), drafts.last?.text != text { drafts.append((text, t)) }
-                if let turn = d.tick(at: t) { fired.append(turn) }
+                // Как TurnController: сначала ход; если его нет — новый текст опережающего запроса даёт новый запрос.
+                if let turn = d.tick(at: t) {
+                    fired.append(turn)
+                } else if let text = d.draft(at: t), drafts.last?.text != text {
+                    drafts.append((text, t))
+                }
                 t += 10
             }
             let first = fired.first
@@ -129,7 +132,7 @@ public enum TurnEval {
                 premature = true
             }
             let firedTexts = Set(fired.map(\.text))
-            let draftAt = first.flatMap { f in drafts.first { $0.text == f.text && $0.at <= f.firedAt }?.at }
+            let draftAt = first.flatMap { f in drafts.first { $0.text == f.text && $0.at < f.firedAt }?.at }
             if let draftAt, let expected = c.expected_turn_at, !premature, !(first?.forced ?? false) {
                 draftLatencies.append(draftAt - expected)
             }
