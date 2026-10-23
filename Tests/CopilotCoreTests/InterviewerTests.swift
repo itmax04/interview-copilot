@@ -97,3 +97,60 @@ struct InterviewerTests {
         #expect(seconds < 10)
     }
 }
+
+@Suite("Hybrid Ukrainian final — R-35")
+struct HybridRecognizerTests {
+    final class Fake: SpeechRecognizer, @unchecked Sendable {
+        let text: String
+        private(set) var calls: [(language: String?, reduced: Bool)] = []
+        init(_ text: String) { self.text = text }
+        func transcribe(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription {
+            calls.append((language, reducedContext))
+            return Transcription(text: text, language: language ?? "ru", languageProbabilities: [:], audioSeconds: 1,
+                                 elapsedMs: 100, noSpeechProbability: text.isEmpty ? 1 : 0)
+        }
+        func detectLanguage(_ samples: [Float]) throws -> (String, [String: Float]) { ("ru", [:]) }
+        func cancel() {}
+    }
+
+    @Test func ukrainianLettersOrExplicitLanguageTriggerWhisper() {
+        #expect(HybridRecognizer.needsUkrainian(language: "uk", text: "Расскажите о себе"))
+        #expect(HybridRecognizer.needsUkrainian(language: nil, text: "Розкажіть про себе"))
+        #expect(!HybridRecognizer.needsUkrainian(language: nil, text: "Расскажите о себе"))
+        #expect(!HybridRecognizer.needsUkrainian(language: "ru", text: "Розкажіть"))
+        #expect(!HybridRecognizer.needsUkrainian(language: nil, text: "Tell me about yourself"))
+    }
+
+    @Test func finalUsesWhisperWithUkrainianAndFullContextPartialStaysParakeet() throws {
+        let parakeet = Fake("Розкажыте про сэбе"), whisper = Fake("Розкажіть про себе")
+        let loads = Counter()
+        let hybrid = HybridRecognizer(primary: parakeet, loadVerifier: { loads.add(); return whisper })
+        let partial = try hybrid.transcribe([0], language: "uk", prompt: nil, reducedContext: true)
+        #expect(partial.text == "Розкажыте про сэбе")
+        #expect(whisper.calls.isEmpty && loads.value == 0)
+        let final = try hybrid.transcribeFinal([0], language: "uk", prompt: nil, reducedContext: true)
+        #expect(final.text == "Розкажіть про себе")
+        #expect(final.language == "uk")
+        #expect(whisper.calls.first?.language == "uk")
+        #expect(whisper.calls.first?.reduced == false)
+        _ = try hybrid.transcribeFinal([0], language: "uk", prompt: nil, reducedContext: false)
+        #expect(loads.value == 1)
+    }
+
+    @Test func russianFinalStaysParakeetAndFailuresFallBack() throws {
+        let whisper = Fake("не должно вызываться")
+        let ru = HybridRecognizer(primary: Fake("Почему вы ушли?"), loadVerifier: { whisper })
+        #expect(try ru.transcribeFinal([0], language: nil, prompt: nil, reducedContext: false).text == "Почему вы ушли?")
+        #expect(whisper.calls.isEmpty)
+        struct LoadError: Error {}
+        let broken = HybridRecognizer(primary: Fake("Чому ви пішли?"), loadVerifier: { throw LoadError() })
+        #expect(try broken.transcribeFinal([0], language: nil, prompt: nil, reducedContext: false).text == "Чому ви пішли?")
+        let silent = HybridRecognizer(primary: Fake("Чому ви пішли?"), loadVerifier: { Fake("") })
+        #expect(try silent.transcribeFinal([0], language: nil, prompt: nil, reducedContext: false).text == "Чому ви пішли?")
+    }
+
+    final class Counter: @unchecked Sendable {
+        private(set) var value = 0
+        func add() { value += 1 }
+    }
+}

@@ -205,7 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotkeys?.register(Dictionary(uniqueKeysWithValues: HotkeyAction.allCases.map { ($0, s.hotkey($0)) }))
         }
         if !force && s.audioSource != old.audioSource { listening.sourceSettingChanged() }
-        if !force && (s.recognitionBackend != old.recognitionBackend || s.whisperModel != old.whisperModel || s.recognitionAccuracy != old.recognitionAccuracy) {
+        if !force && (s.recognitionBackend != old.recognitionBackend || s.whisperModel != old.whisperModel || s.recognitionAccuracy != old.recognitionAccuracy || s.ukrainianWhisperFinal != old.ukrainianWhisperFinal) {
             testCall.recognitionChanged()
             interviewer.recognitionChanged()
             listening.recognitionSettingsChanged()

@@ -330,13 +330,18 @@ final class ListeningController {
         sttStatus = "Загружаю модель распознавания…"
         let buffer = self.buffer
         let reducedContext = !model.settings.recognitionAccuracy
+        // Гибрид для украинского (R-35): итог украинской фразы — Whisper turbo с языком uk, если файл модели есть.
+        let turbo = AppPaths.model("ggml-large-v3-turbo-q5_0.bin").path
+        let hybrid = useParakeet && model.settings.ukrainianWhisperFinal && FileManager.default.fileExists(atPath: turbo)
         let generation = recognizerGeneration
         Task { [weak self] in
             let result: Result<any SpeechRecognizer, Error> = await Task.detached(priority: .userInitiated) {
                 do {
                     let engine: any SpeechRecognizer
-                    if useParakeet { engine = try await ParakeetEngine.load(from: URL(fileURLWithPath: path)) }
-                    else { engine = try WhisperEngine(modelPath: path) }
+                    if useParakeet {
+                        let parakeet = try await ParakeetEngine.load(from: URL(fileURLWithPath: path))
+                        engine = hybrid ? HybridRecognizer(primary: parakeet, loadVerifier: { try WhisperEngine(modelPath: turbo) }) : parakeet
+                    } else { engine = try WhisperEngine(modelPath: path) }
                     return .success(engine)
                 } catch { return .failure(error) }
             }.value
@@ -365,7 +370,8 @@ final class ListeningController {
             t.setPaused(phase == .paused)
             transcriberBox.set(t)
             transcriber = t
-            let name = engine.nativeMultilingual ? "Parakeet v3" : (path as NSString).lastPathComponent
+            let name = engine is HybridRecognizer ? "Parakeet v3 + Whisper turbo (UK)"
+                : engine.nativeMultilingual ? "Parakeet v3" : (path as NSString).lastPathComponent
             let fallback = model.settings.recognitionBackend == .parakeet && !engine.nativeMultilingual
                 ? " (Parakeet не установлен, используется Whisper)" : ""
             sttStatus = "Распознавание: \(name)\(fallback)"

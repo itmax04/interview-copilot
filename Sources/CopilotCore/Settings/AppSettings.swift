@@ -91,6 +91,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var whisperModel = AppSettings.defaultWhisperModel
     /// Полный акустический контекст для итогового текста; быстрый предварительный текст сохраняется.
     public var recognitionAccuracy = true
+    /// Parakeet: итог украинской фразы распознаётся Whisper large-v3-turbo с закреплённым языком `uk`
+    /// (Parakeet сползает в русский, COPILOT-03 R-35). Нужен файл модели turbo.
+    public var ukrainianWhisperFinal = true
     public var audioSource: AudioSourceSetting = .auto
     /// Подсказывать распознаванию формулировки из базы вопросов (initial prompt). По замеру P-12 на сжатом звуке
     /// результат смешанный (одни фразы точнее, другие переводятся/повторяются) — выключено по умолчанию.
@@ -202,6 +205,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         recognitionBackend = v(.recognitionBackend, d.recognitionBackend)
         whisperModel = v(.whisperModel, d.whisperModel)
         recognitionAccuracy = v(.recognitionAccuracy, d.recognitionAccuracy)
+        ukrainianWhisperFinal = v(.ukrainianWhisperFinal, d.ukrainianWhisperFinal)
         audioSource = v(.audioSource, d.audioSource)
         recognitionPromptFromBank = v(.recognitionPromptFromBank, d.recognitionPromptFromBank)
         language = v(.language, d.language)

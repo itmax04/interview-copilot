@@ -93,6 +93,9 @@ struct AudioSettingsView: View {
             } else {
                 Text("Распознаёт русский, украинский и английский без отдельного определения языка. Аудио обрабатывается на Mac.")
                     .font(.footnote).foregroundStyle(.secondary)
+                Toggle("Украинский итог — через Whisper turbo", isOn: $model.settings.ukrainianWhisperFinal)
+                Text("Parakeet не умеет закреплять язык, и украинская речь у него сползает в русскую. Итог украинской фразы (язык «Українська» в меню или украинские буквы в тексте) распознаётся Whisper large-v3-turbo с языком uk: точнее, но итог появляется на 1–3 с позже. Нужен файл модели turbo.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Toggle("Подсказывать распознаванию формулировки из базы вопросов", isOn: $model.settings.recognitionPromptFromBank)
                 .disabled(model.settings.recognitionBackend == .parakeet)

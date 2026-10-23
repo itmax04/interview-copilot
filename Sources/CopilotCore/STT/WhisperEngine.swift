@@ -39,10 +39,15 @@ public protocol SpeechRecognizer: AnyObject, Sendable {
     func transcribe(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription
     func detectLanguage(_ samples: [Float]) throws -> (String, [String: Float])
     func cancel()
+    /// Итоговый текст фразы. Гибрид (`HybridRecognizer`) проверяет здесь украинский итог через Whisper.
+    func transcribeFinal(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription
 }
 
 public extension SpeechRecognizer {
     var nativeMultilingual: Bool { false }
+    func transcribeFinal(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription {
+        try transcribe(samples, language: language, prompt: prompt, reducedContext: reducedContext)
+    }
 }
 
 /// Обёртка C API whisper.cpp (ADR-0001 п. 5, R-03). Один экземпляр — один контекст; вызовы сериализуются.

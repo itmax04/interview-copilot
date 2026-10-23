@@ -34,9 +34,12 @@ func finish(_ code: Int32) -> Never {
 }
 
 switch args.first {
-case "stt", "stt-parakeet":
-    let useParakeet = args.first == "stt-parakeet"
+case "stt", "stt-parakeet", "stt-hybrid":
+    // stt-hybrid <parakeet-dir> <whisper.bin> <file.wav>… — итог как в приложении: украинский через Whisper uk (R-35).
+    let useParakeet = args.first == "stt-parakeet" || args.first == "stt-hybrid"
+    let hybridWhisper: String? = args.first == "stt-hybrid" && args.count > 2 ? args[2] : nil
     args.removeFirst()
+    if hybridWhisper != nil { args.remove(at: 1) }
     let lang = option("--lang")
     let repeats = Int(option("--repeat") ?? "1") ?? 1
     let fullContext = flag("--full-context")
@@ -45,7 +48,12 @@ case "stt", "stt-parakeet":
     let loadStart = Date()
     let engine: any SpeechRecognizer
     do {
-        if useParakeet { engine = try await ParakeetEngine.load(from: URL(fileURLWithPath: args[0])) }
+        if useParakeet {
+            let parakeet = try await ParakeetEngine.load(from: URL(fileURLWithPath: args[0]))
+            if let hybridWhisper {
+                engine = HybridRecognizer(primary: parakeet, loadVerifier: { try WhisperEngine(modelPath: hybridWhisper) })
+            } else { engine = parakeet }
+        }
         else { engine = try WhisperEngine(modelPath: args[0]) }
     } catch { fail("\(error)", code: 1) }
     print(String(format: "model=%@ load_ms=%.0f mem_after_load_mb=%.0f (before %.0f)",
@@ -57,7 +65,7 @@ case "stt", "stt-parakeet":
         do { samples = try AudioFileReader.read16kMono(URL(fileURLWithPath: path)) } catch { fail("\(path): \(error)", code: 1) }
         for _ in 0..<repeats {
             do {
-                let r = try engine.transcribe(samples, language: lang, prompt: nil, reducedContext: !fullContext)
+                let r = try engine.transcribeFinal(samples, language: lang, prompt: nil, reducedContext: !fullContext)
                 peak = max(peak, ProcessMemory.footprintMB())
                 let probs = r.languageProbabilities.sorted { $0.key < $1.key }
                     .map { String(format: "%@=%.2f", $0.key, $0.value) }.joined(separator: " ")

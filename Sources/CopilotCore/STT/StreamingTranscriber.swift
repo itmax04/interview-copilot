@@ -344,7 +344,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             }
         }
         do {
-            let result = try recognizer.transcribe(audio, language: lang, prompt: prompt(for: lang), reducedContext: config.finalReducedContext)
+            let result = try recognizer.transcribeFinal(audio, language: lang, prompt: prompt(for: lang), reducedContext: config.finalReducedContext)
             let seconds = Double(audio.count) / Double(buffer.sampleRate)
             lock.withLock {
                 lastLanguage = result.language
