@@ -132,6 +132,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var languageFilter = true
     /// Нейросетевая проверка речи Silero (COPILOT-05 R-02): шум без речи не становится репликой. Нужна модель.
     public var neuralSpeechGate = true
+    /// Только голос владельца в микрофоне (COPILOT-05 R-03): нужен записанный образец голоса.
+    public var ownerVoiceOnly = true
+    /// Порог сходства с отпечатком голоса; 0 — персональный по образцу (`VoicePrint.recommendedThreshold`).
+    public var ownerVoiceThreshold: Double = 0
 
     // Answer / Bank
     public var mode: AnswerMode = .bankAndHint
@@ -259,6 +263,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         speculativeAnswers = v(.speculativeAnswers, d.speculativeAnswers)
         languageFilter = v(.languageFilter, d.languageFilter)
         neuralSpeechGate = v(.neuralSpeechGate, d.neuralSpeechGate)
+        ownerVoiceOnly = v(.ownerVoiceOnly, d.ownerVoiceOnly)
+        ownerVoiceThreshold = v(.ownerVoiceThreshold, d.ownerVoiceThreshold)
         mode = v(.mode, d.mode)
         useProfile = v(.useProfile, d.useProfile)
         bankThreshold = v(.bankThreshold, d.bankThreshold)

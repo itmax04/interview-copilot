@@ -153,6 +153,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         turns.onTurn = { [weak self] turn in self?.turnCompleted(turn) }
         turns.onDraft = { [weak self] text in self?.draftReady(text) }
         listening.onFiltered = { [weak self] text in self?.turns.filtered(text) }
+        // Образец голоса записан или удалён в настройках (COPILOT-05 R-03).
+        NotificationCenter.default.addObserver(forName: ListeningController.voicePrintChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.listening.voiceSettingsChanged() }
+        }
         panelModel.onAnswerFiltered = { [weak self] text in self?.turns.answerFiltered(text) }
 
         panelModel.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
@@ -227,6 +231,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if !force && s.language != old.language { listening.languageSettingChanged() }
         if force || s.neuralSpeechGate != old.neuralSpeechGate { listening.speechGateSettingChanged() }
+        if force || s.ownerVoiceOnly != old.ownerVoiceOnly || s.ownerVoiceThreshold != old.ownerVoiceThreshold { listening.voiceSettingsChanged() }
         if force { updateFilterTerms() }
         if force || s.pauseThresholdMs != old.pauseThresholdMs || s.questionPauseMs != old.questionPauseMs {
             turns.setThreshold(s.pauseThresholdMs, questionMs: s.questionPauseMs)

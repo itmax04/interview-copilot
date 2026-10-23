@@ -17,6 +17,8 @@ public enum TranscriptEvent: Sendable, Equatable {
     case revised(utterance: Int, text: String, language: String)
     /// Реплика без текста (шум, тишина, ошибка распознавания): её итога ждать не нужно (R-38).
     case discarded(utterance: Int, phraseEnd: UInt64)
+    /// Реплика сказана не владельцем (отпечаток голоса, COPILOT-05 R-03): вместо `final`, показывается серым.
+    case foreignVoice(utterance: Int, text: String, similarity: Float, phraseEnd: UInt64)
 }
 
 /// Потоковое распознавание: VAD режет поток собеседника на реплики, пока человек говорит — частичный текст,
@@ -137,6 +139,16 @@ public final class StreamingTranscriber: @unchecked Sendable {
     }
 
     private var speechGate: (@Sendable ([Float]) -> Bool)?
+
+    /// Проверка голоса владельца (COPILOT-05 R-03): сходство с отпечатком и решение; nil — реплика не проверяется
+    /// (короче 1 с или ошибка модели). Без проверки — nil.
+    public typealias VoiceCheck = @Sendable ([Float]) -> (similarity: Float, accepted: Bool)?
+
+    public func setVoiceGate(_ check: VoiceCheck?) {
+        lock.withLock { voiceGate = check }
+    }
+
+    private var voiceGate: VoiceCheck?
     private var recentFinals: [(language: String, text: String)] = []
 
     func prompt(for language: String?) -> String? {
@@ -425,6 +437,12 @@ public final class StreamingTranscriber: @unchecked Sendable {
                 return
             }
             guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
+            // R-03: чужой голос — серой строкой, без хода и подсказки.
+            if let check = lock.withLock({ voiceGate }), let verdict = check(audio), !verdict.accepted {
+                Log.metrics.notice("filtered reason=voice utt=\(u) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
+                onEvent(.foreignVoice(utterance: u, text: result.text, similarity: verdict.similarity, phraseEnd: phraseEnd))
+                return
+            }
             lock.withLock {
                 recentFinals.append((result.language, result.text))
                 if recentFinals.count > 6 { recentFinals.removeFirst() }

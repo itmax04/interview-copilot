@@ -160,3 +160,74 @@ struct MicrophoneNoiseTests {
         #expect(!HallucinationFilter.isLikely("", audioSeconds: 0.5))
     }
 }
+
+@Suite("Отпечаток голоса — COPILOT-05 R-03")
+struct VoicePrintTests {
+    @Test func savesLoadsAndDeletesWithoutAudio() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("voice-\(UUID().uuidString)/owner.json")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let print = VoicePrint(embedding: [0.6, 0.8], speechSeconds: 21, selfSimilarityMin: 0.9)
+        try print.save(to: url)
+        #expect(VoicePrint.load(from: url) == print)
+        let json = try String(contentsOf: url, encoding: .utf8)
+        #expect(!json.contains("samples") && !json.contains("audio"))   // звук образца не хранится
+        VoicePrint.delete(at: url)
+        #expect(VoicePrint.load(from: url) == nil)
+    }
+
+    @Test func personalThresholdFollowsSelfSimilarityWithinLimits() {
+        #expect(VoicePrint(embedding: [1], speechSeconds: 20, selfSimilarityMin: 0.98).recommendedThreshold == 0.85)
+        #expect(abs(VoicePrint(embedding: [1], speechSeconds: 20, selfSimilarityMin: 0.80).recommendedThreshold - 0.72) < 0.001)
+        #expect(VoicePrint(embedding: [1], speechSeconds: 20, selfSimilarityMin: 0.50).recommendedThreshold == 0.55)
+    }
+
+    @Test func oldFileWithoutCalibrationStillLoads() throws {
+        let json = #"{"embedding":[1,0],"createdAt":0,"speechSeconds":12}"#
+        let print = try JSONDecoder().decode(VoicePrint.self, from: Data(json.utf8))
+        #expect(print.selfSimilarityMin == 1 && print.recommendedThreshold == 0.85)
+    }
+
+    @Test func gateBoxIsSilentWhenInactiveOrWithoutPrint() {
+        let box = VoiceGateBox()
+        #expect(box.check([Float](repeating: 0.1, count: 32_000)) == nil)
+        box.update { $0.active = true }
+        #expect(box.check([Float](repeating: 0.1, count: 32_000)) == nil)   // нет модели и образца — не отбрасываем
+    }
+
+    @Test func foreignVoiceReplacesFinal() async {
+        let buffer = AudioRingBuffer(seconds: 30)
+        let fake = FakeRecognizer()
+        let sink = EventSink()
+        var config = StreamingTranscriber.Config()
+        config.partialInterval = 10
+        let t = StreamingTranscriber(recognizer: fake, buffer: buffer, config: config) { sink.add($0) }
+        t.setLanguage("uk")
+        t.setVoiceGate { _ in (similarity: 0.41, accepted: false) }
+        for chunk in [EnergyVADTests.noise(ms: 300, amplitude: 0.001), EnergyVADTests.tone(ms: 1500, amplitude: 0.3),
+                      EnergyVADTests.noise(ms: 700, amplitude: 0.001)] {
+            var i = 0
+            while i < chunk.count {
+                let part = Array(chunk[i..<min(i + 320, chunk.count)])
+                buffer.append(part)
+                t.process(part)
+                i += 320
+            }
+        }
+        #expect(await sink.waitFor { $0.contains { if case .foreignVoice(_, "привіт", 0.41, _) = $0 { true } else { false } } })
+        #expect(!sink.events.contains { if case .final = $0 { true } else { false } })
+    }
+
+    @Test func campPlusSeparatesOwnerFromOtherVoiceWhenInstalled() throws {
+        guard VoiceEmbedder.isInstalled(in: AppPaths.models) else { return } // модель не установлена — проверка в eval `voice`
+        let embedder = try VoiceEmbedder.load(from: AppPaths.models)
+        let audio = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("evals/audio")
+        func read(_ name: String) throws -> [Float] { try AudioFileReader.read16kMono(audio.appendingPathComponent(name)) }
+        // Milena: образец из двух фраз; своя третья фраза против Samantha.
+        let sample = try read("ru-about-me.wav") + read("ru-weakness.wav") + read("test-call/ru-negation.wav")
+        let print = try #require(embedder.makePrint(from: sample))
+        let own = try #require(embedder.similarity(of: read("test-call/ru-technical.wav"), to: print))
+        let other = try #require(embedder.similarity(of: read("en-why-company.wav"), to: print))
+        #expect(own > other + 0.1)
+    }
+}

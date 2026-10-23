@@ -49,6 +49,46 @@ final class ListeningController {
 
     func setTerms(_ terms: TermDictionary) { self.terms = terms }
 
+    /// Проверка голоса владельца (COPILOT-05 R-03): отпечаток, порог, модель CAM++.
+    let voiceGate = VoiceGateBox()
+    private var voiceEmbedderLoading = false
+    static let voicePrintChanged = Notification.Name("InterviewCopilot.voicePrintChanged")
+
+    /// Перечитать образец и настройки голоса; модель загружается один раз в фоне.
+    func voiceSettingsChanged() {
+        let settings = model.settings
+        voiceGate.update {
+            $0.print = VoicePrint.load()
+            $0.threshold = Float(settings.ownerVoiceThreshold)
+        }
+        updateVoiceGateActive()
+        guard voiceGate.current.embedder == nil, !voiceEmbedderLoading, VoiceEmbedder.isInstalled(in: AppPaths.models) else { return }
+        voiceEmbedderLoading = true
+        Task { [weak self] in
+            let embedder = await Task.detached(priority: .utility) { try? VoiceEmbedder.load(from: AppPaths.models) }.value
+            guard let self else { return }
+            self.voiceEmbedderLoading = false
+            if embedder == nil { Log.stt.error("CAM++ load failed") }
+            self.voiceGate.update { $0.embedder = embedder }
+            self.onChange?()
+        }
+    }
+
+    /// Голос проверяется в режиме «Микрофон Mac» и в ответе владельца на ИИ-собеседовании (R-01, Q13).
+    private func updateVoiceGateActive() {
+        let active = model.settings.ownerVoiceOnly
+            && ((testSource == nil && source == .microphone) || interviewRoute == .owner)
+        voiceGate.update { $0.active = active }
+    }
+
+    var voiceStatus: String {
+        let s = voiceGate.current
+        if !VoiceEmbedder.isInstalled(in: AppPaths.models) { return "Модель CAM++ не установлена: scripts/fetch-filter-models.py" }
+        guard let print = s.print else { return "Образец голоса не записан" }
+        let threshold = voiceGate.effectiveThreshold ?? print.recommendedThreshold
+        return String(format: "Образец: %.0f с речи · порог %.2f%@", print.speechSeconds, threshold, s.embedder == nil ? " · загружаю модель…" : "")
+    }
+
     /// Канал для фильтра языка: звонок, весь системный звук или микрофон (R-01, Q8).
     private var gateChannel: LanguageGate.Channel {
         switch source {
@@ -90,6 +130,7 @@ final class ListeningController {
     /// Порог громкости по источнику: у микрофона шум комнаты громче, чем тишина в звуке звонка (COPILOT-05).
     private func applyVADConfig() {
         transcriber?.setVADConfig(source == .microphone ? StreamingTranscriber.microphoneVAD : StreamingTranscriber.Config().vad)
+        updateVoiceGateActive()
     }
 
     private func applySpeechGate() {
@@ -139,6 +180,7 @@ final class ListeningController {
         guard interviewRoute != nil, interviewRoute != value else { return }
         route.set(value)
         interviewRoute = value
+        updateVoiceGateActive()
         partialText = nil
         resetTestCallPhrase()
     }
@@ -148,6 +190,7 @@ final class ListeningController {
         micSource?.stop()
         route.set(nil)
         interviewRoute = nil
+        updateVoiceGateActive()
         await endTestCallCapture()
     }
 
@@ -435,6 +478,8 @@ final class ListeningController {
             t.setPromptProvider(testSource == nil ? promptProvider : nil)
             let gate = model.settings.neuralSpeechGate && testSource == nil ? speechGate : nil
             t.setSpeechGate(gate.map { g in { @Sendable samples in g.isSpeech(samples) } })
+            let voiceGate = self.voiceGate
+            t.setVoiceGate { samples in voiceGate.check(samples) }
             t.setPaused(phase == .paused)
             transcriberBox.set(t)
             transcriber = t
@@ -476,6 +521,15 @@ final class ListeningController {
             onChange?()
         case .revising, .discarded:
             break
+        case .foreignVoice(let u, let text, let similarity, let phraseEnd):
+            // R-03, R-06: чужой голос — серой строкой; для хода — как шум.
+            partialText = nil
+            transcript.append(TranscriptLine(id: u, text: text, language: "", filtered: String(format: "чужой голос %.2f", similarity)))
+            if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
+            onChange?()
+            onFiltered?(text)
+            onTranscript?(.discarded(utterance: u, phraseEnd: phraseEnd))
+            return
         case .revised(let u, let text, let language):
             // Уточнённый итог (R-37) подменяет строку реплики в расшифровке.
             if let i = transcript.lastIndex(where: { $0.id == u }) {

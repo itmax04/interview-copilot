@@ -247,6 +247,61 @@ case "filter":
                  wanted.lost, wanted.total, lostRate * 100, termsKept.ok, termsKept.total, termsLatin, noise.utterances, noise.total,
                  vadMs.sorted().dropFirst(vadMs.count / 2).first ?? 0, pass ? "PASS" : "FAIL"))
     finish(pass ? 0 : 1)
+case "voice":
+    // Eval `voice` (COPILOT-05 R-03, AC-03): отпечаток по образцу «владельца», сходство своих и чужих фраз.
+    args.removeFirst()
+    let manifest = args.first ?? "evals/filter/voice-cases.json"
+    let dir = URL(fileURLWithPath: option("--dir") ?? "evals/audio/voice")
+    let fixedThreshold = option("--threshold").flatMap(Float.init)  // по умолчанию — персональный порог по образцу
+    guard let data = FileManager.default.contents(atPath: manifest),
+          let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+          let owners = root["owners"] as? [String: String], let tests = root["tests"] as? [[String: String]]
+    else { fail("\(manifest): нет манифеста (scripts/make-voice-fixtures.py)", code: 1) }
+    let embedder: VoiceEmbedder
+    do { embedder = try VoiceEmbedder.load(from: AppPaths.models) } catch { fail("CAM++: \(error) (scripts/fetch-filter-models.py)", code: 1) }
+    let verbose = flag("--verbose")
+    var thresholds: [Float] = []
+    var own: [Float] = [], other: [Float] = [], cross: [Float] = []
+    var accepted = 0, ownTotal = 0, rejected = 0, otherTotal = 0
+    var embedMs: [Double] = []
+    for (owner, file) in owners.sorted(by: { $0.key < $1.key }) {
+        guard let sample = try? AudioFileReader.read16kMono(dir.appendingPathComponent(file)),
+              let print_ = embedder.makePrint(from: sample) else { fail("\(owner): образец не обработан", code: 1) }
+        let threshold = fixedThreshold ?? print_.recommendedThreshold
+        thresholds.append(threshold)
+        var line: [String] = []
+        for t in tests {
+            guard let f = t["file"], let speaker = t["speaker"], let samples = try? AudioFileReader.read16kMono(dir.appendingPathComponent(f)) else { continue }
+            let started = Date()
+            guard let sim = embedder.similarity(of: samples, to: print_) else { continue }
+            embedMs.append(Date().timeIntervalSince(started) * 1000)
+            if speaker == owner {
+                if f.contains("cross") { cross.append(sim) } else { own.append(sim) }
+                ownTotal += 1
+                if sim >= threshold { accepted += 1 }
+            } else {
+                other.append(sim)
+                otherTotal += 1
+                if sim < threshold { rejected += 1 }
+            }
+            line.append(String(format: "%@=%.2f", f.replacingOccurrences(of: ".wav", with: ""), sim))
+        }
+        if verbose { print("owner \(owner) (\(String(format: "%.0f", print_.speechSeconds)) с, порог \(String(format: "%.2f", threshold)), разброс образца \(String(format: "%.2f", print_.selfSimilarityMin))): " + line.joined(separator: " ")) }
+    }
+    func stats(_ v: [Float]) -> String {
+        guard !v.isEmpty else { return "—" }
+        return String(format: "min %.2f · median %.2f · max %.2f", v.min()!, v.sorted()[v.count / 2], v.max()!)
+    }
+    print("  свой голос:              " + stats(own))
+    print("  свой голос, другой язык: " + stats(cross))
+    print("  чужие голоса:            " + stats(other))
+    let acceptRate = ownTotal == 0 ? 0 : Double(accepted) / Double(ownTotal)
+    let rejectRate = otherTotal == 0 ? 0 : Double(rejected) / Double(otherTotal)
+    let pass = acceptRate >= 0.95 && rejectRate >= 0.9
+    print(String(format: "voice: threshold=%@ AC-03 owner_accepted=%d/%d (%.0f%%, ≥95%%) others_rejected=%d/%d (%.0f%%, ≥90%%) embed_ms_median=%.0f %@",
+                 thresholds.map { String(format: "%.2f", $0) }.joined(separator: "/"), accepted, ownTotal, acceptRate * 100, rejected, otherTotal, rejectRate * 100,
+                 embedMs.sorted().dropFirst(embedMs.count / 2).first ?? 0, pass ? "PASS" : "FAIL"))
+    finish(pass ? 0 : 1)
 case "turn":
     // Eval `turn` (R-05): evals/turn/cases.jsonl → преждевременные/пропущенные ходы, задержка.
     args.removeFirst()

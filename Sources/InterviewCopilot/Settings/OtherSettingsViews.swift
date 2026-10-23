@@ -133,6 +133,7 @@ struct AudioSettingsView: View {
             Toggle("Нейросетевой детектор речи (Silero): шум без речи не становится репликой", isOn: $model.settings.neuralSpeechGate)
             Text("Нужна модель Silero VAD (scripts/fetch-filter-models.py). Конец фразы не замедляет: проверяется уже закрытая реплика.")
                 .font(.footnote).foregroundStyle(.secondary)
+            VoiceSettingsSection(model: model)
             Toggle("Начинать ответ заранее, не дожидаясь паузы", isOn: $model.settings.speculativeAnswers)
             Text("Модель получает вопрос, как только готов его текст. Если собеседник продолжил, запрос отменяется и уходит заново — запросов к модели становится немного больше.")
                 .font(.footnote).foregroundStyle(.secondary)

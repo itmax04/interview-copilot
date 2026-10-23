@@ -1,0 +1,199 @@
+{
+ "owners": {
+  "Milena": "enroll-Milena.wav",
+  "Lesya": "enroll-Lesya.wav",
+  "Samantha": "enroll-Samantha.wav"
+ },
+ "tests": [
+  {
+   "file": "Milena-ru-0.wav",
+   "speaker": "Milena",
+   "lang": "ru"
+  },
+  {
+   "file": "Milena-ru-1.wav",
+   "speaker": "Milena",
+   "lang": "ru"
+  },
+  {
+   "file": "Milena-ru-2.wav",
+   "speaker": "Milena",
+   "lang": "ru"
+  },
+  {
+   "file": "Milena-ru-3.wav",
+   "speaker": "Milena",
+   "lang": "ru"
+  },
+  {
+   "file": "Lesya-uk-0.wav",
+   "speaker": "Lesya",
+   "lang": "uk"
+  },
+  {
+   "file": "Lesya-uk-1.wav",
+   "speaker": "Lesya",
+   "lang": "uk"
+  },
+  {
+   "file": "Lesya-uk-2.wav",
+   "speaker": "Lesya",
+   "lang": "uk"
+  },
+  {
+   "file": "Lesya-uk-3.wav",
+   "speaker": "Lesya",
+   "lang": "uk"
+  },
+  {
+   "file": "Samantha-en-0.wav",
+   "speaker": "Samantha",
+   "lang": "en"
+  },
+  {
+   "file": "Samantha-en-1.wav",
+   "speaker": "Samantha",
+   "lang": "en"
+  },
+  {
+   "file": "Samantha-en-2.wav",
+   "speaker": "Samantha",
+   "lang": "en"
+  },
+  {
+   "file": "Samantha-en-3.wav",
+   "speaker": "Samantha",
+   "lang": "en"
+  },
+  {
+   "file": "Daniel-en-0.wav",
+   "speaker": "Daniel",
+   "lang": "en"
+  },
+  {
+   "file": "Daniel-en-1.wav",
+   "speaker": "Daniel",
+   "lang": "en"
+  },
+  {
+   "file": "Daniel-en-2.wav",
+   "speaker": "Daniel",
+   "lang": "en"
+  },
+  {
+   "file": "Daniel-en-3.wav",
+   "speaker": "Daniel",
+   "lang": "en"
+  },
+  {
+   "file": "Fred-en-0.wav",
+   "speaker": "Fred",
+   "lang": "en"
+  },
+  {
+   "file": "Fred-en-1.wav",
+   "speaker": "Fred",
+   "lang": "en"
+  },
+  {
+   "file": "Fred-en-2.wav",
+   "speaker": "Fred",
+   "lang": "en"
+  },
+  {
+   "file": "Fred-en-3.wav",
+   "speaker": "Fred",
+   "lang": "en"
+  },
+  {
+   "file": "Karen-en-0.wav",
+   "speaker": "Karen",
+   "lang": "en"
+  },
+  {
+   "file": "Karen-en-1.wav",
+   "speaker": "Karen",
+   "lang": "en"
+  },
+  {
+   "file": "Karen-en-2.wav",
+   "speaker": "Karen",
+   "lang": "en"
+  },
+  {
+   "file": "Karen-en-3.wav",
+   "speaker": "Karen",
+   "lang": "en"
+  },
+  {
+   "file": "Anna-de-0.wav",
+   "speaker": "Anna",
+   "lang": "de"
+  },
+  {
+   "file": "Anna-de-1.wav",
+   "speaker": "Anna",
+   "lang": "de"
+  },
+  {
+   "file": "Anna-de-2.wav",
+   "speaker": "Anna",
+   "lang": "de"
+  },
+  {
+   "file": "Anna-de-3.wav",
+   "speaker": "Anna",
+   "lang": "de"
+  },
+  {
+   "file": "Thomas-fr-0.wav",
+   "speaker": "Thomas",
+   "lang": "fr"
+  },
+  {
+   "file": "Thomas-fr-1.wav",
+   "speaker": "Thomas",
+   "lang": "fr"
+  },
+  {
+   "file": "Thomas-fr-2.wav",
+   "speaker": "Thomas",
+   "lang": "fr"
+  },
+  {
+   "file": "Thomas-fr-3.wav",
+   "speaker": "Thomas",
+   "lang": "fr"
+  },
+  {
+   "file": "Milena-en-cross-0.wav",
+   "speaker": "Milena",
+   "lang": "en"
+  },
+  {
+   "file": "Milena-en-cross-1.wav",
+   "speaker": "Milena",
+   "lang": "en"
+  },
+  {
+   "file": "Lesya-ru-cross-0.wav",
+   "speaker": "Lesya",
+   "lang": "ru"
+  },
+  {
+   "file": "Lesya-ru-cross-1.wav",
+   "speaker": "Lesya",
+   "lang": "ru"
+  },
+  {
+   "file": "Samantha-ru-cross-0.wav",
+   "speaker": "Samantha",
+   "lang": "ru"
+  },
+  {
+   "file": "Samantha-ru-cross-1.wav",
+   "speaker": "Samantha",
+   "lang": "ru"
+  }
+ ]
+}

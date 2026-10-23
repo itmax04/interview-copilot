@@ -62,7 +62,7 @@ public struct TestCallTrial: Sendable {
         case .revising(let u):
             // Оценка — по уточнённому тексту (R-37); задержка — по быстрому итогу, который видит ход.
             if seen.contains(u) { revising.insert(u) }
-        case .discarded(let u, _):
+        case .discarded(let u, _), .foreignVoice(let u, _, _, _):
             pending.remove(u)
             revising.remove(u)
         case .revised(let u, let value, _):

@@ -51,7 +51,8 @@ public struct AnswerCapture: Sendable {
         case .revising(let u):
             revising.insert(u)
             pending.insert(u)
-        case .discarded(let u, _):
+        case .discarded(let u, _), .foreignVoice(let u, _, _, _):
+            // Чужой голос в ответе владельца (COPILOT-05 R-01) — как шум.
             pending.remove(u)
             revising.remove(u)
         case .revised(let u, let value, _):
