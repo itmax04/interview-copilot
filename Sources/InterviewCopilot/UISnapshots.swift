@@ -143,7 +143,7 @@ enum UISnapshots {
         let onboarding = OnboardingState(model: model, listening: listening, onFinish: {})
         for step in OnboardingState.Step.allCases {
             onboarding.step = step
-            shot("onboarding-\(step.rawValue + 1)", NSSize(width: 660, height: 520), OnboardingView(state: onboarding).padding(20))
+            shot("onboarding-\(step.rawValue + 1)", NSSize(width: 860, height: 600), OnboardingView(state: onboarding))
         }
         shot("permissions", NSSize(width: 600, height: 420), PermissionsView(listening: listening).padding(20))
 
@@ -386,57 +386,5 @@ enum UISnapshots {
                 m.lines = [.init(id: 1, text: "Над яким проєктом ви працювали останнім?")]
             }),
         ]
-    }
-}
-
-/// Рамка окна настроек для снимка: вкладки сверху, как в `SettingsView`, выбранная — подсвечена.
-private struct SettingsFrame<Content: View>: View {
-    let selected: String
-    @ViewBuilder let content: Content
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 14) {
-                ForEach(SettingsTab.allCases) { t in
-                    VStack(spacing: 2) {
-                        Image(systemName: t.symbol)
-                        Text(t.rawValue).font(.caption)
-                    }
-                    .foregroundStyle(t.rawValue.lowercased() == selected ? Color.accentColor : .secondary)
-                }
-            }
-            .padding(.vertical, 8)
-            Divider()
-            content.padding(20)
-        }
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
-}
-
-/// Рамка окна «Профиль» для снимка: шапка с выбором профиля и вкладки, выбранная — подсвечена.
-private struct ProfileFrame<Content: View>: View {
-    let bank: BankController
-    let selected: String
-    @ViewBuilder let content: Content
-    private let names = [("resume", "Резюме"), ("facts", "Факты о себе"), ("job", "Вакансия"), ("instructions", "Инструкции"),
-                         ("materials", "Материалы"), ("questions", "Вопросы")]
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Профиль:").foregroundStyle(.secondary)
-                Text(bank.profile.name).fontWeight(.semibold)
-                Spacer()
-                Text("Новый…  Переименовать…  Удалить…  Папка").foregroundStyle(.secondary).font(.callout)
-            }
-            HStack(spacing: 2) {
-                ForEach(names, id: \.0) { n in
-                    Text(n.1).font(.callout)
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(n.0 == selected ? Color.accentColor.opacity(0.25) : .clear))
-                }
-            }
-            content
-        }
-        .padding(16)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 }

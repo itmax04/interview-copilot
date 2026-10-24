@@ -2,7 +2,7 @@ import AppKit
 import CopilotCore
 import SwiftUI
 
-/// Мастер первого запуска — S-09: разрешения → ключ Gemini → модели с прогрессом.
+/// Мастер первого запуска — S-09, P18: разрешения → бесплатный ключ Groq → модели с прогрессом.
 /// Без разрешения на запись экрана слушать нельзя, и это явно показано.
 @MainActor
 final class OnboardingWindowController {
@@ -99,91 +99,167 @@ final class OnboardingState {
 struct OnboardingView: View {
     @Bindable var state: OnboardingState
 
+    /// P18: шаги с линиями, крупный заголовок шага, справа — значок приложения.
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
-                ForEach(OnboardingState.Step.allCases, id: \.self) { s in
-                    HStack(spacing: 6) {
-                        Text("\(s.rawValue + 1)")
-                            .font(.caption.bold())
-                            .frame(width: 20, height: 20)
-                            .background(Circle().fill(s == state.step ? Color.accentColor : Color.secondary.opacity(0.3)))
-                            .foregroundStyle(.white)
-                        Text(title(s)).foregroundStyle(s == state.step ? .primary : .secondary)
+        VStack(spacing: 0) {
+            stepper.padding(.top, 26).padding(.bottom, 18)
+            HStack(alignment: .top, spacing: 28) {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text(heading).font(.system(size: 32, weight: .bold)).fixedSize(horizontal: false, vertical: true)
+                    Text(subheading).font(.system(size: 17)).foregroundStyle(IC.secondary).fixedSize(horizontal: false, vertical: true)
+                    Group {
+                        switch state.step {
+                        case .permissions: PermissionsView(listening: state.listening).frame(maxWidth: .infinity, alignment: .leading)
+                        case .key: KeyStep(model: state.model)
+                        case .models: ModelsStep(state: state)
+                        }
                     }
+                    .padding(.top, 6)
                 }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                art
             }
-            Divider()
-            Group {
-                switch state.step {
-                case .permissions:
-                    PermissionsView(listening: state.listening)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                case .key:
-                    KeyStep(model: state.model)
-                case .models:
-                    ModelsStep(state: state)
-                }
-            }
-            .frame(minHeight: 300, alignment: .top)
-            Divider()
+            .padding(.horizontal, 40)
+            Spacer(minLength: 12)
+            Rectangle().fill(IC.line).frame(height: 1)
             HStack {
                 if state.step != .permissions {
-                    Button("Назад") { state.step = OnboardingState.Step(rawValue: state.step.rawValue - 1)! }
+                    Button { state.step = OnboardingState.Step(rawValue: state.step.rawValue - 1)! } label: { Label("Назад", systemImage: "chevron.left") }
+                        .buttonStyle(ICButtonStyle())
                 }
                 Spacer()
                 if state.step == .models {
                     Button("Готово") { state.finish() }
+                        .buttonStyle(ICButtonStyle(primary: true))
                         .keyboardShortcut(.defaultAction)
                         .disabled(!state.allModelsPresent)
                 } else {
-                    Button("Далее") { state.step = OnboardingState.Step(rawValue: state.step.rawValue + 1)! }
-                        .keyboardShortcut(.defaultAction)
+                    Button { state.step = OnboardingState.Step(rawValue: state.step.rawValue + 1)! } label: {
+                        HStack(spacing: 8) { Text("Далее"); Image(systemName: "chevron.right") }
+                    }
+                    .buttonStyle(ICButtonStyle(primary: true))
+                    .keyboardShortcut(.defaultAction)
                 }
             }
+            .padding(20)
         }
-        .padding(24)
-        .frame(width: 620)
+        .frame(width: 860, height: 600)
+        .background(Color.white)
+        .foregroundStyle(IC.ink)
+        .tint(IC.accent)
+        .environment(\.colorScheme, .light)
+    }
+
+    private var stepper: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(OnboardingState.Step.allCases, id: \.self) { s in
+                let done = s.rawValue < state.step.rawValue, current = s == state.step
+                if s.rawValue > 0 {
+                    Rectangle().fill(done || current ? IC.green.opacity(0.8) : IC.line).frame(width: 120, height: 3).padding(.top, 17)
+                }
+                VStack(spacing: 8) {
+                    ZStack {
+                        Circle().fill(done ? IC.green : current ? IC.accent : Color.white).frame(width: 36, height: 36)
+                            .overlay(Circle().strokeBorder(done || current ? .clear : IC.line))
+                        if done { Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(.white) }
+                        else { Text("\(s.rawValue + 1)").font(.system(size: 15, weight: .medium)).foregroundStyle(current ? .white : IC.secondary) }
+                    }
+                    Text(title(s)).font(.system(size: 14, weight: current ? .semibold : .regular)).foregroundStyle(current ? IC.accent : IC.secondary)
+                        .fixedSize()
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Шаг \(s.rawValue + 1): \(title(s))\(current ? ", текущий" : "")")
+            }
+        }
+    }
+
+    private var art: some View {
+        ZStack {
+            ForEach(0..<3) { i in
+                RoundedRectangle(cornerRadius: 50).stroke(IC.accent.opacity(0.10), lineWidth: 1)
+                    .frame(width: CGFloat(170 + i * 40), height: CGFloat(170 + i * 40)).rotationEffect(.degrees(-14))
+            }
+            Image(nsImage: ParrotIcon.colored(size: 150))
+                .shadow(color: IC.accent.opacity(0.25), radius: 24, y: 12)
+        }
+        .frame(width: 280, height: 300)
+        .background(RadialGradient(colors: [IC.accent.opacity(0.10), .clear], center: .center, startRadius: 10, endRadius: 160))
+        .accessibilityHidden(true)
+    }
+
+    private var heading: String {
+        switch state.step {
+        case .permissions: "Разрешите слушать звонок"
+        case .key: "Подключите бесплатную модель"
+        case .models: "Загрузите модели распознавания"
+        }
+    }
+
+    private var subheading: String {
+        switch state.step {
+        case .permissions: "Звук звонка и микрофон распознаются на этом Mac."
+        case .key: "Groq отвечает примерно за 1 с и бесплатен."
+        case .models: "Речь и поиск по вашим ответам работают локально."
+        }
     }
 
     private func title(_ s: OnboardingState.Step) -> String {
         switch s {
         case .permissions: "Разрешения"
-        case .key: "Ключ Gemini"
+        case .key: "Бесплатный ключ"
         case .models: "Модели"
         }
     }
 }
 
+/// P18: ключ Groq — первый в цепочке и бесплатный; остальные модели — позже в Настройках.
 private struct KeyStep: View {
     @Bindable var model: AppModel
     @State private var input = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Ключ Gemini API нужен для подсказок на вопросы, которых нет в базе. Бесплатный ключ: aistudio.google.com/apikey.")
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                SecureField(model.hasKey[.gemini] == true ? "Ключ сохранён — введите новый, чтобы заменить" : "Вставьте ключ", text: $input)
-                    .textFieldStyle(.roundedBorder)
-                Button("Сохранить") {
+            Text("Ключ Groq").font(.system(size: 14, weight: .medium))
+            HStack(spacing: 8) {
+                Image(systemName: "lock").foregroundStyle(IC.secondary)
+                SecureField(saved ? "Сохранен — вставьте новый, чтобы заменить" : "Вставьте ключ gsk_…", text: $input)
+                    .textFieldStyle(.plain)
+                Button("Проверить") {
                     let v = input
                     input = ""
-                    model.saveKey(v, for: .gemini)
+                    model.saveKey(v, for: .groq)
+                    model.checkKey(.groq)
                 }
+                .buttonStyle(ICButtonStyle(primary: true))
                 .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            HStack {
-                Image(systemName: model.hasKey[.gemini] == true ? "checkmark.circle.fill" : "circle.dashed")
-                    .foregroundStyle(model.hasKey[.gemini] == true ? .green : .secondary)
-                Text(model.keyStatus[.gemini] ?? (model.hasKey[.gemini] == true ? "Ключ сохранён" : "Нет ключа")).foregroundStyle(.secondary)
+            .padding(.leading, 12).padding(4)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.accent.opacity(0.6), lineWidth: 1.5))
+            HStack(spacing: 8) {
+                Image(systemName: saved ? "checkmark.circle.fill" : "circle.dashed").foregroundStyle(saved ? IC.green : IC.secondary)
+                Text(model.keyStatus[.groq] ?? (saved ? "Ключ сохранен" : "Нет ключа")).foregroundStyle(IC.secondary).font(.system(size: 12))
                 Spacer()
-                Button("Проверить") { model.checkKey(.gemini) }.disabled(model.hasKey[.gemini] != true)
+                if saved { Button("Проверить") { model.checkKey(.groq) }.buttonStyle(.borderless) }
             }
-            Text("Можно пропустить: база вопросов работает и без ключа. DeepSeek и Anthropic — в Settings → Keys.")
-                .font(.footnote).foregroundStyle(.secondary)
+            Link(destination: URL(string: "https://console.groq.com/keys")!) {
+                Label("Получить ключ на console.groq.com", systemImage: "arrow.up.right.square").font(.system(size: 13))
+            }
+            HStack(spacing: 12) {
+                Image(systemName: "plus").frame(width: 32, height: 32).background(IC.background, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Добавить другие модели позже").font(.system(size: 13, weight: .medium))
+                    Text("Cerebras, Gemini, DeepSeek, Claude и свой API — в Настройках → Ключи моделей. Шаг можно пропустить: ваши готовые ответы работают и без ключа.")
+                        .font(.system(size: 11)).foregroundStyle(IC.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(14)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
         }
     }
+
+    private var saved: Bool { model.hasKey[.groq] == true }
 }
 
 private struct ModelsStep: View {
