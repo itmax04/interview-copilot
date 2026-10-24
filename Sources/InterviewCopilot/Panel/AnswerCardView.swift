@@ -15,8 +15,9 @@ struct AnswerCard: View {
                 bodyView(entry: entry, version: version)
                 if version.status == .complete || version.status == .cancelled { footer(version) }
             }
-            .padding(12)
-            .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Color.white.opacity(0.08)))
+            .padding(14)
+            .background(ICDark.surface, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(ICDark.stroke))
             if model.history.hasUnseenNew {
                 Button { model.history.selectLatest() } label: {
                     Label("Новый ответ", systemImage: "arrow.down.circle.fill")
@@ -32,24 +33,30 @@ struct AnswerCard: View {
     }
 
     private func header(_ entry: AnswerEntry) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            if model.history.entries.count > 1 {
-                navButton("chevron.left", label: "Предыдущий ответ \(model.hotkey(.previousAnswer))",
-                          disabled: model.history.selected == 0) { model.selectPrevious() }
-                Text(model.history.position ?? "").font(.system(size: model.fontSize - 3).monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.6))
-                navButton("chevron.right", label: "Следующий ответ \(model.hotkey(.nextAnswer))",
-                          disabled: model.history.isViewingLatest) { model.selectNext() }
-            }
-            (Text("Вопрос: ").foregroundColor(.white.opacity(0.6)) + Text(entry.title))
-                .font(.system(size: model.fontSize - 1, weight: .semibold))
+        HStack(alignment: .center, spacing: 8) {
+            (Text("Вопрос: ").foregroundColor(ICDark.secondary).fontWeight(.semibold) + Text(entry.title))
+                .font(.system(size: model.fontSize - 1))
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button { model.onCopy?() } label: { Image(systemName: "doc.on.doc") }
-                .buttonStyle(.plain)
-                .help("Скопировать ответ")
-                .accessibilityLabel("Скопировать ответ")
-                .disabled(entry.current?.text.isEmpty ?? true)
+            if model.history.entries.count > 1 {
+                HStack(spacing: 8) {
+                    navButton("chevron.left", label: "Предыдущий ответ \(model.hotkey(.previousAnswer))",
+                              disabled: model.history.selected == 0) { model.selectPrevious() }
+                    Text(model.history.position ?? "").font(.system(size: model.fontSize - 2).monospacedDigit())
+                    navButton("chevron.right", label: "Следующий ответ \(model.hotkey(.nextAnswer))",
+                              disabled: model.history.isViewingLatest) { model.selectNext() }
+                }
+                .padding(.horizontal, 9).padding(.vertical, 5)
+                .background(ICDark.raised, in: RoundedRectangle(cornerRadius: 8))
+                .fixedSize()
+            }
+            Button { model.onCopy?() } label: {
+                Image(systemName: "doc.on.doc").frame(width: 28, height: 26).background(ICDark.raised, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .help("Скопировать ответ")
+            .accessibilityLabel("Скопировать ответ")
+            .disabled(entry.current?.text.isEmpty ?? true)
         }
     }
 
@@ -63,34 +70,39 @@ struct AnswerCard: View {
     }
 
     private func versionTabs(_ entry: AnswerEntry) -> some View {
+        // P03: вкладки «Версия 1 / Версия 2 (короче)».
         HStack(spacing: 4) {
             ForEach(Array(entry.versions.enumerated()), id: \.offset) { i, v in
+                let selected = i == entry.selectedVersion
                 Button { model.history.selectVersion(i) } label: {
                     Text(versionTitle(v, index: i)).lineLimit(1)
-                        .font(.system(size: max(9, model.fontSize - 4), weight: i == entry.selectedVersion ? .semibold : .regular))
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(Capsule().fill(i == entry.selectedVersion ? Theme.accent.opacity(0.5) : Color.white.opacity(0.08)))
+                        .font(.system(size: max(10, model.fontSize - 3), weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? .white : ICDark.secondary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .frame(maxWidth: .infinity)
+                        .background(selected ? IC.accent.opacity(0.45) : .clear, in: RoundedRectangle(cornerRadius: 7))
+                        .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(selected ? IC.accent : .clear))
                 }
                 .buttonStyle(.plain)
             }
         }
+        .padding(3)
+        .background(ICDark.surface, in: RoundedRectangle(cornerRadius: 9))
     }
 
     private func versionTitle(_ v: AnswerVersion, index: Int) -> String {
         switch v.kind {
-        case .refine: "\(index + 1) · \(v.instruction ?? "уточнение")"
-        case .strong: "\(index + 1) · сильная модель"
-        default: "\(index + 1)"
+        case .refine: "Версия \(index + 1) (\(v.instruction ?? "уточнение"))"
+        case .strong: "Версия \(index + 1) (\(model.strongModelName))"
+        default: "Версия \(index + 1)"
         }
     }
 
     @ViewBuilder private func bodyView(entry: AnswerEntry, version: AnswerVersion) -> some View {
         switch version.status {
         case .waiting:
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("Готовлю ответ…").foregroundStyle(.white.opacity(0.75))
-            }
+            // P02 №4: статус «Готовлю ответ…» — в пилюле над карточкой, здесь — полоса ожидания.
+            ProgressView().progressViewStyle(.linear).tint(IC.accent).accessibilityLabel("Готовлю ответ")
             // R-08: прежний ответ виден, но не выдаёт себя за новый.
             if entry.versions.count == 1, let previous = model.history.previous, let text = previous.current?.text, !text.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
@@ -104,7 +116,7 @@ struct AnswerCard: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
-                        MarkdownText(version.text, fontSize: model.fontSize)
+                        MarkdownText(version.text, fontSize: model.fontSize, emphasizeLead: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                         if version.status == .streaming { Text("▍").foregroundStyle(.white.opacity(0.6)) }
@@ -127,13 +139,13 @@ struct AnswerCard: View {
                     .foregroundStyle(.white.opacity(0.5))
             }
         case .failed(let reason):
-            Label(reason, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.warn)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Button("Повторить") { model.onRetryAnswer?(entry.id) }
-                Button("Настройки моделей") { model.onOpenSettings?() }
+            VStack(alignment: .leading, spacing: 8) {
+                AlertBox(icon: "exclamationmark.circle.fill", text: reason, size: model.fontSize)
+                HStack(spacing: 6) {
+                    ICOverlayButton(title: "Повторить", icon: "arrow.clockwise", size: model.fontSize) { model.onRetryAnswer?(entry.id) }
+                    ICOverlayButton(title: "Сменить модель", icon: "arrow.left.arrow.right", size: model.fontSize) { model.onOpenSettings?() }
+                }
             }
-            .controlSize(.small)
         case .noMatch(let ids):
             Label(version.source.isEmpty ? "Нет в базе" : version.source, systemImage: "questionmark.circle")
                 .font(.system(size: model.fontSize, weight: .semibold))
@@ -173,15 +185,18 @@ struct AnswerCard: View {
     }
 
     private var chips: some View {
-        ForEach(["Короче", "Подробнее", "Пример"], id: \.self) { chip in
-            Button(chip) { model.onQuickRefine?(chip) }
-                .buttonStyle(.plain)
-                .font(.system(size: max(10, model.fontSize - 3)))
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.horizontal, 8).padding(.vertical, 3)
-                .background(Capsule().fill(Color.white.opacity(0.1)))
-                .accessibilityHint("Новая версия ответа: \(chip.lowercased())")
+        ForEach([("Короче", "text.alignleft"), ("Подробнее", "sparkles"), ("Пример", "doc.text")], id: \.0) { chip, icon in
+            Button { model.onQuickRefine?(chip) } label: {
+                Label(chip, systemImage: icon)
+                    .font(.system(size: max(10, model.fontSize - 3)))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .padding(.horizontal, 9).padding(.vertical, 5)
+                    .background(ICDark.raised, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ICDark.stroke))
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Новая версия ответа: \(chip.lowercased())")
         }
     }
 
@@ -199,10 +214,21 @@ struct AnswerCard: View {
 struct MarkdownText: View {
     let text: String
     let fontSize: Double
+    /// P01: первая строка целиком жирным («суть») — крупнее остального ответа.
+    var emphasizeLead = false
 
-    init(_ text: String, fontSize: Double) {
+    init(_ text: String, fontSize: Double, emphasizeLead: Bool = false) {
         self.text = text
         self.fontSize = fontSize
+        self.emphasizeLead = emphasizeLead
+    }
+
+    /// Жирная первая строка «**…**» и остальной текст.
+    private var lead: (String, String)? {
+        guard emphasizeLead, let first = text.components(separatedBy: "\n").first else { return nil }
+        let t = first.trimmingCharacters(in: .whitespaces)
+        guard t.hasPrefix("**"), t.hasSuffix("**"), t.count > 4, !t.dropFirst(2).dropLast(2).contains("**") else { return nil }
+        return (String(t.dropFirst(2).dropLast(2)), String(text.dropFirst(first.count)).trimmingCharacters(in: .newlines))
     }
 
     private enum Block: Hashable {
@@ -233,6 +259,17 @@ struct MarkdownText: View {
     }
 
     var body: some View {
+        if let (head, rest) = lead {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(head).font(.system(size: fontSize + 4, weight: .bold)).fixedSize(horizontal: false, vertical: true)
+                if !rest.isEmpty { MarkdownText(rest, fontSize: fontSize) }
+            }
+        } else {
+            blocksView
+        }
+    }
+
+    private var blocksView: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 switch block {

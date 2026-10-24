@@ -14,7 +14,7 @@ final class PanelController {
     init(model: PanelModel) {
         self.model = model
         panel = CopilotPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 540),
             styleMask: [.nonactivatingPanel, .titled, .resizable, .fullSizeContentView, .utilityWindow],
             backing: .buffered, defer: true)
         panel.isFloatingPanel = true

@@ -26,7 +26,7 @@ struct SettingsStoreTests {
         #expect(s.piiFilterEnabled)                            // R-12
         #expect(s.historyRetentionDays == 30)                  // R-18
         #expect(s.monthlyBudgetUSD == 5)                       // R-18
-        #expect(s.panelWidth == 380)                           // R-16
+        #expect(s.panelWidth == 420)                           // R-16; P01 — шире, чтобы кнопки с клавишами помещались
         #expect(s.geminiFreeTier)                              // R-20
         #expect(s.modelIDs.anthropic == "claude-sonnet-5-5")
     }

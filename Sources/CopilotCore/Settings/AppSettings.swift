@@ -165,7 +165,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     // Panel
     public var panelOpacity: Double = 0.92
     public var panelFontSize: PanelFontSize = .medium
-    public var panelWidth: Double = 380
+    /// P01: шире прежних 380 pt — кнопки действий с подсказками клавиш помещаются в строку.
+    public var panelWidth: Double = 420
     /// Масштаб оверлея (COPILOT-09 R-11): меню «Крупнее / Мельче / Обычный размер».
     public var panelZoom: Double = 1
     /// «Скрывать при демонстрации экрана» (R-17) — без обещания невидимости: результат проверяется кнопкой.

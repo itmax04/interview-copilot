@@ -37,7 +37,7 @@ enum UISnapshots {
             let pm = PanelModel()
             pm.hotkeys = model.settings.hotkeys
             configure(pm)
-            shot("panel-\(name)", NSSize(width: 380, height: name == "answer-code" ? 620 : 440), dark: true,
+            shot("panel-\(name)", NSSize(width: 420, height: name == "answer-code" ? 660 : 540), dark: true,
                  PanelView(model: pm).background(Color(white: 0.13)))
         }
 

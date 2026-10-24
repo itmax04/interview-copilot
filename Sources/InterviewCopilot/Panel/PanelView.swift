@@ -17,12 +17,14 @@ struct PanelView: View {
                 if model.chatOpen { ChatField(model: model) }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
-        .padding(.bottom, model.collapsed ? 12 : 12)
+        .padding(.horizontal, 16)
+        .padding(.top, 14)
+        .padding(.bottom, 14)
         .foregroundStyle(.white)
         .font(.system(size: model.fontSize))
         .frame(minWidth: 300, maxWidth: .infinity, minHeight: model.collapsed ? 0 : 220, maxHeight: .infinity, alignment: .topLeading)
+        // P00: темное стекло #16181D 82% поверх размытия окна.
+        .background(ICDark.glass)
         .overlay {
             // Проверка видимости (R-17): контрольный цвет на долю секунды — по нему видно, попал ли оверлей в захват экрана.
             if model.visibilityProbe { Color(red: 1, green: 0, blue: 1) }
@@ -32,17 +34,21 @@ struct PanelView: View {
 
     @ViewBuilder private var notes: some View {
         if !model.sessionNotes.isEmpty {
-            HStack(spacing: 6) {
+            VStack(spacing: 6) {
                 ForEach(Array(model.sessionNotes.enumerated()), id: \.offset) { i, note in
-                    Button { model.onRemoveSessionNote?(i) } label: {
-                        Label("На всю сессию: \(note)", systemImage: "xmark").labelStyle(TrailingIconLabel())
-                            .lineLimit(1)
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle.fill").foregroundStyle(IC.accent)
+                        Text("На всю сессию: \(note)").lineLimit(1)
+                        Spacer(minLength: 4)
+                        Button { model.onRemoveSessionNote?(i) } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }
+                            .buttonStyle(.plain)
+                            .help("Снять указание")
+                            .accessibilityLabel("Снять указание: \(note)")
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: model.fontSize - 3, weight: .medium))
-                    .padding(.horizontal, 8).padding(.vertical, 3)
-                    .background(Capsule().fill(Theme.accent.opacity(0.35)))
-                    .help("Снять указание")
+                    .font(.system(size: model.fontSize - 2, weight: .medium))
+                    .padding(.horizontal, 10).padding(.vertical, 7)
+                    .background(IC.accent.opacity(0.22), in: RoundedRectangle(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(IC.accent.opacity(0.45)))
                 }
             }
         }
@@ -53,8 +59,7 @@ struct PanelView: View {
             Banner(icon: "clock.badge.exclamationmark", text: notice, color: Theme.warn, size: model.fontSize)
         }
         if let silent = model.callSilentSeconds, silent >= 10 {
-            Banner(icon: "speaker.slash", text: "Не слышу звонок \(silent) с — проверьте звук вкладки или источник", color: Theme.warn,
-                   size: model.fontSize)
+            AlertBox(icon: "speaker.slash.fill", text: "Не слышу звонок \(silent) с — проверьте звук вкладки или источник", size: model.fontSize)
         }
         if model.ownerAnswering {
             Banner(icon: "mic.fill", text: "Ваш ответ записывается — \(model.hotkey(.ownerAnswer)), чтобы закончить", color: Theme.warn,
@@ -135,49 +140,56 @@ private struct TaskChip: View {
 private struct Toolbar: View {
     let model: PanelModel
 
-    /// Две строки: статус и управление сессией сверху, действия — во всю ширину снизу (панель узкая, 380 pt).
+    /// P01: сверху — уровни микрофона и звонка, таймер, свернуть, меню, «Завершить»; ниже — действия с клавишами.
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
                 if model.sessionActive {
-                    LevelBars(level: model.micLevel, icon: "mic.fill", label: "Микрофон")
-                    LevelBars(level: model.callLevel, icon: "speaker.wave.2.fill", label: "Звук звонка")
-                    if let timer = model.sessionTimer {
-                        Text(timer)
-                            .font(.system(size: model.fontSize - 2, weight: .medium).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.8))
-                            .padding(.leading, 4)
-                            .accessibilityLabel("Время сессии \(timer)")
-                    }
+                    LevelWave(level: model.micLevel, icon: "mic.fill", label: "Микрофон", silent: false)
+                    Rectangle().fill(ICDark.divider).frame(width: 1, height: 20)
+                    LevelWave(level: model.callLevel, icon: "speaker.wave.2.fill", label: "Звук звонка", silent: model.callSilentSeconds != nil)
                 } else {
-                    Image(nsImage: ParrotIcon.colored(size: 18)).accessibilityHidden(true)
-                    StatusPill(text: statusText, color: statusColor)
+                    ICLogo(size: 22)
+                    ICStatusPill(text: statusText, color: statusColor, size: max(10, model.fontSize - 3))
                 }
                 Spacer(minLength: 4)
-                IconButton(symbol: model.collapsed ? "chevron.down" : "chevron.up", label: model.collapsed ? "Развернуть" : "Свернуть") {
+                if model.sessionActive, let timer = model.sessionTimer {
+                    Text(timer)
+                        .font(.system(size: model.fontSize - 1, weight: .medium).monospacedDigit())
+                        .lineLimit(1).fixedSize()
+                        .foregroundStyle(.white.opacity(0.85))
+                        .accessibilityLabel("Время сессии \(timer)")
+                }
+                IconButton(symbol: model.collapsed ? "chevron.down" : "minus", label: model.collapsed ? "Развернуть" : "Свернуть") {
                     model.onToggleCollapse?()
                 }
                 OverlayMenu(model: model)
                 if model.sessionActive {
-                    Button("Завершить") { model.onEndSession?() }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Theme.danger)
-                        .controlSize(.small)
+                    Button { model.onEndSession?() } label: {
+                        HStack(spacing: 6) {
+                            Circle().fill(.white).frame(width: 9, height: 9)
+                            Text("Завершить").font(.system(size: model.fontSize - 2, weight: .semibold))
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(IC.red, in: RoundedRectangle(cornerRadius: 9))
                         .fixedSize()
-                        .accessibilityHint("Завершить сессию: приложение перестанет слушать")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Завершить сессию")
+                    .accessibilityHint("Приложение перестанет слушать")
                 }
             }
             if model.sessionActive && !model.collapsed {
                 HStack(spacing: 6) {
-                    ActionButton(title: "Ответ", keys: model.hotkey(.answerNow), size: model.fontSize) { model.onAnswerNow?() }
+                    ICOverlayButton(title: "Ответ", icon: "doc", keys: model.hotkey(.answerNow), size: model.fontSize) { model.onAnswerNow?() }
                         .help("Ответить на последнюю реплику сейчас")
-                    ActionButton(title: "Скриншот", keys: model.hotkey(.screenshot), size: model.fontSize) { model.onScreenshot?() }
+                    ICOverlayButton(title: "Скриншот", icon: "crop", keys: model.hotkey(.screenshot), size: model.fontSize) { model.onScreenshot?() }
                         .help("Снимок экрана с задачей → решение")
-                    ActionButton(title: "Чат", keys: model.hotkey(.chat), size: model.fontSize) { model.onToggleChat?() }
+                    ICOverlayButton(title: "Чат", icon: "bubble.left", keys: model.hotkey(.chat), size: model.fontSize) { model.onToggleChat?() }
                         .help("Вопрос текстом или уточнение ответа")
                     if model.selfTest {
-                        ActionButton(title: model.ownerAnswering ? "Конец" : "Я отвечаю", keys: model.hotkey(.ownerAnswer),
-                                     size: model.fontSize) { model.onOwnerAnswer?() }
+                        ICOverlayButton(title: model.ownerAnswering ? "Конец" : "Я отвечаю", icon: "person.wave.2",
+                                        keys: model.hotkey(.ownerAnswer), size: model.fontSize) { model.onOwnerAnswer?() }
                     }
                 }
             }
@@ -198,35 +210,11 @@ private struct Toolbar: View {
 
     private var statusColor: Color {
         switch model.state {
-        case .listening: Theme.ok
-        case .noPermission, .error: Theme.danger
-        default: .gray
+        case .listening: IC.green
+        case .noPermission, .error: IC.red
+        case .paused, .downloading: IC.amber
+        default: Color(hex: 0xA1A1AA)
         }
-    }
-}
-
-private struct ActionButton: View {
-    let title: String
-    let keys: String
-    let size: Double
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Text(title).fontWeight(.semibold)
-                Text(keys).font(.system(size: max(9, size - 4), weight: .medium)).foregroundStyle(.white.opacity(0.6))
-            }
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .font(.system(size: max(11, size - 2)))
-            .padding(.horizontal, 8).padding(.vertical, 5)
-            .frame(maxWidth: .infinity)
-            .background(Capsule().fill(Color.white.opacity(0.12)))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(keys)")
     }
 }
 
@@ -236,7 +224,8 @@ private struct IconButton: View {
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            Image(systemName: symbol).frame(width: 22, height: 22).background(Circle().fill(Color.white.opacity(0.1)))
+            Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).frame(width: 26, height: 26)
+                .background(ICDark.raised, in: Circle())
         }
         .buttonStyle(.plain)
         .help(label)
@@ -244,37 +233,31 @@ private struct IconButton: View {
     }
 }
 
-private struct LevelBars: View {
+/// P01: иконка и «волна» из 9 полос; горит столько, сколько громкость (−60…−20 дБ). Звонок не слышен — красным (P02 №5).
+private struct LevelWave: View {
     let level: Float
     let icon: String
     let label: String
-    var body: some View {
-        HStack(spacing: 2) {
-            Image(systemName: icon).font(.system(size: 9)).foregroundStyle(.white.opacity(0.6))
-            ForEach(Array([-55, -42, -30].enumerated()), id: \.offset) { i, threshold in
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(level >= Float(threshold) ? Theme.ok : Color.white.opacity(0.18))
-                    .frame(width: 3, height: CGFloat(6 + i * 3))
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label): \(level >= -55 ? "есть сигнал" : "тишина")")
-    }
-}
+    let silent: Bool
+    private static let heights: [CGFloat] = [6, 11, 16, 20, 14, 18, 10, 13, 7]
 
-private struct StatusPill: View {
-    let text: String
-    let color: Color
     var body: some View {
+        let lit = Int(((min(max(level, -60), -20) + 60) / 40 * Float(Self.heights.count)).rounded())
         HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true)
-            Text(text).lineLimit(1)
+            Image(systemName: silent ? "mic.slash.fill" : icon).font(.system(size: 13))
+                .foregroundStyle(silent ? IC.red : lit > 0 ? IC.green : .white.opacity(0.55))
+            HStack(spacing: 2) {
+                ForEach(Array(Self.heights.enumerated()), id: \.offset) { i, h in
+                    Capsule()
+                        .fill(silent ? IC.red.opacity(0.5) : i < lit ? IC.green : Color.white.opacity(0.18))
+                        .frame(width: 2.5, height: silent ? 2.5 : h)
+                }
+            }
+            .frame(height: 20)
         }
-        .font(.system(size: 12, weight: .medium))
-        .padding(.horizontal, 8).padding(.vertical, 3)
-        .background(Capsule().fill(Color.white.opacity(0.12)))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Статус: \(text)")
+        .animation(.easeOut(duration: 0.12), value: lit)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(silent ? "нет сигнала" : lit > 0 ? "есть сигнал" : "тишина")")
     }
 }
 
@@ -301,7 +284,8 @@ private struct OverlayMenu: View {
                 Button("Завершить сессию", role: .destructive) { model.onEndSession?() }
             }
         } label: {
-            Image(systemName: "ellipsis").frame(width: 22, height: 22).background(Circle().fill(Color.white.opacity(0.1)))
+            Image(systemName: "ellipsis").rotationEffect(.degrees(90)).font(.system(size: 12, weight: .bold)).frame(width: 26, height: 26)
+                .background(ICDark.raised, in: Circle())
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
@@ -349,9 +333,9 @@ private struct TranscriptStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top, spacing: 8) {
-                Image(systemName: "waveform").foregroundStyle(model.partial != nil ? Theme.ok : .white.opacity(0.5))
-                    .accessibilityHidden(true)
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Собеседник").font(.system(size: max(9, model.fontSize - 4))).foregroundStyle(ICDark.secondary)
                 Group {
                     if let partial = model.partial {
                         (Text(partial) + Text(" ▍").foregroundColor(.white.opacity(0.6)))
@@ -365,10 +349,16 @@ private struct TranscriptStrip: View {
                 .lineLimit(model.transcriptExpanded ? nil : 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityLabel("Собеседник: \(model.partial ?? model.lines.last?.text ?? "тишина")")
+                }
                 Button { model.onClearTranscript?() } label: {
-                    Text("Очистить \(model.hotkey(.clearTranscript))").font(.system(size: max(9, model.fontSize - 4)))
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Capsule().fill(Color.white.opacity(0.1)))
+                    HStack(spacing: 5) {
+                        Text("Очистить").font(.system(size: max(10, model.fontSize - 3)))
+                        ICKeycap(text: model.hotkey(.clearTranscript), dark: true)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .background(ICDark.surface, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ICDark.stroke))
+                    .fixedSize()
                 }
                 .buttonStyle(.plain)
                 .help("Очистить расшифровку и «последние реплики» для следующего ответа; память интервью остаётся")
@@ -382,8 +372,9 @@ private struct TranscriptStrip: View {
                 if let last = model.lines.last, last.filtered != nil { TranscriptLineView(model: model, line: last) }
             }
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Color.white.opacity(0.06)))
+        .padding(.vertical, 10)
+        .overlay(alignment: .top) { Rectangle().fill(ICDark.divider).frame(height: 1) }
+        .overlay(alignment: .bottom) { Rectangle().fill(ICDark.divider).frame(height: 1) }
     }
 }
 
@@ -411,31 +402,42 @@ private struct TranscriptLineView: View {
 private struct DetectionChip: View {
     let model: PanelModel
     var body: some View {
-        switch model.detection {
-        case .idle:
-            EmptyView()
-        case .checking:
-            chip("Проверяю…", color: Theme.warn, spinner: true)
-        case .detected:
-            chip("Вопрос найден", color: Theme.ok)
-        case .notQuestion:
-            chip("Не вопрос · ответить вручную \(model.hotkey(.answerNow))", color: .gray)
+        // P02: «Готовлю ответ…» — пока у нового вопроса нет текста; иначе — статус распознавания.
+        if case .waiting? = model.history.current?.current?.status, model.history.isViewingLatest {
+            ICStatusPill(text: "Готовлю ответ…", color: IC.accent, spinner: true, size: size)
+        } else {
+            switch model.detection {
+            case .idle: EmptyView()
+            case .checking: ICStatusPill(text: "Проверяю…", color: IC.amber, size: size)
+            case .detected: ICStatusPill(text: "Вопрос найден", color: IC.green, size: size)
+            case .notQuestion: ICStatusPill(text: "Не вопрос · ответить вручную \(model.hotkey(.answerNow))", color: Color(hex: 0xA1A1AA), size: size)
+            }
         }
     }
 
-    private func chip(_ text: String, color: Color, spinner: Bool = false) -> some View {
-        HStack(spacing: 6) {
-            if spinner { ProgressView().controlSize(.mini) } else { Circle().fill(color).frame(width: 7, height: 7) }
-            Text(text)
-        }
-        .font(.system(size: max(10, model.fontSize - 3), weight: .medium))
-        .padding(.horizontal, 8).padding(.vertical, 3)
-        .background(Capsule().fill(color.opacity(0.18)))
-        .accessibilityElement(children: .combine)
-    }
+    private var size: Double { max(10, model.fontSize - 2) }
 }
 
 // MARK: Вспомогательное
+
+/// P02 №5–6: красная плашка с причиной.
+struct AlertBox: View {
+    let icon: String
+    let text: String
+    let size: Double
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon).foregroundStyle(IC.red)
+            Text(text).fixedSize(horizontal: false, vertical: true)
+        }
+        .font(.system(size: size - 2, weight: .medium))
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(IC.red.opacity(0.22), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.red.opacity(0.45)))
+        .accessibilityElement(children: .combine)
+    }
+}
 
 private struct Banner: View {
     let icon: String
@@ -481,20 +483,24 @@ private struct ChatField: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            HStack {
+            HStack(spacing: 8) {
+                Image(systemName: "text.bubble").foregroundStyle(ICDark.secondary)
                 TextField(placeholder, text: $model.chatText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .lineLimit(1...4)
                     .focused($focused)
                     .onSubmit(submit)
-                Button(action: submit) { Image(systemName: "arrow.up.circle.fill").font(.title3) }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Theme.accent)
-                    .disabled(model.chatText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .accessibilityLabel("Отправить")
+                Button(action: submit) {
+                    Image(systemName: "paperplane.fill").font(.system(size: 13)).frame(width: 34, height: 30)
+                        .background(IC.accent, in: RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .disabled(model.chatText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityLabel("Отправить")
             }
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.1)))
+            .padding(.leading, 10).padding(.trailing, 5).padding(.vertical, 5)
+            .background(ICDark.surface, in: RoundedRectangle(cornerRadius: 11))
+            .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(IC.accent, lineWidth: 1.5))
             Text("↩ отправить · Esc закрыть").font(.system(size: max(9, model.fontSize - 4))).foregroundStyle(.white.opacity(0.5))
         }
         .onAppear { focused = true }
