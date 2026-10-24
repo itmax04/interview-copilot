@@ -73,6 +73,33 @@ enum UISnapshots {
             if renderWeb(URL(fileURLWithPath: path), size: NSSize(width: 1100, height: 760), to: dir.appendingPathComponent("\(name).png")) { count += 1 }
         }
 
+        // Мастер «Создать сессию» (COPILOT-09): три шага; проверка — на синтетических результатах, без захвата звука.
+        var config = SessionConfig()
+        config.profileID = bank.activeID
+        config.company = "ФинБанк"
+        config.jobDescription = "Senior iOS Engineer\n\nПлатёжный модуль на SwiftUI, код-ревью, менторство. 5+ лет iOS, Swift Concurrency."
+        config.plannedMinutes = 60
+        let wizard = SessionWizardModel(config: config, model: model, bank: bank, listening: listening)
+        wizard.jobLink = "https://jobs.example.com/senior-ios"
+        for step in SessionWizardModel.Step.allCases {
+            wizard.step = step
+            if step == .check {
+                var input = PreflightInput()
+                input.micPeakDB = -28
+                input.callSourceName = "Google Chrome"
+                input.callPeakDB = -90
+                input.recognizerReady = true
+                input.recognizerStatus = "Parakeet v3 + уточнение Whisper turbo"
+                input.providersWithKeys = [.groq, .gemini]
+                input.resumeCharacters = 1_900
+                input.materials = 3
+                input.questions = 9
+                input.preparedQuestions = 1
+                wizard.preflight = Preflight.evaluate(input)
+            }
+            shot("wizard-\(step.rawValue + 1)", NSSize(width: 820, height: 600), SessionWizardView(state: wizard))
+        }
+
         // История сессий.
         let store = SessionStore(directory: AppPaths.sessions)
         try? store.save(sampleSession(store))
@@ -188,6 +215,12 @@ enum UISnapshots {
         }
         return [
             ("idle", { $0.state = .idle }),
+            ("no-session", { $0.state = .noSession }),
+            ("call-detected", { $0.state = .noSession; $0.callDetected = "Zoom" }),
+            ("session-active", { m in
+                listening(m); m.state = .listening; m.sessionActive = true; m.sessionTimer = "56:12"
+                m.planNotice = "Осталось 4 мин по плану"
+            }),
             ("no-permission", { $0.state = .noPermission }),
             ("downloading", { $0.state = .downloading(0.42) }),
             ("listening", { m in listening(m); m.state = .listening; m.partial = "А как вы тестируете" }),

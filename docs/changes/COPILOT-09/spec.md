@@ -1,6 +1,6 @@
 # COPILOT-09: Спецификация — живой помощник уровня ParakeetAI
 
-ID: COPILOT-09-spec · Статус: **draft (H-0)** · Версия: 1 · Дата: 2026-10-24 · Владелец: itmax04
+ID: COPILOT-09-spec · Статус: **accepted** (2026-10-24) · Версия: 1 · Дата: 2026-10-24 · Владелец: itmax04
 Связи: [intent.md](intent.md) · [plan.md](plan.md)
 
 ## Требования

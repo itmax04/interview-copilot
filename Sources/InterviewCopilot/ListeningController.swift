@@ -11,6 +11,8 @@ final class ListeningController {
         case idle            // нет источника
         case listening
         case paused
+        /// Сессии нет (COPILOT-09 R-02): звук и микрофон не захватываются, модель распознавания загружена заранее.
+        case standby
         case error(String)
     }
 
@@ -243,6 +245,7 @@ final class ListeningController {
     private var usesMicrophone: Bool { effectiveSource == .microphone }
     var recognitionReady: Bool { transcriber != nil && phase == .listening }
     private var pausedBeforeTest = false
+    private var standbyBeforeTest = false
     private var transcriptBeforeTest: [TranscriptLine] = []
     private let deliveryEpoch = TranscriptDeliveryEpoch()
     /// Какой источник сейчас идёт в распознавание во время ИИ-собеседования; nil — обычная работа.
@@ -287,6 +290,7 @@ final class ListeningController {
     func beginTestCallCapture(_ source: AudioSourceSetting) async {
         if testSource == nil {
             pausedBeforeTest = phase == .paused
+            standbyBeforeTest = phase == .standby
             transcriptBeforeTest = transcript
             transcript = []
         }
@@ -318,7 +322,12 @@ final class ListeningController {
         transcript = transcriptBeforeTest
         transcriptBeforeTest = []
         partialText = nil
-        if pausedBeforeTest {
+        if standbyBeforeTest {
+            // Тест или ИИ-собеседование без сессии — после них снова не слушаем (COPILOT-09 R-02).
+            await capture?.stop()
+            micSource?.stop()
+            setPhase(.standby)
+        } else if pausedBeforeTest {
             await capture?.stop()
             micSource?.stop()
             source = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
@@ -353,6 +362,7 @@ final class ListeningController {
         case .noPermission: .noPermission
         case .listening: .listening(source: source.displayName ?? "—")
         case .paused: .paused(source: source.displayName ?? "—")
+        case .standby: .noSession
         case .idle, .error: .idle
         }
     }
@@ -365,9 +375,36 @@ final class ListeningController {
         }
     }
 
+    /// Без сессии: всё остановлено, распознавание загружено заранее — старт сессии не ждёт модель (COPILOT-09 R-02).
+    func enterStandby() {
+        stopping = false
+        transcriber?.setPaused(true)
+        partialText = nil
+        ownerAnswering = false
+        setPhase(.standby)
+        loadRecognizer()
+        Task {
+            await capture?.stop()
+            micSource?.stop()
+            mic?.stop()
+            buffer.clear()
+        }
+    }
+
+    /// Загрузить модель распознавания заранее, ничего не захватывая.
+    func warmUp() { loadRecognizer() }
+
+    /// Начало сессии: расшифровка с чистого листа, захват по источнику из настроек.
+    func startSession() {
+        transcript = []
+        partialText = nil
+        start()
+    }
+
     /// Запуск при старте приложения и после выдачи разрешений.
     func start() {
         stopping = false
+        transcriber?.setPaused(false)
         // Микрофону разрешение «Запись экрана» не нужно.
         guard usesMicrophone || Permissions.screenCaptureGranted else {
             setPhase(.noPermission)
@@ -403,13 +440,13 @@ final class ListeningController {
 
     /// Смена источника из меню или настроек — без перезапуска приложения (R-01).
     func sourceSettingChanged() {
-        guard phase != .paused else { return }
+        guard phase != .paused, phase != .standby else { return }
         if phase == .noPermission && !usesMicrophone { return }
         Task { await applySource(restart: false) }
     }
 
     private func runningAppsChanged() {
-        guard phase != .paused, phase != .noPermission else { return }
+        guard phase != .paused, phase != .noPermission, phase != .standby else { return }
         let resolved = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
         if resolved != source { Task { await applySource(restart: false) } }
     }
@@ -474,6 +511,33 @@ final class ListeningController {
             setPhase(.error(String(describing: error)))
         }
     }
+
+    // MARK: Проверка перед стартом (COPILOT-09 R-03)
+
+    /// Пиковый уровень микрофона за `seconds`; nil — нет разрешения или микрофон не запустился.
+    func probeMicrophone(seconds: Double = 2) async -> Float? {
+        guard Permissions.microphone == .granted else { return nil }
+        let meter = LevelMeter()
+        let probe = MicrophoneCapture { samples in meter.add(samples) }
+        do { try probe.start() } catch { return nil }
+        try? await Task.sleep(for: .seconds(seconds))
+        probe.stop()
+        return meter.takeDB()
+    }
+
+    /// Источник звонка по настройке и пиковый уровень его звука за `seconds` (только уровень — без распознавания).
+    func probeCall(seconds: Double = 3) async -> (name: String?, peak: Float?) {
+        let resolved = AudioSourceResolver.resolve(model.settings.audioSource, running: Self.runningApps())
+        guard resolved != .none, resolved != .microphone, Permissions.screenCaptureGranted else { return (resolved.displayName, nil) }
+        let meter = LevelMeter()
+        let probe = SystemAudioCapture(onSamples: { samples in meter.add(samples) }, onStop: { _ in })
+        do { try await probe.start(resolved) } catch { return (resolved.displayName, nil) }
+        try? await Task.sleep(for: .seconds(seconds))
+        await probe.stop()
+        return (resolved.displayName, meter.takeDB())
+    }
+
+    var recognizerLoaded: Bool { transcriber != nil }
 
     /// Остановка и освобождение модели перед выходом.
     func shutdown() {
@@ -580,7 +644,7 @@ final class ListeningController {
             t.setVoiceGate { samples in voiceGate.check(samples) }
             let enhancerBox = self.enhancerBox
             t.setAudioEnhancer { samples in enhancerBox.enhance(samples) }
-            t.setPaused(phase == .paused)
+            t.setPaused(phase == .paused || phase == .standby)
             transcriberBox.set(t)
             transcriber = t
             var ownerConfig = StreamingTranscriber.Config()
@@ -708,7 +772,7 @@ final class ListeningController {
     /// Захват остановили macOS или значок записи в строке меню (R-39). На собеседовании нельзя молча перестать слышать:
     /// перезапускаем через 1 с, не больше 5 раз за 10 минут; дальше — понятная ошибка в панели.
     private func captureStopped(_ error: Error?) {
-        guard !stopping, phase != .paused, phase != .noPermission else { return }
+        guard !stopping, phase != .paused, phase != .noPermission, phase != .standby else { return }
         let reason = error?.localizedDescription ?? "?"
         let now = Date()
         captureRestarts = captureRestarts.filter { now.timeIntervalSince($0) < 600 }
@@ -722,7 +786,7 @@ final class ListeningController {
         setPhase(.error("Захват звука остановлен — перезапускаю…"))
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(1))
-            guard let self, !self.stopping, self.phase != .paused else { return }
+            guard let self, !self.stopping, self.phase != .paused, self.phase != .standby else { return }
             await self.applySource(restart: true)
         }
     }

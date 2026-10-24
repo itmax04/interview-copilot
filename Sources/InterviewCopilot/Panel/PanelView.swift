@@ -38,6 +38,17 @@ struct PanelView: View {
                     .background(Capsule().fill(Color.white.opacity(0.14)))
                     .accessibilityLabel("Источник: \(badge)")
             }
+            if model.sessionActive, let timer = model.sessionTimer {
+                Text(timer)
+                    .font(.system(size: model.fontSize - 2, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.8))
+                    .accessibilityLabel("Время сессии \(timer)")
+                Button("Завершить") { model.onEndSession?() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .controlSize(.small)
+                    .accessibilityHint("Завершить сессию: приложение перестанет слушать")
+            }
             if let latency = model.latency {
                 Text(String(format: "%.1fs", latency))
                     .font(.system(size: model.fontSize - 2).monospacedDigit())
@@ -51,7 +62,34 @@ struct PanelView: View {
 
     @ViewBuilder
     private var content: some View {
+        if let notice = model.planNotice {
+            Label(notice, systemImage: "clock.badge.exclamationmark")
+                .font(.system(size: model.fontSize - 2, weight: .medium))
+                .foregroundStyle(.orange)
+        }
         switch model.state {
+        case .noSession:
+            VStack(alignment: .leading, spacing: 12) {
+                if let app = model.callDetected {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Похоже, начался звонок: \(app)", systemImage: "phone.arrow.down.left")
+                            .font(.system(size: model.fontSize, weight: .semibold))
+                        Text("Начать сессию с последними настройками?").foregroundStyle(.white.opacity(0.75))
+                        HStack {
+                            Button("Начать") { model.onStartDetectedCall?() }.buttonStyle(.borderedProminent)
+                            Button("Настроить…") { model.onCreateSession?() }
+                            Button("Не сейчас") { model.onDismissDetectedCall?() }
+                        }
+                        .controlSize(.small)
+                    }
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.08)))
+                }
+                Message(icon: "pause.circle", text: "Сессии нет — приложение не слушает звонок и микрофон.")
+                Button("Создать сессию… \(model.hotkey(.newSession))") { model.onCreateSession?() }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityHint("Открывает мастер: тип звонка, профиль, проверка перед стартом")
+            }
         case .idle:
             Message(icon: "ear", text: "Выберите источник: откройте созвон в Chrome, Zoom или Telegram или выберите приложение в меню «Listening».")
         case .noPermission:
@@ -116,6 +154,7 @@ private struct StatusPill: View {
         switch state {
         case .listening, .answer, .noMatch: "Listening — \(source ?? "—")"
         case .paused: "Paused"
+        case .noSession: "Нет сессии"
         case .thinking: "Thinking…"
         case .idle: "Idle"
         case .noPermission: "No permission"
@@ -127,7 +166,7 @@ private struct StatusPill: View {
     private var color: Color {
         switch state {
         case .listening, .answer, .noMatch, .thinking: .green
-        case .paused, .idle, .downloading: .gray
+        case .paused, .idle, .downloading, .noSession: .gray
         case .noPermission, .error: .red
         }
     }

@@ -1,6 +1,6 @@
 # COPILOT-09: План
 
-ID: COPILOT-09-plan · Статус: **draft (H-0)** · Дата: 2026-10-24
+ID: COPILOT-09-plan · Статус: **accepted** (2026-10-24) · Дата: 2026-10-24
 Связи: [intent.md](intent.md) · [spec.md](spec.md)
 
 | Шаг | Что | Требования | Проверка |

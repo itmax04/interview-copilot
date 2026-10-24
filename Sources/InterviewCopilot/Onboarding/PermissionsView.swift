@@ -104,6 +104,7 @@ struct PermissionsView: View {
         case .idle: "Источник не найден: откройте Meet в Chrome, Zoom или Telegram"
         case .listening: "Слушаю: \(listening.source.displayName ?? "—")"
         case .paused: "Пауза"
+        case .standby: "Сессии нет — приложение не слушает. Создайте сессию в меню"
         case .error(let message): "Ошибка: \(message)"
         }
     }

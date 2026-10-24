@@ -21,7 +21,9 @@ public enum MenuAction: String, Sendable, Equatable {
     case listeningSource, togglePause
     case mode, models, language
     case profile, questionBank, editProfile, practice, aiInterview
-    case answerNow, screenshot, togglePanel, newInterview, sessionHistory
+    case answerNow, screenshot, togglePanel, sessionHistory
+    /// Сессия (COPILOT-09 R-01, R-02): мастер «Создать сессию…» и «Завершить сессию».
+    case newSession, endSession
     /// Самопроверка «Микрофон Mac»: «сейчас отвечаю я» (COPILOT-06, пункт меню — COPILOT-07).
     case ownerAnswer
     case status
@@ -81,6 +83,9 @@ public struct MenuState: Sendable, Equatable {
     /// Профили для подменю Profile и активный (COPILOT-08 R-01).
     public var profiles: [ProfileInfo] = []
     public var activeProfileID: String?
+    /// Идёт сессия и её время (COPILOT-09).
+    public var sessionActive = false
+    public var sessionTimer: String?
 
     public init(listening: ListeningStatus = .idle, mode: AnswerMode = .bankAndHint,
                 chain: [ProviderID] = [.gemini, .deepseek, .anthropic], language: RecognitionLanguage = .auto,
@@ -117,6 +122,7 @@ public enum MenuLayout {
         case .paused(let app): listeningTitle = "Paused — \(app)"; paused = true
         case .noPermission: listeningTitle = "No screen recording permission"; paused = false
         case .idle: listeningTitle = "Listening — choose source"; paused = false
+        case .noSession: listeningTitle = "Нет сессии — не слушаю"; paused = false
         }
         let chainTitle = s.chain.map(\.displayName).joined(separator: " → ")
         var actions = [
@@ -124,8 +130,6 @@ public enum MenuLayout {
             MenuItemSpec(.screenshot, "Screenshot → \(s.strongModelName)", symbol: "camera", hotkey: s.hotkey(.screenshot)),
             MenuItemSpec(.togglePanel, s.panelVisible ? "Hide panel" : "Show panel", symbol: "macwindow",
                          hotkey: s.hotkey(.togglePanel)),
-            // COPILOT-06: память интервью начинается заново, прошлое сохраняется в историю.
-            MenuItemSpec(.newInterview, "Новое интервью", symbol: "arrow.counterclockwise"),
             MenuItemSpec(.sessionHistory, "Session history…", symbol: "clock"),
         ]
         if s.selfTest {
@@ -133,8 +137,13 @@ public enum MenuLayout {
             actions.insert(MenuItemSpec(.ownerAnswer, s.ownerAnswering ? "Закончить мой ответ" : "Сейчас отвечаю я",
                                         symbol: s.ownerAnswering ? "stop.circle" : "mic", hotkey: s.hotkey(.ownerAnswer)), at: 1)
         }
+        // COPILOT-09 R-02: без сессии приложение не слушает — первым пунктом меню идёт сессия.
+        let session = s.sessionActive
+            ? MenuItemSpec(.endSession, "Завершить сессию" + (s.sessionTimer.map { " · \($0)" } ?? ""), symbol: "stop.circle")
+            : MenuItemSpec(.newSession, "Создать сессию…", symbol: "play.circle", hotkey: s.hotkey(.newSession))
         return [
             [
+                session,
                 // Без разрешения — пункт без подменю: клик открывает окно разрешений (AC-13).
                 MenuItemSpec(.listeningSource, listeningTitle, symbol: "circle.fill",
                              submenu: s.listening != .noPermission, statusDot: s.listening.dot),

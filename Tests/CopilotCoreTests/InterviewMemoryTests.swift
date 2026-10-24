@@ -81,8 +81,9 @@ struct InterviewMemoryTests {
     }
 
     @Test func ownerAnswerHotkeyIsControlOptionA() {
-        // Новое действие — в конце allCases: номера прежних горячих клавиш не меняются.
-        #expect(HotkeyAction.allCases.last == .ownerAnswer)
+        // Новые действия — в конце allCases: номера прежних горячих клавиш не меняются (⌃⌥A — шестая, ⌃⌥N — после неё).
+        #expect(HotkeyAction.allCases.firstIndex(of: .ownerAnswer) == 5)
+        #expect(HotkeyAction.allCases.last == .newSession)
         #expect(HotkeyBinding.defaults[.ownerAnswer]?.displayString == "⌃⌥A")
     }
 
@@ -223,7 +224,7 @@ struct PromptScenarioCheckTests {
     }
 
     @Test func scenariosUseNoProfileAndBackReference() {
-        #expect(PromptScenarios.all.count == 13)
+        #expect(PromptScenarios.all.count == 15)
         let trap = PromptScenarios.request(PromptScenarios.all[0])
         #expect(trap.system.contains("No candidate profile is given"))
         #expect(trap.messages[0].text.contains("Shown suggestion (may not have been said): Я працював з широким стеком"))

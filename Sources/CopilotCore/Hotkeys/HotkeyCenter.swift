@@ -7,6 +7,8 @@ public enum HotkeyAction: String, Codable, CaseIterable, Sendable {
     /// Самопроверка «Микрофон Mac»: речь — ответ владельца, а не вопрос (COPILOT-06). Новые действия — только в конец:
     /// номер действия — его индекс в `allCases`.
     case ownerAnswer
+    /// «Создать сессию…» (COPILOT-09 R-01).
+    case newSession
 
     public var title: String {
         switch self {
@@ -16,6 +18,7 @@ public enum HotkeyAction: String, Codable, CaseIterable, Sendable {
         case .togglePause: "Пауза"
         case .strongModel: "Сильная модель"
         case .ownerAnswer: "Сейчас отвечаю я (самопроверка)"
+        case .newSession: "Создать сессию"
         }
     }
 }
@@ -40,6 +43,7 @@ public struct HotkeyBinding: Codable, Equatable, Hashable, Sendable {
         .togglePause: HotkeyBinding(keyCode: UInt32(kVK_ANSI_P), modifiers: ctrlOpt),
         .strongModel: HotkeyBinding(keyCode: UInt32(kVK_ANSI_C), modifiers: ctrlOpt),
         .ownerAnswer: HotkeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: ctrlOpt),
+        .newSession: HotkeyBinding(keyCode: UInt32(kVK_ANSI_N), modifiers: ctrlOpt),
     ]
 
     static let keyNames: [UInt32: String] = {

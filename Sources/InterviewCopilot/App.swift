@@ -30,6 +30,10 @@ enum InterviewCopilotMain {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.memory(runs: (i + 1 < args.count ? Int(args[i + 1]) : nil) ?? 3))
         }
+        if args.contains("--smoke-session") {
+            setvbuf(stdout, nil, _IOLBF, 0)
+            exit(SmokeTest.session())
+        }
         if args.contains("--smoke-prepare") {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.prepare())
@@ -80,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func makeOnboarding() -> OnboardingWindowController {
         OnboardingWindowController(model: model, listening: listening) { [weak self] in
             self?.onboarding.close()
-            self?.listening.start()
+            self?.listening.enterStandby()
         }
     }
     private let panelModel = PanelModel()
@@ -91,6 +95,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let sessions = SessionController()
     private lazy var historyWindow = SessionHistoryWindowController(sessions: sessions)
     private lazy var profileWindow = ProfileWindowController(bank: bank, model: model)
+    /// Живая сессия и мастер «Создать сессию» (COPILOT-09).
+    private let liveSession = LiveSessionController()
+    private lazy var wizard = SessionWizardController(model: model, bank: bank, listening: listening) { [weak self] config in
+        self?.startSession(config)
+    }
     private lazy var usage: UsageMeter = {
         let url = Bundle.main.url(forResource: "pricing", withExtension: "json")
             ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../Resources/pricing.json")
@@ -167,12 +176,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self.testCallOnly {
                 // Служебный локальный запуск не включает облачные ответы после закрытия теста.
                 self.listening.togglePause()
-            } else if self.listening.phase != .paused { self.turns.start() }
+            } else if self.liveSession.isActive, self.listening.phase != .paused { self.turns.start() }
             self.refreshUI()
         }
         testCall.onPermissions = { [weak self] in self?.permissionsWindow.show() }
         listening.onOwnerTranscript = { [weak self] event in self?.interviewer.handleOwnerTranscript(event) }
-        interviewer.onEnd = { [weak self] in self?.refreshUI() }
+        interviewer.onEnd = { [weak self] in
+            // ИИ-собеседование — сессия типа Mock (COPILOT-09 R-06): закончилось оно — закончилась и сессия.
+            guard let self else { return }
+            if self.liveSession.isActive, self.liveSession.config.type == .mock { self.liveSession.end() }
+            self.refreshUI()
+        }
         interviewer.onOwnerAnswer = { [weak self] text in
             self?.memory.addAnswer(text)
             self?.saveMemory()
@@ -194,7 +208,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         panelModel.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
         panelModel.onOpenPermissions = { [weak self] in self?.permissionsWindow.show() }
-        panelModel.onRetry = { [weak self] in self?.listening.start() }
+        panelModel.onRetry = { [weak self] in
+            guard let self else { return }
+            if self.liveSession.isActive { self.listening.start() } else { self.listening.enterStandby() }
+        }
+        panelModel.onCreateSession = { [weak self] in self?.showWizard() }
+        panelModel.onEndSession = { [weak self] in self?.liveSession.end() }
+        panelModel.onStartDetectedCall = { [weak self] in
+            guard let self else { return }
+            self.startSession(self.wizard.defaultConfig())
+        }
+        panelModel.onDismissDetectedCall = { [weak self] in self?.liveSession.dismissDetectedCall() }
+        liveSession.onStart = { [weak self] config in self?.sessionStarted(config) }
+        liveSession.onEnd = { [weak self] config in self?.sessionEnded(config) }
+        liveSession.onTick = { [weak self] in self?.refreshUI() }
+        liveSession.runningApps = { ListeningController.runningApps().map(\.bundleID) }
+        liveSession.detectionAllowed = { [weak self] in
+            guard let self else { return false }
+            return !self.testCall.active && !self.interviewer.active && self.model.settings.onboardingCompleted
+        }
+        answers.session = { [weak self] in
+            guard let self, self.liveSession.isActive else { return nil }
+            return self.liveSession.config
+        }
 
         bank.onChange = { [weak self] in
             self?.updateRecognitionPrompt()
@@ -235,12 +271,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         sessions.currentSource = { [weak self] in self?.listening.source.displayName }
-        sessions.start(source: nil, retentionDays: model.settings.historyRetentionDays)
         bank.onActiveProfileChange = { [weak self] id in self?.model.settings.activeProfileID = id }
         bank.start(embeddingModel: model.settings.embeddingModel, activeProfileID: model.settings.activeProfileID)
 
-        listening.start()
-        turns.start()
+        // COPILOT-09 R-02: без сессии приложение не слушает; модель распознавания загружается заранее.
+        listening.enterStandby()
+        liveSession.startTicking()
         model.verifyModelIDs()
         refreshUI()
         panel.show()
@@ -253,7 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             permissionsWindow.show()
         }
         startDownloadProgressMirror()
-        if openInterviewer { interviewer.start() }
+        if openInterviewer { handle(MenuAction.aiInterview) }
         if openSettings { settingsWindow.show() }
         if openProfile { profileWindow.show() }
     }
@@ -322,7 +358,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refreshUI() {
-        checkCallSourceChange()
         var state = model.menuState(listening: listening.listeningStatus, profileName: bank.profile.name,
                                     cardCount: bank.cards.count)
         state.bankError = bank.error
@@ -333,7 +368,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.panelVisible = panel.isVisible
         state.selfTest = listening.source == .microphone && !testCall.active && !interviewer.active
         state.ownerAnswering = listening.ownerAnswering
+        state.sessionActive = liveSession.isActive
+        state.sessionTimer = liveSession.clock?.elapsedText()
         menuBar?.state = state
+
+        panelModel.sessionActive = liveSession.isActive
+        panelModel.sessionTimer = liveSession.clock?.elapsedText()
+        panelModel.planNotice = liveSession.planNotice
+        panelModel.callDetected = liveSession.detectedCall
 
         panelModel.sourceName = listening.source.displayName
         panelModel.ownerAnswering = listening.ownerAnswering
@@ -343,6 +385,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .noPermission: panelModel.state = .noPermission
         case .idle: panelModel.state = .idle
         case .paused: panelModel.state = .paused
+        case .standby:
+            // Ответ последней сессии остаётся на экране до новой (его можно дочитать и скопировать).
+            switch panelModel.state {
+            case .answer, .noMatch: break
+            default: panelModel.state = .noSession
+            }
         case .error(let message): panelModel.state = .error(message)
         case .listening:
             // Ответ, «нет в базе» и генерация остаются на экране; остальные состояния сменяются на «слушаю».
@@ -355,9 +403,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func turnCompleted(_ turn: Turn) {
         guard !testCall.active, !testCallOnly else { return }
-        // COPILOT-06: тишина дольше 30 минут — это уже другое интервью.
-        if let last = lastTurnAt, Date().timeIntervalSince(last) > Self.newInterviewAfterSilence { startNewInterview(reason: "silence") }
-        lastTurnAt = Date()
         memory.addQuestion(turn.text, turnID: turn.id)
         saveMemory()
         answers.handle(turn)
@@ -368,34 +413,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let memory = InterviewMemory()
     /// Быстрый текст реплик до уточнения (R-37): по нему находим вопрос в памяти.
     private var fastText: [Int: String] = [:]
-    private var lastTurnAt: Date?
-    private var lastCallSource: String?
-    static let newInterviewAfterSilence: TimeInterval = 30 * 60
 
     private func saveMemory() {
         sessions.updateExchanges(memory.all)
     }
 
-    /// Новое интервью: прошлое сохраняется в историю, память очищается (R-06 COPILOT-06).
-    func startNewInterview(reason: String) {
-        sessions.finish()
+    // MARK: Сессия (COPILOT-09 R-01, R-02, R-06)
+
+    private func showWizard() {
+        guard !liveSession.isActive else { panel.show(); return }
+        wizard.show()
+    }
+
+    /// Старт из мастера или из предложения «Начать сессию?».
+    private func startSession(_ config: SessionConfig) {
+        guard !liveSession.isActive, !testCall.active else { return }
+        liveSession.start(config)
+    }
+
+    /// Сессия начата: профиль, язык, память, история, слушание и ходы. Границы интервью теперь задаёт сессия
+    /// (раньше — тишина 30 мин и смена приложения звонка, COPILOT-06 R-05).
+    private func sessionStarted(_ c: SessionConfig) {
+        if let id = c.profileID { bank.select(id) }
+        model.settings.useProfile = c.type == .interview || c.type == .mock
+        if model.settings.language != c.language { model.settings.language = c.language }
+        model.settings.lastSessionConfig = c.defaultsForNext()
         memory.reset()
-        lastTurnAt = nil
-        sessions.start(source: listening.source.displayName, retentionDays: model.settings.historyRetentionDays)
-        Log.app.info("new interview: \(reason, privacy: .public)")
+        fastText = [:]
+        answers.cancel()
+        sessions.start(source: listening.source.displayName, retentionDays: model.settings.historyRetentionDays, config: c)
+        turns.autoEnabled = c.autoGenerate
+        if c.type == .mock {
+            // ИИ-собеседование само управляет звуком (вопрос — звук браузера, ответ — микрофон).
+            turns.start()
+            interviewer.start()
+        } else {
+            listening.startSession()
+            turns.start()
+        }
+        panel.show()
         refreshUI()
     }
 
-    /// Смена приложения звонка (например, Zoom → Telegram) — новое интервью.
-    private func checkCallSourceChange() {
-        let name: String? = switch listening.source {
-        case .app(let app): app.bundleID
-        case .allSystem: "all-system"
-        default: nil
-        }
-        guard let name else { return }
-        if let previous = lastCallSource, previous != name, !memory.all.isEmpty { startNewInterview(reason: "source") }
-        lastCallSource = name
+    private func sessionEnded(_ c: SessionConfig) {
+        turns.stop()
+        answers.cancel()
+        if c.type == .mock, interviewer.active { Task { await interviewer.close() } }
+        listening.enterStandby()
+        sessions.finish()
+        refreshUI()
     }
 
     /// Опережающий запрос (COPILOT-04 R-01): ответ готовится до истечения паузы, показывается при ходе с тем же текстом.
@@ -413,6 +479,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .strongModel: answers.askStrongModel()
         case .ownerAnswer: toggleOwnerAnswering()
         case .screenshot: takeScreenshot()
+        case .newSession: showWizard()
         }
     }
 
@@ -470,6 +537,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func togglePause() {
+        guard liveSession.isActive else { return }   // без сессии ставить на паузу нечего (COPILOT-09 R-02)
         let pausing = listening.phase == .listening
         listening.togglePause()
         if pausing {
@@ -488,8 +556,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard !interviewer.active else { return }
             testCall.start()
         case .aiInterview:
-            guard !testCall.active else { return }
-            interviewer.start()
+            // ИИ-собеседование — сессия типа Mock с последними настройками (COPILOT-09 R-06).
+            guard !testCall.active, !liveSession.isActive else { return }
+            var c = wizard.defaultConfig()
+            c.type = .mock
+            startSession(c)
         case .settings:
             settingsWindow.show()
         case .quit:
@@ -498,8 +569,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             togglePause()
         case .sessionHistory:
             historyWindow.show()
-        case .newInterview:
-            startNewInterview(reason: "menu")
+        case .newSession:
+            showWizard()
+        case .endSession:
+            liveSession.end()
         case .ownerAnswer:
             toggleOwnerAnswering()
         case .togglePanel:

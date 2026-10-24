@@ -36,6 +36,35 @@ final class AnswerController {
     var onAnswer: ((AnswerRecord) -> Void)?
     /// Модель ответила «—» — реплика не вопрос (обмен без ответа убирается из памяти, COPILOT-07).
     var onNotAQuestion: ((Turn) -> Void)?
+    /// Настройки текущей сессии из мастера (COPILOT-09): тип звонка, вакансия, указания, первая модель.
+    var session: () -> SessionConfig? = { nil }
+
+    /// Настройки с цепочкой сессии: выбранная в мастере модель — первой (COPILOT-09 R-01).
+    private var effectiveSettings: AppSettings {
+        var s = model.settings
+        if let c = session() { s.chain = c.chain(from: s.chain) }
+        return s
+    }
+
+    private var isRegularCall: Bool { session()?.type == .regular }
+
+    private var sessionPrompt: SessionPrompt? { session().map { SessionPrompt(type: $0.type, instructions: $0.instructions) } }
+
+    /// Профиль в промпте: обычный звонок — только инструкции профиля (без резюме и карточек, Q14); собеседование —
+    /// с вакансией и компанией из мастера вместо вакансии профиля.
+    private func promptProfile(_ settings: AppSettings) -> Profile? {
+        let s = session()
+        if s?.type == .regular { return Profile(name: bank.profile.name, instructions: bank.profile.instructions) }
+        guard settings.useProfile else { return nil }
+        var p = bank.profile
+        if let s {
+            let company = s.company.trimmingCharacters(in: .whitespacesAndNewlines)
+            let job = s.jobDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !job.isEmpty { p.job = job }
+            if !company.isEmpty { p.job = "Компания: \(company)\n\n" + p.job }
+        }
+        return p
+    }
 
     struct AnswerRecord {
         var turn: Turn
@@ -88,14 +117,16 @@ final class AnswerController {
     }
 
     private func answerNormally(_ turn: Turn) {
-        let settings = model.settings
+        let settings = effectiveSettings
         generation = Task { [weak self] in
             guard let self else { return }
-            // «Без профиля» (R-40): база не ищется, модель отвечает сама.
+            // «Без профиля» (R-40): база не ищется, модель отвечает сама. Обычный звонок (COPILOT-09) — без карточек,
+            // но с материалами профиля.
             guard settings.useProfile else {
                 self.lastMatch = nil
-                self.lastMaterials = []
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings)
+                self.lastMaterials = self.isRegularCall ? await self.bank.lookup(turn.text, threshold: 1).materials : []
+                guard !Task.isCancelled else { return }
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials)
                 return
             }
             let found = await self.bank.lookup(turn.text, threshold: settings.bankThreshold)
@@ -125,10 +156,10 @@ final class AnswerController {
     private func hintRequest(question: String, base: BankCard?, top: [CardScore], settings: AppSettings,
                              memory: MemoryContext = MemoryContext(), materials: [MaterialHit] = []) -> LLMRequest {
         PromptBuilder.hintRequest(question: question, transcript: transcript(), cards: top, baseCard: base,
-                                  profile: settings.useProfile ? bank.profile : nil, redactPII: settings.piiFilterEnabled,
+                                  profile: promptProfile(settings), redactPII: settings.piiFilterEnabled,
                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question),
                                   memory: memory, generalInstructions: bank.generalInstructions,
-                                  materials: settings.useProfile ? materials : [])
+                                  materials: settings.useProfile || isRegularCall ? materials : [], session: sessionPrompt)
     }
 
     private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = []) {
@@ -315,7 +346,7 @@ final class AnswerController {
     /// Начать отвечать на законченную реплику до истечения паузы T. Повтор с тем же текстом ничего не делает,
     /// новый текст (собеседник продолжил) отменяет прежний запрос.
     func prefetch(_ text: String) {
-        let settings = model.settings
+        let settings = effectiveSettings
         guard settings.speculativeAnswers, draft?.text != text else { return }
         cancelDraft()
         let d = Draft(text: text, startedAt: Self.now())
@@ -324,9 +355,9 @@ final class AnswerController {
         let providers = self.providers
         d.task = Task { [weak self] in
             guard let self else { return }
-            if settings.useProfile {
+            if settings.useProfile || self.isRegularCall {
                 let found = await self.bank.lookup(text, threshold: settings.bankThreshold)
-                if let match = found.match { d.match = match }
+                if let match = found.match, settings.useProfile { d.match = match }
                 d.materials = found.materials
             }
             guard !Task.isCancelled, self.draft === d || d.adopted else { return }
@@ -382,7 +413,7 @@ final class AnswerController {
     // MARK: Сильная модель вручную (S-05, R-13)
 
     func askStrongModel() {
-        let settings = model.settings
+        let settings = effectiveSettings
         guard let turn = lastQuestion else { return }
         let secrets = model.secrets
         let providers = self.providers
@@ -403,11 +434,12 @@ final class AnswerController {
         generation?.cancel()
         let request = PromptBuilder.strongRequest(question: turn.text, transcript: transcript(), cards: settings.useProfile ? lastMatch?.top ?? [] : [],
                                                   baseCard: settings.useProfile ? lastMatch?.matched?.card : nil,
-                                                  profile: settings.useProfile ? bank.profile : nil,
+                                                  profile: promptProfile(settings),
                                                   redactPII: settings.piiFilterEnabled,
                                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text),
                                                   memory: memory, generalInstructions: bank.generalInstructions,
-                                                  materials: settings.useProfile ? lastMaterials : [])
+                                                  materials: settings.useProfile || isRegularCall ? lastMaterials : [],
+                                                  session: sessionPrompt)
         // Задержка для сильной модели считаем от нажатия.
         let manual = Turn(id: turn.id, text: turn.text, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         generate(turn: manual, chain: chain, request: request, fallbackTop: lastMatch?.top ?? [], strong: true)

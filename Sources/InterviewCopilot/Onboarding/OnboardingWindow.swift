@@ -78,7 +78,7 @@ final class OnboardingState {
                     errors[f] = "\(error)"
                 }
                 downloads[f] = nil
-                if allModelsPresent { listening.start() } // загрузка и прогрев модели распознавания
+                if allModelsPresent { listening.warmUp() } // загрузка и прогрев модели распознавания (слушает только сессия)
             }
         }
     }

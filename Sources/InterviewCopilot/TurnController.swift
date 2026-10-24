@@ -12,6 +12,8 @@ final class TurnController {
     var onDraft: ((String) -> Void)?
     /// Выключено в настройках — `onDraft` не вызывается.
     var draftsEnabled = true
+    /// Auto Generate (COPILOT-09 Q4): выключено — ход только вручную (⌃⌥↩ / Answer), реплики копятся до нажатия.
+    var autoEnabled = true
     private(set) var lastTurn: Turn?
     private var lastDraft: String?
     /// Последняя отфильтрованная реплика (COPILOT-05 S-08): ⌃⌥↩ в течение 15 с отвечает на неё.
@@ -98,6 +100,7 @@ final class TurnController {
     private var lastStallLog: Double = 0
 
     private func tick() {
+        guard autoEnabled else { return }
         let now = Self.now()
         if let turn = detector.tick(at: now) {
             emit(turn)

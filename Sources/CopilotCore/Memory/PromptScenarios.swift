@@ -15,11 +15,13 @@ public enum PromptScenarios {
         public var materials: [MaterialHit] = []
         /// Найденная карточка с ответом владельца (COPILOT-08 R-09).
         public var base: BankCard? = nil
+        /// Сессия: тип звонка и указания (COPILOT-09).
+        public var session: SessionPrompt? = nil
         /// nil — PASS, иначе причина FAIL.
         public var check: @Sendable (String) -> String?
 
         public init(name: String, question: String, language: String, memory: MemoryContext, profile: Profile? = nil,
-                    general: String = "", materials: [MaterialHit] = [], base: BankCard? = nil,
+                    general: String = "", materials: [MaterialHit] = [], base: BankCard? = nil, session: SessionPrompt? = nil,
                     check: @escaping @Sendable (String) -> String?) {
             self.name = name
             self.question = question
@@ -29,6 +31,7 @@ public enum PromptScenarios {
             self.general = general
             self.materials = materials
             self.base = base
+            self.session = session
             self.check = check
         }
     }
@@ -152,6 +155,24 @@ public enum PromptScenarios {
                      if !facts { return "потеряны факты ответа (3 мес., 9→4 с, 30 %): «\(firstLine(text))»" }
                      return russian ? nil : "не по-русски: «\(firstLine(text))»"
                  }),
+        // COPILOT-09: обычный звонок и указания на сессию.
+        Scenario(name: "обычный звонок: что сказать по материалам", question: "Когда сможете прислать смету и сколько это будет стоить?",
+                 language: "ru", memory: MemoryContext(), profile: Profile(name: "p"),
+                 materials: [MaterialHit(source: "смета.md", text: "Смета для клиента: 3 недели работы, 12 000 $, старт с 1 ноября.", score: 0.6)],
+                 session: SessionPrompt(type: .regular),
+                 check: { text in
+                     let t = text.lowercased()
+                     if t.contains("резюме") || t.contains("собеседован") { return "звучит как собеседование: «\(firstLine(text))»" }
+                     return t.contains("12") && (t.contains("недел") || t.contains("3")) ? nil : "нет цифр из материалов: «\(firstLine(text))»"
+                 }),
+        Scenario(name: "указание на сессию важнее профиля", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
+                 profile: { var p = sampleProfile; p.instructions = "Відповідай українською."; return p }(),
+                 session: SessionPrompt(type: .interview, instructions: "Answer only in English for this session."),
+                 check: { text in
+                     let letters = text.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+                     let latin = letters.filter { $0.isASCII }.count
+                     return letters.isEmpty || Double(latin) / Double(letters.count) > 0.8 ? nil : "не по-английски: «\(firstLine(text))»"
+                 }),
         Scenario(name: "материалы: чужой фрагмент игнорируется", question: "Яке у вас хобі?", language: "uk", memory: MemoryContext(),
                  profile: sampleProfile,
                  materials: [MaterialHit(source: "system-design.md", text: "Rate limiting на API: алгоритм token bucket в Redis, лимит на пользователя и на IP.", score: 0.48)],
@@ -164,7 +185,8 @@ public enum PromptScenarios {
     /// Запрос подсказки сценария — как в приложении (с профилем или «Без профиля»).
     public static func request(_ s: Scenario) -> LLMRequest {
         PromptBuilder.hintRequest(question: s.question, transcript: [], cards: [], baseCard: s.base, profile: s.profile, redactPII: true,
-                                  answerLanguage: s.language, memory: s.memory, generalInstructions: s.general, materials: s.materials)
+                                  answerLanguage: s.language, memory: s.memory, generalInstructions: s.general, materials: s.materials,
+                                  session: s.session)
 
     }
 }

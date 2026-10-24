@@ -10,22 +10,23 @@ final class SessionController {
     /// Текущий источник звука (имя приложения) — для сессии, начатой при запуске, когда источник ещё не выбран.
     var currentSource: () -> String? = { nil }
 
-    func start(source: String?, retentionDays: Int) {
+    /// «Сохранять расшифровку» выключено (COPILOT-09 R-01) — сессия живёт только в памяти, на диск не пишется.
+    private var persist = true
+
+    func start(source: String?, retentionDays: Int, config: SessionConfig? = nil) {
         store.restrictPermissions()
         let removed = store.purge(olderThan: retentionDays)
         if removed > 0 { Log.app.info("sessions purged: \(removed)") }
         current = store.newSession(source: source)
+        current?.config = config
+        persist = config?.saveTranscript ?? true
     }
 
-    /// Сессия без содержимого начинается заново с первой репликой: иначе приложение, запущенное вечером, записывало
-    /// утреннее интервью как сессию «23:56–08:13» (живой тест COPILOT-06).
+    /// С COPILOT-09 сессия начинается кнопкой Start, а не с запуска приложения: время начала — момент Start.
+    /// Источник, ещё не найденный при старте, записывается с первой репликой.
     private func touch() {
-        guard let s = current, s.utterances.isEmpty, s.turns.isEmpty, s.exchanges.isEmpty else { return }
-        if Date().timeIntervalSince(s.startedAt) > 60 {
-            current = store.newSession(source: s.source ?? currentSource())
-        } else if s.source == nil {
-            current?.source = currentSource()
-        }
+        guard current?.source == nil else { return }
+        current?.source = currentSource()
     }
 
     func addUtterance(id: Int, text: String, language: String) {
@@ -70,13 +71,18 @@ final class SessionController {
     }
 
     func saveNow() {
-        guard let s = current, !(s.utterances.isEmpty && s.turns.isEmpty && s.exchanges.isEmpty) else { return }
+        guard persist, let s = current, !(s.utterances.isEmpty && s.turns.isEmpty && s.exchanges.isEmpty) else { return }
         do { try store.save(s) } catch { Log.app.error("session save failed: \(error.localizedDescription, privacy: .public)") }
     }
 
-    func finish() {
+    /// Конец сессии: запись сохраняется (если разрешено) и возвращается для разбора (этап 4); текущей больше нет.
+    @discardableResult
+    func finish() -> SessionRecord? {
         saveTask?.cancel()
         current?.endedAt = Date()
         saveNow()
+        let finished = current
+        current = nil
+        return finished
     }
 }

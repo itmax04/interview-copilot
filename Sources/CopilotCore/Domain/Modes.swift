@@ -69,11 +69,13 @@ public enum ListeningStatus: Sendable, Equatable {
     case paused(source: String)
     case noPermission
     case idle
+    /// Сессии нет — приложение не слушает (COPILOT-09 R-02).
+    case noSession
 
     public var dot: StatusDot {
         switch self {
         case .listening: .green
-        case .paused, .idle: .gray
+        case .paused, .idle, .noSession: .gray
         case .noPermission: .red
         }
     }

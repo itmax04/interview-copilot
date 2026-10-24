@@ -149,6 +149,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var useProfile = true
     /// Активный профиль — папка в `profiles/` (COPILOT-08 R-01); nil или удалённый — первый по имени.
     public var activeProfileID: String?
+    /// Последние настройки мастера сессии — по умолчанию для следующей (COPILOT-09 R-01).
+    public var lastSessionConfig: SessionConfig?
     /// Порог совпадения с карточкой (R-07: «по умолчанию 0,85, уточняется eval bank» → 0,74 по eval P-06, ADR-0001).
     public var bankThreshold: Double = 0.74
     /// Модель эмбеддингов в `…/models/` (ADR-0001 п. 6: bge-m3 по eval P-06).
@@ -278,6 +280,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         mode = v(.mode, d.mode)
         useProfile = v(.useProfile, d.useProfile)
         activeProfileID = v(.activeProfileID, d.activeProfileID)
+        lastSessionConfig = v(.lastSessionConfig, d.lastSessionConfig)
         bankThreshold = v(.bankThreshold, d.bankThreshold)
         embeddingModel = v(.embeddingModel, d.embeddingModel)
         piiFilterEnabled = v(.piiFilterEnabled, d.piiFilterEnabled)

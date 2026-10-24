@@ -6,10 +6,10 @@ struct MenuLayoutTests {
     @Test func sectionsFollowDesignOrder() {
         let sections = MenuLayout.sections(for: MenuState())
         #expect(sections.map { $0.map(\.action) } == [
-            [.listeningSource, .togglePause],
+            [.newSession, .listeningSource, .togglePause],
             [.mode, .models, .language],
             [.profile, .questionBank, .editProfile, .practice, .aiInterview],
-            [.answerNow, .screenshot, .togglePanel, .newInterview, .sessionHistory],
+            [.answerNow, .screenshot, .togglePanel, .sessionHistory],
             [.status],
             [.settings, .quit],
         ])
@@ -40,13 +40,13 @@ struct MenuLayoutTests {
     }
 
     @Test func listeningDotReflectsState() {
-        let listening = MenuLayout.sections(for: MenuState(listening: .listening(source: "Chrome")))[0][0]
+        let listening = MenuLayout.sections(for: MenuState(listening: .listening(source: "Chrome")))[0][1]
         #expect(listening.title == "Listening — Chrome")
         #expect(listening.statusDot == .green)
         let paused = MenuLayout.sections(for: MenuState(listening: .paused(source: "Chrome")))[0]
-        #expect(paused[0].statusDot == .gray)
-        #expect(paused[1].title == "Resume listening")
-        let noPermission = MenuLayout.sections(for: MenuState(listening: .noPermission))[0][0]
+        #expect(paused[1].statusDot == .gray)
+        #expect(paused[2].title == "Resume listening")
+        let noPermission = MenuLayout.sections(for: MenuState(listening: .noPermission))[0][1]
         #expect(noPermission.statusDot == .red)
         #expect(noPermission.hasSubmenu == false)
     }
@@ -82,10 +82,21 @@ struct MenuLayoutTests {
         var s = MenuState()
         s.selfTest = true
         let actions = MenuLayout.sections(for: s)[3]
-        #expect(actions.map(\.action) == [.answerNow, .ownerAnswer, .screenshot, .togglePanel, .newInterview, .sessionHistory])
+        #expect(actions.map(\.action) == [.answerNow, .ownerAnswer, .screenshot, .togglePanel, .sessionHistory])
         #expect(actions[1].title == "Сейчас отвечаю я" && actions[1].hotkey?.displayString == "⌃⌥A")
         s.ownerAnswering = true
         #expect(MenuLayout.sections(for: s)[3][1].title == "Закончить мой ответ")
+    }
+
+    @Test func sessionItemComesFirst() {
+        // COPILOT-09 R-02: без сессии — «Создать сессию…» с ⌃⌥N; в сессии — «Завершить сессию · 12:47».
+        let idle = MenuLayout.sections(for: MenuState(listening: .noSession))[0]
+        #expect(idle[0].action == .newSession && idle[0].hotkey?.displayString == "⌃⌥N")
+        #expect(idle[1].title == "Нет сессии — не слушаю" && idle[1].statusDot == .gray)
+        var s = MenuState(listening: .listening(source: "Zoom"))
+        s.sessionActive = true
+        s.sessionTimer = "12:47"
+        #expect(MenuLayout.sections(for: s)[0][0].title == "Завершить сессию · 12:47")
     }
 
     @Test func noProfileTitle() {

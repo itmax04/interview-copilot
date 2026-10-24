@@ -16,6 +16,8 @@ final class PanelModel {
         case error(String)
         case noPermission
         case downloading(Double)
+        /// Сессии нет — приложение не слушает (COPILOT-09 R-02).
+        case noSession
     }
 
     struct Line: Identifiable, Equatable {
@@ -65,6 +67,19 @@ final class PanelModel {
     var ownerAnswering = false
     /// Источник — «Микрофон Mac»: в подвале подсказка «⌃⌥A я отвечаю» (COPILOT-07).
     var selfTest = false
+
+    // Сессия (COPILOT-09 R-02, R-05).
+    var sessionActive = false
+    /// «12:47» — время сессии.
+    var sessionTimer: String?
+    /// «Осталось 5 минут по плану» и т. п.
+    var planNotice: String?
+    /// Похоже, начался звонок в этом приложении — предложить сессию.
+    var callDetected: String?
+    var onCreateSession: (() -> Void)?
+    var onEndSession: (() -> Void)?
+    var onStartDetectedCall: (() -> Void)?
+    var onDismissDetectedCall: (() -> Void)?
     /// Клик по серой строке — ответить на неё (COPILOT-05 S-08).
     var onAnswerFiltered: ((String) -> Void)?
     var onStrongModel: (() -> Void)?
