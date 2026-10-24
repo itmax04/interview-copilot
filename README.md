@@ -4,24 +4,27 @@
 Личное приложение для macOS (строка меню + плавающая панель), которое слушает собеседника
 в Google Meet / Zoom / Telegram, локально расшифровывает речь (украинский, русский, английский),
 находит вопрос в заранее подготовленной базе ответов владельца и показывает ответ.
-Если вопроса нет в базе, по выбранному режиму генерирует подсказку через Gemini
-с переходом на DeepSeek или Claude. По горячей клавише отправляет скриншот задачи в сильную модель.
-Пользователь один — владелец; распространение не планируется.
+Если вопроса нет в базе (или режим «Без профиля»), генерирует подсказку цепочкой Groq → Cerebras → Gemini → DeepSeek →
+Claude → свой API; первые слова — около 1 с после вопроса. Отсеивает шум, чужой язык и чужие голоса, помнит всё интервью.
+По горячей клавише отправляет скриншот задачи в сильную модель. Пользователь один — владелец; распространение не планируется.
 
-Статус: **v1 готова к приёмке** — [docs/changes/COPILOT-01/report.md](docs/changes/COPILOT-01/report.md).
+Статус: **0.4.0** (COPILOT-07) — [docs/changes/COPILOT-07/handoff.md](docs/changes/COPILOT-07/handoff.md).
+**Новому разработчику или агенту — начать с [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: поток данных, модули,
+где что лежит, как вносить типичные изменения и как проверять.
 
 ## Требования к среде
 - Mac на Apple Silicon, macOS 15+ (проверено на M1 8 ГБ, macOS 15.7.2).
 - Xcode 26+ (без Xcode не работают тесты — решение P-00): `sudo xcode-select -s /Applications/Xcode.app`.
 - Сертификат подписи кода «InterviewCopilot» или «InterviewCopilot Dev» в Связке ключей (самоподписанный, «Подписание кода»).
 - Свободно ≥ 3 ГБ на модели.
-- Ключ Gemini API (бесплатный тариф). DeepSeek и Anthropic — по желанию.
+- Ключ Groq или Gemini API (бесплатные тарифы). Cerebras, DeepSeek, Anthropic, свой OpenAI-совместимый API — по желанию.
 - Память во время созвона: приложение ≈ 1,1–1,2 ГБ.
 
 ## Быстрый запуск
 ```bash
 scripts/fetch-parakeet.py      # локальный Parakeet v3, фиксированная версия и SHA256
 scripts/fetch-models.sh        # модели whisper и эмбеддингов, проверка SHA256 (или мастер первого запуска)
+scripts/fetch-filter-models.py # Silero, CAM++ (отпечаток голоса), LocalVQE — фильтры COPILOT-05
 scripts/build-app.sh           # сборка и подпись dist/InterviewCopilot.app
 open dist/InterviewCopilot.app # попугай в строке меню; панель — ⌃⌥H
 ```
@@ -39,27 +42,32 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
 - **Language**: Auto (UK/RU/EN) или конкретный язык — для Whisper известный язык точнее и быстрее. Parakeet сохраняет мультиязычный текст; настройка задаёт метку языка.
 - **Question bank…** — `~/Library/Application Support/InterviewCopilot/profile/questions.yaml`
   (формат — spec R-06; по 2+ формулировки на язык для каждой карточки). **Edit resume & stories…** — папка профиля.
-- Горячие клавиши (переназначаются в Settings → Hotkeys): ⌃⌥↩ ответить сейчас, ⌃⌥S скриншот, ⌃⌥H панель,
-  ⌃⌥P пауза, ⌃⌥C сильная модель.
+- Горячие клавиши (переназначаются в Settings → Hotkeys): ⌃⌥↩ ответить сейчас (и на серую строку), ⌃⌥S скриншот,
+  ⌃⌥H панель, ⌃⌥P пауза, ⌃⌥C сильная модель, ⌃⌥A «сейчас отвечаю я» в самопроверке (есть и в меню).
+- **Новое интервью** — память начинается заново (и сама: смена приложения звонка, тишина > 30 мин); **Session history…** —
+  вопросы, подсказки, ваши ответы, расшифровка.
+- **Settings → Audio → Ваш голос** — образец голоса (25 с): в режиме микрофона чужие голоса и ТВ — серым.
 - **Settings… (⌘,)**: ключи, ID моделей и запасная модель Gemini, порог паузы, порог базы, фильтр личных данных,
   срок истории, вид панели, бюджет на платных провайдеров.
 
 ## Проверка
-- Быстрая: `swift build && swift test` (157 тестов).
+- Быстрая: `swift build && swift test` (245 тестов).
 - Полная: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh`.
-- Evals: `scripts/run-evals.sh [bank|turn]` — пороги и baseline в [evals/README.md](evals/README.md).
+- Evals: `scripts/run-evals.sh [bank|turn|filter-text|memory|filter|voice]` — пороги и baseline в [evals/README.md](evals/README.md).
 - Метрики созвона: `scripts/metrics.py --last 30m` (AC-01…AC-03), память: `scripts/footprint-monitor.sh 10` (AC-05).
 - Живые проверки из приложения: `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`
   и `--smoke-screenshot evals/fixtures/two-sum.png` (тратят квоту Gemini).
 - `--smoke-memory [N]` — синтетические сценарии памяти и правил промпта (ловушка «вы упоминали», возврат к ответу,
   зарплата, обрывок) через цепочку из настроек, каждый N раз (COPILOT-07; ~6·N запросов к бесплатным провайдерам).
-- CLI: `swift run -c release copilot-eval <stt|stt-parakeet|stt-stream|turn|bank|exit-check>`.
+- CLI: `swift run -c release copilot-eval <stt|stt-parakeet|stt-hybrid|stt-stream|turn|bank|filter-text|filter|voice|voice-enroll|enhance|memory|exit-check>`.
 - Что и как тестировать дальше — [docs/changes/COPILOT-01/test-plan.md](docs/changes/COPILOT-01/test-plan.md).
 
 ## Структура
-- `Sources/CopilotCore/` — логика: `Audio/` (захват ScreenCaptureKit, VAD, буфер), `STT/` (Parakeet v3 / Whisper), `Turns/` (конец вопроса),
-  `Bank/` (база, поиск, профиль), `LLM/` (провайдеры, цепочка, промпт), `Answer/`, `Privacy/`, `Capture/` (скриншот),
-  `Storage/` (история), `Usage/` (расход), `Hotkeys/`, `Menu/`, `Models/` (загрузка моделей), `Settings/`, `Logging/`.
+- `Sources/CopilotCore/` — логика: `Audio/` (захват ScreenCaptureKit, VAD, буфер), `STT/` (Parakeet v3 / Whisper), `Filter/`
+  (Silero, язык, голос, шумоподавление), `Turns/` (конец вопроса), `Bank/` (база, поиск, профиль), `LLM/` (провайдеры, цепочка,
+  промпт), `Memory/` (память интервью), `Answer/`, `Interviewer/` и `TestCall/` (тренировки), `Privacy/`, `Capture/` (скриншот),
+  `Storage/` (история), `Usage/` (расход), `Hotkeys/`, `Menu/`, `Models/` (загрузка моделей), `Settings/`, `Secrets/`, `Logging/`.
+  Подробно — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - `Sources/CopilotEmbeddings/` — эмбеддинги на llama.cpp (отдельно от whisper из-за заголовков ggml).
 - `Sources/InterviewCopilot/` — приложение: меню, панель, настройки, мастер, история.
 - `Sources/copilot-eval/` — CLI для evals и замеров.
@@ -67,7 +75,7 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
 - `scripts/` — сборка, модели, evals, секреты, метрики, память, фикстуры.
 - `profile.example/` — пример профиля вымышленного кандидата (копируется при первом запуске).
 - `evals/` — наборы bank/turn, аудио- и скриншот-фикстуры, сценарий созвона.
-- `docs/` — дизайн, ADR, комплект COPILOT-01 (intent, spec, plan, handoff, report, test-plan).
+- `docs/` — [ARCHITECTURE.md](docs/ARCHITECTURE.md), дизайн, ADR, задачи `changes/COPILOT-01…07` (intent, spec, plan, handoff).
 
 ## Ограничения и безопасность
 - API-ключи — только в Связке ключей macOS. Не в коде, не в логах, не в чате, не в Git (`scripts/secret-scan.sh`).
