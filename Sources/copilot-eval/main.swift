@@ -498,6 +498,8 @@ case "bank":
     let fixedThreshold = option("--threshold").flatMap(Double.init) ?? (tune ? nil : AppSettings().bankThreshold)
     let sweep = flag("--sweep")
     let verbose = flag("--verbose")
+    // COPILOT-08 AC-04: `--first-only` — у карточки только первая формулировка (как вопрос владельца до «Подготовить»).
+    let firstOnly = flag("--first-only")
     let casesPath = args.first ?? "evals/bank/cases.jsonl"
     let bankPath = "profile.example/questions.yaml"
     let spec = EmbeddingModels.spec(for: modelFile)
@@ -506,6 +508,7 @@ case "bank":
     do { embedder = try LlamaEmbedder(modelPath: AppPaths.model(spec.file).path, prefix: spec.prefix) } catch { fail("\(error)", code: 1) }
     do {
         let cards = try QuestionBankParser.load(URL(fileURLWithPath: bankPath))
+            .map { firstOnly ? BankCard(id: $0.id, questions: Array($0.questions.prefix(1)), answer: $0.answer) : $0 }
         let builder = BankIndexBuilder(embedder: embedder, cacheDirectory: nil)
         let t0 = Date()
         let index = try builder.build(cards)

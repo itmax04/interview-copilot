@@ -1,19 +1,50 @@
 import Foundation
 import Yams
 
-/// Карточка базы — R-06.
+/// Откуда ответ карточки (COPILOT-08 R-07, R-08).
+public enum AnswerStatus: String, Codable, Sendable, CaseIterable {
+    /// Ответа ещё нет: вопрос ждёт черновика.
+    case none
+    /// Ответ владельца — подготовка его никогда не перезаписывает.
+    case own
+    /// Черновик модели, ещё не просмотрен владельцем.
+    case draft
+    /// Черновик, подтверждённый владельцем.
+    case approved
+
+    public var title: String {
+        switch self {
+        case .none: "нет ответа"
+        case .own: "ваш"
+        case .draft: "черновик"
+        case .approved: "подтверждён"
+        }
+    }
+}
+
+/// Карточка базы — R-06; статус ответа и подготовленные формулировки — COPILOT-08.
+/// `questions[0]` — формулировка владельца, остальные — его или подготовленные моделью (uk/ru/en).
 public struct BankCard: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var questions: [String]
     public var answer: String
     public var tags: [String]
+    public var status: AnswerStatus
+    /// Формулировки на трёх языках уже подготовлены (R-08): «Подготовить» их не повторяет.
+    public var prepared: Bool
 
-    public init(id: String, questions: [String], answer: String, tags: [String] = []) {
+    public init(id: String, questions: [String], answer: String, tags: [String] = [], status: AnswerStatus? = nil,
+                prepared: Bool = false) {
         self.id = id
         self.questions = questions
         self.answer = answer
         self.tags = tags
+        self.status = status ?? (answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .none : .own)
+        self.prepared = prepared
     }
+
+    /// Есть ответ, на который можно опереться (свой, черновик или подтверждённый).
+    public var hasAnswer: Bool { !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     /// Чипы S/T/A/R (R-16).
     public var isSTAR: Bool { tags.contains { $0.uppercased() == "STAR" } }
@@ -71,12 +102,14 @@ public enum QuestionBankParser {
             guard !questions.isEmpty else {
                 throw QuestionBankError(line: line, message: "в карточке «\(id)» нет ни одного вопроса")
             }
+            // COPILOT-08 R-07: вопрос без ответа — правильная карточка (ждёт черновика), в поиск она не идёт.
             let answer = (map["answer"]?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !answer.isEmpty else {
-                throw QuestionBankError(line: line, message: "в карточке «\(id)» пустой ответ")
-            }
             let tags = map["tags"]?.sequence?.compactMap(\.string) ?? []
-            cards.append(BankCard(id: id, questions: questions, answer: answer, tags: tags))
+            let status = map["status"]?.string.flatMap(AnswerStatus.init(rawValue:))
+            let prepared = map["prepared"]?.bool ?? false
+            var card = BankCard(id: id, questions: questions, answer: answer, tags: tags, status: status, prepared: prepared)
+            if !card.hasAnswer { card.status = .none } else if card.status == .none { card.status = .own }
+            cards.append(card)
         }
         return cards
     }
@@ -105,6 +138,50 @@ public enum QuestionBankParser {
         default:
             return "\(error)"
         }
+    }
+}
+
+/// Запись `questions.yaml` (COPILOT-08 R-07): формат тот же, что читает `QuestionBankParser`; ответы — блоком `|`.
+public enum QuestionBankWriter {
+    public static let header = "# Вопросы профиля (COPILOT-08). Правится в окне «Профиль» → «Вопросы» или здесь.\n"
+        + "# status: own — ваш ответ, draft — черновик модели, approved — подтверждённый черновик, none — без ответа.\n"
+
+    public static func yaml(_ cards: [BankCard]) -> String {
+        guard !cards.isEmpty else { return header + "[]\n" }
+        var out = header
+        for c in cards {
+            out += "- id: \(c.id)\n"
+            out += "  status: \(c.status.rawValue)\n"
+            if c.prepared { out += "  prepared: true\n" }
+            if !c.tags.isEmpty { out += "  tags: [\(c.tags.map(quote).joined(separator: ", "))]\n" }
+            out += "  questions:\n"
+            for q in c.questions { out += "    - \(quote(q))\n" }
+            let answer = c.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            if answer.isEmpty {
+                out += "  answer: \"\"\n"
+            } else {
+                out += "  answer: |\n"
+                for line in answer.components(separatedBy: "\n") { out += line.isEmpty ? "\n" : "    \(line)\n" }
+            }
+            out += "\n"
+        }
+        return out
+    }
+
+    /// Строка YAML в двойных кавычках (экранирование совместимо с JSON).
+    static func quote(_ s: String) -> String {
+        let one = s.replacingOccurrences(of: "\n", with: " ")
+        let data = (try? JSONSerialization.data(withJSONObject: [one], options: [.withoutEscapingSlashes])) ?? Data()
+        let json = String(decoding: data, as: UTF8.self)
+        return String(json.dropFirst().dropLast())
+    }
+
+    /// Свободный id карточки: q-1, q-2…
+    public static func nextID(_ cards: [BankCard]) -> String {
+        let used = Set(cards.map(\.id))
+        var n = cards.count + 1
+        while used.contains("q-\(n)") { n += 1 }
+        return "q-\(n)"
     }
 }
 

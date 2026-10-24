@@ -8,14 +8,16 @@ import UniformTypeIdentifiers
 final class ProfileWindowController {
     private var window: NSWindow?
     private let bank: BankController
+    private let preparer: QuestionPreparer
 
-    init(bank: BankController) {
+    init(bank: BankController, model: AppModel) {
         self.bank = bank
+        self.preparer = QuestionPreparer(bank: bank, model: model)
     }
 
     func show() {
         if window == nil {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: ProfileView(bank: bank)))
+            let w = NSWindow(contentViewController: NSHostingController(rootView: ProfileView(bank: bank, preparer: preparer)))
             w.title = "Профиль"
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             w.setContentSize(NSSize(width: 760, height: 580))
@@ -35,6 +37,7 @@ enum ProfileLimits {
 
 struct ProfileView: View {
     let bank: BankController
+    let preparer: QuestionPreparer
     @State private var naming: NamingMode?
     @State private var newName = ""
     @State private var confirmDelete = false
@@ -50,6 +53,7 @@ struct ProfileView: View {
                 }
                 InstructionsEditor(bank: bank).tabItem { Text("Инструкции") }
                 MaterialsView(bank: bank).tabItem { Text("Материалы") }
+                QuestionsView(bank: bank, preparer: preparer).tabItem { Text("Вопросы") }
             }
             .id(bank.activeID)   // другой профиль — свежие тексты во всех вкладках
             footer

@@ -50,7 +50,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | `…/Filter` | что не распознавать и не показывать | `SileroSpeechGate`, `LanguageGate`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
 | `…/Turns` | конец вопроса | `TurnDetector` (чистая логика, вся покрыта тестами), `TurnEval` |
 | `…/Profiles` | профили, загрузка файлов, материалы (COPILOT-08) | `ProfileLibrary` (создать, переключить, удалить, перенос старого `profile/`, материалы), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md), `MaterialChunker`, `MaterialIndex`, `MaterialIndexBuilder` |
-| `…/Bank` | профиль и база ответов | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML), `BankMatcher`, `TextEmbedder` |
+| `…/Bank` | профиль и база ответов | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML: `BankCard` со статусом ответа, `QuestionBankWriter`), `QuestionImport` (правила + модель), `QuestionPreparation` (формулировки, черновики), `BankMatcher`, `TextEmbedder` |
 | `…/Answer` | выбор: карточка / нет в базе / генерация | `AnswerRouter` |
 | `…/LLM` | провайдеры и промпт | `PromptBuilder` (все правила для модели), `ProviderChain` + `ChainFactory`, `Providers` (Gemini, DeepSeek, Anthropic, OpenAI-совместимые: Groq, Cerebras, свой API), `SSEClient`, `KeyVerifier` |
 | `…/Memory` | память интервью | `InterviewMemory`, `SessionExchange`, `MemoryContext`, `ReferenceDetector`, `PromptScenarios` |
@@ -96,11 +96,11 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 ## 6. Проверки
 | Что | Команда |
 |---|---|
-| Быстро | `swift build && swift test` (260 тестов) |
+| Быстро | `swift build && swift test` (268 тестов) |
 | Полностью | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh` |
 | Звуковые eval | `scripts/run-evals.sh filter voice` (нужны модели Parakeet, Silero, CAM++) |
 | CLI | `swift run -c release copilot-eval <stt|stt-parakeet|stt-hybrid|stt-stream|turn|bank|filter-text|filter|voice|voice-enroll|enhance|memory|exit-check>` |
-| Живые (тратят бесплатные лимиты) | `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`, `--smoke-memory 5`, `--smoke-screenshot evals/fixtures/two-sum.png` |
+| Живые (тратят бесплатные лимиты) | `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`, `--smoke-memory 5`, `--smoke-prepare`, `--smoke-screenshot evals/fixtures/two-sum.png` |
 | Метрики созвона | `scripts/metrics.py --last 30m` (из журнала, только числа) |
 
 Пороги eval — `evals/README.md`. Живые проверки запускаются из подписанного `.app`: только ему Связка ключей отдаёт ключи без запроса.

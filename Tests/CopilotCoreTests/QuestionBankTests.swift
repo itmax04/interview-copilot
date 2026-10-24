@@ -53,7 +53,6 @@ struct QuestionBankTests {
     @Test(arguments: [
         ("- id: Bad_Id\n  questions: [q]\n  answer: x", 1),
         ("- id: ok\n  questions: []\n  answer: x", 1),
-        ("- id: ok\n  questions: [q]\n  answer: \"  \"", 1),
         ("- questions: [q]\n  answer: x", 1),
         ("- id: a\n  questions: [q]\n  answer: x\n- id: b\n  answer: y", 4),
     ])

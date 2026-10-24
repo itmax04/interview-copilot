@@ -1,4 +1,5 @@
 import CopilotCore
+import CopilotEmbeddings
 import Foundation
 import ImageIO
 
@@ -91,6 +92,66 @@ enum SmokeTest {
             }
             print("memory smoke: \(passed)/\(total)")
             result.ok = passed == total
+            done.signal()
+        }
+        done.wait()
+        return result.ok ? 0 : 1
+    }
+
+    /// `--smoke-prepare`: подготовка вопросов на настоящих моделях (COPILOT-08 R-08, R-09) — формулировки uk/ru/en,
+    /// черновики по инструкции, ответ владельца не меняется, перефразированный вопрос на другом языке находит карточку (bge-m3).
+    static func prepare() -> Int32 {
+        let settings = SettingsStore().load()
+        let secrets = KeychainStore()
+        let done = DispatchSemaphore(value: 0)
+        let result = ResultBox()
+        Task.detached {
+            var ok = true
+            func check(_ pass: Bool, _ what: String) { print("\(pass ? "PASS" : "FAIL") \(what)"); if !pass { ok = false } }
+            let chain = ChainFactory.chain(settings: settings, secrets: secrets, providers: ChainFactory.providers())
+            let own = "Я iOS-розробник 7 років, останні 5 — у ФінБанку."
+            var cards = [BankCard(id: "q-1", questions: ["Розкажіть про себе"], answer: own),
+                         BankCard(id: "q-2", questions: ["Чому ви хочете змінити роботу?"], answer: ""),
+                         BankCard(id: "q-3", questions: ["Як ви обробляєте помилки в мережевому шарі?"], answer: "")]
+            switch await ChainText.collect(chain, QuestionPreparation.phrasingsRequest(cards)) {
+            case .success(let text):
+                let items = JSONExtract.array(text) ?? []
+                let langsOK = cards.allSatisfy { c in
+                    let item = items.first { ($0["id"] as? String) == c.id }
+                    return ["uk", "ru", "en"].allSatisfy { ((item?[$0] as? [String]) ?? []).count >= 2 }
+                }
+                check(langsOK, "формулировки: у каждого вопроса ≥2 на uk, ru и en")
+                cards = QuestionPreparation.applyPhrasings(text, to: cards, requested: cards.map(\.id))
+                print("  q-2: " + cards[1].questions.joined(separator: " | "))
+            case .failure(let e): check(false, "формулировки: \(e)")
+            }
+            var profile = PromptScenarios.sampleProfile
+            profile.instructions = "Відповідай двома-трьома реченнями, без списків."
+            let items = cards.filter { !$0.hasAnswer }.map { (card: $0, materials: [MaterialHit]()) }
+            try? await Task.sleep(for: .seconds(2))
+            switch await ChainText.collect(chain, QuestionPreparation.draftsRequest(items, profile: profile, generalInstructions: "",
+                                                                                    redactPII: true)) {
+            case .success(let text):
+                cards = QuestionPreparation.applyDrafts(text, to: cards)
+                check(cards[1].status == .draft && cards[2].status == .draft, "черновики: оба вопроса без ответа получили черновик")
+                check(cards[0].answer == own && cards[0].status == .own, "ваш ответ не изменён")
+                check(cards.dropFirst().allSatisfy { PromptScenarios.bullets($0.answer) == 0 }, "черновики: без списков по инструкции")
+                print("  q-3: " + cards[2].answer.replacingOccurrences(of: "\n", with: " "))
+            case .failure(let e): check(false, "черновики: \(e)")
+            }
+            let spec = EmbeddingModels.spec(for: settings.embeddingModel)
+            if let embedder = try? LlamaEmbedder(modelPath: AppPaths.model(spec.file).path, prefix: spec.prefix),
+               let index = try? BankIndexBuilder(embedder: embedder, cacheDirectory: nil).build(cards) {
+                let builder = BankIndexBuilder(embedder: embedder, cacheDirectory: nil)
+                for (q, id) in [("Tell me a bit about yourself", "q-1"), ("Почему вы решили уйти с текущего места?", "q-2"),
+                                ("How do you deal with failed network requests?", "q-3")] {
+                    let m = (try? builder.embedQuery(q)).map { index.match($0, threshold: settings.bankThreshold) }
+                    check(m?.matched?.card.id == id, String(format: "поиск: «%@» → %@ (%.2f)", q, m?.matched?.card.id ?? "—", m?.top.first?.score ?? 0))
+                }
+            } else {
+                print("NOT RUN поиск: нет модели bge-m3")
+            }
+            result.ok = ok
             done.signal()
         }
         done.wait()

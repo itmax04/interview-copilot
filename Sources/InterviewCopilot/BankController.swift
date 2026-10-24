@@ -252,6 +252,25 @@ final class BankController {
         reloadMaterials()
     }
 
+    // MARK: Вопросы (R-07)
+
+    /// Сохранить вопросы активного профиля (таблица, импорт, подготовка) и перечитать базу.
+    func saveCards(_ new: [BankCard]) {
+        guard let url = questionsURL else { return }
+        do {
+            try Data(QuestionBankWriter.yaml(new).utf8).write(to: url, options: .atomic)
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        } catch {
+            self.error = "Вопросы: \(error.localizedDescription)"
+        }
+        reload()
+    }
+
+    /// Фрагменты материалов для вопроса (черновик ответа при подготовке).
+    func materials(for question: String) async -> [MaterialHit] {
+        await lookup(question, threshold: 1).materials
+    }
+
     func materialText(_ name: String) -> String {
         guard let id = activeID else { return "" }
         return library.readMaterial(name, of: id)
@@ -285,7 +304,8 @@ final class BankController {
         status = "Пересчитываю эмбеддинги…"
         Task.detached(priority: .utility) { [builder, parsed, id] in
             let started = Date()
-            let result = Result { try builder.build(parsed) }
+            // Вопросы без ответа в поиск не идут: опереться не на что (R-07); они ждут черновика.
+            let result = Result { try builder.build(parsed.filter(\.hasAnswer)) }
             await MainActor.run { [weak self] in
                 // Профиль успели сменить — индекс прежнего не нужен.
                 guard let self, self.activeID == id else { return }

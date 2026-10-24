@@ -25,6 +25,10 @@ enum InterviewCopilotMain {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.memory(runs: (i + 1 < args.count ? Int(args[i + 1]) : nil) ?? 3))
         }
+        if args.contains("--smoke-prepare") {
+            setvbuf(stdout, nil, _IOLBF, 0)
+            exit(SmokeTest.prepare())
+        }
         if args.contains("--smoke-llm") {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.run())
@@ -81,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var answers = AnswerController(model: model, bank: bank, panel: panelModel)
     private let sessions = SessionController()
     private lazy var historyWindow = SessionHistoryWindowController(sessions: sessions)
-    private lazy var profileWindow = ProfileWindowController(bank: bank)
+    private lazy var profileWindow = ProfileWindowController(bank: bank, model: model)
     private lazy var usage: UsageMeter = {
         let url = Bundle.main.url(forResource: "pricing", withExtension: "json")
             ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../Resources/pricing.json")

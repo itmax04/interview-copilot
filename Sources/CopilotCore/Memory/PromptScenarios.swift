@@ -13,11 +13,14 @@ public enum PromptScenarios {
         public var general = ""
         /// Найденные фрагменты материалов (COPILOT-08 R-06).
         public var materials: [MaterialHit] = []
+        /// Найденная карточка с ответом владельца (COPILOT-08 R-09).
+        public var base: BankCard? = nil
         /// nil — PASS, иначе причина FAIL.
         public var check: @Sendable (String) -> String?
 
         public init(name: String, question: String, language: String, memory: MemoryContext, profile: Profile? = nil,
-                    general: String = "", materials: [MaterialHit] = [], check: @escaping @Sendable (String) -> String?) {
+                    general: String = "", materials: [MaterialHit] = [], base: BankCard? = nil,
+                    check: @escaping @Sendable (String) -> String?) {
             self.name = name
             self.question = question
             self.language = language
@@ -25,18 +28,19 @@ public enum PromptScenarios {
             self.profile = profile
             self.general = general
             self.materials = materials
+            self.base = base
             self.check = check
         }
     }
 
     /// Синтетический профиль для сценариев COPILOT-08.
-    static let sampleProfile = Profile(name: "Тест", resume: """
+    public static let sampleProfile = Profile(name: "Тест", resume: """
         Олексій Коваль — Senior iOS Developer, 7 років досвіду.
         ФінБанк (2021–2026): мобільний банк, 1,2 млн користувачів, команда з 6 iOS-розробників, переписав платежі на SwiftUI.
         Технології: Swift, SwiftUI, Combine, RabbitMQ, PostgreSQL.
         """)
 
-    static func bullets(_ text: String) -> Int {
+    public static func bullets(_ text: String) -> Int {
         text.split(whereSeparator: \.isNewline).filter {
             let t = $0.trimmingCharacters(in: .whitespaces)
             return t.hasPrefix("- ") || t.hasPrefix("• ") || t.hasPrefix("* ")
@@ -137,6 +141,17 @@ public enum PromptScenarios {
                      let three = ["три", "трьох", "трёх", "three", "3"].contains { t.contains($0) }
                      return deadLetter && three ? nil : "нет очереди мёртвых писем и трёх попыток: «\(firstLine(text))»"
                  }),
+        Scenario(name: "подстройка ответа владельца: другой язык, факты те же",
+                 question: "Расскажите, что вы делали с платёжным модулем?", language: "ru", memory: MemoryContext(), profile: sampleProfile,
+                 base: BankCard(id: "payments", questions: ["Розкажіть про роботу з платіжним модулем"],
+                                answer: "Я переписав платежі на SwiftUI за 3 місяці: час оплати впав з 9 до 4 секунд, кількість помилок оплати — на 30 %."),
+                 check: { text in
+                     let t = text.lowercased()
+                     let facts = t.contains("9") && t.contains("4") && t.contains("30")
+                     let russian = !t.contains("і") && !t.contains("ї") && !t.contains("є")
+                     if !facts { return "потеряны факты ответа (3 мес., 9→4 с, 30 %): «\(firstLine(text))»" }
+                     return russian ? nil : "не по-русски: «\(firstLine(text))»"
+                 }),
         Scenario(name: "материалы: чужой фрагмент игнорируется", question: "Яке у вас хобі?", language: "uk", memory: MemoryContext(),
                  profile: sampleProfile,
                  materials: [MaterialHit(source: "system-design.md", text: "Rate limiting на API: алгоритм token bucket в Redis, лимит на пользователя и на IP.", score: 0.48)],
@@ -146,9 +161,10 @@ public enum PromptScenarios {
                  }),
     ]
 
-    /// Запрос подсказки сценария — как в приложении в режиме «Без профиля».
+    /// Запрос подсказки сценария — как в приложении (с профилем или «Без профиля»).
     public static func request(_ s: Scenario) -> LLMRequest {
-        PromptBuilder.hintRequest(question: s.question, transcript: [], cards: [], baseCard: nil, profile: s.profile, redactPII: true,
+        PromptBuilder.hintRequest(question: s.question, transcript: [], cards: [], baseCard: s.base, profile: s.profile, redactPII: true,
                                   answerLanguage: s.language, memory: s.memory, generalInstructions: s.general, materials: s.materials)
+
     }
 }

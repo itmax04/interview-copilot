@@ -58,7 +58,8 @@ struct FastProvidersTests {
         let (events, seconds) = await run(chain)
         #expect(text(events) == "ok")
         #expect(events.contains(.providerFailed(.groq, .http(status: 503, message: "busy"))))
-        #expect(seconds < 1)
+        // Следующий стартует сразу, а не через hedgeAfter = 5 с; запас — под нагрузкой параллельных тестов (было < 1, падало на 1,1).
+        #expect(seconds < 3)
     }
 
     @Test func brokenWinnerRestartsWithNextProvider() async {

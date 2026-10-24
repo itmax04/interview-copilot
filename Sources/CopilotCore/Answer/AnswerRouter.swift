@@ -23,8 +23,13 @@ public enum AnswerRouter {
             if let m = match.matched { return .bankCard(m) }
             return .noMatch(top: match.top)
         case .bankAndHint:
-            if let m = match.matched { return .bankCard(m) }
-            return modelsAvailable ? .generate(base: nil, top: match.top) : .noMatch(top: match.top)
+            // COPILOT-08 R-09 (решение владельца Q6): похожий вопрос с ответом владельца — модель подстраивает этот ответ
+            // под формулировку и язык; без моделей — карточка дословно.
+            guard modelsAvailable else {
+                if let m = match.matched { return .bankCard(m) }
+                return .noMatch(top: match.top)
+            }
+            return .generate(base: match.matched?.card, top: match.top)
         case .generateAlways:
             guard modelsAvailable else {
                 if let m = match.matched { return .bankCard(m) }

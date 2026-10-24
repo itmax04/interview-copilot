@@ -376,7 +376,9 @@ struct AnswerRouterTests {
     }
 
     @Test func bankAndHint() {
-        #expect(AnswerRouter.decide(mode: .bankAndHint, match: matched, modelsAvailable: true) == .bankCard(CardScore(card: card, score: 0.92)))
+        // COPILOT-08 R-09: найденный ответ владельца — основа для подстройки моделью; без моделей — дословно.
+        #expect(AnswerRouter.decide(mode: .bankAndHint, match: matched, modelsAvailable: true) == .generate(base: card, top: matched.top))
+        #expect(AnswerRouter.decide(mode: .bankAndHint, match: matched, modelsAvailable: false) == .bankCard(CardScore(card: card, score: 0.92)))
         #expect(AnswerRouter.decide(mode: .bankAndHint, match: notMatched, modelsAvailable: true) == .generate(base: nil, top: notMatched.top)) // S-03
         #expect(AnswerRouter.decide(mode: .bankAndHint, match: notMatched, modelsAvailable: false) == .noMatch(top: notMatched.top)) // S-04
     }
