@@ -117,7 +117,19 @@ enum UISnapshots {
         // История сессий.
         let store = SessionStore(directory: AppPaths.sessions)
         try? store.save(sampleSession(store))
-        shot("history", NSSize(width: 820, height: 640), SessionHistoryView(store: store))
+        shot("history", NSSize(width: 980, height: 680), SessionHistoryView(store: store))
+        // Разбор (COPILOT-09 R-13, R-14): вкладки окна сессии и разбор в работе.
+        var reviewed = sampleSession(store)
+        for (name, tab) in [("history-transcript", SessionDetail.Tab.transcript), ("history-ask", .ask)] {
+            shot(name, NSSize(width: 720, height: 680), SessionDetail(session: reviewed, reviews: nil, tab: tab, onDelete: {})
+                .background(Color(nsColor: .windowBackgroundColor)))
+        }
+        reviewed.review = SessionReview()
+        reviewed.review?.status = .failed("Модели недоступны: Groq — лимит запросов (429)")
+        reviewed.review?.comments = [sampleSession(store).review!.comments[0]]
+        reviewed.review?.summary = nil
+        shot("history-review-failed", NSSize(width: 720, height: 680), SessionDetail(session: reviewed, reviews: nil, onDelete: {})
+            .background(Color(nsColor: .windowBackgroundColor)))
 
         // Мастер первого запуска и разрешения.
         let onboarding = OnboardingState(model: model, listening: listening, onFinish: {})
@@ -213,10 +225,34 @@ enum UISnapshots {
         ]
         s.exchanges = [
             SessionExchange(id: 1, question: "Расскажите о себе.", answer: ["Я iOS-разработчик, семь лет опыта, последние три года — тимлид."],
-                            askedAt: start.addingTimeInterval(30), turnID: 1),
+                            hint: "**7 лет в iOS, 3 года тимлидом.**\n- Мобильный банк на 1,2 млн пользователей", askedAt: start.addingTimeInterval(30), turnID: 1),
             SessionExchange(id: 2, question: "Как вы организуете тестирование?", answer: ["Unit и snapshot тесты, покрытие около семидесяти процентов."],
-                            askedAt: start.addingTimeInterval(180), turnID: 2),
+                            hint: "• Unit-тесты на бизнес-логику\n• Snapshot-тесты экранов", askedAt: start.addingTimeInterval(180), turnID: 2),
+            SessionExchange(id: 3, question: "Tell me about a conflict in your team.", askedAt: start.addingTimeInterval(420), turnID: 3),
         ]
+        s.ownerUtterances = [
+            .init(id: 1, text: "Я iOS-разработчик, семь лет опыта, последние три года — тимлид.", language: "", at: start.addingTimeInterval(41)),
+            .init(id: 2, text: "Unit и snapshot тесты, покрытие около семидесяти процентов.", language: "", at: start.addingTimeInterval(195)),
+        ]
+        var c = SessionConfig()
+        c.company = "ФинБанк"
+        c.plannedMinutes = 45
+        s.config = c
+        var review = SessionReview()
+        review.status = .done
+        review.comments = [
+            ReviewComment(exchangeID: 1, good: "Сразу назван стаж и роль — коротко и по делу.", missing: "Нет результата: чем команда гордится.",
+                          better: "Я iOS-разработчик, семь лет опыта, три года веду команду; за это время мы [результат]."),
+            ReviewComment(exchangeID: 2, good: "Есть уровни тестов и цифра покрытия.", missing: "Не сказано, как тесты встроены в CI.",
+                          better: "Unit-тесты на бизнес-логику и snapshot на экраны, покрытие около 70%; всё запускается в CI на каждый PR."),
+        ]
+        review.summary = ReviewSummary(overview: "Ровное начало: опыт и тестирование описаны уверенно. На вопрос о конфликте ответа не было — его стоит подготовить.",
+                                       topics: ["Опыт и роль", "Тестирование", "Работа в команде"],
+                                       strengths: ["Короткие ответы с цифрами"], weaknesses: ["Нет историй в формате STAR", "Конфликт — без ответа"],
+                                       nextSteps: ["Подготовить 2 истории STAR: конфликт и провал", "Добавить результат к рассказу о себе"])
+        review.chat = [ReviewQA(id: 1, question: "Где я отвечал слабее всего?",
+                                answer: "На вопрос о конфликте в команде ответа нет. В рассказе о себе не хватило результата — чем закончились изменения.")]
+        s.review = review
         return s
     }
 

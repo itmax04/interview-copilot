@@ -49,6 +49,10 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
     public var exchanges: [SessionExchange] = []
     /// Настройки сессии из мастера (COPILOT-09); у сессий до 09 — nil.
     public var config: SessionConfig?
+    /// Ваши фразы с временем — расшифровка по говорящим (COPILOT-09 R-14); у сессий до 09 — пусто.
+    public var ownerUtterances: [Utterance] = []
+    /// Разбор после End (COPILOT-09 R-13).
+    public var review: SessionReview?
 
     public init(id: String, startedAt: Date, source: String?) {
         self.id = id
@@ -56,7 +60,7 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
         self.source = source
     }
 
-    enum CodingKeys: String, CodingKey { case id, startedAt, endedAt, source, utterances, turns, exchanges, config }
+    enum CodingKeys: String, CodingKey { case id, startedAt, endedAt, source, utterances, turns, exchanges, config, ownerUtterances, review }
 
     // Старые файлы истории без новых полей читаются (COPILOT-06).
     public init(from decoder: Decoder) throws {
@@ -69,6 +73,9 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
         turns = try c.decodeIfPresent([TurnRecord].self, forKey: .turns) ?? []
         exchanges = try c.decodeIfPresent([SessionExchange].self, forKey: .exchanges) ?? []
         config = try? c.decodeIfPresent(SessionConfig.self, forKey: .config)
+        ownerUtterances = (try? c.decodeIfPresent([Utterance].self, forKey: .ownerUtterances)) ?? []
+        // Поврежденный разбор не мешает открыть расшифровку (AC-07).
+        review = try? c.decodeIfPresent(SessionReview.self, forKey: .review)
     }
 }
 

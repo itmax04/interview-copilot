@@ -55,7 +55,8 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | `…/Answer` | выбор: карточка / нет в базе / генерация; история ответов | `AnswerRouter`, `AnswerStyle` (формат, длина, тон → правило промпта; `AnswerShape` — проверка формы), `AnswerHistory` (`AnswerEntry` → `AnswerVersion`: hint / bank / strong / screenshot / refine, статусы, ←/→, «новый ответ») |
 | `…/LLM` | провайдеры и промпт | `PromptBuilder` (все правила для модели), `ProviderChain` + `ChainFactory`, `Providers` (Gemini, DeepSeek, Anthropic, OpenAI-совместимые: Groq, Cerebras, свой API), `SSEClient`, `KeyVerifier` |
 | `…/Memory` | память интервью | `InterviewMemory`, `SessionExchange`, `MemoryContext`, `ReferenceDetector`, `PromptScenarios` |
-| `…/Storage` | история сессий | `SessionRecord` (с `config` сессии), `SessionStore` |
+| `…/Storage` | история сессий | `SessionRecord` (с `config` сессии, вашими фразами по времени и разбором), `SessionStore` |
+| `…/Review` | разбор после End (COPILOT-09) | `SessionReview` (статус, `ReviewComment`, `ReviewSummary`, `ReviewQA`), `ReviewPrompt` (комментарии порциями, сводка, «Спросить ИИ»), `TimelineEntry` / `SessionRecord.timeline` |
 | `…/Session` | сессия (COPILOT-09) | `SessionConfig`/`SessionType`/`SessionPhase`/`SessionClock`, `Preflight` (проверка перед стартом), `CallDetection`, `JobImport` |
 | `…/Settings` | настройки и пути | `AppSettings` (миграции `schemaVersion`), `SettingsStore` (UserDefaults `settings.v1`), `AppPaths` |
 | `…/Secrets` | ключи API | `KeychainStore` (service `com.itmax04.interviewcopilot`) |
@@ -63,7 +64,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | `…/Hotkeys`, `…/Menu` | глобальные клавиши (Carbon), состав меню | `HotkeyCenter`, `HotkeyAction`, `MenuLayout` (без AppKit — тестируется) |
 | `…/Usage`, `…/Privacy`, `…/Models`, `…/Capture`, `…/Logging` | расход и бюджет, фильтр ПД, загрузка моделей с SHA256, скриншот, логи | `UsageMeter`, `PIIFilter`, `ModelDownloader`, `ScreenshotService`, `Log` |
 | `Sources/CopilotEmbeddings` | bge-m3 через llama.cpp (отдельно из-за заголовков ggml) | `LlamaEmbedder` |
-| `Sources/InterviewCopilot` | приложение: связывает всё | `AppDelegate` (App.swift — вся проводка колбэков), `LiveSessionController` (Start/End, таймер, определение звонка), `SessionWizard` (мастер), `AnswerStyleEditor`/`StylePreview` (стиль ответа с предпросмотром), `ListeningController` (в т. ч. `standby` без сессии), `TurnController`, `AnswerController`, `SessionController` (история), `PanelController` (свернуть, следующий экран, фокус чата, проверка видимости)/`PanelView`/`AnswerCardView`, `Theme`, настройки, профиль, история |
+| `Sources/InterviewCopilot` | приложение: связывает всё | `AppDelegate` (App.swift — вся проводка колбэков), `LiveSessionController` (Start/End, таймер, определение звонка), `SessionWizard` (мастер), `AnswerStyleEditor`/`StylePreview` (стиль ответа с предпросмотром), `ListeningController` (в т. ч. `standby` без сессии), `TurnController`, `AnswerController`, `SessionController` (история), `ReviewController` (разбор в фоне), `PanelController` (свернуть, следующий экран, фокус чата, проверка видимости)/`PanelView`/`AnswerCardView`, `Theme`, настройки, профиль, история |
 | `Sources/copilot-eval` | CLI замеров | см. §6 |
 
 Правило: логика — в `CopilotCore` (тестируется без UI), приложение только связывает и показывает.
@@ -102,7 +103,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | Полностью | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh` |
 | Звуковые eval | `scripts/run-evals.sh filter voice` (нужны модели Parakeet, Silero, CAM++) |
 | CLI | `swift run -c release copilot-eval <stt|stt-parakeet|stt-hybrid|stt-stream|turn|bank|filter-text|filter|voice|voice-enroll|enhance|memory|exit-check>` |
-| Живые (тратят бесплатные лимиты) | `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`, `--smoke-memory 5`, `--smoke-prepare`, `--smoke-session`, `--ui-snapshots <папка>` (снимки окон без звука), `--smoke-screenshot evals/fixtures/two-sum.png` |
+| Живые (тратят бесплатные лимиты) | `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`, `--smoke-memory 5`, `--smoke-prepare`, `--smoke-session`, `--smoke-review`, `--ui-snapshots <папка>` (снимки окон без звука), `--smoke-screenshot evals/fixtures/two-sum.png` |
 | Метрики созвона | `scripts/metrics.py --last 30m` (из журнала, только числа) |
 
 Пороги eval — `evals/README.md`. Живые проверки запускаются из подписанного `.app`: только ему Связка ключей отдаёт ключи без запроса.

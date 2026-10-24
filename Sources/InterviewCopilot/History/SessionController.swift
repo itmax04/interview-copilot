@@ -43,6 +43,21 @@ final class SessionController {
         scheduleSave()
     }
 
+    /// Ваша фраза с временем — для расшифровки по говорящим (COPILOT-09 R-14).
+    func addOwnerUtterance(_ text: String) {
+        guard current != nil else { return }
+        let id = (current?.ownerUtterances.last?.id ?? 0) + 1
+        current?.ownerUtterances.append(.init(id: id, text: text, language: "", at: Date()))
+        scheduleSave()
+    }
+
+    /// Уточненный текст вашей фразы (самопроверка) заменяет черновой — последнее совпадение.
+    func reviseOwnerUtterance(_ fast: String, to text: String) {
+        guard let i = current?.ownerUtterances.lastIndex(where: { $0.text == fast }), let u = current?.ownerUtterances[i] else { return }
+        current?.ownerUtterances[i] = .init(id: u.id, text: text, language: u.language, at: u.at)
+        scheduleSave()
+    }
+
     /// Обмены интервью с ответами владельца (COPILOT-06) — снимок памяти текущего интервью.
     func updateExchanges(_ exchanges: [SessionExchange]) {
         guard current != nil else { return }

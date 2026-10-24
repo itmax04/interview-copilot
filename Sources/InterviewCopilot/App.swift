@@ -30,6 +30,10 @@ enum InterviewCopilotMain {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.memory(runs: (i + 1 < args.count ? Int(args[i + 1]) : nil) ?? 3))
         }
+        if args.contains("--smoke-review") {
+            setvbuf(stdout, nil, _IOLBF, 0)
+            exit(SmokeTest.review())
+        }
         if args.contains("--smoke-session") {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.session())
@@ -100,7 +104,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let bank = BankController()
     private lazy var answers = AnswerController(model: model, bank: bank, panel: panelModel)
     private let sessions = SessionController()
-    private lazy var historyWindow = SessionHistoryWindowController(sessions: sessions)
+    private lazy var reviews = ReviewController(store: sessions.store, model: model, bank: bank)
+    private lazy var historyWindow = SessionHistoryWindowController(sessions: sessions, reviews: reviews)
     private lazy var profileWindow = ProfileWindowController(bank: bank, model: model)
     /// Живая сессия и мастер «Создать сессию» (COPILOT-09).
     private let liveSession = LiveSessionController()
@@ -275,10 +280,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.embed = { [weak self] in self?.bank.embedFunction }
         listening.onOwnerSaid = { [weak self] text in
             self?.memory.addAnswer(text)
+            self?.sessions.addOwnerUtterance(text)
             self?.saveMemory()
         }
         listening.onOwnerRevised = { [weak self] fast, text in
             self?.memory.reviseText(fast, to: text)
+            self?.sessions.reviseOwnerUtterance(fast, to: text)
             self?.saveMemory()
         }
         if testCallOnly {
@@ -500,8 +507,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.cancel()
         if c.type == .mock, interviewer.active { Task { await interviewer.close() } }
         listening.enterStandby()
-        sessions.finish()
+        let record = sessions.finish()
         refreshUI()
+        // Разбор (R-13, Q15): сразу после End в фоне; окно открывается на этой сессии — расшифровка видна сразу.
+        if c.reviewAfterEnd, c.saveTranscript, let record, record.canBeReviewed, sessions.store.load(record.id) != nil {
+            reviews.start(record.id)
+            historyWindow.show(select: record.id)
+        }
     }
 
     /// Опережающий запрос (COPILOT-04 R-01): ответ готовится до истечения паузы, показывается при ходе с тем же текстом.
