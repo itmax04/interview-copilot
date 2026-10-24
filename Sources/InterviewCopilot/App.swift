@@ -257,6 +257,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.onTaskChange = { [weak self] task in
             self?.panelModel.taskImages = task?.images ?? []
             self?.panelModel.taskSolved = task.map { !$0.solution.isEmpty } ?? false
+            self?.panelModel.taskTitle = task?.statement
         }
         panelModel.onCloseTask = { [weak self] in self?.answers.clearTask() }
         liveSession.onStart = { [weak self] config in self?.sessionStarted(config) }

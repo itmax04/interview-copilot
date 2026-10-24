@@ -102,46 +102,98 @@ struct PanelView: View {
     }
 }
 
-/// Активная задача со скриншота (COPILOT-09 R-15): миниатюры, число снимков, ✕ — закрыть задачу.
+/// Активная задача со скриншота (COPILOT-09 R-15, P05): миниатюры, «+ Добавить снимок», условие, ✕ — закрыть задачу.
 private struct TaskChip: View {
     let model: PanelModel
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(Array(model.taskImages.enumerated()), id: \.offset) { _, data in
-                if let image = NSImage(data: data) {
-                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
-                        .frame(width: 38, height: 26).clipShape(RoundedRectangle(cornerRadius: 4))
-                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.25)))
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Активная задача · \(model.taskImages.count) \(model.taskImages.count == 1 ? "снимок" : "снимка")")
+                    .font(.system(size: max(10, model.fontSize - 3))).foregroundStyle(ICDark.secondary)
+                Spacer()
+                Button { model.onCloseTask?() } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .help("Закрыть задачу: вопросы больше не относятся к ней")
+                    .accessibilityLabel("Закрыть задачу")
+            }
+            HStack(spacing: 8) {
+                ForEach(Array(model.taskImages.enumerated()), id: \.offset) { _, data in
+                    if let image = NSImage(data: data) {
+                        Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                            .frame(width: 76, height: 46).clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(ICDark.stroke))
+                            .accessibilityLabel("Снимок задачи")
+                    }
                 }
+                if model.taskImages.count < 3 {
+                    Button { model.onScreenshot?() } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: "plus")
+                            Text("Добавить снимок").font(.system(size: 9))
+                            Text(model.hotkey(.screenshot)).font(.system(size: 9)).foregroundStyle(ICDark.secondary)
+                        }
+                        .frame(width: 92, height: 46)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(ICDark.stroke, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Снимок в течение 30 с — к этой же задаче")
+                }
+                Spacer(minLength: 0)
             }
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Задача · \(model.taskImages.count) \(model.taskImages.count == 1 ? "снимок" : "снимка")")
-                    .font(.system(size: max(10, model.fontSize - 3), weight: .semibold))
-                Text(model.taskSolved ? "Уточнения голосом — к этой задаче" : "Решаю… снимок за 30 с добавится сюда")
-                    .font(.system(size: max(9, model.fontSize - 4))).foregroundStyle(.white.opacity(0.6))
+            if let title = model.taskTitle {
+                Text(title).font(.system(size: model.fontSize, weight: .semibold)).lineLimit(2)
+            } else {
+                Text(model.taskSolved ? "Уточнения голосом — к этой задаче" : "Решаю…").font(.system(size: model.fontSize - 2))
+                    .foregroundStyle(ICDark.secondary)
             }
-            .lineLimit(1)
-            Spacer(minLength: 4)
-            Button { model.onCloseTask?() } label: { Image(systemName: "xmark") }
-                .buttonStyle(.plain)
-                .foregroundStyle(.white.opacity(0.7))
-                .help("Закрыть задачу: вопросы больше не относятся к ней")
-                .accessibilityLabel("Закрыть задачу")
         }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(0.22)))
-        .accessibilityElement(children: .combine)
+        .padding(12)
+        .background(ICDark.surface, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(ICDark.stroke))
+        .accessibilityElement(children: .contain)
     }
 }
-
-// MARK: Панель действий
 
 private struct Toolbar: View {
     let model: PanelModel
 
     /// P01: сверху — уровни микрофона и звонка, таймер, свернуть, меню, «Завершить»; ниже — действия с клавишами.
-    var body: some View {
+    /// P06: свернутый — одна строка: волны, действия иконками, таймер, развернуть, «Завершить».
+    @ViewBuilder var body: some View {
+        if model.collapsed && model.sessionActive { collapsedRow } else { fullBody }
+    }
+
+    private var collapsedRow: some View {
+        HStack(spacing: 7) {
+            LevelWave(level: model.micLevel, icon: "mic.fill", label: "Микрофон", silent: false)
+            LevelWave(level: model.callLevel, icon: "speaker.wave.2.fill", label: "Звук звонка", silent: model.callSilentSeconds != nil)
+            Spacer(minLength: 2)
+            ForEach([("doc", "Ответ", HotkeyAction.answerNow), ("crop", "Скриншот", .screenshot), ("bubble.left", "Чат", .chat)], id: \.1) { icon, title, action in
+                IconButton(symbol: icon, label: "\(title) \(model.hotkey(action))") {
+                    switch action {
+                    case .answerNow: model.onAnswerNow?()
+                    case .screenshot: model.onScreenshot?()
+                    default: model.onToggleChat?()
+                    }
+                }
+            }
+            if let timer = model.sessionTimer {
+                Text(timer).font(.system(size: model.fontSize - 2, weight: .medium).monospacedDigit()).lineLimit(1).fixedSize()
+            }
+            IconButton(symbol: "arrow.up.left.and.arrow.down.right", label: "Развернуть") { model.onToggleCollapse?() }
+            Button { model.onEndSession?() } label: {
+                Circle().fill(.white).frame(width: 9, height: 9).frame(width: 30, height: 26)
+                    .background(IC.red, in: RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .help("Завершить сессию")
+            .accessibilityLabel("Завершить сессию")
+        }
+    }
+
+    private var fullBody: some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
                 if model.sessionActive {
@@ -303,24 +355,39 @@ private struct NoSessionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let app = model.callDetected {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Похоже, начался звонок: \(app)", systemImage: "phone.arrow.down.left")
-                        .font(.system(size: model.fontSize, weight: .semibold))
-                    Text("Начать сессию с последними настройками?").foregroundStyle(.white.opacity(0.75))
-                    HStack {
-                        Button("Начать") { model.onStartDetectedCall?() }.buttonStyle(.borderedProminent).tint(Theme.accent)
-                        Button("Настроить…") { model.onCreateSession?() }
-                        Button("Не сейчас") { model.onDismissDetectedCall?() }
+                // P10: как уведомление — значок, «Звонок в Zoom», вопрос и две кнопки.
+                HStack(alignment: .top, spacing: 12) {
+                    ICLogo(size: 38)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Звонок в \(app)").font(.system(size: model.fontSize, weight: .semibold))
+                        Text("Начать сессию с последними настройками?").font(.system(size: model.fontSize - 2)).foregroundStyle(ICDark.secondary)
+                        HStack(spacing: 6) {
+                            Button { model.onStartDetectedCall?() } label: {
+                                Text("Начать").font(.system(size: model.fontSize - 2, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 6)
+                                    .background(IC.accent, in: RoundedRectangle(cornerRadius: 8))
+                            }
+                            .buttonStyle(.plain)
+                            ICOverlayButton(title: "Настроить…", icon: "slider.horizontal.3", size: model.fontSize) { model.onCreateSession?() }
+                        }
+                        Button("Не сейчас") { model.onDismissDetectedCall?() }.buttonStyle(.plain)
+                            .font(.system(size: model.fontSize - 3)).foregroundStyle(ICDark.secondary)
                     }
-                    .controlSize(.small)
                 }
                 .padding(12)
-                .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Color.white.opacity(0.08)))
+                .background(ICDark.raised, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(ICDark.stroke))
             }
             Message(icon: "pause.circle", text: "Сессии нет — приложение не слушает звонок и микрофон.")
-            Button("Создать сессию… \(model.hotkey(.newSession))") { model.onCreateSession?() }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
+            Button { model.onCreateSession?() } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "paperplane")
+                    Text("Создать сессию").font(.system(size: model.fontSize - 1, weight: .semibold))
+                    ICKeycap(text: model.hotkey(.newSession), dark: true)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(IC.accent, in: RoundedRectangle(cornerRadius: 10))
+            }
+            .buttonStyle(.plain)
                 .accessibilityHint("Открывает мастер: тип звонка, профиль, проверка перед стартом")
         }
     }

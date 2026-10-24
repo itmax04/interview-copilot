@@ -73,7 +73,8 @@ public struct ScreenshotTask: Equatable, Sendable, Identifiable {
     static func firstSentences(_ s: String) -> String {
         let plain = s.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")
             .replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
-        return plain.count > 160 ? String(plain.prefix(159)) + "…" : plain
+        let capitalized = plain.prefix(1).uppercased() + plain.dropFirst()
+        return capitalized.count > 160 ? String(capitalized.prefix(159)) + "…" : capitalized
     }
 }
 

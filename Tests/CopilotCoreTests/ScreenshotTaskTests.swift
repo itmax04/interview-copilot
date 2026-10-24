@@ -63,7 +63,7 @@ struct ScreenshotTaskTests {
     @Test func solutionSectionsBecomeTitleAndPromptSummary() throws {
         var task = ScreenshotTask(id: 1, image: Data([1]), at: t0)
         task.solution = Self.solution
-        #expect(task.statement == "найти индексы двух чисел массива с суммой target.")
+        #expect(task.statement == "Найти индексы двух чисел массива с суммой target.")
         let summary = try #require(task.promptSummary)
         #expect(summary.hasPrefix("Task: найти индексы"))
         #expect(summary.contains("Approach:\n- словарь «значение → индекс»\n- один проход"))

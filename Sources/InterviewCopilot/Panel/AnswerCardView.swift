@@ -1,3 +1,4 @@
+import AppKit
 import CopilotCore
 import SwiftUI
 
@@ -278,11 +279,26 @@ struct MarkdownText: View {
                         .font(.system(size: fontSize))
                         .fixedSize(horizontal: false, vertical: true)
                 case .code(let c):
+                    // P05: код — на темной подложке, «Копировать код» в углу.
                     Text(c)
                         .font(.system(size: fontSize - 1, design: .monospaced))
-                        .padding(8)
+                        .textSelection(.enabled)
+                        .padding(10)
+                        .padding(.top, 18)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.35)))
+                        .overlay(alignment: .topTrailing) {
+                            Button {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(c, forType: .string)
+                            } label: {
+                                Label("Копировать код", systemImage: "doc.on.doc").font(.system(size: max(9, fontSize - 4)))
+                            }
+                            .buttonStyle(.plain)
+                            .opacity(0.7)
+                            .padding(6)
+                            .accessibilityLabel("Копировать код")
+                        }
                 }
             }
         }

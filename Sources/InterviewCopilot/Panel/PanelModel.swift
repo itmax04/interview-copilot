@@ -77,6 +77,8 @@ final class PanelModel {
     // Задача со скриншота (COPILOT-09 R-15): миниатюры снимков; голосовые уточнения относятся к ней.
     var taskImages: [Data] = []
     var taskSolved = false
+    /// Условие задачи из решения (P05: «Two Sum — найти пару с суммой target»).
+    var taskTitle: String?
     var onCloseTask: (() -> Void)?
 
     // Самопроверка (COPILOT-06/07).

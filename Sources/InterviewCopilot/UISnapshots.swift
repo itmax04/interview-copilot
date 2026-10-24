@@ -350,6 +350,7 @@ enum UISnapshots {
                 let shot = (try? Data(contentsOf: URL(fileURLWithPath: "evals/fixtures/two-sum.png"))) ?? Data()
                 m.taskImages = [shot, shot]
                 m.taskSolved = true
+                m.taskTitle = "найти индексы двух чисел с суммой target."
                 let ids = m.history.begin(question: "Задача: найти индексы двух чисел с суммой target.", turnID: nil, kind: .screenshot)
                 m.history.update(entry: ids.entry, version: ids.version) {
                     $0.text = "1. **Task** — найти индексы двух чисел с суммой target.\n2. **Approach** — словарь «значение → индекс», один проход.\n4. **Complexity** — O(n) времени, O(n) памяти."
@@ -372,6 +373,7 @@ enum UISnapshots {
             }),
             ("call-silent", { m in session(m); m.callSilentSeconds = 14; m.callLevel = -120 }),
             ("collapsed", { m in session(m); m.collapsed = true }),
+            ("call-offer", { m in m.state = .noSession; m.callDetected = "Zoom" }),
             ("zoomed", { m in
                 session(m); m.zoom = 1.3
                 answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · generated", latency: 1.2)
