@@ -122,8 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // ИИ-собеседование: вопрос сверяется с текстом модели и при этом идёт в обычные подсказки, как на созвоне.
             if self.interviewer.active { self.interviewer.handleCallTranscript(event) }
             self.turns.handle(event)
-            if case .final(let u, let text, let lang, _, _) = event { self.sessions.addUtterance(id: u, text: text, language: lang) }
-            if case .final(let u, let text, _, _, _) = event {
+            if case .final(let u, let text, let lang, _, _) = event {
+                self.sessions.addUtterance(id: u, text: text, language: lang)
                 self.fastText[u] = text
                 if self.fastText.count > 50, let oldest = self.fastText.keys.min() { self.fastText.removeValue(forKey: oldest) }
             }
@@ -178,7 +178,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // В промпт — только реплики интервьюера, прошедшие фильтры (серые строки COPILOT-05 не идут).
         answers.transcript = { [weak self] in self?.listening.transcript.filter { $0.filtered == nil }.map(\.text) ?? [] }
-        answers.candidateSaid = { [weak self] in self?.listening.candidateSaid ?? [] }
         answers.onUsage = { [weak self] provider, modelID, u in self?.recordUsage(provider, modelID, u) }
         answers.onProviderError = { [weak self] provider, error in
             self?.usage.recordError(provider: provider, error: error)
@@ -187,13 +186,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.onAnswer = { [weak self] record in
             guard let self else { return }
             self.sessions.addAnswer(record)
-            // COPILOT-06: подсказка — в обмен этого вопроса (для разбора после звонка).
-            if !record.text.isEmpty { self.memory.setHint(record.text, forQuestion: record.turn.text); self.saveMemory() }
+            // COPILOT-06: подсказка — в обмен этого хода (замена ответа, если он не записан, и разбор после звонка).
+            if !record.text.isEmpty, record.turn.id >= 0 { self.memory.setHint(record.text, forTurn: record.turn.id); self.saveMemory() }
         }
-        // COPILOT-06: память интервью вместо отдельного блока «что кандидат сказал» — ответы уже в обменах.
+        answers.onNotAQuestion = { [weak self] turn in
+            guard let self, self.memory.dropUnanswered(turnID: turn.id) else { return }
+            self.saveMemory()
+        }
+        // COPILOT-06: ответы владельца — в обменах памяти интервью.
         answers.memory = memory
         answers.embed = { [weak self] in self?.bank.embedFunction }
-        answers.candidateSaid = { [] }
         listening.onOwnerSaid = { [weak self] text in
             self?.memory.addAnswer(text)
             self?.saveMemory()
@@ -319,7 +321,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // COPILOT-06: тишина дольше 30 минут — это уже другое интервью.
         if let last = lastTurnAt, Date().timeIntervalSince(last) > Self.newInterviewAfterSilence { startNewInterview(reason: "silence") }
         lastTurnAt = Date()
-        memory.addQuestion(turn.text)
+        memory.addQuestion(turn.text, turnID: turn.id)
         saveMemory()
         answers.handle(turn)
     }
@@ -341,7 +343,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func startNewInterview(reason: String) {
         sessions.finish()
         memory.reset()
-        listening.clearCandidateContext()
         lastTurnAt = nil
         sessions.start(source: listening.source.displayName, retentionDays: model.settings.historyRetentionDays)
         Log.app.info("new interview: \(reason, privacy: .public)")

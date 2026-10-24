@@ -411,7 +411,10 @@ extension ProviderChain {
                         if winner == i { winner = nil }
                         fail(i, e)
                         if !e.triggersFallback {
+                            // Как в последовательном режиме: потребитель должен узнать, что ответа не будет,
+                            // иначе панель остаётся в «Готовлю подсказку…» (COPILOT-07).
                             for (_, t) in tasks { t.cancel() }
+                            if !Task.isCancelled { continuation.yield(.exhausted(reason: reasons.joined(separator: "; "))) }
                             continuation.finish()
                             return
                         }

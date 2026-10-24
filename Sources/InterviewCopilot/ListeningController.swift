@@ -94,8 +94,6 @@ final class ListeningController {
     private let ownerActive = LockedFlag()
     /// Фраза владельца прошла фильтры — в память интервью (COPILOT-06).
     var onOwnerSaid: ((String) -> Void)?
-    /// Что владелец уже сказал — только в памяти (Q6).
-    private var candidateContext = CandidateContext()
 
     /// Самопроверка: «сейчас отвечаю я» (⌃⌥A, COPILOT-06) — речь с микрофона идёт ответом в память, а не вопросом.
     private(set) var ownerAnswering = false
@@ -114,14 +112,6 @@ final class ListeningController {
         return true
     }
 
-    /// Новое интервью (COPILOT-06): фразы прошлого не переносятся.
-    func clearCandidateContext() { candidateContext.clear() }
-
-    /// До 3 последних фраз владельца для промпта (R-07).
-    var candidateSaid: [String] {
-        candidateContext.recent(at: Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
-    }
-
     /// Канал владельца работает на созвоне (звук приложения или весь системный звук), не в самопроверке и не в тестах.
     private func updateOwnerChannel() {
         let callSource: Bool = switch source {
@@ -133,7 +123,6 @@ final class ListeningController {
         guard ownerActive.value != active else { return }
         ownerActive.set(active)
         ownerTranscriber?.setPaused(!active)
-        if !active { candidateContext.clear() }
         Log.audio.info("owner channel \(active ? "on" : "off", privacy: .public)")
     }
 
@@ -156,7 +145,6 @@ final class ListeningController {
         // Без образца голоса — хотя бы фильтр языка микрофона: ТВ на другом языке не станет «ответом владельца».
         if voiceGate.current.print == nil, model.settings.languageFilter,
            case .drop = LanguageGate(setting: model.settings.language, terms: terms).check(text, channel: .mic) { return }
-        candidateContext.add(text, at: Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
         onOwnerSaid?(text)
         Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text))")
     }
@@ -629,7 +617,6 @@ final class ListeningController {
         if ownerAnswering, source == .microphone {
             switch event {
             case .final(_, let text, _, let phraseEnd, _):
-                candidateContext.add(text, at: Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
                 onOwnerSaid?(text)
                 Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=self-test")
                 onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))

@@ -77,6 +77,14 @@ struct FastProvidersTests {
         #expect(reason.contains("Groq") && reason.contains("Gemini"))
     }
 
+    @Test func nonFallbackFailureStillEndsWithExhausted() async {
+        // COPILOT-07: ошибка без перехода (отмена со стороны URLSession) не должна оставлять панель в «Готовлю подсказку…».
+        let chain = ProviderChain(steps: [step(.groq, .fail(.cancelled)), step(.gemini, .reply(["ok"]))], hedgeAfter: 1)
+        let (events, _) = await run(chain)
+        guard case .exhausted? = events.last else { Issue.record("ожидался exhausted, получено \(events)"); return }
+        #expect(!events.contains(.text("ok")))
+    }
+
     @Test func groqRequestUsesLowReasoningWithoutReasoningText() async throws {
         let rec = RequestRecorder()
         let p = OpenAICompatibleProvider(.groq, transport: FixtureTransport(fixture: "deepseek-ok.sse", recorder: rec))

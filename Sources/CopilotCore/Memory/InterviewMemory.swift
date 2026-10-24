@@ -11,13 +11,17 @@ public struct SessionExchange: Codable, Equatable, Sendable, Identifiable {
     /// Подсказка, которую показала модель (для разбора после звонка; в промпт не идёт).
     public var hint: String?
     public var askedAt: Date
+    /// Ход приложения, к которому относится обмен (COPILOT-07): подсказка находит свой обмен по нему, даже если
+    /// текст вопроса уже заменён уточнённым (Whisper) или такой же вопрос задан дважды. В старых файлах истории — nil.
+    public var turnID: Int?
 
-    public init(id: Int, question: String, answer: [String] = [], hint: String? = nil, askedAt: Date) {
+    public init(id: Int, question: String, answer: [String] = [], hint: String? = nil, askedAt: Date, turnID: Int? = nil) {
         self.id = id
         self.question = question
         self.answer = answer
         self.hint = hint
         self.askedAt = askedAt
+        self.turnID = turnID
     }
 
     public var answerText: String { answer.joined(separator: " ") }
@@ -53,6 +57,8 @@ public struct MemoryContext: Sendable, Equatable {
     }
 
     public var isEmpty: Bool { recent.isEmpty && earlier.isEmpty }
+    /// Есть ли в контексте хоть один записанный ответ кандидата (показанные подсказки не в счёт).
+    public var hasRecordedAnswers: Bool { (recent + earlier).contains { !$0.answer.isEmpty } }
 }
 
 public final class InterviewMemory: @unchecked Sendable {
@@ -99,9 +105,9 @@ public final class InterviewMemory: @unchecked Sendable {
     public var all: [SessionExchange] { lock.withLock { exchanges } }
 
     @discardableResult
-    public func addQuestion(_ text: String, at date: Date = Date()) -> Int {
+    public func addQuestion(_ text: String, turnID: Int? = nil, at date: Date = Date()) -> Int {
         lock.withLock {
-            let e = SessionExchange(id: nextID, question: text, askedAt: date)
+            let e = SessionExchange(id: nextID, question: text, askedAt: date, turnID: turnID)
             nextID += 1
             exchanges.append(e)
             return e.id
@@ -131,18 +137,38 @@ public final class InterviewMemory: @unchecked Sendable {
         }
     }
 
-    public func setHint(_ text: String, forQuestion question: String) {
+    /// Подсказка, показанная на ход. По номеру хода, а не по тексту: уточнение Whisper (~3 с) приходит раньше конца
+    /// ответа медленного провайдера и меняет текст вопроса — поиск по тексту терял подсказку.
+    public func setHint(_ text: String, forTurn turnID: Int) {
         lock.withLock {
-            guard let i = exchanges.lastIndex(where: { $0.question == question }) else { return }
+            guard let i = exchanges.lastIndex(where: { $0.turnID == turnID }) else { return }
             exchanges[i].hint = text
         }
     }
 
+    /// Модель решила, что это не вопрос («—»): обмен без ответа убирается, чтобы обрывки («Є таке питання.»)
+    /// не занимали место последних обменов в промпте. Возвращает true, если обмен удалён.
+    @discardableResult
+    public func dropUnanswered(turnID: Int) -> Bool {
+        lock.withLock {
+            guard let i = exchanges.lastIndex(where: { $0.turnID == turnID }), exchanges[i].answer.isEmpty else { return false }
+            embeddings[exchanges[i].id] = nil
+            exchanges.remove(at: i)
+            return true
+        }
+    }
+
     /// Контекст для вопроса. `embed` — эмбеддинг текста (bge-m3); без него — только последние обмены.
-    /// Текущий вопрос (последний обмен с этим же текстом) в историю не входит.
-    public func context(for question: String, now: Date = Date(), embed: ((String) -> [Float]?)? = nil) -> MemoryContext {
+    /// Текущий вопрос в историю не входит, пока на него нет ответа: обмен хода `turnID`, а без номера — последний обмен
+    /// с тем же текстом.
+    public func context(for question: String, turnID: Int? = nil, now: Date = Date(),
+                        embed: ((String) -> [Float]?)? = nil) -> MemoryContext {
         var history = all
-        if let last = history.last, last.question == question, last.answer.isEmpty { history.removeLast() }
+        if let turnID {
+            history.removeAll { $0.turnID == turnID && $0.answer.isEmpty }
+        } else if let last = history.last, last.question == question, last.answer.isEmpty {
+            history.removeLast()
+        }
         let backReference = ReferenceDetector.isBackReference(question)
         func item(_ e: SessionExchange) -> MemoryContext.Item {
             .init(minutesAgo: max(0, Int(now.timeIntervalSince(e.askedAt) / 60)),
@@ -176,16 +202,19 @@ public final class InterviewMemory: @unchecked Sendable {
 
 /// Отсылки к сказанному раньше (uk / ru / en) — COPILOT-06 R-03.
 public enum ReferenceDetector {
+    /// Основы слов, а не формы: «ви згадува» — и «згадували», и «згадувала»; «поверне/поверні» — «повернемо(ся)»,
+    /// «повернімо(ся)» (живой тест COPILOT-06: «Повернемо себе до…» не распознавалось).
     static let markers: [String] = [
         // ru
-        "вернёмся", "вернемся", "вернуться к", "ранее", "раньше", "вы говорили", "вы сказали", "вы упоминали", "вы упомянули",
-        "предыдущ", "в начале", "как вы сказали", "уточните", "подробнее о", "возвращаясь",
+        "вернёмся", "вернемся", "вернуться к", "вернусь к", "возвращаясь", "ранее", "раньше", "предыдущ", "в начале",
+        "вы говорил", "вы сказал", "вы упоминал", "вы упомянул", "вы рассказывал", "как вы сказали", "уточните", "подробнее о",
         // uk
-        "повернімося", "повернемося", "повернутися до", "раніше", "ви казали", "ви сказали", "ви згадували", "ви згадали",
-        "попередн", "на початку", "як ви сказали", "уточніть", "детальніше про",
+        "повернемо", "повернімо", "повернутися до", "повертаючись", "раніше", "попередн", "на початку",
+        "ви казал", "ви сказал", "ви згадува", "ви згадал", "ви говорил", "ви розповідал", "як ви сказали",
+        "уточніть", "детальніше про",
         // en
-        "go back to", "back to", "earlier", "previous", "you mentioned", "you said", "you told", "at the beginning",
-        "as you said", "elaborate on", "more about what you",
+        "go back to", "back to", "earlier", "previous", "you mentioned", "you said", "you told", "you were saying",
+        "you talked about", "at the beginning", "as you said", "elaborate on", "more about what you",
     ]
 
     public static func isBackReference(_ text: String) -> Bool {

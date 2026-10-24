@@ -14,18 +14,17 @@ final class AnswerController {
     private var lastMatch: BankMatch?
     /// Последние реплики собеседника для промпта (R-11: до 6).
     var transcript: () -> [String] = { [] }
-    /// Что владелец уже сказал на созвоне (COPILOT-05 R-07).
-    var candidateSaid: () -> [String] = { [] }
     /// Память интервью (COPILOT-06): последние обмены и найденные по смыслу старые.
     var memory: InterviewMemory?
     /// Эмбеддинг текста (bge-m3 базы) для поиска по истории; nil — модель не загружена.
     var embed: () -> (@Sendable (String) -> [Float]?)? = { nil }
 
-    /// Контекст истории для вопроса — в фоне (эмбеддинги), без главного потока.
-    private func memoryContext(for question: String) async -> MemoryContext {
+    /// Контекст истории для вопроса — в фоне (эмбеддинги), без главного потока. `turnID` — обмен текущего хода,
+    /// он в историю не входит (у опережающего запроса хода ещё нет — и обмена в памяти тоже).
+    private func memoryContext(for question: String, turnID: Int? = nil) async -> MemoryContext {
         guard let memory else { return MemoryContext() }
         let embed = self.embed()
-        return await Task.detached(priority: .userInitiated) { memory.context(for: question, embed: embed) }.value
+        return await Task.detached(priority: .userInitiated) { memory.context(for: question, turnID: turnID, embed: embed) }.value
     }
     /// Учёт токенов и запросов (P-10).
     var onUsage: ((ProviderID, String, TokenUsage) -> Void)?
@@ -33,6 +32,8 @@ final class AnswerController {
     var onProviderError: ((ProviderID, LLMError) -> Void)?
     /// Готовый ответ для истории сессии (P-10).
     var onAnswer: ((AnswerRecord) -> Void)?
+    /// Модель ответила «—» — реплика не вопрос (обмен без ответа убирается из памяти, COPILOT-07).
+    var onNotAQuestion: ((Turn) -> Void)?
 
     struct AnswerRecord {
         var turn: Turn
@@ -118,7 +119,7 @@ final class AnswerController {
         PromptBuilder.hintRequest(question: question, transcript: transcript(), cards: top, baseCard: base,
                                   profile: settings.useProfile ? bank.profile : nil, redactPII: settings.piiFilterEnabled,
                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question),
-                                  candidateSaid: candidateSaid(), memory: memory)
+                                  memory: memory)
     }
 
     private func route(_ turn: Turn, match: BankMatch, settings: AppSettings) {
@@ -134,7 +135,7 @@ final class AnswerController {
             generation = Task { [weak self] in
                 guard let self else { return }
                 // История интервью (COPILOT-06) и ключи — не на главном потоке.
-                let memory = await self.memoryContext(for: turn.text)
+                let memory = await self.memoryContext(for: turn.text, turnID: turn.id)
                 let request = self.hintRequest(question: turn.text, base: base, top: top, settings: settings, memory: memory)
                 let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
                 guard !Task.isCancelled, self.lastQuestion?.id == turn.id else { return }
@@ -248,6 +249,7 @@ final class AnswerController {
                 if PromptBuilder.isNoAnswer(text) {
                     (self.panel.state, self.panel.answerSource, self.panel.answerText, self.panel.answerTags, self.panel.badge) = previous
                     Log.metrics.notice("not_a_question turn=\(turn.id)")
+                    self.onNotAQuestion?(turn)
                 } else {
                     self.onAnswer?(AnswerRecord(turn: turn, source: provider?.rawValue ?? "?", model: actualModel, cardID: nil,
                                                 text: text, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
@@ -372,7 +374,7 @@ final class AnswerController {
             let chain = await Task.detached {
                 ChainFactory.strong(settings: settings, secrets: secrets, providers: providers, fallbackToGemini: false)
             }.value
-            let memory = await self?.memoryContext(for: turn.text) ?? MemoryContext()
+            let memory = await self?.memoryContext(for: turn.text, turnID: turn.id) ?? MemoryContext()
             self?.askStrongModel(turn: turn, settings: settings, chain: chain, memory: memory)
         }
     }
@@ -388,7 +390,7 @@ final class AnswerController {
                                                   profile: settings.useProfile ? bank.profile : nil,
                                                   redactPII: settings.piiFilterEnabled,
                                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text),
-                                                  candidateSaid: candidateSaid(), memory: memory)
+                                                  memory: memory)
         // Задержка для сильной модели считаем от нажатия.
         let manual = Turn(id: turn.id, text: turn.text, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         generate(turn: manual, chain: chain, request: request, fallbackTop: lastMatch?.top ?? [], strong: true)
