@@ -21,6 +21,11 @@ enum InterviewCopilotMain {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.screenshot(path: args[i + 1]))
         }
+        if let i = args.firstIndex(of: "--ui-snapshots"), i + 1 < args.count {
+            setvbuf(stdout, nil, _IOLBF, 0)
+            NSApplication.shared.setActivationPolicy(.accessory)
+            exit(UISnapshots.run(to: URL(fileURLWithPath: args[i + 1])))
+        }
         if let i = args.firstIndex(of: "--smoke-memory") {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.memory(runs: (i + 1 < args.count ? Int(args[i + 1]) : nil) ?? 3))
