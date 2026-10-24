@@ -164,6 +164,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var panelOpacity: Double = 0.92
     public var panelFontSize: PanelFontSize = .medium
     public var panelWidth: Double = 380
+    /// Масштаб оверлея (COPILOT-09 R-11): меню «Крупнее / Мельче / Обычный размер».
+    public var panelZoom: Double = 1
+    /// «Скрывать при демонстрации экрана» (R-17) — без обещания невидимости: результат проверяется кнопкой.
+    public var panelHiddenFromCapture = false
 
     // Hotkeys (R-17): переназначенные сочетания; отсутствующие — по умолчанию ⌃⌥.
     public var hotkeys: [HotkeyAction: HotkeyBinding] = [:]
@@ -226,6 +230,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public static let retentionRange = 1...365
     public static let panelOpacityRange = 0.7...1.0
     public static let panelWidthRange = 300.0...520.0
+    public static let panelZoomRange = 0.8...1.6
     public static let budgetRange = 0.0...1000.0
 
     /// Значения в допустимых диапазонах; цепочка без повторов и со всеми провайдерами.
@@ -239,6 +244,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         s.historyRetentionDays = s.historyRetentionDays.clamped(to: Self.retentionRange)
         s.panelOpacity = s.panelOpacity.clamped(to: Self.panelOpacityRange)
         s.panelWidth = s.panelWidth.clamped(to: Self.panelWidthRange)
+        s.panelZoom = s.panelZoom.clamped(to: Self.panelZoomRange)
         s.monthlyBudgetUSD = s.monthlyBudgetUSD.clamped(to: Self.budgetRange)
         var seen = Set<ProviderID>()
         s.chain = s.chain.filter { seen.insert($0).inserted }
@@ -288,6 +294,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         panelOpacity = v(.panelOpacity, d.panelOpacity)
         panelFontSize = v(.panelFontSize, d.panelFontSize)
         panelWidth = v(.panelWidth, d.panelWidth)
+        panelZoom = v(.panelZoom, d.panelZoom)
+        panelHiddenFromCapture = v(.panelHiddenFromCapture, d.panelHiddenFromCapture)
         hotkeys = v(.hotkeys, d.hotkeys)
         onboardingCompleted = v(.onboardingCompleted, d.onboardingCompleted)
         monthlyBudgetUSD = v(.monthlyBudgetUSD, d.monthlyBudgetUSD)

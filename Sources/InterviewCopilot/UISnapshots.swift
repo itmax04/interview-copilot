@@ -213,6 +213,19 @@ enum UISnapshots {
                        .init(id: 2, text: "Und dann haben wir das Meeting verschoben.", filtered: "язык de"),
                        .init(id: 3, text: "Какой у вас опыт со SwiftUI?")]
         }
+        func session(_ m: PanelModel) {
+            listening(m); m.state = .listening; m.sessionActive = true; m.sessionTimer = "12:40"
+            m.micLevel = -32; m.callLevel = -24
+        }
+        @discardableResult
+        func answer(_ m: PanelModel, _ q: String, _ text: String, source: String, latency: Double) -> (entry: Int, version: Int) {
+            let ids = m.history.begin(question: q, turnID: nil, kind: .hint)
+            m.history.update(entry: ids.entry, version: ids.version) {
+                $0.text = text; $0.source = source; $0.latency = latency; $0.status = .complete
+            }
+            return ids
+        }
+        let swiftUI = "**Пять лет со SwiftUI, перевёл 70% экранов банка без остановки релизов.**\n- Навигация на NavigationStack и координаторах\n- Состояние — @Observable, тяжёлые списки — LazyVStack\n- Snapshot-тесты на ключевые экраны"
         return [
             ("idle", { $0.state = .idle }),
             ("no-session", { $0.state = .noSession }),
@@ -224,26 +237,77 @@ enum UISnapshots {
             ("no-permission", { $0.state = .noPermission }),
             ("downloading", { $0.state = .downloading(0.42) }),
             ("listening", { m in listening(m); m.state = .listening; m.partial = "А как вы тестируете" }),
-            ("thinking", { m in listening(m); m.question = "Какой у вас опыт со SwiftUI?"; m.state = .thinking }),
+            ("detecting", { m in session(m); m.detection = .checking; m.partial = "Какой у вас опыт со SwiftUI" }),
+            ("thinking", { m in
+                session(m); m.detection = .detected
+                answer(m, "Расскажите о себе.", "**7 лет в iOS, 3 года тимлидом.**\n- Мобильный банк на 1,2 млн пользователей", source: "Groq · generated", latency: 1.1)
+                m.history.begin(question: "Какой у вас опыт со SwiftUI?", turnID: 2, kind: .hint)
+            }),
             ("answer", { m in
-                listening(m); m.state = .answer; m.badge = "Groq"; m.latency = 1.2
-                m.answerSource = "Groq · generated"; m.strongModelAvailable = true; m.strongModelName = "Claude"
-                m.answerText = "**Пять лет со SwiftUI, перевёл 70% экранов банка без остановки релизов.**\n- Навигация на NavigationStack и координаторах\n- Состояние — @Observable, тяжёлые списки — LazyVStack\n- Snapshot-тесты на ключевые экраны"
+                session(m); m.detection = .detected; m.strongModelAvailable = true; m.strongModelName = "Claude"
+                answer(m, "Расскажите о себе.", "**7 лет в iOS, 3 года тимлидом.**", source: "Groq · generated", latency: 1.1)
+                answer(m, "Эээ, какой у вас опыт со SwiftUI? И как вы тестируете?", swiftUI, source: "Groq · generated", latency: 1.2)
+            }),
+            ("answer-history", { m in
+                session(m)
+                answer(m, "Расскажите о себе.", "**7 лет в iOS, 3 года тимлидом.**\n- Мобильный банк на 1,2 млн пользователей", source: "Groq · generated", latency: 1.1)
+                answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · generated", latency: 1.2)
+                m.history.selectPrevious()
+                answer(m, "Как вы организуете тестирование?", "• Unit-тесты на бизнес-логику", source: "Groq · generated", latency: 0.9)
+            }),
+            ("answer-versions", { m in
+                session(m)
+                let ids = answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · generated", latency: 1.2)
+                if let v = m.history.beginVersion(of: ids.entry, kind: .refine, instruction: "короче") {
+                    m.history.update(entry: ids.entry, version: v) {
+                        $0.text = "**5 лет со SwiftUI, 70% экранов банка.**"; $0.source = "Groq · уточнение"; $0.latency = 0.8; $0.status = .complete
+                    }
+                }
             }),
             ("answer-code", { m in
-                m.sourceName = "Google Chrome"; m.state = .answer; m.badge = "Claude"; m.latency = 3.4
-                m.answerSource = "Claude · strong"; m.question = "Скриншот задачи"
-                m.answerText = "1. **Task** — найти два числа с суммой target.\n2. **Approach** — словарь «значение → индекс».\n```swift\nfunc twoSum(_ nums: [Int], _ target: Int) -> [Int] {\n    var seen: [Int: Int] = [:]\n    for (i, n) in nums.enumerated() {\n        if let j = seen[target - n] { return [j, i] }\n        seen[n] = i\n    }\n    return []\n}\n```\n4. **Complexity** — O(n) времени, O(n) памяти."
+                session(m)
+                let ids = m.history.begin(question: "Скриншот задачи", turnID: nil, kind: .screenshot)
+                m.history.update(entry: ids.entry, version: ids.version) {
+                    $0.text = "1. **Task** — найти два числа с суммой target.\n2. **Approach** — словарь «значение → индекс».\n```swift\nfunc twoSum(_ nums: [Int], _ target: Int) -> [Int] {\n    var seen: [Int: Int] = [:]\n    for (i, n) in nums.enumerated() {\n        if let j = seen[target - n] { return [j, i] }\n        seen[n] = i\n    }\n    return []\n}\n```\n4. **Complexity** — O(n) времени, O(n) памяти."
+                    $0.source = "Claude · strong"; $0.latency = 3.4; $0.status = .complete
+                }
             }),
             ("bank-card", { m in
-                listening(m); m.state = .answer; m.badge = "Bank"; m.latency = 0.6
-                m.answerSource = "Bank · about-me · 91%"; m.answerTags = ["S", "T", "A", "R"]
-                m.answerText = "• 7 лет в iOS, 3 года тимлидом команды из 4 человек\n• Мобильный банк на 1,2 млн пользователей, рейтинг 4,8"
+                session(m)
+                let ids = m.history.begin(question: "Расскажите о себе.", turnID: 1, kind: .bank)
+                m.history.update(entry: ids.entry, version: ids.version) {
+                    $0.text = "• 7 лет в iOS, 3 года тимлидом команды из 4 человек\n• Мобильный банк на 1,2 млн пользователей, рейтинг 4,8"
+                    $0.source = "Bank · about-me · 91%"; $0.latency = 0.6; $0.tags = ["S", "T", "A", "R"]; $0.status = .complete
+                }
             }),
             ("no-match", { m in
-                listening(m); m.state = .noMatch; m.question = "Какой у вас опыт со SwiftUI?"; m.badge = "Bank"
-                m.answerSource = "Нет в базе"; m.suggestions = [("swiftui", 0.71), ("architecture", 0.66), ("testing", 0.52)]
+                session(m)
+                let ids = m.history.begin(question: "Какой у вас опыт со SwiftUI?", turnID: 1, kind: .bank)
+                m.history.update(entry: ids.entry, version: ids.version) {
+                    $0.source = "Нет в базе"; $0.status = .noMatch(["swiftui · 71%", "architecture · 66%", "testing · 52%"])
+                }
             }),
+            ("answer-failed", { m in
+                session(m)
+                let ids = m.history.begin(question: "Какой у вас опыт со SwiftUI?", turnID: 1, kind: .hint)
+                m.history.update(entry: ids.entry, version: ids.version) { $0.status = .failed("Все модели недоступны: Groq 429, Gemini — таймаут") }
+            }),
+            ("not-question", { m in session(m); m.detection = .notQuestion }),
+            ("chat-open", { m in
+                session(m); answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · generated", latency: 1.2)
+                m.chatOpen = true; m.chatMode = .refine; m.chatText = "без Combine, только async/await"
+            }),
+            ("session-notes", { m in
+                session(m); m.sessionNotes = ["Отвечай на английском", "Не упоминай прошлую зарплату"]
+                answer(m, "Tell me about a conflict in your team.", "**We disagreed on the API format.**\n- Aligned on a shared call", source: "Gemini · generated", latency: 1.5)
+            }),
+            ("call-silent", { m in session(m); m.callSilentSeconds = 14; m.callLevel = -120 }),
+            ("collapsed", { m in session(m); m.collapsed = true }),
+            ("zoomed", { m in
+                session(m); m.zoom = 1.3
+                answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · generated", latency: 1.2)
+            }),
+            ("private", { m in session(m); m.hiddenFromCapture = true; m.visibilityResult = "Не видно в захвате экрана · 24.10.2026, macOS 15.6" }),
             ("error", { $0.state = .error("Захват звука остановлен macOS. Пауза → Продолжить, чтобы включить снова.") }),
             ("paused", { $0.state = .paused; $0.sourceName = "Google Chrome" }),
             ("self-test-answering", { m in

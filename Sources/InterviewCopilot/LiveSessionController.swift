@@ -13,6 +13,30 @@ final class LiveSessionController {
     /// Похоже, начался звонок в этом приложении, а сессии нет.
     private(set) var detectedCall: String?
     private(set) var planWarned = false
+    /// Указания на сессию из чата (R-10) — видны значками в оверлее, снимаются кликом.
+    private(set) var notes: [String] = []
+
+    /// Настройки с указаниями из чата — то, что видит модель.
+    var effectiveConfig: SessionConfig {
+        var c = config
+        let extra = notes.joined(separator: "\n")
+        if !extra.isEmpty { c.instructions = [c.instructions, extra].filter { !$0.isEmpty }.joined(separator: "\n") }
+        return c
+    }
+
+    func addNote(_ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard isActive, !t.isEmpty else { return }
+        notes.append(t)
+        Log.app.info("session note added count=\(self.notes.count)")
+    }
+
+    func removeNote(at index: Int) {
+        guard notes.indices.contains(index) else { return }
+        notes.remove(at: index)
+    }
+
+    func setAutoGenerate(_ on: Bool) { config.autoGenerate = on }
 
     var onStart: ((SessionConfig) -> Void)?
     var onEnd: ((SessionConfig) -> Void)?
@@ -42,6 +66,7 @@ final class LiveSessionController {
         guard phase == .none || phase.isFailed else { return }
         phase = .starting
         config = c
+        notes = []
         detectedCall = nil
         planWarned = false
         clock = SessionClock(startedAt: Date(), plannedMinutes: c.plannedMinutes)

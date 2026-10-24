@@ -20,6 +20,11 @@ final class ListeningController {
     private(set) var source: ResolvedAudioSource = .none
     /// Уровень сигнала собеседника, dBFS (debug-индикатор P-03).
     private(set) var levelDB: Float = -120
+    /// Уровень микрофона владельца для индикатора оверлея (COPILOT-09 R-08).
+    private(set) var micLevelDB: Float = -120
+    private var micPeakSecond: Float = -120
+    /// Каждые 100 мс — для индикаторов оверлея (дёшево: без перерисовки остального).
+    var onLevels: (() -> Void)?
     private(set) var ownerSpeaking = false
 
     /// Расшифровка собеседника (R-03): итоговые реплики и текущая частичная.
@@ -389,6 +394,13 @@ final class ListeningController {
             mic?.stop()
             buffer.clear()
         }
+    }
+
+    /// Clear в оверлее (COPILOT-09 Q13): расшифровка на экране и «последние реплики» для следующего ответа.
+    func clearTranscript() {
+        transcript = []
+        partialText = nil
+        onChange?()
     }
 
     /// Загрузить модель распознавания заранее, ничего не захватывая.
@@ -836,9 +848,13 @@ final class ListeningController {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard let self else { return }
                 self.levelDB = self.levelMeter.takeDB()
+                self.micLevelDB = self.mic?.takePeakDB() ?? (self.source == .microphone ? self.levelDB : -120)
+                self.micPeakSecond = max(self.micPeakSecond, self.micLevelDB)
+                self.onLevels?()
                 tick += 1
                 if tick % 10 == 0, self.phase == .listening {
-                    let mic = self.mic?.takePeakDB() ?? -120
+                    let mic = self.micPeakSecond
+                    self.micPeakSecond = -120
                     Log.audio.info("level_db=\(self.levelDB, format: .fixed(precision: 1), privacy: .public) mic_db=\(mic, format: .fixed(precision: 1), privacy: .public) owner_speaking=\(self.ownerSpeaking, privacy: .public)")
                 }
             }

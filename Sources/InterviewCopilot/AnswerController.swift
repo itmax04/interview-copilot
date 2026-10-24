@@ -101,22 +101,31 @@ final class AnswerController {
             : "Нет ключа \(s.strongProvider == .anthropic ? "Anthropic" : s.strongProvider.displayName)"
     }
 
-    /// Новый ход: отменяет незавершённую генерацию прошлого (R-10).
+    /// Куда пишет запрос: свой вопрос и своя версия в истории панели (COPILOT-09 R-08) — чужие и отменённые запросы
+    /// видимый ответ не трогают.
+    struct Slot: Equatable {
+        let entry: Int
+        let version: Int
+    }
+
+    /// Новый ход: отменяет незавершённую генерацию прошлого (R-10), открывает новый вопрос в истории.
     func handle(_ turn: Turn) {
         generation?.cancel()
         lastQuestion = turn
-        panel.question = turn.text
+        panel.history.cancelUnfinished()
+        let ids = panel.history.begin(question: turn.text, turnID: turn.id, kind: .hint)
+        let slot = Slot(entry: ids.entry, version: ids.version)
         // COPILOT-04 R-01: ответ на этот текст уже готовится (или запрос ещё собирается — чтение ключей) —
         // ход забирает его, без нового запроса. Если опережающий запрос решит, что нужна карточка базы, ход пойдёт обычным путём.
         if let d = draft, d.text == turn.text, !d.declined {
-            adopt(d, turn: turn)
+            adopt(d, turn: turn, slot: slot)
             return
         }
         cancelDraft()
-        answerNormally(turn)
+        answerNormally(turn, slot: slot)
     }
 
-    private func answerNormally(_ turn: Turn) {
+    private func answerNormally(_ turn: Turn, slot: Slot) {
         let settings = effectiveSettings
         generation = Task { [weak self] in
             guard let self else { return }
@@ -126,7 +135,7 @@ final class AnswerController {
                 self.lastMatch = nil
                 self.lastMaterials = self.isRegularCall ? await self.bank.lookup(turn.text, threshold: 1).materials : []
                 guard !Task.isCancelled else { return }
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials)
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials, slot: slot)
                 return
             }
             let found = await self.bank.lookup(turn.text, threshold: settings.bankThreshold)
@@ -137,12 +146,12 @@ final class AnswerController {
             }
             guard let match = found.match else {
                 // Базы нет (нет модели эмбеддингов) — генерация без карточек, если можно.
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: found.materials)
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: found.materials, slot: slot)
                 return
             }
             self.lastMatch = match
             Log.metrics.notice("bank_match turn=\(turn.id) matched=\(match.matched != nil) score=\(match.top.first?.score ?? 0, format: .fixed(precision: 3)) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
-            self.route(turn, match: match, settings: settings, materials: found.materials)
+            self.route(turn, match: match, settings: settings, materials: found.materials, slot: slot)
         }
     }
 
@@ -162,13 +171,14 @@ final class AnswerController {
                                   materials: settings.useProfile || isRegularCall ? materials : [], session: sessionPrompt)
     }
 
-    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = []) {
+    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = [], slot: Slot) {
         let modelsAvailable = modelsAvailable(settings)
         switch AnswerRouter.decide(mode: settings.mode, match: match, modelsAvailable: modelsAvailable, useProfile: settings.useProfile) {
         case .bankCard(let card):
-            showCard(card, turn: turn)
+            showCard(card, turn: turn, slot: slot)
         case .noMatch(let top):
-            showNoMatch(top, turn: turn, reason: modelsAvailable || (settings.mode == .bankOnly && settings.useProfile) ? nil : "Модели недоступны: нет ключей")
+            showNoMatch(top, turn: turn, reason: modelsAvailable || (settings.mode == .bankOnly && settings.useProfile) ? nil : "Модели недоступны: нет ключей",
+                        slot: slot)
         case .generate(let base, let top):
             let secrets = model.secrets
             let providers = self.providers
@@ -180,22 +190,23 @@ final class AnswerController {
                                                materials: materials)
                 let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
                 guard !Task.isCancelled, self.lastQuestion?.id == turn.id else { return }
-                self.generate(turn: turn, chain: chain, request: request, fallbackTop: top)
+                self.generate(turn: turn, chain: chain, request: request, fallbackTop: top, slot: slot)
             }
         }
     }
 
     // MARK: Карточка из базы (S-01)
 
-    private func showCard(_ card: CardScore, turn: Turn) {
+    private func showCard(_ card: CardScore, turn: Turn, slot: Slot) {
         let shownMs = Self.now() - turn.speechEndedAt
-        panel.answerSource = "Bank · \(card.card.id) · \(Int((card.score * 100).rounded()))%"
-        panel.answerText = card.card.answer
-        panel.answerTags = card.card.isSTAR ? ["S", "T", "A", "R"] : []
-        panel.badge = "Bank"
-        panel.latency = shownMs / 1000
-        panel.suggestions = []
-        panel.state = .answer
+        panel.history.update(entry: slot.entry, version: slot.version) { v in
+            v.kind = .bank
+            v.text = card.card.answer
+            v.tags = card.card.isSTAR ? ["S", "T", "A", "R"] : []
+            v.source = "База · \(card.card.id) · \(Int((card.score * 100).rounded()))%"
+            v.latency = shownMs / 1000
+            v.status = .complete
+        }
         // AC-02: turn_end → card_shown.
         Log.metrics.notice("card_shown turn=\(turn.id) card=\(card.card.id, privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(shownMs)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt))")
         onAnswer?(AnswerRecord(turn: turn, source: "bank", model: nil, cardID: card.card.id, text: card.card.answer,
@@ -204,23 +215,23 @@ final class AnswerController {
 
     // MARK: Нет в базе (S-02)
 
-    private func showNoMatch(_ top: [CardScore], turn: Turn, reason: String?) {
-        panel.answerSource = reason ?? "Нет в базе"
-        panel.answerText = ""
-        panel.answerTags = []
-        panel.badge = "Bank"
-        panel.latency = (Self.now() - turn.speechEndedAt) / 1000
-        panel.suggestions = top.map { (id: $0.card.id, score: $0.score) }
-        panel.state = .noMatch
+    private func showNoMatch(_ top: [CardScore], turn: Turn, reason: String?, slot: Slot) {
+        panel.history.update(entry: slot.entry, version: slot.version) { v in
+            v.latency = (Self.now() - turn.speechEndedAt) / 1000
+            if let reason { v.status = .failed(reason) } else {
+                v.source = "Нет в базе"
+                v.status = .noMatch(top.map(\.card.id))
+            }
+        }
         Log.metrics.notice("no_match turn=\(turn.id) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
         onAnswer?(AnswerRecord(turn: turn, source: "bank", model: nil, cardID: nil, text: "", firstTokenMs: nil, cardShownMs: nil, usage: nil))
     }
 
     // MARK: Генерация (S-03, S-04, R-10)
 
-    private func generate(turn: Turn, chain: ProviderChain, request: LLMRequest, fallbackTop: [CardScore],
-                          strong: Bool = false) {
-        let consume = makeConsumer(turn: turn, purpose: request.purpose, fallbackTop: fallbackTop, strong: strong)
+    private func generate(turn: Turn, chain: ProviderChain, request: LLMRequest, fallbackTop: [CardScore], slot: Slot,
+                          label: String = "generated") {
+        let consume = makeConsumer(turn: turn, purpose: request.purpose, fallbackTop: fallbackTop, slot: slot, label: label)
         generation = Task { [weak self] in
             for await event in chain.run(request) {
                 if Task.isCancelled { return }
@@ -244,12 +255,10 @@ final class AnswerController {
         }
     }
 
-    /// Вывод ответа в панель (S-03, S-04, R-10). `speculative` — ответ начат опережающим запросом (метрика COPILOT-04).
-    private func makeConsumer(turn: Turn, purpose: LLMPurpose, fallbackTop: [CardScore], strong: Bool,
+    /// Вывод ответа в его версию истории (S-03, S-04, R-10; COPILOT-09 R-08). `speculative` — ответ начат опережающим
+    /// запросом (метрика COPILOT-04).
+    private func makeConsumer(turn: Turn, purpose: LLMPurpose, fallbackTop: [CardScore], slot: Slot, label: String,
                               speculative: Bool = false) -> @MainActor (ChainEvent) -> Void {
-        let previous = (panel.state, panel.answerSource, panel.answerText, panel.answerTags, panel.badge)
-        panel.state = .thinking
-        panel.suggestions = []
         var text = ""
         var provider: ProviderID?
         var actualModel: String?
@@ -272,32 +281,40 @@ final class AnswerController {
                 Log.metrics.notice("first_token turn=\(turn.id) kind=\(purpose.rawValue, privacy: .public) provider=\(provider?.rawValue ?? "?", privacy: .public) at_ms=\(Int(Self.now())) ms_from_speech_end=\(Int(ms)) ms_from_turn_end=\(Int(Self.now() - turn.firedAt)) speculative=\(speculative ? 1 : 0)")
             case .text(let t):
                 text += t
-                // «—» — не вопрос: панель не меняется (R-11). Ждём, пока станет ясно.
+                // «—» — не вопрос: ничего не показываем, пока не станет ясно (R-11).
                 if PromptBuilder.isNoAnswer(text) || (text.count <= 2 && "—–-".contains(text.trimmingCharacters(in: .whitespaces))) { return }
-                self.panel.state = .answer
-                self.panel.answerSource = "\(Self.label(provider, actualModel)) · \(strong ? "strong" : "generated")"
-                self.panel.answerText = text
-                self.panel.answerTags = []
-                self.panel.badge = Self.label(provider, actualModel)
-                if let firstMs { self.panel.latency = firstMs / 1000 }
+                let shown = text, source = "\(Self.label(provider, actualModel)) · \(label)", latency = firstMs.map { $0 / 1000 }
+                self.panel.history.update(entry: slot.entry, version: slot.version) { v in
+                    v.text = shown
+                    v.source = source
+                    if let latency { v.latency = latency }
+                    v.status = .streaming
+                }
             case .restart:
                 text = ""
+                self.panel.history.update(entry: slot.entry, version: slot.version) { $0.text = "" }
             case .providerFailed:
                 break // учтено в `account`
             case .usage(_, _, let u):
                 usage = u // учтено в `account`
             case .finished:
                 if PromptBuilder.isNoAnswer(text) {
-                    (self.panel.state, self.panel.answerSource, self.panel.answerText, self.panel.answerTags, self.panel.badge) = previous
+                    // Не вопрос: вопрос из истории убирается, просмотр — к предыдущему (R-11, COPILOT-09 R-08).
+                    if self.panel.history.entry(slot.entry)?.versions.count == 1 { self.panel.history.remove(entry: slot.entry) }
                     Log.metrics.notice("not_a_question turn=\(turn.id)")
                     self.onNotAQuestion?(turn)
                 } else {
+                    self.panel.history.update(entry: slot.entry, version: slot.version) { $0.status = .complete }
                     self.onAnswer?(AnswerRecord(turn: turn, source: provider?.rawValue ?? "?", model: actualModel, cardID: nil,
                                                 text: text, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
                 }
             case .exhausted(let reason):
-                // S-04: понятная ошибка и поведение S-02.
-                self.showNoMatch(fallbackTop, turn: turn, reason: "Модели недоступны: \(reason)")
+                // S-04: понятная ошибка и «Повторить»; ближайшие карточки — в «нет в базе».
+                if fallbackTop.isEmpty {
+                    self.panel.history.update(entry: slot.entry, version: slot.version) { $0.status = .failed("Модели недоступны: \(reason)") }
+                } else {
+                    self.showNoMatch(fallbackTop, turn: turn, reason: "Модели недоступны: \(reason)", slot: slot)
+                }
             }
         }
     }
@@ -318,6 +335,7 @@ final class AnswerController {
         var declined = false
         /// Ход, забравший запрос до решения: если запрос откажется, ход уйдёт обычным путём.
         var adoptedTurn: Turn?
+        var adoptedSlot: Slot?
         var task: Task<Void, Never>?
         private var buffered: [ChainEvent] = []
         private var consumer: (@MainActor (ChainEvent) -> Void)?
@@ -366,7 +384,7 @@ final class AnswerController {
                                                                            modelsAvailable: self.modelsAvailable(settings),
                                                                            useProfile: settings.useProfile) else {
                 d.declined = true
-                if let turn = d.adoptedTurn, self.lastQuestion?.id == turn.id { self.answerNormally(turn) }
+                if let turn = d.adoptedTurn, let slot = d.adoptedSlot, self.lastQuestion?.id == turn.id { self.answerNormally(turn, slot: slot) }
                 return
             }
             let memory = await self.memoryContext(for: text)
@@ -393,13 +411,14 @@ final class AnswerController {
         Log.metrics.notice("draft_cancelled lead_ms=\(Int(Self.now() - d.startedAt)) generating=\(d.generating)")
     }
 
-    private func adopt(_ d: Draft, turn: Turn) {
+    private func adopt(_ d: Draft, turn: Turn, slot: Slot) {
         draft = nil
         d.adoptedTurn = turn
+        d.adoptedSlot = slot
         if model.settings.useProfile { lastMatch = d.match; lastMaterials = d.materials } else { lastMatch = nil; lastMaterials = [] }
         Log.metrics.notice("draft_used turn=\(turn.id) started_ms_from_speech_end=\(Int(d.startedAt - turn.speechEndedAt)) lead_ms=\(Int(turn.firedAt - d.startedAt)) generating=\(d.generating)")
         generation = d.task
-        d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, strong: false, speculative: true))
+        d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, slot: slot, label: "generated", speculative: true))
     }
 
     static func label(_ p: ProviderID?, _ model: String?) -> String {
@@ -426,11 +445,18 @@ final class AnswerController {
         }
     }
 
-    private func askStrongModel(turn: Turn, settings: AppSettings, chain: ProviderChain?, memory: MemoryContext) {
-        guard let chain else {
-            panel.answerSource = panel.strongModelHint
-            return
+    /// Вопрос в истории для хода: тот же, если есть, иначе — новый.
+    private func entry(for turn: Turn, kind: AnswerVersion.Kind, instruction: String? = nil) -> Slot? {
+        if let e = panel.history.entries.last(where: { $0.turnID == turn.id && turn.id >= 0 }),
+           let v = panel.history.beginVersion(of: e.id, kind: kind, instruction: instruction) {
+            return Slot(entry: e.id, version: v)
         }
+        let ids = panel.history.begin(question: turn.text, turnID: turn.id >= 0 ? turn.id : nil, kind: kind)
+        return Slot(entry: ids.entry, version: ids.version)
+    }
+
+    private func askStrongModel(turn: Turn, settings: AppSettings, chain: ProviderChain?, memory: MemoryContext) {
+        guard let chain else { return }   // кнопка неактивна, подсказка уже объясняет причину
         generation?.cancel()
         let request = PromptBuilder.strongRequest(question: turn.text, transcript: transcript(), cards: settings.useProfile ? lastMatch?.top ?? [] : [],
                                                   baseCard: settings.useProfile ? lastMatch?.matched?.card : nil,
@@ -442,23 +468,66 @@ final class AnswerController {
                                                   session: sessionPrompt)
         // Задержка для сильной модели считаем от нажатия.
         let manual = Turn(id: turn.id, text: turn.text, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
-        generate(turn: manual, chain: chain, request: request, fallbackTop: lastMatch?.top ?? [], strong: true)
+        guard let slot = entry(for: turn, kind: .strong) else { return }
+        generate(turn: manual, chain: chain, request: request, fallbackTop: lastMatch?.top ?? [], slot: slot, label: "strong")
     }
 
-    /// Ответ по скриншоту (P-09) использует тот же вывод.
+    /// Ответ по скриншоту (P-09): новый вопрос «Скриншот задачи».
     func showGenerated(chain: ProviderChain, request: LLMRequest, label turn: Turn) {
         generation?.cancel()
-        generate(turn: turn, chain: chain, request: request, fallbackTop: [], strong: true)
+        panel.history.cancelUnfinished()
+        let ids = panel.history.begin(question: turn.text, turnID: nil, kind: .screenshot)
+        generate(turn: turn, chain: chain, request: request, fallbackTop: [], slot: Slot(entry: ids.entry, version: ids.version), label: "screenshot")
+    }
+
+    // MARK: Уточнение и повтор (COPILOT-09 R-08, R-10)
+
+    /// Быстрые уточнения под ответом: подпись → указание модели.
+    static var quickRefinements: [String: String] { PromptBuilder.quickRefinements }
+
+    /// Новая версия показанного ответа по указанию владельца («короче», «без Kafka»). Прежняя версия остаётся.
+    func refine(_ instruction: String, label: String? = nil) {
+        guard let entry = panel.history.current, let previous = entry.current?.text, !previous.isEmpty else { return }
+        let settings = effectiveSettings
+        let secrets = model.secrets
+        let providers = self.providers
+        generation?.cancel()
+        guard let version = panel.history.beginVersion(of: entry.id, kind: .refine, instruction: label ?? instruction) else { return }
+        let slot = Slot(entry: entry.id, version: version)
+        let turn = Turn(id: entry.turnID ?? -1, text: entry.question, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
+        Log.metrics.notice("refine turn=\(turn.id) quick=\(label != nil)")
+        generation = Task { [weak self] in
+            guard let self else { return }
+            let memory = await self.memoryContext(for: entry.question, turnID: entry.turnID)
+            let request = PromptBuilder.refine(self.hintRequest(question: entry.question, base: nil, top: [], settings: settings,
+                                                                memory: memory, materials: self.lastMaterials),
+                                               previousAnswer: previous, instruction: instruction)
+            let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
+            guard !Task.isCancelled else { return }
+            self.generate(turn: turn, chain: chain, request: request, fallbackTop: [], slot: slot, label: "уточнение")
+        }
+    }
+
+    /// «Повторить» после ошибки: новая версия того же вопроса обычным путём.
+    func retry(entry entryID: Int) {
+        guard let entry = panel.history.entry(entryID),
+              let version = panel.history.beginVersion(of: entryID, kind: .hint) else { return }
+        generation?.cancel()
+        let turn = Turn(id: entry.turnID ?? -1, text: entry.question, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
+        lastQuestion = turn
+        answerNormally(turn, slot: Slot(entry: entryID, version: version))
     }
 
     func cancel() {
         generation?.cancel()
         cancelDraft()
+        panel.history.cancelUnfinished()
     }
 
     private func copyAnswer() {
+        guard let text = panel.history.current?.current?.text, !text.isEmpty else { return }
         let pb = NSPasteboard.general
         pb.clearContents()
-        pb.setString(panel.answerText, forType: .string)
+        pb.setString(text, forType: .string)
     }
 }

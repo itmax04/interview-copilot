@@ -145,6 +145,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         model.onChange = { [weak self] in self?.settingsChanged() }
         listening.onChange = { [weak self] in self?.refreshUI() }
+        listening.onLevels = { [weak self] in
+            guard let self, self.liveSession.isActive, self.panel.isVisible else { return }
+            self.updateLevels()
+        }
         listening.onTranscript = { [weak self] event in
             guard let self else { return }
             if self.testCall.active { self.testCall.handleTranscript(event); return }
@@ -152,6 +156,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // ИИ-собеседование: вопрос сверяется с текстом модели и при этом идёт в обычные подсказки, как на созвоне.
             if self.interviewer.active { self.interviewer.handleCallTranscript(event) }
             self.turns.handle(event)
+            // Собеседник снова говорит — прежний статус распознавания устарел.
+            if case .speechStarted = event, self.panelModel.detection != .idle { self.panelModel.detection = .idle }
             if case .final(let u, let text, let lang, _, _) = event {
                 self.sessions.addUtterance(id: u, text: text, language: lang)
                 self.fastText[u] = text
@@ -219,6 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.startSession(self.wizard.defaultConfig())
         }
         panelModel.onDismissDetectedCall = { [weak self] in self?.liveSession.dismissDetectedCall() }
+        setupOverlayActions()
         liveSession.onStart = { [weak self] config in self?.sessionStarted(config) }
         liveSession.onEnd = { [weak self] config in self?.sessionEnded(config) }
         liveSession.onTick = { [weak self] in self?.refreshUI() }
@@ -229,7 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         answers.session = { [weak self] in
             guard let self, self.liveSession.isActive else { return nil }
-            return self.liveSession.config
+            return self.liveSession.effectiveConfig
         }
 
         bank.onChange = { [weak self] in
@@ -251,7 +258,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !record.text.isEmpty, record.turn.id >= 0 { self.memory.setHint(record.text, forTurn: record.turn.id); self.saveMemory() }
         }
         answers.onNotAQuestion = { [weak self] turn in
-            guard let self, self.memory.dropUnanswered(turnID: turn.id) else { return }
+            guard let self else { return }
+            self.panelModel.detection = .notQuestion
+            guard self.memory.dropUnanswered(turnID: turn.id) else { return }
             self.saveMemory()
         }
         // COPILOT-06: ответы владельца — в обменах памяти интервью.
@@ -381,28 +390,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.ownerAnswering = listening.ownerAnswering
         panelModel.selfTest = state.selfTest
         panelModel.setTranscript(listening.transcript, partial: listening.partialText)
+        panelModel.autoGenerate = liveSession.isActive ? liveSession.config.autoGenerate : (model.settings.lastSessionConfig?.autoGenerate ?? true)
+        panelModel.language = model.settings.language
+        panelModel.sessionNotes = liveSession.notes
+        // Ответы живут в истории панели и после конца сессии — общее состояние только про слушание.
         switch listening.phase {
         case .noPermission: panelModel.state = .noPermission
         case .idle: panelModel.state = .idle
         case .paused: panelModel.state = .paused
-        case .standby:
-            // Ответ последней сессии остаётся на экране до новой (его можно дочитать и скопировать).
-            switch panelModel.state {
-            case .answer, .noMatch: break
-            default: panelModel.state = .noSession
-            }
+        case .standby: panelModel.state = .noSession
         case .error(let message): panelModel.state = .error(message)
-        case .listening:
-            // Ответ, «нет в базе» и генерация остаются на экране; остальные состояния сменяются на «слушаю».
-            switch panelModel.state {
-            case .thinking, .answer, .noMatch: break
-            default: panelModel.state = .listening
-            }
+        case .listening: panelModel.state = .listening
         }
+        updateLevels()
+    }
+
+    // MARK: Звук в оверлее (COPILOT-09 R-08)
+
+    private var lastCallSignalAt = Date()
+
+    /// Уровни микрофона и звонка; «не слышу звонок N с» — только в сессии со звуком приложения (не в самопроверке).
+    private func updateLevels() {
+        // Шаг 3 дБ и запись только при изменении: шапка не перерисовывается 10 раз в секунду без нужды.
+        let mic = (listening.micLevelDB / 3).rounded() * 3, call = (listening.levelDB / 3).rounded() * 3
+        if panelModel.micLevel != mic { panelModel.micLevel = mic }
+        if panelModel.callLevel != call { panelModel.callLevel = call }
+        guard liveSession.isActive, listening.phase == .listening, listening.source != .microphone, liveSession.config.type != .mock else {
+            if panelModel.callSilentSeconds != nil { panelModel.callSilentSeconds = nil }
+            lastCallSignalAt = Date()
+            return
+        }
+        if listening.levelDB > Preflight.callSignalDB { lastCallSignalAt = Date() }
+        let silent = Int(Date().timeIntervalSince(lastCallSignalAt))
+        let notice = silent >= 10 ? silent : nil
+        if panelModel.callSilentSeconds != notice { panelModel.callSilentSeconds = notice }
     }
 
     private func turnCompleted(_ turn: Turn) {
         guard !testCall.active, !testCallOnly else { return }
+        panelModel.detection = .detected
         memory.addQuestion(turn.text, turnID: turn.id)
         saveMemory()
         answers.handle(turn)
@@ -443,6 +469,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.cancel()
         sessions.start(source: listening.source.displayName, retentionDays: model.settings.historyRetentionDays, config: c)
         turns.autoEnabled = c.autoGenerate
+        panelModel.history.clear()
+        panelModel.detection = .idle
+        // ⌘-схема ParakeetAI — только на время сессии (Q10).
+        hotkeys?.registerSession()
         if c.type == .mock {
             // ИИ-собеседование само управляет звуком (вопрос — звук браузера, ответ — микрофон).
             turns.start()
@@ -456,6 +486,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func sessionEnded(_ c: SessionConfig) {
+        hotkeys?.unregisterSession()
+        if panelModel.chatOpen { panelModel.chatOpen = false; panel.setChatFocus(false) }
+        panelModel.detection = .idle
         turns.stop()
         answers.cancel()
         if c.type == .mock, interviewer.active { Task { await interviewer.close() } }
@@ -467,6 +500,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Опережающий запрос (COPILOT-04 R-01): ответ готовится до истечения паузы, показывается при ходе с тем же текстом.
     private func draftReady(_ text: String) {
         guard !testCall.active, !testCallOnly else { return }
+        panelModel.detection = .checking
         answers.prefetch(text)
     }
 
@@ -480,7 +514,103 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .ownerAnswer: toggleOwnerAnswering()
         case .screenshot: takeScreenshot()
         case .newSession: showWizard()
+        case .chat: toggleChat()
+        case .clearTranscript: clearTranscript()
+        case .previousAnswer: panelModel.selectPrevious()
+        case .nextAnswer: panelModel.selectNext()
         }
+    }
+
+    // MARK: Оверлей (COPILOT-09 R-07…R-11, R-17)
+
+    private func toggleChat() {
+        guard liveSession.isActive else { return }
+        panelModel.chatOpen.toggle()
+        if panelModel.chatOpen {
+            panelModel.chatMode = panelModel.history.current == nil ? .question : .refine
+            if panelModel.collapsed { panel.setCollapsed(false) }
+        }
+        panel.setChatFocus(panelModel.chatOpen)
+    }
+
+    /// Отправка из чата: вопрос — как голосовой ход; уточнение — новая версия ответа; указание — до конца сессии.
+    private func chatSubmit(_ text: String, mode: PanelModel.ChatMode) {
+        switch mode {
+        case .question:
+            turns.answerFiltered(text)
+        case .refine:
+            answers.refine(text, label: String(text.prefix(24)))
+        case .session:
+            liveSession.addNote(text)
+        }
+        Log.app.info("chat submit mode=\(mode.rawValue, privacy: .public)")
+        panelModel.chatOpen = false
+        panel.setChatFocus(false)
+        refreshUI()
+    }
+
+    /// Clear (решение владельца Q13): строка расшифровки и «последние реплики» следующего ответа; память интервью
+    /// и сохранённая расшифровка остаются.
+    private func clearTranscript() {
+        listening.clearTranscript()
+        turns.clearPending()
+        answers.cancelDraft()
+        panelModel.detection = .idle
+        Log.app.info("transcript cleared")
+        refreshUI()
+    }
+
+    private func setupOverlayActions() {
+        panelModel.onAnswerNow = { [weak self] in self?.turns.forceTurn() }
+        panelModel.onScreenshot = { [weak self] in self?.takeScreenshot() }
+        panelModel.onToggleChat = { [weak self] in self?.toggleChat() }
+        panelModel.onChatSubmit = { [weak self] text, mode in self?.chatSubmit(text, mode: mode) }
+        panelModel.onQuickRefine = { [weak self] chip in
+            self?.answers.refine(AnswerController.quickRefinements[chip] ?? chip, label: chip.lowercased())
+        }
+        panelModel.onClearTranscript = { [weak self] in self?.clearTranscript() }
+        panelModel.onRetryAnswer = { [weak self] id in self?.answers.retry(entry: id) }
+        panelModel.onRemoveSessionNote = { [weak self] i in
+            self?.liveSession.removeNote(at: i)
+            self?.refreshUI()
+        }
+        panelModel.onToggleAuto = { [weak self] in
+            guard let self else { return }
+            if self.liveSession.isActive {
+                self.liveSession.setAutoGenerate(!self.liveSession.config.autoGenerate)
+                self.turns.autoEnabled = self.liveSession.config.autoGenerate
+            } else {
+                var c = self.model.settings.lastSessionConfig ?? SessionConfig()
+                c.autoGenerate.toggle()
+                self.model.settings.lastSessionConfig = c
+            }
+            self.refreshUI()
+        }
+        panelModel.onSelectLanguage = { [weak self] lang in self?.model.settings.language = lang }
+        panelModel.onZoom = { [weak self] step in
+            guard let self else { return }
+            let z = step == 0 ? 1 : self.model.settings.panelZoom + Double(step) * 0.1
+            self.model.settings.panelZoom = min(max(z, AppSettings.panelZoomRange.lowerBound), AppSettings.panelZoomRange.upperBound)
+        }
+        panelModel.onNextScreen = { [weak self] in self?.panel.moveToNextScreen() }
+        panelModel.onToggleCollapse = { [weak self] in
+            guard let self else { return }
+            self.panel.setCollapsed(!self.panelModel.collapsed)
+        }
+        panelModel.onTogglePrivate = { [weak self] in
+            guard let self else { return }
+            self.model.settings.panelHiddenFromCapture.toggle()
+            self.panelModel.visibilityResult = nil
+        }
+        panelModel.onCheckVisibility = { [weak self] in
+            guard let self else { return }
+            self.panelModel.checkingVisibility = true
+            Task {
+                self.panelModel.visibilityResult = await self.panel.checkVisibility()
+                self.panelModel.checkingVisibility = false
+            }
+        }
+        panelModel.onOwnerAnswer = { [weak self] in self?.toggleOwnerAnswering() }
     }
 
     /// ⌃⌥A или пункт меню «Сейчас отвечаю я» (самопроверка, COPILOT-06/07).
@@ -494,7 +624,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = model.settings
         let secrets = model.secrets
         let language = listening.transcript.last?.language ?? settings.language.whisperCode
-        panelModel.question = "Скриншот задачи"
         panel.show()
         Task {
             do {
@@ -505,15 +634,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     ChainFactory.strong(settings: settings, secrets: secrets, providers: ChainFactory.providers(), fallbackToGemini: true)
                 }.value
                 guard let chain else {
-                    panelModel.state = .error("Нет ключа ни для сильной модели, ни для Gemini")
+                    screenshotFailed("Нет ключа ни для сильной модели, ни для Gemini")
                     return
                 }
                 let turn = Turn(id: -1, text: "Скриншот задачи", speechEndedAt: started, firedAt: started, forced: true)
                 answers.showGenerated(chain: chain, request: PromptBuilder.screenshotRequest(image: jpeg, language: language), label: turn)
             } catch {
-                panelModel.state = .error("\(error)")
+                screenshotFailed("Скриншот не получился: \(error)")
             }
         }
+    }
+
+    /// Ошибка скриншота — в истории ответов отдельным вопросом с причиной, слушание не прерывается.
+    private func screenshotFailed(_ reason: String) {
+        let ids = panelModel.history.begin(question: "Скриншот задачи", turnID: nil, kind: .screenshot)
+        panelModel.history.update(entry: ids.entry, version: ids.version) { $0.status = .failed(reason) }
     }
 
     /// Прогресс загрузки моделей — в панель (состояние downloading, R-16).

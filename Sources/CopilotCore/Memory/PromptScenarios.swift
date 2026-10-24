@@ -17,12 +17,15 @@ public enum PromptScenarios {
         public var base: BankCard? = nil
         /// Сессия: тип звонка и указания (COPILOT-09).
         public var session: SessionPrompt? = nil
+        /// Уточнение показанного ответа (COPILOT-09 R-10): прежний ответ и указание.
+        public var refine: (previous: String, instruction: String)? = nil
         /// nil — PASS, иначе причина FAIL.
         public var check: @Sendable (String) -> String?
 
         public init(name: String, question: String, language: String, memory: MemoryContext, profile: Profile? = nil,
                     general: String = "", materials: [MaterialHit] = [], base: BankCard? = nil, session: SessionPrompt? = nil,
-                    check: @escaping @Sendable (String) -> String?) {
+                    refine: (previous: String, instruction: String)? = nil, check: @escaping @Sendable (String) -> String?) {
+            self.refine = refine
             self.name = name
             self.question = question
             self.language = language
@@ -42,6 +45,14 @@ public enum PromptScenarios {
         ФінБанк (2021–2026): мобільний банк, 1,2 млн користувачів, команда з 6 iOS-розробників, переписав платежі на SwiftUI.
         Технології: Swift, SwiftUI, Combine, RabbitMQ, PostgreSQL.
         """)
+
+    /// Числа в тексте («1,2», «70», «2021») — для проверки, что модель не придумала новых.
+    public static func numbers(_ text: String) -> Set<String> {
+        let normalized = text.replacingOccurrences(of: ".", with: ",")
+        guard let re = try? NSRegularExpression(pattern: #"\d+(?:,\d+)?"#) else { return [] }
+        let ns = normalized as NSString
+        return Set(re.matches(in: normalized, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) })
+    }
 
     public static func bullets(_ text: String) -> Int {
         text.split(whereSeparator: \.isNewline).filter {
@@ -173,6 +184,40 @@ public enum PromptScenarios {
                      let latin = letters.filter { $0.isASCII }.count
                      return letters.isEmpty || Double(latin) / Double(letters.count) > 0.8 ? nil : "не по-английски: «\(firstLine(text))»"
                  }),
+        Scenario(name: "уточнение: короче", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
+                 profile: sampleProfile, refine: (longAnswer, PromptBuilder.quickRefinements["Короче"]!),
+                 check: { text in
+                     let words = text.split(whereSeparator: { $0.isWhitespace }).count
+                     if words > 45 { return "не короче: \(words) слов" }
+                     if text.lowercased().contains("previous_answer") { return "служебный тег в ответе" }
+                     return text.contains("7") || text.contains("сім") ? nil : "потерян ключевой факт (7 років): «\(firstLine(text))»"
+                 }),
+        Scenario(name: "уточнение: свободное указание без факта", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
+                 profile: sampleProfile, refine: (longAnswer, "do not mention the bank's user count or rating"),
+                 check: { text in
+                     let t = text.lowercased()
+                     if t.contains("1,2") || t.contains("4,8") || t.contains("млн") { return "указание не выполнено: «\(firstLine(text))»" }
+                     return t.contains("swiftui") || t.contains("7") ? nil : "потеряны остальные факты: «\(firstLine(text))»"
+                 }),
+        Scenario(name: "уточнение: подробнее без выдуманных цифр", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
+                 profile: sampleProfile, refine: (longAnswer, PromptBuilder.quickRefinements["Подробнее"]!),
+                 check: { text in
+                     let invented = numbers(text).subtracting(numbers(longAnswer + sampleProfile.resume))
+                     return invented.isEmpty ? nil : "выдуманные цифры \(invented.sorted()): «\(firstLine(text))»"
+                 }),
+        Scenario(name: "уточнение: пример без выдуманного опыта", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
+                 profile: sampleProfile, refine: (longAnswer, PromptBuilder.quickRefinements["Пример"]!),
+                 check: { text in
+                     let invented = numbers(text).subtracting(numbers(longAnswer + sampleProfile.resume))
+                     return invented.isEmpty ? nil : "выдуманные цифры \(invented.sorted()): «\(firstLine(text))»"
+                 }),
+        Scenario(name: "уточнение: язык сохраняется", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
+                 profile: sampleProfile, refine: (longAnswer, PromptBuilder.quickRefinements["Подробнее"]!),
+                 check: { text in
+                     let t = text.lowercased()
+                     let uk = ["і", "ї", "є", "років"].contains { t.contains($0) }
+                     return uk ? nil : "язык сменился: «\(firstLine(text))»"
+                 }),
         Scenario(name: "материалы: чужой фрагмент игнорируется", question: "Яке у вас хобі?", language: "uk", memory: MemoryContext(),
                  profile: sampleProfile,
                  materials: [MaterialHit(source: "system-design.md", text: "Rate limiting на API: алгоритм token bucket в Redis, лимит на пользователя и на IP.", score: 0.48)],
@@ -182,11 +227,21 @@ public enum PromptScenarios {
                  }),
     ]
 
-    /// Запрос подсказки сценария — как в приложении (с профилем или «Без профиля»).
+    /// Запрос подсказки сценария — как в приложении (с профилем или «Без профиля»); уточнение — поверх него.
     public static func request(_ s: Scenario) -> LLMRequest {
-        PromptBuilder.hintRequest(question: s.question, transcript: [], cards: [], baseCard: s.base, profile: s.profile, redactPII: true,
+        let base = PromptBuilder.hintRequest(question: s.question, transcript: [], cards: [], baseCard: s.base, profile: s.profile, redactPII: true,
                                   answerLanguage: s.language, memory: s.memory, generalInstructions: s.general, materials: s.materials,
                                   session: s.session)
-
+        guard let r = s.refine else { return base }
+        return PromptBuilder.refine(base, previousAnswer: r.previous, instruction: r.instruction)
     }
+
+    /// Прежний ответ для сценариев уточнения: длинный, со списком, на украинском.
+    static let longAnswer = """
+        **7 років в iOS, останні 5 — у ФінБанку, 3 роки тімлідом.**
+        - Мобільний банк на 1,2 млн користувачів, рейтинг 4,8
+        - Перевів 70% екранів на SwiftUI без зупинки релізів
+        - Налаштував CI і snapshot-тести, час релізу з тижня до 2 днів
+        - Менторю трьох розробників
+        """
 }

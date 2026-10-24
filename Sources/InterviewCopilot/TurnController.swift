@@ -84,6 +84,13 @@ final class TurnController {
         if let turn = detector.force(at: now) { emit(turn) }
     }
 
+    /// Clear (COPILOT-09 Q13): накопленные реплики не войдут в следующий ход.
+    func clearPending() {
+        detector.reset()
+        lastDraft = nil
+        lastFiltered = nil
+    }
+
     /// Фильтр отбросил реплику (COPILOT-05 R-06): запоминаем для ⌃⌥↩.
     func filtered(_ text: String) {
         lastFiltered = (text, Self.now())

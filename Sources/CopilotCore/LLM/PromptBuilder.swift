@@ -242,6 +242,36 @@ public enum PromptBuilder {
                    maxTokens: 1024, purpose: .strong)
     }
 
+    /// Уточнение показанного ответа (COPILOT-09 R-10): тот же контекст, прежний ответ и указание владельца.
+    /// Факты и язык сохраняются, если указание не говорит иначе.
+    /// Быстрые уточнения под ответом (COPILOT-09 R-10): чип → указание модели.
+    public static let quickRefinements: [String: String] = [
+        "Короче": "make it much shorter: at most two short sentences, under 30 words, no bullet list, only the key facts",
+        "Подробнее": "add more detail, up to 150 words; take new facts about the candidate only from the resume, materials and "
+            + "interview history, never invent projects, employers or numbers",
+        "Пример": "add one concrete example: from the resume or materials if they have one, otherwise a general how-I-would-do-it "
+            + "example or a short code snippet for a technical question; never invent past projects or numbers",
+    ]
+
+    public static func refine(_ request: LLMRequest, previousAnswer: String, instruction: String) -> LLMRequest {
+        var r = request
+        guard !r.messages.isEmpty else { return r }
+        r.messages[0].text += """
+
+
+        Your previous answer to this question:
+        <previous_answer>
+        \(previousAnswer)
+        </previous_answer>
+        Rewrite it following the candidate's request: \(instruction). The request overrides the length and format rules above. \
+        Keep the facts and the language unless the request says otherwise. Facts about the candidate (projects, employers, \
+        numbers, results) may come only from the previous answer, the resume, the materials and the interview history — do not \
+        add new ones; a general or hypothetical example must be phrased as such. Output only the new answer.
+        """
+        r.maxTokens = max(r.maxTokens, 800)
+        return r
+    }
+
     /// Скриншот задачи (R-14): условие → подход → код → сложность → проверочные кейсы.
     public static func screenshotRequest(image: Data, language: String?) -> LLMRequest {
         let lang = language.map { " Write the explanation in \($0 == "uk" ? "Ukrainian" : $0 == "ru" ? "Russian" : "English")." } ?? ""

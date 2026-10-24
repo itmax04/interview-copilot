@@ -83,7 +83,8 @@ struct InterviewMemoryTests {
     @Test func ownerAnswerHotkeyIsControlOptionA() {
         // Новые действия — в конце allCases: номера прежних горячих клавиш не меняются (⌃⌥A — шестая, ⌃⌥N — после неё).
         #expect(HotkeyAction.allCases.firstIndex(of: .ownerAnswer) == 5)
-        #expect(HotkeyAction.allCases.last == .newSession)
+        #expect(HotkeyAction.allCases.firstIndex(of: .newSession) == 6)
+        #expect(Array(HotkeyAction.allCases.suffix(4)) == [.chat, .clearTranscript, .previousAnswer, .nextAnswer])
         #expect(HotkeyBinding.defaults[.ownerAnswer]?.displayString == "⌃⌥A")
     }
 
@@ -224,7 +225,12 @@ struct PromptScenarioCheckTests {
     }
 
     @Test func scenariosUseNoProfileAndBackReference() {
-        #expect(PromptScenarios.all.count == 15)
+        #expect(PromptScenarios.all.count == 20)
+        // Сценарии уточнения (COPILOT-09 R-10) — поверх обычного запроса, прежний ответ — данными.
+        let refine = PromptScenarios.all.filter { $0.refine != nil }
+        #expect(refine.count == 5)
+        #expect(refine.allSatisfy { PromptScenarios.request($0).messages[0].text.contains("<previous_answer>") })
+        #expect(PromptScenarios.numbers("з тижня до 2 днів, 1.2 млн, 70 %") == ["2", "1,2", "70"])
         let trap = PromptScenarios.request(PromptScenarios.all[0])
         #expect(trap.system.contains("No candidate profile is given"))
         #expect(trap.messages[0].text.contains("Shown suggestion (may not have been said): Я працював з широким стеком"))

@@ -9,6 +9,8 @@ public enum HotkeyAction: String, Codable, CaseIterable, Sendable {
     case ownerAnswer
     /// «Создать сессию…» (COPILOT-09 R-01).
     case newSession
+    /// Оверлей (COPILOT-09 R-07, R-09, R-10): чат, очистить расшифровку, предыдущий / следующий ответ.
+    case chat, clearTranscript, previousAnswer, nextAnswer
 
     public var title: String {
         switch self {
@@ -19,6 +21,10 @@ public enum HotkeyAction: String, Codable, CaseIterable, Sendable {
         case .strongModel: "Сильная модель"
         case .ownerAnswer: "Сейчас отвечаю я (самопроверка)"
         case .newSession: "Создать сессию"
+        case .chat: "Чат: вопрос или уточнение"
+        case .clearTranscript: "Очистить расшифровку"
+        case .previousAnswer: "Предыдущий ответ"
+        case .nextAnswer: "Следующий ответ"
         }
     }
 }
@@ -44,6 +50,24 @@ public struct HotkeyBinding: Codable, Equatable, Hashable, Sendable {
         .strongModel: HotkeyBinding(keyCode: UInt32(kVK_ANSI_C), modifiers: ctrlOpt),
         .ownerAnswer: HotkeyBinding(keyCode: UInt32(kVK_ANSI_A), modifiers: ctrlOpt),
         .newSession: HotkeyBinding(keyCode: UInt32(kVK_ANSI_N), modifiers: ctrlOpt),
+        .chat: HotkeyBinding(keyCode: UInt32(kVK_Space), modifiers: ctrlOpt),
+        .clearTranscript: HotkeyBinding(keyCode: UInt32(kVK_Delete), modifiers: ctrlOpt),
+        .previousAnswer: HotkeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: ctrlOpt),
+        .nextAnswer: HotkeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: ctrlOpt),
+    ]
+
+    public static let cmd = UInt32(cmdKey)
+    public static let cmdShift = UInt32(cmdKey | shiftKey)
+
+    /// Схема ParakeetAI — только во время сессии (решение владельца Q10): вне сессии ⌘-сочетания не перехватываются.
+    /// ⌃⌥-сочетания действуют всегда.
+    public static let sessionDefaults: [HotkeyAction: HotkeyBinding] = [
+        .answerNow: HotkeyBinding(keyCode: UInt32(kVK_Return), modifiers: cmd),
+        .screenshot: HotkeyBinding(keyCode: UInt32(kVK_Return), modifiers: cmdShift),
+        .chat: HotkeyBinding(keyCode: UInt32(kVK_Space), modifiers: cmdShift),
+        .clearTranscript: HotkeyBinding(keyCode: UInt32(kVK_Delete), modifiers: cmdShift),
+        .previousAnswer: HotkeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: cmd),
+        .nextAnswer: HotkeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: cmd),
     ]
 
     static let keyNames: [UInt32: String] = {
@@ -94,6 +118,9 @@ public struct HotkeyBinding: Codable, Equatable, Hashable, Sendable {
 public final class HotkeyCenter {
     public private(set) var failures: [HotkeyAction: String] = [:]
     private var refs: [HotkeyAction: EventHotKeyRef] = [:]
+    /// ⌘-сочетания сессии — отдельные регистрации (номера с `sessionBase`).
+    private var sessionRefs: [HotkeyAction: EventHotKeyRef] = [:]
+    static let sessionBase: UInt32 = 100
     private var handlerRef: EventHandlerRef?
     private let onPress: (HotkeyAction) -> Void
     private static let signature: OSType = 0x4943_4F50 // 'ICOP'
@@ -132,6 +159,32 @@ public final class HotkeyCenter {
         refs.removeAll()
     }
 
+    /// Включить ⌘-схему на время сессии; занятое другим приложением сочетание пропускается (⌃⌥ остаётся).
+    @discardableResult
+    public func registerSession(_ bindings: [HotkeyAction: HotkeyBinding] = HotkeyBinding.sessionDefaults) -> [HotkeyAction] {
+        unregisterSession()
+        var failed: [HotkeyAction] = []
+        for (action, b) in bindings {
+            var ref: EventHotKeyRef?
+            let id = EventHotKeyID(signature: Self.signature,
+                                   id: Self.sessionBase + UInt32(HotkeyAction.allCases.firstIndex(of: action)! + 1))
+            if RegisterEventHotKey(b.keyCode, b.modifiers, id, GetApplicationEventTarget(), 0, &ref) == noErr, let ref {
+                sessionRefs[action] = ref
+            } else {
+                failed.append(action)
+                Log.app.error("session hotkey \(action.rawValue, privacy: .public) \(b.displayString, privacy: .public) failed")
+            }
+        }
+        return failed
+    }
+
+    public func unregisterSession() {
+        for ref in sessionRefs.values { UnregisterEventHotKey(ref) }
+        sessionRefs.removeAll()
+    }
+
+    public var sessionActive: Bool { !sessionRefs.isEmpty }
+
     private func installHandler() {
         var spec = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         let me = Unmanaged.passUnretained(self).toOpaque()
@@ -141,7 +194,7 @@ public final class HotkeyCenter {
             let status = GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                                            nil, MemoryLayout<EventHotKeyID>.size, nil, &id)
             guard status == noErr, id.signature == HotkeyCenter.signature else { return OSStatus(eventNotHandledErr) }
-            let index = Int(id.id) - 1
+            let index = Int(id.id > HotkeyCenter.sessionBase ? id.id - HotkeyCenter.sessionBase : id.id) - 1
             guard HotkeyAction.allCases.indices.contains(index) else { return OSStatus(eventNotHandledErr) }
             let action = HotkeyAction.allCases[index]
             let center = Unmanaged<HotkeyCenter>.fromOpaque(userData).takeUnretainedValue()
