@@ -22,6 +22,8 @@ public enum MenuAction: String, Sendable, Equatable {
     case mode, models, language
     case profile, questionBank, editProfile, practice, aiInterview
     case answerNow, screenshot, togglePanel, newInterview, sessionHistory
+    /// Самопроверка «Микрофон Mac»: «сейчас отвечаю я» (COPILOT-06, пункт меню — COPILOT-07).
+    case ownerAnswer
     case status
     case settings, quit
 }
@@ -72,6 +74,10 @@ public struct MenuState: Sendable, Equatable {
     public var panelVisible: Bool
     /// Ошибка разбора questions.yaml (S-10): показывается вместо числа карточек, прежняя база продолжает работать.
     public var bankError: String?
+    /// Источник — «Микрофон Mac» (самопроверка): в меню есть «Сейчас отвечаю я» (COPILOT-07).
+    public var selfTest = false
+    /// Идёт запись ответа владельца (⌃⌥A).
+    public var ownerAnswering = false
 
     public init(listening: ListeningStatus = .idle, mode: AnswerMode = .bankAndHint,
                 chain: [ProviderID] = [.gemini, .deepseek, .anthropic], language: RecognitionLanguage = .auto,
@@ -110,6 +116,20 @@ public enum MenuLayout {
         case .idle: listeningTitle = "Listening — choose source"; paused = false
         }
         let chainTitle = s.chain.map(\.displayName).joined(separator: " → ")
+        var actions = [
+            MenuItemSpec(.answerNow, "Answer now", symbol: "bolt", hotkey: s.hotkey(.answerNow)),
+            MenuItemSpec(.screenshot, "Screenshot → \(s.strongModelName)", symbol: "camera", hotkey: s.hotkey(.screenshot)),
+            MenuItemSpec(.togglePanel, s.panelVisible ? "Hide panel" : "Show panel", symbol: "macwindow",
+                         hotkey: s.hotkey(.togglePanel)),
+            // COPILOT-06: память интервью начинается заново, прошлое сохраняется в историю.
+            MenuItemSpec(.newInterview, "Новое интервью", symbol: "arrow.counterclockwise"),
+            MenuItemSpec(.sessionHistory, "Session history…", symbol: "clock"),
+        ]
+        if s.selfTest {
+            // Живой тест COPILOT-06: горячую клавишу ⌃⌥A не нашли — ответы не записались. Пункт виден в самопроверке.
+            actions.insert(MenuItemSpec(.ownerAnswer, s.ownerAnswering ? "Закончить мой ответ" : "Сейчас отвечаю я",
+                                        symbol: s.ownerAnswering ? "stop.circle" : "mic", hotkey: s.hotkey(.ownerAnswer)), at: 1)
+        }
         return [
             [
                 // Без разрешения — пункт без подменю: клик открывает окно разрешений (AC-13).
@@ -131,15 +151,7 @@ public enum MenuLayout {
                 MenuItemSpec(.practice, "Тестовый звонок…", symbol: "phone"),
                 MenuItemSpec(.aiInterview, "ИИ-собеседование…", symbol: "person.wave.2"),
             ],
-            [
-                MenuItemSpec(.answerNow, "Answer now", symbol: "bolt", hotkey: s.hotkey(.answerNow)),
-                MenuItemSpec(.screenshot, "Screenshot → \(s.strongModelName)", symbol: "camera", hotkey: s.hotkey(.screenshot)),
-                MenuItemSpec(.togglePanel, s.panelVisible ? "Hide panel" : "Show panel", symbol: "macwindow",
-                             hotkey: s.hotkey(.togglePanel)),
-                // COPILOT-06: память интервью начинается заново, прошлое сохраняется в историю.
-                MenuItemSpec(.newInterview, "Новое интервью", symbol: "arrow.counterclockwise"),
-                MenuItemSpec(.sessionHistory, "Session history…", symbol: "clock"),
-            ],
+            actions,
             [
                 MenuItemSpec(.status, s.statusLine, symbol: "chart.bar", enabled: false),
             ],

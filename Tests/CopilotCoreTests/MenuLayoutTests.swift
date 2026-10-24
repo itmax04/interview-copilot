@@ -76,6 +76,18 @@ struct MenuLayoutTests {
         #expect(items.contains { $0.title == "Screenshot → Claude" })
     }
 
+    @Test func ownerAnswerItemOnlyInSelfTest() {
+        // COPILOT-07: «Сейчас отвечаю я» — в самопроверке, сразу после «Answer now», с горячей клавишей.
+        #expect(!MenuLayout.sections(for: MenuState()).flatMap { $0 }.contains { $0.action == .ownerAnswer })
+        var s = MenuState()
+        s.selfTest = true
+        let actions = MenuLayout.sections(for: s)[3]
+        #expect(actions.map(\.action) == [.answerNow, .ownerAnswer, .screenshot, .togglePanel, .newInterview, .sessionHistory])
+        #expect(actions[1].title == "Сейчас отвечаю я" && actions[1].hotkey?.displayString == "⌃⌥A")
+        s.ownerAnswering = true
+        #expect(MenuLayout.sections(for: s)[3][1].title == "Закончить мой ответ")
+    }
+
     @Test func noProfileTitle() {
         // R-40: «Без профиля» вместо названия профиля.
         let items = MenuLayout.sections(for: MenuState(profileName: "Senior iOS", useProfile: false)).flatMap { $0 }

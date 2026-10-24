@@ -205,6 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             refreshUI()
             return
         }
+        sessions.currentSource = { [weak self] in self?.listening.source.displayName }
         sessions.start(source: nil, retentionDays: model.settings.historyRetentionDays)
         bank.start(embeddingModel: model.settings.embeddingModel)
 
@@ -297,10 +298,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.statusLine = usage.statusLine
         state.hotkeys = model.settings.hotkeys
         state.panelVisible = panel.isVisible
+        state.selfTest = listening.source == .microphone && !testCall.active && !interviewer.active
+        state.ownerAnswering = listening.ownerAnswering
         menuBar?.state = state
 
         panelModel.sourceName = listening.source.displayName
         panelModel.ownerAnswering = listening.ownerAnswering
+        panelModel.selfTest = state.selfTest
         panelModel.setTranscript(listening.transcript, partial: listening.partialText)
         switch listening.phase {
         case .noPermission: panelModel.state = .noPermission
@@ -374,11 +378,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .togglePanel: togglePanel()
         case .togglePause: togglePause()
         case .strongModel: answers.askStrongModel()
-        case .ownerAnswer:
-            if !listening.toggleOwnerAnswering() { Log.app.info("owner answer hotkey ignored: not self-test source") }
-            refreshUI()
+        case .ownerAnswer: toggleOwnerAnswering()
         case .screenshot: takeScreenshot()
         }
+    }
+
+    /// ⌃⌥A или пункт меню «Сейчас отвечаю я» (самопроверка, COPILOT-06/07).
+    private func toggleOwnerAnswering() {
+        if !listening.toggleOwnerAnswering() { Log.app.info("owner answer ignored: not self-test source") }
+        refreshUI()
     }
 
     /// ⌃⌥S — снимок задачи → сильная модель (без ключа Anthropic — Gemini), S-06.
@@ -459,6 +467,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             historyWindow.show()
         case .newInterview:
             startNewInterview(reason: "menu")
+        case .ownerAnswer:
+            toggleOwnerAnswering()
         case .togglePanel:
             togglePanel()
         case .answerNow:

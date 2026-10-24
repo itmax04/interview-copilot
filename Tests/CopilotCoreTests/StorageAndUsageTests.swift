@@ -36,6 +36,24 @@ struct SessionStoreTests {
         #expect(store.load(s.id)?.turns[0].answer == "• обновлено")
     }
 
+    @Test func sessionFilesAreOwnerOnly() throws {
+        // COPILOT-07: расшифровки и ответы — личные данные; файл 600, папка 700 (как отпечаток голоса).
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let s = sample(store, at: Date())
+        try store.save(s)
+        let file = try FileManager.default.attributesOfItem(atPath: dir.appendingPathComponent("\(s.id).json").path)
+        #expect((file[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+        let folder = try FileManager.default.attributesOfItem(atPath: dir.path)
+        #expect((folder[.posixPermissions] as? NSNumber)?.intValue == 0o700)
+        // Старый файл с правами 644 исправляется при запуске.
+        let old = dir.appendingPathComponent("old.json")
+        try Data("{}".utf8).write(to: old)
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: old.path)
+        store.restrictPermissions()
+        #expect((try FileManager.default.attributesOfItem(atPath: old.path)[.posixPermissions] as? NSNumber)?.intValue == 0o600)
+    }
+
     @Test func uniqueIdsForSameSecond() throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }

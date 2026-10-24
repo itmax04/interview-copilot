@@ -112,8 +112,25 @@ public final class SessionStore: @unchecked Sendable {
 
     public func save(_ session: SessionRecord) throws {
         try lock.withLock {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try Self.encoder.encode(session).write(to: url(for: session.id), options: [.atomic, .completeFileProtection])
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
+                                                    attributes: [.posixPermissions: 0o700])
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            let file = url(for: session.id)
+            try Self.encoder.encode(session).write(to: file, options: [.atomic, .completeFileProtection])
+            // Расшифровки и ответы — личные данные: файл только для владельца (как отпечаток голоса, COPILOT-07).
+            try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        }
+    }
+
+    /// Файлы, сохранённые до COPILOT-07 с правами 644, — только для владельца.
+    public func restrictPermissions() {
+        lock.withLock {
+            guard FileManager.default.fileExists(atPath: directory.path) else { return }
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+            let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+            for f in files where f.pathExtension == "json" {
+                try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: f.path)
+            }
         }
     }
 

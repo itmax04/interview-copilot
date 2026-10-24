@@ -85,6 +85,9 @@ struct PanelView: View {
     private var footer: some View {
         HStack(spacing: 14) {
             FooterHint(keys: model.hotkey(.answerNow), label: "ответ")
+            if model.selfTest {
+                FooterHint(keys: model.hotkey(.ownerAnswer), label: model.ownerAnswering ? "конец ответа" : "я отвечаю")
+            }
             FooterHint(keys: model.hotkey(.screenshot), label: "скриншот")
             FooterHint(keys: model.hotkey(.togglePanel), label: "скрыть")
         }
@@ -142,9 +145,9 @@ private struct InterviewerView: View {
                 .textCase(.uppercase)
             if model.ownerAnswering {
                 // COPILOT-06: самопроверка — речь сейчас записывается как ваш ответ.
-                Label("Ваш ответ записывается — ⌃⌥A, чтобы закончить", systemImage: "mic.fill")
+                Label("Ваш ответ записывается — \(model.hotkey(.ownerAnswer)), чтобы закончить", systemImage: "mic.fill")
                     .foregroundStyle(.orange)
-                    .accessibilityLabel("Идёт запись вашего ответа. Control Option A — закончить")
+                    .accessibilityLabel("Идёт запись вашего ответа. \(model.hotkey(.ownerAnswer)) — закончить")
             }
             if model.lines.isEmpty && model.partial == nil {
                 Text(model.state == .paused ? "Пауза: ничего не слушаю и не отправляю." : "Жду, когда собеседник заговорит…")
@@ -155,12 +158,13 @@ private struct InterviewerView: View {
                     // COPILOT-05 R-06, S-08: отфильтрованное — серым; клик — ответить всё равно.
                     Button { model.onAnswerFiltered?(line.text) } label: {
                         VStack(alignment: .leading, spacing: 2) {
+                            // Серый, но читаемый: 0,35 давало контраст ниже 4,5:1 на тёмной панели (COPILOT-07).
                             Text(line.text).italic()
-                                .foregroundStyle(.white.opacity(0.35))
+                                .foregroundStyle(.white.opacity(0.5))
                                 .fixedSize(horizontal: false, vertical: true)
-                            Text("игнорировано: \(reason) · нажмите или ⌃⌥↩, чтобы ответить")
+                            Text("игнорировано: \(reason) · нажмите или \(model.hotkey(.answerNow)), чтобы ответить")
                                 .font(.system(size: model.fontSize - 4))
-                                .foregroundStyle(.white.opacity(0.35))
+                                .foregroundStyle(.white.opacity(0.5))
                         }
                     }
                     .buttonStyle(.plain)

@@ -42,7 +42,7 @@ struct SessionHistoryView: View {
             List(sessions, selection: $selection) { s in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(s.startedAt.formatted(date: .abbreviated, time: .shortened))
-                    Text("\(s.source ?? "—") · \(s.turns.count) вопросов").font(.caption).foregroundStyle(.secondary)
+                    Text("\(s.source ?? "—") · \(RussianPlural.questions(s.turns.count))").font(.caption).foregroundStyle(.secondary)
                 }
                 .tag(s.id)
                 .contextMenu {
@@ -106,6 +106,17 @@ struct SessionDetail: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
                 }
+                // COPILOT-06/07: что вы ответили на вопросы (микрофон на созвоне или ⌃⌥A в самопроверке).
+                let answered = session.exchanges.filter { !$0.answer.isEmpty }
+                if !answered.isEmpty {
+                    Text("Ваши ответы").font(.headline).padding(.top, 6)
+                    ForEach(answered) { e in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(e.question).font(.callout.weight(.semibold))
+                            Text("Вы: \(e.answerText)").font(.callout).textSelection(.enabled)
+                        }
+                    }
+                }
                 if !session.utterances.isEmpty {
                     Text("Расшифровка").font(.headline).padding(.top, 6)
                     ForEach(Array(session.utterances.enumerated()), id: \.offset) { _, u in
@@ -122,7 +133,19 @@ struct SessionDetail: View {
         if let ms = t.cardShownMs { parts.append(String(format: "%.1f с", ms / 1000)) }
         if let ms = t.firstTokenMs { parts.append(String(format: "первые слова %.1f с", ms / 1000)) }
         if let i = t.inputTokens, let o = t.outputTokens { parts.append("токены \(i)/\(o)") }
-        if t.forced { parts.append("⌃⌥↩") }
+        if t.forced { parts.append("вручную") }
         return parts.joined(separator: " · ")
     }
+}
+
+/// Склонение числительных для подписей (1 вопрос, 2 вопроса, 5 вопросов).
+enum RussianPlural {
+    static func form(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
+        let n10 = n % 10, n100 = n % 100
+        if n10 == 1 && n100 != 11 { return one }
+        if (2...4).contains(n10) && !(12...14).contains(n100) { return few }
+        return many
+    }
+
+    static func questions(_ n: Int) -> String { "\(n) \(form(n, "вопрос", "вопроса", "вопросов"))" }
 }

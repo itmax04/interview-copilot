@@ -101,7 +101,6 @@ final class TurnController {
         let now = Self.now()
         if let turn = detector.tick(at: now) {
             emit(turn)
-            finalsSinceTurn = 0
             return
         }
         // Опережающий запрос — только если ход ещё не наступил: итог, пришедший после паузы, сразу даёт ход.
@@ -120,6 +119,7 @@ final class TurnController {
     private func emit(_ turn: Turn) {
         lastTurn = turn
         lastDraft = nil
+        finalsSinceTurn = 0   // на любом ходе, и на ⌃⌥↩ тоже: иначе turn_stall срабатывал ложно
         // Метрика для AC-02/AC-03: отсчёт от конца речи (`turn_end`), текст не логируется (R-24).
         Log.metrics.notice("turn_end turn=\(turn.id) speech_end_ms=\(Int(turn.speechEndedAt)) fired_ms=\(Int(turn.firedAt)) forced=\(turn.forced) words=\(TurnDetectorWords.count(turn.text))")
         onTurn?(turn)
