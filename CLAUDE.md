@@ -4,7 +4,7 @@
 Нативное приложение macOS на Swift 6 (SwiftUI + AppKit), сборка через SwiftPM без .xcodeproj.
 Сначала прочитать `docs/ARCHITECTURE.md` (поток данных, модули, типичные изменения, проверки, журнал).
 Карта, команды и ограничения — `README.md`. Стек и причины — `docs/decisions/ADR-0001-stack.md`.
-Задачи — `docs/changes/COPILOT-NN/` (intent → spec → plan → handoff); последняя — с наибольшим номером (сейчас COPILOT-08).
+Задачи — `docs/changes/COPILOT-NN/` (intent → spec → plan → handoff); последняя — с наибольшим номером (сейчас COPILOT-09).
 
 ## Проверки
 - Быстрая: `swift build && swift test`
@@ -27,7 +27,9 @@
 - После каждого шага обновлять `handoff.md` текущей задачи: сделано, коммит, проверки (PASS/FAIL/NOT RUN), следующий шаг.
 
 ## Дизайн
-- Источник: `docs/design/menu-v2.webp` + раздел «Интерфейс» в spec.md (отклонения от картинки перечислены там).
+- Источник: редизайн COPILOT-09 — образцы ImageGen P00–P19 (`docs/design/redesign/prompts.md`, сравнение с реализацией —
+  `docs/design/copilot-09/stage6/`), токены и компоненты — `Sources/InterviewCopilot/Design/DesignSystem.swift` (IC, ICDark).
+  Отклонения от образцов — в `docs/changes/COPILOT-09/handoff.md`. Меню в строке состояния — по-прежнему `docs/design/menu-v2.webp`.
 - Глобальные правила фронтенда владельца (21st.dev, component.gallery, Kinetics, DESIGN.md) относятся к вебу
   и к этому нативному проекту не применяются — источник стиля здесь Apple HIG + картинки. Решение владельца от 2026-10-06.
 - Анимации: системные; учитывать «Уменьшить движение» (`accessibilityReduceMotion`).

@@ -96,6 +96,14 @@ public struct AnswerHistory: Equatable, Sendable {
         return (entryID, versionID)
     }
 
+    /// Повторное «Ответ» на тот же вопрос, пока ответ еще готовится (двойное нажатие, AC-03): второй ход не нужен —
+    /// иначе первый ответ прервется, а вопрос задвоится в истории и памяти.
+    public func isRepeat(of question: String, at date: Date = Date(), within seconds: TimeInterval = 2) -> Bool {
+        guard let last = entries.last, let version = last.current, !version.isFinished else { return false }
+        let norm = { (s: String) in s.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        return norm(last.question) == norm(question) && date.timeIntervalSince(last.createdAt) < seconds
+    }
+
     /// Новая версия того же вопроса (уточнение, сильная модель); показывается сразу.
     @discardableResult
     public mutating func beginVersion(of entryID: Int, kind: AnswerVersion.Kind, instruction: String? = nil) -> Int? {

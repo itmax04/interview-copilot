@@ -231,6 +231,7 @@ struct PromptScenarioCheckTests {
         #expect(refine.count == 5)
         #expect(refine.allSatisfy { PromptScenarios.request($0).messages[0].text.contains("<previous_answer>") })
         #expect(PromptScenarios.numbers("з тижня до 2 днів, 1.2 млн, 70 %") == ["2", "1,2", "70"])
+        #expect(PromptScenarios.numbers("7 років, `timeout: 30`\n```swift\nlet x = 0\n```") == ["7"])
         let trap = PromptScenarios.request(PromptScenarios.all[0])
         #expect(trap.system.contains("No candidate profile is given"))
         #expect(trap.messages[0].text.contains("Shown suggestion (may not have been said): Я працював з широким стеком"))

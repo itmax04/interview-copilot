@@ -46,9 +46,12 @@ public enum PromptScenarios {
         Технології: Swift, SwiftUI, Combine, RabbitMQ, PostgreSQL.
         """)
 
-    /// Числа в тексте («1,2», «70», «2021») — для проверки, что модель не придумала новых.
+    /// Числа в тексте («1,2», «70», «2021») — для проверки, что модель не придумала новых. Код (```…``` и `…`) не
+    /// считается: числа в примере кода — не факты о кандидате.
     public static func numbers(_ text: String) -> Set<String> {
-        let normalized = text.replacingOccurrences(of: ".", with: ",")
+        let prose = text.replacingOccurrences(of: #"```[\s\S]*?```"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(of: #"`[^`]*`"#, with: " ", options: .regularExpression)
+        let normalized = prose.replacingOccurrences(of: ".", with: ",")
         guard let re = try? NSRegularExpression(pattern: #"\d+(?:,\d+)?"#) else { return [] }
         let ns = normalized as NSString
         return Set(re.matches(in: normalized, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range) })
@@ -225,7 +228,9 @@ public enum PromptScenarios {
                      let words = AnswerShape.words(text)
                      if words > 40 { return "длиннее 40 слов: \(words)" }
                      if AnswerShape.bulletCount(text) > 0 || text.contains("**") { return "есть пункты или жирный: «\(firstLine(text))»" }
-                     return text.contains("7") || text.lowercased().contains("сім") ? nil : "потерян факт (7 років): «\(firstLine(text))»"
+                     // «7 років», «сім років», «семирічний» — один и тот же факт.
+                     let t = text.lowercased()
+                     return text.contains("7") || t.contains("сім") || t.contains("семи") ? nil : "потерян факт (7 років): «\(firstLine(text))»"
                  }),
         Scenario(name: "стиль: только пункты", question: "Як ви обробляєте помилки в мережевому шарі застосунку?", language: "uk",
                  memory: MemoryContext(), profile: sampleProfile, session: SessionPrompt(style: AnswerStyle(format: .bullets)),

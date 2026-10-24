@@ -185,7 +185,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self.interviewer.active { self.interviewer.handleCallTranscript(event) }
             self.turns.handle(event)
             // Собеседник снова говорит — прежний статус распознавания устарел.
-            if case .speechStarted = event, self.panelModel.detection != .idle { self.panelModel.detection = .idle }
+            if case .speechStarted = event, self.panelModel.detection != .idle {
+                self.panelModel.detection = self.panelModel.detection.next(on: .speechStarted)
+            }
             if case .final(let u, let text, let lang, _, _) = event {
                 self.sessions.addUtterance(id: u, text: text, language: lang)
                 self.fastText[u] = text
@@ -293,7 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         answers.onNotAQuestion = { [weak self] turn in
             guard let self else { return }
-            self.panelModel.detection = .notQuestion
+            self.panelModel.detection = self.panelModel.detection.next(on: .notAQuestion)
             guard self.memory.dropUnanswered(turnID: turn.id) else { return }
             self.saveMemory()
         }
@@ -471,7 +473,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func turnCompleted(_ turn: Turn) {
         guard !testCall.active, !testCallOnly else { return }
-        panelModel.detection = .detected
+        if turn.forced, panelModel.history.isRepeat(of: turn.text) {
+            Log.app.info("turn \(turn.id) ignored: repeated Answer while the answer is still coming")
+            return
+        }
+        panelModel.detection = panelModel.detection.next(on: .turnCompleted)
         memory.addQuestion(turn.text, turnID: turn.id)
         saveMemory()
         answers.handle(turn)
@@ -513,10 +519,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sessions.start(source: listening.source.displayName, retentionDays: model.settings.historyRetentionDays, config: c)
         turns.autoEnabled = c.autoGenerate
         panelModel.history.clear()
-        panelModel.detection = .idle
+        panelModel.detection = panelModel.detection.next(on: .reset)
         answers.clearTask()
         // ⌘-схема ParakeetAI — только на время сессии (Q10).
-        hotkeys?.registerSession()
+        panelModel.sessionHotkeysFailed = Set(hotkeys?.registerSession() ?? [])
         if c.type == .mock {
             // ИИ-собеседование само управляет звуком (вопрос — звук браузера, ответ — микрофон).
             turns.start()
@@ -531,9 +537,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func sessionEnded(_ c: SessionConfig) {
         hotkeys?.unregisterSession()
+        panelModel.sessionHotkeysFailed = []
         answers.clearTask()
         if panelModel.chatOpen { panelModel.chatOpen = false; panel.setChatFocus(false) }
-        panelModel.detection = .idle
+        panelModel.detection = panelModel.detection.next(on: .reset)
         turns.stop()
         answers.cancel()
         if c.type == .mock, interviewer.active { Task { await interviewer.close() } }
@@ -550,7 +557,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Опережающий запрос (COPILOT-04 R-01): ответ готовится до истечения паузы, показывается при ходе с тем же текстом.
     private func draftReady(_ text: String) {
         guard !testCall.active, !testCallOnly else { return }
-        panelModel.detection = .checking
+        panelModel.detection = panelModel.detection.next(on: .draftReady)
         answers.prefetch(text)
     }
 
@@ -606,7 +613,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         turns.clearPending()
         answers.cancelDraft()
         answers.clearTask()
-        panelModel.detection = .idle
+        panelModel.detection = panelModel.detection.next(on: .reset)
         Log.app.info("transcript cleared")
         refreshUI()
     }

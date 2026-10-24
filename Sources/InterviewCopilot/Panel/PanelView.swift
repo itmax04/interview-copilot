@@ -469,16 +469,17 @@ private struct TranscriptLineView: View {
 private struct DetectionChip: View {
     let model: PanelModel
     var body: some View {
-        // P02: «Готовлю ответ…» — пока у нового вопроса нет текста; иначе — статус распознавания.
-        if case .waiting? = model.history.current?.current?.status, model.history.isViewingLatest {
-            ICStatusPill(text: "Готовлю ответ…", color: IC.accent, spinner: true, size: size)
-        } else {
-            switch model.detection {
-            case .idle: EmptyView()
-            case .checking: ICStatusPill(text: "Проверяю…", color: IC.amber, size: size)
-            case .detected: ICStatusPill(text: "Вопрос найден", color: IC.green, size: size)
-            case .notQuestion: ICStatusPill(text: "Не вопрос · ответить вручную \(model.hotkey(.answerNow))", color: Color(hex: 0xA1A1AA), size: size)
-            }
+        // P02: «Готовлю ответ…» — пока у нового вопроса нет текста; иначе — статус распознавания (AC-04).
+        let waiting: Bool = {
+            if case .waiting? = model.history.current?.current?.status, model.history.isViewingLatest { return true }
+            return false
+        }()
+        switch model.detection.display(answerWaiting: waiting) {
+        case .hidden: EmptyView()
+        case .preparing: ICStatusPill(text: "Готовлю ответ…", color: IC.accent, spinner: true, size: size)
+        case .checking: ICStatusPill(text: "Проверяю…", color: IC.amber, size: size)
+        case .detected: ICStatusPill(text: "Вопрос найден", color: IC.green, size: size)
+        case .notQuestion: ICStatusPill(text: "Не вопрос · ответить вручную \(model.hotkey(.answerNow))", color: Color(hex: 0xA1A1AA), size: size)
         }
     }
 

@@ -147,6 +147,24 @@ final class SessionWizardModel {
         stylePreview = nil
     }
 
+    /// Сводка профиля для бейджей (P07): чтение с диска — один раз на профиль, а не на каждую перерисовку.
+    struct ProfileSummary: Equatable {
+        var hasResume: Bool
+        var materials: Int
+        var questions: Int
+    }
+
+    @ObservationIgnored private var summaries: [String: ProfileSummary] = [:]
+
+    func profileSummary(_ id: String) -> ProfileSummary {
+        if let cached = summaries[id] { return cached }
+        let s = ProfileSummary(hasResume: !bank.library.read(.resume, of: id).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                               materials: bank.library.listMaterials(id).count,
+                               questions: ((try? QuestionBankParser.load(bank.library.questionsURL(id))) ?? []).count)
+        summaries[id] = s
+        return s
+    }
+
     /// Модели с ключами в порядке цепочки — для выбора первой.
     var providersWithKeys: [ProviderID] { model.settings.chain.filter { model.hasKey[$0] == true } }
 
@@ -440,12 +458,10 @@ struct SessionWizardView: View {
     /// «резюме ✓ · 3 материала · 24 вопроса» выбранного профиля.
     @ViewBuilder private var profileBadges: some View {
         if let id = state.config.profileID, state.bank.profiles.contains(where: { $0.id == id }) {
-            let resume = !state.bank.library.read(.resume, of: id).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            let materials = state.bank.library.listMaterials(id).count
-            let questions = ((try? QuestionBankParser.load(state.bank.library.questionsURL(id))) ?? []).count
-            ICBadge(text: resume ? "резюме ✓" : "нет резюме", color: resume ? IC.green : IC.amber)
-            ICBadge(text: "\(materials) \(RussianPlural.form(materials, "материал", "материала", "материалов"))", color: IC.secondary)
-            ICBadge(text: RussianPlural.questions(questions), color: IC.secondary)
+            let p = state.profileSummary(id)
+            ICBadge(text: p.hasResume ? "резюме ✓" : "нет резюме", color: p.hasResume ? IC.green : IC.amber)
+            ICBadge(text: "\(p.materials) \(RussianPlural.form(p.materials, "материал", "материала", "материалов"))", color: IC.secondary)
+            ICBadge(text: RussianPlural.questions(p.questions), color: IC.secondary)
         }
     }
 

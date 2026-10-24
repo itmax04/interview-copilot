@@ -282,7 +282,8 @@ public enum PromptBuilder {
         "Подробнее": "add more detail, up to 150 words; take new facts about the candidate only from the resume, materials and "
             + "interview history, never invent projects, employers or numbers",
         "Пример": "add one concrete example: from the resume or materials if they have one, otherwise a general how-I-would-do-it "
-            + "example or a short code snippet for a technical question; never invent past projects or numbers",
+            + "example or a short code snippet for a technical question; never invent past projects or numbers. Do not add any "
+            + "new metric (percentages, durations, counts): if the example needs a result, describe it in words without a number",
     ]
 
     public static func refine(_ request: LLMRequest, previousAnswer: String, instruction: String) -> LLMRequest {

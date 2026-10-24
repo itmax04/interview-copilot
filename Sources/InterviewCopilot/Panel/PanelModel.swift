@@ -18,15 +18,8 @@ final class PanelModel {
         case noSession
     }
 
-    /// Распознавание вопроса (R-08, решение владельца Q4): видно, что делает автоматика.
-    enum Detection: Equatable {
-        case idle
-        /// Собеседник замолчал — ждём конца вопроса, опережающий запрос уже идёт.
-        case checking
-        case detected
-        /// Модель решила, что это не вопрос — ответить можно вручную.
-        case notQuestion
-    }
+    /// Распознавание вопроса (R-08, решение владельца Q4) — переходы и показ в `QuestionDetection` (CopilotCore, AC-04).
+    typealias Detection = QuestionDetection
 
     /// Режим поля чата (R-10).
     enum ChatMode: String, CaseIterable {
@@ -63,9 +56,12 @@ final class PanelModel {
     var hotkeys: [HotkeyAction: HotkeyBinding] = [:]
     var collapsed = false
 
-    /// Подсказка клавиши: в сессии — ⌘-схема (Q10), вне сессии — ⌃⌥.
+    /// ⌘-сочетания, которые не удалось зарегистрировать (заняты другим приложением) — для них подсказка ⌃⌥.
+    var sessionHotkeysFailed: Set<HotkeyAction> = []
+
+    /// Подсказка клавиши: в сессии — ⌘-схема (Q10), вне сессии и если ⌘ занято — ⌃⌥.
     func hotkey(_ action: HotkeyAction) -> String {
-        if sessionActive, let b = HotkeyBinding.sessionDefaults[action] { return b.displayString }
+        if sessionActive, !sessionHotkeysFailed.contains(action), let b = HotkeyBinding.sessionDefaults[action] { return b.displayString }
         return (hotkeys[action] ?? HotkeyBinding.defaults[action]!).displayString
     }
 

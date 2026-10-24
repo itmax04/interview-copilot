@@ -17,12 +17,7 @@ final class LiveSessionController {
     private(set) var notes: [String] = []
 
     /// Настройки с указаниями из чата — то, что видит модель.
-    var effectiveConfig: SessionConfig {
-        var c = config
-        let extra = notes.joined(separator: "\n")
-        if !extra.isEmpty { c.instructions = [c.instructions, extra].filter { !$0.isEmpty }.joined(separator: "\n") }
-        return c
-    }
+    var effectiveConfig: SessionConfig { config.withSessionNotes(notes) }
 
     func addNote(_ text: String) {
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -63,7 +58,7 @@ final class LiveSessionController {
     }
 
     func start(_ c: SessionConfig) {
-        guard phase == .none || phase.isFailed else { return }
+        guard phase.canStart else { return }
         phase = .starting
         config = c
         notes = []
@@ -77,7 +72,7 @@ final class LiveSessionController {
     }
 
     func end() {
-        guard phase == .active else { return }
+        guard phase.canEnd else { return }
         phase = .ending
         onEnd?(config)
         let minutes = clock.map { Int(Date().timeIntervalSince($0.startedAt) / 60) } ?? 0
@@ -128,6 +123,3 @@ final class LiveSessionController {
     }
 }
 
-extension SessionPhase {
-    var isFailed: Bool { if case .failed = self { true } else { false } }
-}

@@ -40,6 +40,8 @@ struct SessionHistoryView: View {
     let store: SessionStore
     var reviews: ReviewController?
     var initialSelection: String?
+    /// Выбор сессии (и «К списку» — nil) — главное окно помнит его между разделами.
+    var onSelect: ((String?) -> Void)?
     @State private var sessions: [SessionRecord] = []
     @State private var selection: String?
     @State private var search = ""
@@ -64,6 +66,7 @@ struct SessionHistoryView: View {
             if let initialSelection, sessions.contains(where: { $0.id == initialSelection }) { selection = initialSelection }
         }
         .onChange(of: reviews?.version) { sessions = store.list() }
+        .onChange(of: selection) { _, new in onSelect?(new) }
         .confirmationDialog("Удалить всю историю сессий вместе с разбором?", isPresented: $confirmDeleteAll) {
             Button("Удалить всё", role: .destructive) {
                 try? store.deleteAll()

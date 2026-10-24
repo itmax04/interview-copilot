@@ -175,8 +175,9 @@ struct WorkspaceView: View {
         case .today:
             TodayView(workspace: workspace, model: model, bank: bank, store: store)
         case .sessions:
-            SessionHistoryView(store: store, reviews: reviews, initialSelection: workspace.selectedSession)
-                .id("\(workspace.sessionsVersion)-\(workspace.selectedSession ?? "")")
+            SessionHistoryView(store: store, reviews: reviews, initialSelection: workspace.selectedSession,
+                               onSelect: { workspace.selectedSession = $0 })
+                .id(workspace.sessionsVersion)
         case .profiles:
             ProfileView(bank: bank, preparer: preparer).padding(.top, 28)
         case .mock:

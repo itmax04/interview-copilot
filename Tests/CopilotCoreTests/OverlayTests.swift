@@ -53,6 +53,18 @@ struct OverlayTests {
         #expect(h == before)
     }
 
+    @Test func repeatedAnswerPressIsRecognizedOnlyWhileAnswerIsComing() {
+        var h = AnswerHistory()
+        let t0 = Date(timeIntervalSince1970: 1_792_400_000)
+        #expect(!h.isRepeat(of: "Q", at: t0))
+        let ids = h.begin(question: "Какой у вас опыт со SwiftUI?", turnID: 1, kind: .hint, at: t0)
+        #expect(h.isRepeat(of: " какой у вас опыт со SwiftUI? ", at: t0.addingTimeInterval(1)))
+        #expect(!h.isRepeat(of: "Какой у вас опыт со SwiftUI?", at: t0.addingTimeInterval(3)))   // позже — новый ход
+        #expect(!h.isRepeat(of: "Другой вопрос", at: t0.addingTimeInterval(1)))
+        h.update(entry: ids.entry, version: ids.version) { $0.text = "A"; $0.status = .complete }
+        #expect(!h.isRepeat(of: "Какой у вас опыт со SwiftUI?", at: t0.addingTimeInterval(1)))   // ответ готов — можно повторить
+    }
+
     @Test func versionsAndRemovalOfNotAQuestion() {
         var h = AnswerHistory()
         let a = complete(&h, "Q1", "длинный ответ")
