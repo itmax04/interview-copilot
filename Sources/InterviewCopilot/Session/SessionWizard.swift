@@ -12,6 +12,8 @@ final class SessionWizardController {
     private let listening: ListeningController
     private let onStart: (SessionConfig) -> Void
     private var state: SessionWizardModel?
+    /// «Пробный звонок» из мастера: мастер закрывается, запускается тестовый звонок.
+    var onTestCall: (() -> Void)?
 
     init(model: AppModel, bank: BankController, listening: ListeningController, onStart: @escaping (SessionConfig) -> Void) {
         self.model = model
@@ -39,6 +41,12 @@ final class SessionWizardController {
             self?.onStart(config)
         }
         state.onCancel = { [weak self] in self?.window?.close() }
+        if let test = onTestCall {
+            state.onTestCall = { [weak self] in
+                self?.window?.close()
+                test()
+            }
+        }
         self.state = state
         let hosting = NSHostingController(rootView: SessionWizardView(state: state))
         if let window {
@@ -50,7 +58,7 @@ final class SessionWizardController {
             w.isReleasedWhenClosed = false
             window = w
         }
-        window?.setContentSize(NSSize(width: 820, height: 600))
+        window?.setContentSize(NSSize(width: 900, height: 640))
         window?.center()
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
@@ -86,6 +94,12 @@ final class SessionWizardModel {
     let listening: ListeningController
     var onStart: (SessionConfig) -> Void = { _ in }
     var onCancel: () -> Void = {}
+    /// «Пробный звонок» в колонке шагов (P07).
+    var onTestCall: (() -> Void)?
+    /// Поле ссылки на вакансию открыто кнопкой «Вставить ссылку на вакансию» (P07).
+    var showJobLink = false
+    /// Указания на сессию раскрыты кнопкой «+ Добавить» (P08).
+    var showInstructions = false
 
     init(config: SessionConfig, model: AppModel, bank: BankController, listening: ListeningController) {
         self.config = config
@@ -251,13 +265,14 @@ final class SessionWizardModel {
     }
 }
 
+@MainActor
 struct SessionWizardView: View {
     @Bindable var state: SessionWizardModel
 
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-            Divider()
+            Rectangle().fill(IC.line).frame(width: 1)
             VStack(alignment: .leading, spacing: 16) {
                 ScrollView {
                     Group {
@@ -267,14 +282,18 @@ struct SessionWizardView: View {
                         case .check: check
                         }
                     }
-                    .padding(.trailing, 4)
+                    .padding(.trailing, 6)
                 }
+                Rectangle().fill(IC.line).frame(height: 1)
                 footer
             }
             .padding(24)
         }
-        .frame(width: 820, height: 600)
-        .tint(Theme.accent)
+        .frame(width: 900, height: 640)
+        .background(IC.background)
+        .foregroundStyle(IC.ink)
+        .tint(IC.accent)
+        .environment(\.colorScheme, .light)
         .sheet(isPresented: Binding(get: { state.stylePreview != nil }, set: { if !$0 { state.stylePreview = nil } })) {
             if let preview = state.stylePreview {
                 AnswerStyleEditor(preview: preview,
@@ -285,104 +304,176 @@ struct SessionWizardView: View {
         }
     }
 
-    // MARK: Колонка шагов
+    // MARK: Колонка шагов (P07)
 
     private var sidebar: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Создать сессию").font(.title2.bold())
-                Text("Детали и настройки звонка").foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Создать сессию").font(.system(size: 28, weight: .bold))
+                Text("Детали и настройки звонка").font(.system(size: 15)).foregroundStyle(IC.secondary)
             }
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 0) {
                 ForEach(SessionWizardModel.Step.allCases, id: \.self) { s in
-                    HStack(spacing: 10) {
+                    let done = s.rawValue < state.step.rawValue, current = s == state.step
+                    HStack(spacing: 14) {
                         ZStack {
-                            Circle().fill(s.rawValue <= state.step.rawValue ? Theme.accent : Color.secondary.opacity(0.2))
-                                .frame(width: 24, height: 24)
-                            Text(s.rawValue < state.step.rawValue ? "✓" : "\(s.rawValue + 1)")
-                                .font(.caption.bold()).foregroundStyle(.white)
+                            Circle().fill(current ? IC.accent : Color.white).frame(width: 34, height: 34)
+                                .overlay(Circle().strokeBorder(current ? .clear : IC.line))
+                            if done {
+                                Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(IC.accent)
+                            } else {
+                                Text("\(s.rawValue + 1)").font(.system(size: 15, weight: .medium)).foregroundStyle(current ? .white : IC.secondary)
+                            }
                         }
-                        Text(s.title).fontWeight(s == state.step ? .semibold : .regular)
-                            .foregroundStyle(s == state.step ? .primary : .secondary)
+                        Text(s.title).font(.system(size: 16, weight: current ? .semibold : .regular))
+                            .foregroundStyle(current ? IC.accent : IC.secondary)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Шаг \(s.rawValue + 1): \(s.title)\(s == state.step ? ", текущий" : "")")
+                    .accessibilityLabel("Шаг \(s.rawValue + 1): \(s.title)\(current ? ", текущий" : done ? ", пройден" : "")")
+                    if s != SessionWizardModel.Step.allCases.last {
+                        Rectangle().stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3])).foregroundStyle(IC.secondary.opacity(0.5))
+                            .frame(width: 1, height: 30).padding(.leading, 17)
+                    }
                 }
             }
             Spacer()
+            Rectangle().fill(IC.line).frame(height: 1)
+            if let test = state.onTestCall {
+                Button { test() } label: { Label("Пробный звонок", systemImage: "phone").frame(maxWidth: .infinity) }
+                    .buttonStyle(ICButtonStyle())
+            }
             Text("Без сессии приложение не слушает звонок и микрофон.")
-                .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                .font(.system(size: 11)).foregroundStyle(IC.secondary).fixedSize(horizontal: false, vertical: true)
         }
-        .padding(24)
-        .frame(width: 230, alignment: .topLeading)
+        .padding(28)
+        .frame(width: 290, alignment: .topLeading)
         .frame(maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.primary.opacity(0.03))
+        .background(IC.sidebar.opacity(0.5))
     }
 
-    // MARK: Шаг 1 — Детали
+    // MARK: Шаг 1 — Детали (P07)
+
+    private var typePicker: some View {
+        HStack(spacing: 4) {
+            ForEach(SessionType.allCases) { t in
+                let selected = state.config.type == t
+                Button { state.config.type = t } label: {
+                    Label(t.title, systemImage: t == .interview ? "person.fill" : t == .regular ? "phone" : "sparkles")
+                        .font(.system(size: 14, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? .white : IC.ink)
+                        .frame(maxWidth: .infinity).padding(.vertical, 11)
+                        .background(selected ? IC.accent : .clear, in: RoundedRectangle(cornerRadius: 9))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
+    }
+
+    private func field<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.system(size: 14, weight: .semibold))
+            content()
+        }
+    }
 
     private var details: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Picker("Тип", selection: $state.config.type) {
-                ForEach(SessionType.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            Text(typeHint).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-
-            ThemeCard {
+        VStack(alignment: .leading, spacing: 18) {
+            typePicker
+            Text(typeHint).font(.system(size: 12)).foregroundStyle(IC.secondary).fixedSize(horizontal: false, vertical: true)
+            field("Профиль") {
                 Picker("Профиль", selection: Binding(get: { state.config.profileID ?? "" }, set: { state.config.profileID = $0 })) {
                     ForEach(state.bank.profiles) { Text($0.name).tag($0.id) }
                 }
+                .labelsHidden()
+                HStack(spacing: 8) {
+                    profileBadges
+                    Spacer()
+                    if state.config.type == .interview, !state.showJobLink, state.jobLink.isEmpty {
+                        Button { state.showJobLink = true } label: { Label("Вставить ссылку на вакансию", systemImage: "sparkles") }
+                            .buttonStyle(ICButtonStyle())
+                    }
+                }
                 if state.config.type == .regular {
-                    Text("Из профиля берутся инструкции и материалы; резюме и вопросы — нет.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    Text("Из профиля берутся инструкции и материалы; резюме и вопросы — нет.").font(.system(size: 11)).foregroundStyle(IC.secondary)
                 }
             }
-
             if state.config.type == .interview {
-                ThemeCard {
-                    Text("Ссылка на вакансию").font(.callout).foregroundStyle(.secondary)
-                    HStack {
-                        TextField("https://…", text: $state.jobLink)
-                            .onSubmit { state.importJob() }
-                        Button(state.importing ? "Загружаю…" : "Загрузить") { state.importJob() }
-                            .disabled(state.importing || state.jobLink.isEmpty)
+                if state.showJobLink || !state.jobLink.isEmpty {
+                    field("Ссылка на вакансию") {
+                        HStack {
+                            TextField("https://…", text: $state.jobLink).textFieldStyle(.roundedBorder).onSubmit { state.importJob() }
+                            Button(state.importing ? "Загружаю…" : "Загрузить") { state.importJob() }
+                                .buttonStyle(ICButtonStyle(primary: true))
+                                .disabled(state.importing || state.jobLink.isEmpty)
+                        }
+                        if let message = state.importMessage {
+                            Label(message, systemImage: state.importFailed ? "exclamationmark.triangle.fill" : (state.importing ? "hourglass" : "checkmark.circle.fill"))
+                                .font(.system(size: 12)).foregroundStyle(state.importFailed ? IC.amber : IC.secondary)
+                        }
                     }
-                    if let message = state.importMessage {
-                        Label(message, systemImage: state.importFailed ? "exclamationmark.triangle.fill" : (state.importing ? "hourglass" : "checkmark.circle.fill"))
-                            .font(.callout).foregroundStyle(state.importFailed ? Theme.warn : .secondary)
-                    }
-                    Text("Компания").font(.callout).foregroundStyle(.secondary)
-                    TextField("Например, ФинБанк", text: $state.config.company)
-                    Text("Описание вакансии").font(.callout).foregroundStyle(.secondary)
+                }
+                field("Компания") {
+                    TextField("Например, ФинБанк", text: $state.config.company).textFieldStyle(.roundedBorder)
+                }
+                field("Описание вакансии") {
                     TextEditor(text: $state.config.jobDescription)
-                        .frame(minHeight: 140)
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.25)))
+                        .font(.system(size: 13))
+                        .frame(minHeight: 130)
+                        .padding(6)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
                         .accessibilityLabel("Описание вакансии")
-                    Text("Пусто — берётся вакансия из профиля.").font(.footnote).foregroundStyle(.secondary)
+                    Text("Пусто — берется вакансия из профиля.").font(.system(size: 11)).foregroundStyle(IC.secondary)
                 }
             }
             ForEach(state.errors, id: \.self) { e in
-                Label(e, systemImage: "exclamationmark.circle").foregroundStyle(Theme.warn)
+                Label(e, systemImage: "exclamationmark.circle").foregroundStyle(IC.amber)
             }
+        }
+    }
+
+    /// «резюме ✓ · 3 материала · 24 вопроса» выбранного профиля.
+    @ViewBuilder private var profileBadges: some View {
+        if let id = state.config.profileID, state.bank.profiles.contains(where: { $0.id == id }) {
+            let resume = !state.bank.library.read(.resume, of: id).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let materials = state.bank.library.listMaterials(id).count
+            let questions = ((try? QuestionBankParser.load(state.bank.library.questionsURL(id))) ?? []).count
+            ICBadge(text: resume ? "резюме ✓" : "нет резюме", color: resume ? IC.green : IC.amber)
+            ICBadge(text: "\(materials) \(RussianPlural.form(materials, "материал", "материала", "материалов"))", color: IC.secondary)
+            ICBadge(text: RussianPlural.questions(questions), color: IC.secondary)
         }
     }
 
     private var typeHint: String {
         switch state.config.type {
         case .interview: "Собеседование: ответы от вашего лица по резюме, фактам, вакансии, материалам и вопросам профиля."
-        case .regular: "Обычный звонок: что сказать по теме разговора, вашим инструкциям и материалам. После звонка — сводка и договорённости."
-        case .mock: "ИИ-собеседование: модель задаёт вопросы голосом, вы отвечаете в микрофон, подсказки — как на звонке."
+        case .regular: "Обычный звонок: что сказать по теме разговора, вашим инструкциям и материалам. После звонка — сводка и договоренности."
+        case .mock: "ИИ-собеседование: модель задает вопросы голосом, вы отвечаете в микрофон, подсказки — как на звонке."
         }
     }
 
-    // MARK: Шаг 2 — Настройки
+    // MARK: Шаг 2 — Настройки (P08)
+
+    private func row<Content: View>(_ icon: String, _ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon).font(.system(size: 17)).frame(width: 24).foregroundStyle(Color(hex: 0x45516C))
+            Text(title).font(.system(size: 14)).frame(width: 150, alignment: .leading)
+            content().frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 12)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
+    }
 
     private var settings: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ThemeCard {
-                if state.config.type != .mock {
+        VStack(alignment: .leading, spacing: 10) {
+            if state.config.type != .mock {
+                row("speaker.wave.2", "Источник звука") {
                     Picker("Источник звука", selection: $state.sourceTag) {
                         Text("Авто (Zoom → Chrome → Telegram)").tag("auto")
                         ForEach(ListeningController.runningApps().sorted { $0.name < $1.name }, id: \.bundleID) { app in
@@ -395,79 +486,131 @@ struct SessionWizardView: View {
                         Text("Весь системный звук").tag("all")
                         Text("Микрофон Mac (самопроверка)").tag("mic")
                     }
+                    .labelsHidden()
                 }
+            }
+            row("globe", "Язык звонка") {
                 Picker("Язык звонка", selection: $state.config.language) {
                     ForEach(RecognitionLanguage.allCases, id: \.self) { Text($0.menuTitle).tag($0) }
                 }
+                .labelsHidden()
+            }
+            row("cpu", "Модель") {
                 Picker("Модель", selection: $state.config.firstProvider) {
                     Text("По порядку цепочки (\(state.providersWithKeys.first?.displayName ?? "нет ключей"))").tag(ProviderID?.none)
                     ForEach(state.providersWithKeys, id: \.self) { Text($0.displayName).tag(ProviderID?.some($0)) }
                 }
-                Text("Выбранная модель — первой, остальные из цепочки — запасными.").font(.footnote).foregroundStyle(.secondary)
+                .labelsHidden()
+                .help("Выбранная модель — первой, остальные из цепочки — запасными.")
             }
             if state.config.type != .mock {
-                ThemeCard {
+                row("doc.text", "Стиль ответа") {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Стиль ответа").font(.headline)
-                            Text(state.effectiveStyle.summary).foregroundStyle(.secondary)
-                            Text(state.config.style == nil ? "По умолчанию — меняется в Settings → Models" : "Только для этой сессии")
-                                .font(.footnote).foregroundStyle(.secondary)
+                            Text(state.effectiveStyle.summary).font(.system(size: 13)).lineLimit(1)
+                            Text(state.config.style == nil ? "По умолчанию" : "Только для этой сессии")
+                                .font(.system(size: 11)).foregroundStyle(IC.secondary)
                         }
                         Spacer()
-                        Button("Настроить…") { state.openStyleEditor() }
+                        Button { state.openStyleEditor() } label: { Label("Настроить", systemImage: "gearshape") }
+                            .buttonStyle(ICButtonStyle())
                     }
                 }
             }
-            ThemeCard {
-                Text("Указания на эту сессию").font(.headline)
-                TextEditor(text: $state.config.instructions)
-                    .frame(minHeight: 70)
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.25)))
-                    .accessibilityLabel("Указания на эту сессию")
-                Text("Важнее инструкций профиля и общих. Например: «Отвечай по-английски», «Акцент на руководстве командой».")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
-            ThemeCard {
-                Toggle("Автоответ на вопросы", isOn: $state.config.autoGenerate)
-                Text("Выключено — ответ только по кнопке «Ответ» (⌃⌥↩); расшифровка идёт всегда.")
-                    .font(.footnote).foregroundStyle(.secondary)
-                Toggle("Сохранять расшифровку и ответы в историю", isOn: $state.config.saveTranscript)
-                Toggle("Разбор после завершения", isOn: $state.config.reviewAfterEnd)
-                    .disabled(!state.config.saveTranscript)
-                Stepper(value: $state.config.plannedMinutes, in: SessionConfig.plannedMinutesRange, step: 15) {
-                    Text(state.config.plannedMinutes == 0 ? "План длительности: без плана" : "План длительности: \(state.config.plannedMinutes) мин — предупрежу за 5 минут")
+            row("list.bullet.rectangle", "Указания на сессию") {
+                if state.showInstructions || !state.config.instructions.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextEditor(text: $state.config.instructions)
+                            .font(.system(size: 13))
+                            .frame(minHeight: 60)
+                            .padding(4)
+                            .background(IC.background, in: RoundedRectangle(cornerRadius: 8))
+                            .accessibilityLabel("Указания на эту сессию")
+                        Text("Важнее инструкций профиля и общих: «Отвечай по-английски», «Акцент на руководстве командой».")
+                            .font(.system(size: 11)).foregroundStyle(IC.secondary)
+                    }
+                } else {
+                    Button { state.showInstructions = true } label: {
+                        Label("Добавить", systemImage: "plus").frame(maxWidth: .infinity).padding(.vertical, 9)
+                            .foregroundStyle(IC.accent)
+                            .background(IC.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 9))
+                            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(IC.accent.opacity(0.25)))
+                    }
+                    .buttonStyle(.plain)
                 }
-                Text("История хранится только на этом Mac \(state.model.settings.historyRetentionDays) дн.")
-                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Дополнительно").font(.system(size: 14, weight: .semibold))
+                Toggle("Автоответ на вопросы (рекомендуется)", isOn: $state.config.autoGenerate).toggleStyle(.switch)
+                Text("Выключено — ответ только по кнопке «Ответ»; расшифровка идет всегда.").font(.system(size: 11)).foregroundStyle(IC.secondary)
+                Toggle("Сохранять расшифровку", isOn: $state.config.saveTranscript).toggleStyle(.switch)
+                Toggle("Разбор после завершения", isOn: $state.config.reviewAfterEnd).toggleStyle(.switch)
+                    .disabled(!state.config.saveTranscript)
+                Text("Расшифровка хранится только на этом Mac \(state.model.settings.historyRetentionDays) дн.")
+                    .font(.system(size: 11)).foregroundStyle(IC.secondary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
+            row("clock", "План длительности") {
+                HStack {
+                    Text(state.config.plannedMinutes == 0 ? "Без плана" : "Предупрежу за 5 минут").font(.system(size: 12)).foregroundStyle(IC.secondary)
+                    Spacer()
+                    Stepper(value: $state.config.plannedMinutes, in: SessionConfig.plannedMinutesRange, step: 15) {
+                        Text(state.config.plannedMinutes == 0 ? "—" : "\(state.config.plannedMinutes) мин").monospacedDigit()
+                    }
+                    .fixedSize()
+                }
             }
         }
     }
 
-    // MARK: Шаг 3 — Проверка
+    // MARK: Шаг 3 — Проверка (P09)
 
     private var check: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Проверка перед стартом").font(.headline)
+                Text("Проверка перед стартом").font(.system(size: 18, weight: .semibold))
                 Spacer()
-                if state.checking { ProgressView().controlSize(.small); Text("Слушаю микрофон и звонок 3 с…").foregroundStyle(.secondary).font(.callout) }
-                Button("Проверить снова") { state.runPreflight() }.disabled(state.checking)
+                if state.checking {
+                    ProgressView().controlSize(.small)
+                    Text("Слушаю микрофон и звонок 3 с…").foregroundStyle(IC.secondary).font(.system(size: 12))
+                }
+                Button { state.runPreflight() } label: { Label("Проверить снова", systemImage: "arrow.clockwise") }
+                    .buttonStyle(ICButtonStyle())
+                    .disabled(state.checking)
             }
             ForEach(state.preflight) { item in
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: icon(item.status)).foregroundStyle(color(item.status)).font(.title3)
-                        .accessibilityLabel(statusLabel(item.status))
+                HStack(alignment: .center, spacing: 14) {
+                    Image(systemName: icon(item.id)).font(.system(size: 18)).frame(width: 26).foregroundStyle(Color(hex: 0x45516C))
+                    Text(item.title).font(.system(size: 15, weight: .medium)).frame(width: 150, alignment: .leading)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title).fontWeight(.semibold)
-                        Text(item.detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 6) {
+                            if item.status == .checking { ProgressView().controlSize(.mini) } else { Circle().fill(color(item.status)).frame(width: 9, height: 9) }
+                            Text(statusLabel(item.status)).font(.system(size: 13, weight: .medium)).foregroundStyle(color(item.status))
+                        }
+                        Text(item.detail).font(.system(size: 12)).foregroundStyle(IC.secondary).fixedSize(horizontal: false, vertical: true)
                     }
-                    Spacer()
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     actionButton(item)
                 }
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: Theme.radius).fill(Color.primary.opacity(0.04)))
+                .padding(.horizontal, 16).padding(.vertical, 12)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
+                .accessibilityElement(children: .combine)
             }
+        }
+    }
+
+    private func icon(_ id: String) -> String {
+        switch id {
+        case "mic": "mic"
+        case "call": "speaker.wave.2"
+        case "stt": "doc.text"
+        case "keys": "bolt"
+        case "profile": "person"
+        default: "checkmark.circle"
         }
     }
 
@@ -475,37 +618,29 @@ struct SessionWizardView: View {
         switch item.action {
         case .openPermissions:
             Button("Открыть настройки") { NSWorkspace.shared.open(item.id == "mic" ? Permissions.microphoneSettingsURL : Permissions.screenCaptureSettingsURL) }
+                .buttonStyle(ICButtonStyle())
         case .chooseSource:
-            Button("Выбрать источник") { state.step = .settings }
+            Button("Выбрать источник") { state.step = .settings }.buttonStyle(ICButtonStyle())
         case .retry:
-            Button("Проверить снова") { state.runPreflight() }.disabled(state.checking)
+            Button("Проверить снова") { state.runPreflight() }.buttonStyle(ICButtonStyle()).disabled(state.checking)
         default:
             EmptyView()
         }
     }
 
-    private func icon(_ s: PreflightItem.Status) -> String {
-        switch s {
-        case .ok: "checkmark.circle.fill"
-        case .warning: "exclamationmark.triangle.fill"
-        case .fail: "xmark.octagon.fill"
-        case .checking: "clock"
-        }
-    }
-
     private func color(_ s: PreflightItem.Status) -> Color {
         switch s {
-        case .ok: Theme.ok
-        case .warning: Theme.warn
-        case .fail: Theme.danger
-        case .checking: .secondary
+        case .ok: IC.green
+        case .warning: IC.amber
+        case .fail: IC.red
+        case .checking: IC.secondary
         }
     }
 
     private func statusLabel(_ s: PreflightItem.Status) -> String {
         switch s {
         case .ok: "Готово"
-        case .warning: "Предупреждение"
+        case .warning: "Внимание"
         case .fail: "Не готово"
         case .checking: "Проверяю"
         }
@@ -514,21 +649,23 @@ struct SessionWizardView: View {
     // MARK: Кнопки
 
     private var footer: some View {
-        HStack {
-            Button("Отмена") { state.onCancel() }.keyboardShortcut(.cancelAction)
+        HStack(spacing: 10) {
+            Button("Отмена") { state.onCancel() }.keyboardShortcut(.cancelAction).buttonStyle(ICButtonStyle())
             Spacer()
-            if state.step != .details { Button("Назад") { state.back() } }
+            if state.step != .details { Button("Назад") { state.back() }.buttonStyle(ICButtonStyle()) }
             if state.step == .check {
                 if !Preflight.canStart(state.preflight) {
-                    Button("Начать всё равно") { state.start() }
+                    Button("Начать всё равно") { state.start() }.buttonStyle(ICButtonStyle())
                 }
-                Button(state.config.type == .mock ? "Начать собеседование" : "Начать сессию") { state.start() }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!Preflight.canStart(state.preflight))
+                Button { state.start() } label: {
+                    Label(state.config.type == .mock ? "Начать собеседование" : "Начать сессию", systemImage: "play")
+                }
+                .buttonStyle(ICButtonStyle(primary: true))
+                .keyboardShortcut(.defaultAction)
+                .disabled(!Preflight.canStart(state.preflight))
             } else {
                 Button(state.step == .settings ? "Далее: проверка" : "Далее") { state.next() }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(ICButtonStyle(primary: true))
                     .keyboardShortcut(.defaultAction)
                     .disabled(state.step == .details && !state.errors.isEmpty)
             }

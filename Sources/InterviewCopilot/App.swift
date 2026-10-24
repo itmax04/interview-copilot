@@ -611,6 +611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupWorkspace() {
+        wizard.onTestCall = { [weak self] in self?.handle(MenuAction.practice) }
         workspaceModel.onCreateSession = { [weak self] in self?.showWizard() }
         workspaceModel.onTestCall = { [weak self] in self?.handle(MenuAction.practice) }
         workspaceModel.onMock = { [weak self] in self?.handle(MenuAction.aiInterview) }

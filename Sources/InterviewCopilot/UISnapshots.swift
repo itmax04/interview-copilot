@@ -92,7 +92,7 @@ enum UISnapshots {
                 input.preparedQuestions = 1
                 wizard.preflight = Preflight.evaluate(input)
             }
-            shot("wizard-\(step.rawValue + 1)", NSSize(width: 820, height: 600), SessionWizardView(state: wizard))
+            shot("wizard-\(step.rawValue + 1)", NSSize(width: 900, height: 640), SessionWizardView(state: wizard))
         }
 
         // Стиль ответа (COPILOT-09 R-12): редактор с готовым предпросмотром — без запроса к модели.
@@ -105,7 +105,7 @@ enum UISnapshots {
         ] {
             let preview = StylePreview(style: style, context: styleContext)
             preview.showSnapshot(text: sample, source: "Groq · 1,1 с")
-            shot(name, NSSize(width: 760, height: 520), AnswerStyleEditor(preview: preview, onSave: { _ in }, onSaveDefault: { _ in }, onCancel: {})
+            shot(name, NSSize(width: 900, height: 600), AnswerStyleEditor(preview: preview, onSave: { _ in }, onSaveDefault: { _ in }, onCancel: {})
                 .background(Color(nsColor: .windowBackgroundColor)))
         }
 

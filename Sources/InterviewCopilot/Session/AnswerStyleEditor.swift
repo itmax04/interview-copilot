@@ -119,79 +119,137 @@ final class StylePreview {
     }
 }
 
-/// Редактор настроек ответа с предпросмотром. `onSave` — только эта сессия; `onSaveDefault` — для всех (nil — кнопки нет).
+/// Редактор настроек ответа с предпросмотром (P11). `onSave` — только эта сессия; `onSaveDefault` — для всех (nil — кнопки нет).
 struct AnswerStyleEditor: View {
     @Bindable var preview: StylePreview
     var saveTitle = "Сохранить для сессии"
     var onSave: (AnswerStyle) -> Void
     var onSaveDefault: ((AnswerStyle) -> Void)?
     var onCancel: () -> Void
+    @State private var open: Option? = .length
+
+    enum Option { case format, length, tone }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 20) {
-                controls.frame(width: 330, alignment: .topLeading)
-                previewCard
-            }
-            HStack {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Стиль ответа").font(.system(size: 22, weight: .bold))
+                    Spacer()
+                    Button { preview.cancel(); onCancel() } label: { Image(systemName: "xmark").frame(width: 14, height: 14) }
+                        .buttonStyle(ICButtonStyle())
+                        .keyboardShortcut(.cancelAction)
+                        .accessibilityLabel("Закрыть")
+                }
+                optionCard(.format, icon: "doc.text", title: "Формат", value: preview.style.format.title) {
+                    segmented($preview.style.format, AnswerStyle.Format.allCases) { $0.shortTitle }
+                }
+                optionCard(.length, icon: "clock", title: "Длина", value: "\(preview.style.length.title) · до \(preview.style.length.maxWords) слов") {
+                    segmented($preview.style.length, AnswerStyle.Length.allCases) { $0.title }
+                }
+                optionCard(.tone, icon: "waveform", title: "Тон", value: preview.style.tone.title) {
+                    segmented($preview.style.tone, AnswerStyle.Tone.allCases) { $0.title }
+                }
                 if preview.hasOwnerInstructions {
                     Label("Ваши инструкции важнее этих настроек", systemImage: "info.circle")
-                        .font(.footnote).foregroundStyle(.secondary)
+                        .font(.system(size: 11)).foregroundStyle(IC.secondary)
                 }
                 Spacer()
-                Button("Отмена", role: .cancel) { preview.cancel(); onCancel() }
-                    .keyboardShortcut(.cancelAction)
-                if let onSaveDefault {
-                    Button("По умолчанию") { preview.cancel(); onSaveDefault(preview.style) }
-                        .help("Для этой и всех следующих сессий")
-                }
-                Button(saveTitle) { preview.cancel(); onSave(preview.style) }
+                Rectangle().fill(IC.line).frame(height: 1)
+                HStack(spacing: 10) {
+                    if let onSaveDefault {
+                        Button { preview.cancel(); onSaveDefault(preview.style) } label: { Label("По умолчанию", systemImage: "arrow.clockwise") }
+                            .buttonStyle(ICButtonStyle())
+                            .help("Для этой и всех следующих сессий")
+                    }
+                    Button { preview.cancel(); onSave(preview.style) } label: {
+                        Label(saveTitle, systemImage: "paperplane").lineLimit(1).frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(ICButtonStyle(primary: true))
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
+                }
             }
+            .padding(24)
+            .frame(width: 430)
+            Rectangle().fill(IC.line).frame(width: 1)
+            previewPane.padding(24)
         }
-        .padding(24)
-        .frame(width: 760, height: 520)
-        .tint(Theme.accent)
+        .frame(width: 900, height: 600)
+        .background(IC.background)
+        .foregroundStyle(IC.ink)
+        .tint(IC.accent)
+        .environment(\.colorScheme, .light)
         .onAppear { preview.schedule(delay: .zero) }
         .onDisappear { preview.cancel() }
     }
 
-    private var controls: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Стиль ответа").font(.title2.bold())
-            option("Формат", selection: $preview.style.format, cases: AnswerStyle.Format.allCases) { $0.shortTitle }
-            option("Длина", selection: $preview.style.length, cases: AnswerStyle.Length.allCases) { $0.title }
-            Text("до \(preview.style.length.maxWords) слов").font(.footnote).foregroundStyle(.secondary)
-            option("Тон", selection: $preview.style.tone, cases: AnswerStyle.Tone.allCases) { $0.title }
-            Divider()
-            option("Пример вопроса", selection: $preview.question, cases: StylePreviewQuestion.allCases) { $0.title }
-            Picker("Язык примера", selection: $preview.language) {
-                Text("Українська").tag("uk")
-                Text("Русский").tag("ru")
-                Text("English").tag("en")
+    private func optionCard<Content: View>(_ option: Option, icon: String, title: String, value: String,
+                                           @ViewBuilder content: () -> Content) -> some View {
+        let expanded = open == option
+        return VStack(alignment: .leading, spacing: 12) {
+            Button { open = expanded ? nil : option } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: icon).font(.system(size: 18)).frame(width: 44, height: 44)
+                        .background(expanded ? IC.accent.opacity(0.12) : IC.background, in: RoundedRectangle(cornerRadius: 10))
+                        .foregroundStyle(expanded ? IC.accent : IC.ink)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.system(size: 15, weight: .semibold))
+                        Text(value).font(.system(size: 13)).foregroundStyle(IC.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right").foregroundStyle(expanded ? IC.accent : IC.secondary)
+                }
+                .contentShape(Rectangle())
             }
-            Text("Меняется форма ответа, а не факты: факты — из профиля, как на звонке.")
-                .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(title): \(value)")
+            if expanded { content() }
         }
+        .padding(14)
+        .background(expanded ? IC.accent.opacity(0.05) : Color.white, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(expanded ? IC.accent.opacity(0.3) : IC.line))
     }
 
-    private func option<T: Hashable>(_ title: String, selection: Binding<T>, cases: [T], label: @escaping (T) -> String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.callout).foregroundStyle(.secondary)
-            Picker(title, selection: selection) {
-                ForEach(cases, id: \.self) { Text(label($0)).tag($0) }
+    private func segmented<T: Hashable>(_ selection: Binding<T>, _ cases: [T], label: @escaping (T) -> String) -> some View {
+        HStack(spacing: 4) {
+            ForEach(cases, id: \.self) { c in
+                let selected = selection.wrappedValue == c
+                Button { selection.wrappedValue = c } label: {
+                    Text(label(c)).font(.system(size: 13, weight: selected ? .semibold : .regular)).lineLimit(1).minimumScaleFactor(0.8)
+                        .foregroundStyle(selected ? .white : IC.ink)
+                        .frame(maxWidth: .infinity).padding(.vertical, 8)
+                        .background(selected ? IC.accent : .clear, in: RoundedRectangle(cornerRadius: 8))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
         }
+        .padding(4)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 11))
+        .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(IC.line))
     }
 
-    /// Похоже на карточку оверлея: так видно, как ответ будет выглядеть на звонке.
-    private var previewCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Предпросмотр").font(.headline)
+    private var previewPane: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Тип вопроса").font(.system(size: 13)).foregroundStyle(IC.secondary)
+            HStack(spacing: 10) {
+                Picker("Тип вопроса", selection: $preview.question) {
+                    ForEach(StylePreviewQuestion.allCases) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                Picker("Язык", selection: $preview.language) {
+                    Text("Українська").tag("uk")
+                    Text("Русский").tag("ru")
+                    Text("English").tag("en")
+                }
+                .labelsHidden()
+                .frame(width: 130)
+            }
+            Rectangle().fill(IC.line).frame(height: 1)
+            HStack(spacing: 6) {
+                Text("Предпросмотр").font(.system(size: 16, weight: .semibold))
+                Text("· по вашему профилю").font(.system(size: 13)).foregroundStyle(IC.secondary)
                 Spacer()
                 if preview.status == .loading { ProgressView().controlSize(.small) }
                 Button { preview.refresh() } label: { Image(systemName: "arrow.clockwise") }
@@ -200,31 +258,36 @@ struct AnswerStyleEditor: View {
                     .help("Сгенерировать заново")
                     .accessibilityLabel("Сгенерировать заново")
             }
-            VStack(alignment: .leading, spacing: 10) {
-                (Text("Вопрос: ").foregroundStyle(.white.opacity(0.55)) + Text(preview.questionText).foregroundStyle(.white))
-                    .font(.system(size: 13, weight: .semibold))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Вопрос").font(.system(size: 13, weight: .medium))
+                Text(preview.questionText).font(.system(size: 13)).foregroundStyle(Color(hex: 0x45516C))
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Предлагаемый ответ").font(.system(size: 13, weight: .medium)).foregroundStyle(IC.accent)
                 ScrollView {
                     Group {
                         switch preview.status {
                         case .failed(let reason):
-                            Label(reason, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.warn)
+                            Label(reason, systemImage: "exclamationmark.triangle.fill").foregroundStyle(IC.amber)
                         case .loading where preview.text.isEmpty:
-                            Text("Готовлю ответ…").foregroundStyle(.white.opacity(0.6))
+                            Text("Готовлю ответ…").foregroundStyle(IC.secondary)
                         default:
-                            MarkdownText(preview.text, fontSize: 14).foregroundStyle(.white)
+                            MarkdownText(preview.text, fontSize: 14).textSelection(.enabled)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if preview.status == .done {
-                    Text("\(preview.source) · \(preview.words) слов")
-                        .font(.system(size: 11)).foregroundStyle(.white.opacity(0.55))
+                    Text("\(preview.source) · \(preview.words) слов").font(.system(size: 11)).foregroundStyle(IC.secondary)
                 }
             }
             .padding(14)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color(white: 0.13)))
-            .environment(\.colorScheme, .dark)
+            .background(IC.accent.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.accent.opacity(0.18)))
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Предпросмотр ответа")
         }
