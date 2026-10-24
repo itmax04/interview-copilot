@@ -90,9 +90,43 @@ struct PanelView: View {
             if model.history.current != nil { AnswerCard(model: model) }
         case .listening, .paused:
             TranscriptStrip(model: model)
+            if !model.taskImages.isEmpty { TaskChip(model: model) }
             DetectionChip(model: model)
             if model.history.current != nil { AnswerCard(model: model) }
         }
+    }
+}
+
+/// Активная задача со скриншота (COPILOT-09 R-15): миниатюры, число снимков, ✕ — закрыть задачу.
+private struct TaskChip: View {
+    let model: PanelModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(model.taskImages.enumerated()), id: \.offset) { _, data in
+                if let image = NSImage(data: data) {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                        .frame(width: 38, height: 26).clipShape(RoundedRectangle(cornerRadius: 4))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.25)))
+                }
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Задача · \(model.taskImages.count) \(model.taskImages.count == 1 ? "снимок" : "снимка")")
+                    .font(.system(size: max(10, model.fontSize - 3), weight: .semibold))
+                Text(model.taskSolved ? "Уточнения голосом — к этой задаче" : "Решаю… снимок за 30 с добавится сюда")
+                    .font(.system(size: max(9, model.fontSize - 4))).foregroundStyle(.white.opacity(0.6))
+            }
+            .lineLimit(1)
+            Spacer(minLength: 4)
+            Button { model.onCloseTask?() } label: { Image(systemName: "xmark") }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.7))
+                .help("Закрыть задачу: вопросы больше не относятся к ней")
+                .accessibilityLabel("Закрыть задачу")
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(0.22)))
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -166,7 +166,8 @@ final class AnswerController {
                                   profile: promptProfile(settings), redactPII: settings.piiFilterEnabled,
                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question),
                                   memory: memory, generalInstructions: bank.generalInstructions,
-                                  materials: settings.useProfile || isRegularCall ? materials : [], session: sessionPrompt)
+                                  materials: settings.useProfile || isRegularCall ? materials : [], session: sessionPrompt,
+                                  followUp: followUpContext(for: question))
     }
 
     private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = [], slot: Slot) {
@@ -228,8 +229,9 @@ final class AnswerController {
     // MARK: Генерация (S-03, S-04, R-10)
 
     private func generate(turn: Turn, chain: ProviderChain, request: LLMRequest, fallbackTop: [CardScore], slot: Slot,
-                          label: String = "generated") {
-        let consume = makeConsumer(turn: turn, purpose: request.purpose, fallbackTop: fallbackTop, slot: slot, label: label)
+                          label: String = "generated", onComplete: ((String) -> Void)? = nil) {
+        let consume = makeConsumer(turn: turn, purpose: request.purpose, fallbackTop: fallbackTop, slot: slot, label: label,
+                                   onComplete: onComplete)
         generation = Task { [weak self] in
             for await event in chain.run(request) {
                 if Task.isCancelled { return }
@@ -256,7 +258,7 @@ final class AnswerController {
     /// Вывод ответа в его версию истории (S-03, S-04, R-10; COPILOT-09 R-08). `speculative` — ответ начат опережающим
     /// запросом (метрика COPILOT-04).
     private func makeConsumer(turn: Turn, purpose: LLMPurpose, fallbackTop: [CardScore], slot: Slot, label: String,
-                              speculative: Bool = false) -> @MainActor (ChainEvent) -> Void {
+                              speculative: Bool = false, onComplete: ((String) -> Void)? = nil) -> @MainActor (ChainEvent) -> Void {
         var text = ""
         var provider: ProviderID?
         var actualModel: String?
@@ -303,6 +305,7 @@ final class AnswerController {
                     self.onNotAQuestion?(turn)
                 } else {
                     self.panel.history.update(entry: slot.entry, version: slot.version) { $0.status = .complete }
+                    onComplete?(text)
                     self.onAnswer?(AnswerRecord(turn: turn, source: provider?.rawValue ?? "?", model: actualModel, cardID: nil,
                                                 text: text, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
                 }
@@ -463,7 +466,7 @@ final class AnswerController {
                                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text),
                                                   memory: memory, generalInstructions: bank.generalInstructions,
                                                   materials: settings.useProfile || isRegularCall ? lastMaterials : [],
-                                                  session: sessionPrompt)
+                                                  session: sessionPrompt, followUp: followUpContext(for: turn.text))
         // Задержка для сильной модели считаем от нажатия.
         let manual = Turn(id: turn.id, text: turn.text, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         guard let slot = entry(for: turn, kind: .strong) else { return }
@@ -471,11 +474,54 @@ final class AnswerController {
     }
 
     /// Ответ по скриншоту (P-09): новый вопрос «Скриншот задачи».
-    func showGenerated(chain: ProviderChain, request: LLMRequest, label turn: Turn) {
+    // MARK: Задача со скриншота (COPILOT-09 R-15)
+
+    /// Активная задача; уточнения голосом идут к ней блоком `<active_task>`.
+    private(set) var tasks = ScreenshotTaskTracker()
+    /// Задача изменилась (снимок, решение, Clear) — миниатюры в оверлее.
+    var onTaskChange: ((ScreenshotTask?) -> Void)?
+
+    /// Снимок: в течение 30 с после прошлого — та же задача (до 3 снимков, новая версия решения по всем), иначе новая.
+    func screenshot(_ jpeg: Data, chain: ProviderChain, language: String?) {
         generation?.cancel()
-        panel.history.cancelUnfinished()
-        let ids = panel.history.begin(question: turn.text, turnID: nil, kind: .screenshot)
-        generate(turn: turn, chain: chain, request: request, fallbackTop: [], slot: Slot(entry: ids.entry, version: ids.version), label: "screenshot")
+        let isNew = tasks.add(jpeg)
+        guard let task = tasks.task else { return }
+        let slot: Slot
+        if !isNew, let entryID = task.entryID, let version = panel.history.beginVersion(of: entryID, kind: .screenshot,
+                                                                                         instruction: "\(task.images.count) снимка") {
+            panel.history.cancelUnfinished(except: version)
+            slot = Slot(entry: entryID, version: version)
+        } else {
+            panel.history.cancelUnfinished()
+            let ids = panel.history.begin(question: "Скриншот задачи", turnID: nil, kind: .screenshot)
+            tasks.setEntry(ids.entry, taskID: task.id)
+            slot = Slot(entry: ids.entry, version: ids.version)
+        }
+        onTaskChange?(tasks.task)
+        Log.metrics.notice("screenshot_task id=\(task.id) shots=\(task.images.count) new=\(isNew)")
+        let turn = Turn(id: -1, text: "Скриншот задачи", speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
+        let taskID = task.id
+        generate(turn: turn, chain: chain, request: PromptBuilder.screenshotRequest(images: task.images, language: language),
+                 fallbackTop: [], slot: slot, label: "screenshot") { [weak self] text in
+            guard let self else { return }
+            self.tasks.setSolution(text, taskID: taskID)
+            if let statement = self.tasks.task?.statement { self.panel.history.retitle(entry: slot.entry, question: "Задача: " + statement) }
+            self.onTaskChange?(self.tasks.task)
+        }
+    }
+
+    /// Clear (Q13) и конец сессии: задача больше не идет в запросы.
+    func clearTask() {
+        tasks.clear()
+        onTaskChange?(nil)
+    }
+
+    /// Контекст уточнения для запроса: активная задача и «короткий вопрос без предмета» (R-15, R-16).
+    private func followUpContext(for question: String) -> FollowUpContext {
+        let isFollowUp = FollowUpDetector.isFollowUp(question)
+        let active = tasks.active()
+        if active != nil, isFollowUp { tasks.touch() }
+        return FollowUpContext(activeTask: active?.promptSummary, isFollowUp: isFollowUp)
     }
 
     // MARK: Уточнение и повтор (COPILOT-09 R-08, R-10)

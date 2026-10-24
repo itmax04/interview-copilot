@@ -52,7 +52,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | `…/Turns` | конец вопроса | `TurnDetector` (чистая логика, вся покрыта тестами), `TurnEval` |
 | `…/Profiles` | профили, загрузка файлов, материалы (COPILOT-08) | `ProfileLibrary` (создать, переключить, удалить, перенос старого `profile/`, материалы), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md), `MaterialChunker`, `MaterialIndex`, `MaterialIndexBuilder` |
 | `…/Bank` | профиль и база ответов | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML: `BankCard` со статусом ответа, `QuestionBankWriter`), `QuestionImport` (правила + модель), `QuestionPreparation` (формулировки, черновики), `BankMatcher`, `TextEmbedder` |
-| `…/Answer` | выбор: карточка / нет в базе / генерация; история ответов | `AnswerRouter`, `AnswerStyle` (формат, длина, тон → правило промпта; `AnswerShape` — проверка формы), `AnswerHistory` (`AnswerEntry` → `AnswerVersion`: hint / bank / strong / screenshot / refine, статусы, ←/→, «новый ответ») |
+| `…/Answer` | выбор: карточка / нет в базе / генерация; история ответов | `AnswerRouter`, `ScreenshotTask`/`ScreenshotTaskTracker` (задача со скриншота, 30 с, `<active_task>`), `FollowUpDetector` (короткие уточнения), `AnswerStyle` (формат, длина, тон → правило промпта; `AnswerShape` — проверка формы), `AnswerHistory` (`AnswerEntry` → `AnswerVersion`: hint / bank / strong / screenshot / refine, статусы, ←/→, «новый ответ») |
 | `…/LLM` | провайдеры и промпт | `PromptBuilder` (все правила для модели), `ProviderChain` + `ChainFactory`, `Providers` (Gemini, DeepSeek, Anthropic, OpenAI-совместимые: Groq, Cerebras, свой API), `SSEClient`, `KeyVerifier` |
 | `…/Memory` | память интервью | `InterviewMemory`, `SessionExchange`, `MemoryContext`, `ReferenceDetector`, `PromptScenarios` |
 | `…/Storage` | история сессий | `SessionRecord` (с `config` сессии, вашими фразами по времени и разбором), `SessionStore` |
@@ -103,7 +103,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | Полностью | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh` |
 | Звуковые eval | `scripts/run-evals.sh filter voice` (нужны модели Parakeet, Silero, CAM++) |
 | CLI | `swift run -c release copilot-eval <stt|stt-parakeet|stt-hybrid|stt-stream|turn|bank|filter-text|filter|voice|voice-enroll|enhance|memory|exit-check>` |
-| Живые (тратят бесплатные лимиты) | `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`, `--smoke-memory 5`, `--smoke-prepare`, `--smoke-session`, `--smoke-review`, `--ui-snapshots <папка>` (снимки окон без звука), `--smoke-screenshot evals/fixtures/two-sum.png` |
+| Живые (тратят бесплатные лимиты) | `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`, `--smoke-memory 5`, `--smoke-prepare`, `--smoke-session`, `--smoke-review`, `--smoke-task evals/fixtures/two-sum.png`, `--ui-snapshots <папка>` (снимки окон без звука), `--smoke-screenshot evals/fixtures/two-sum.png` |
 | Метрики созвона | `scripts/metrics.py --last 30m` (из журнала, только числа) |
 
 Пороги eval — `evals/README.md`. Живые проверки запускаются из подписанного `.app`: только ему Связка ключей отдаёт ключи без запроса.

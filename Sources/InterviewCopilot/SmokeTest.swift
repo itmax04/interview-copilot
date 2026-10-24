@@ -190,6 +190,71 @@ enum SmokeTest {
         return result.ok ? 0 : 1
     }
 
+    /// `--smoke-task <png>`: задача со скриншота и голосовые уточнения (COPILOT-09 R-15, R-16, AC-08) — решение сильной
+    /// моделью или Gemini, затем вопросы обычной цепочкой с блоком `<active_task>`: «а сложность?», «а если отсортирован?»,
+    /// «почему словарь?» — про задачу; «Расскажите о себе» — без задачи; уточнение без задачи — к прошлому ответу.
+    static func task(path: String) -> Int32 {
+        let settings = SettingsStore().load()
+        let secrets = KeychainStore()
+        let done = DispatchSemaphore(value: 0)
+        let result = ResultBox()
+        Task.detached {
+            var ok = true
+            func check(_ pass: Bool, _ what: String) { print("\(pass ? "PASS" : "FAIL") \(what)"); if !pass { ok = false } }
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+                  let src = CGImageSourceCreateWithData(data as CFData, nil),
+                  let image = CGImageSourceCreateImageAtIndex(src, 0, nil),
+                  let jpeg = try? ScreenshotService.encode(image),
+                  let strong = ChainFactory.strong(settings: settings, secrets: secrets, providers: ChainFactory.providers(), fallbackToGemini: true)
+            else {
+                print("task: NOT RUN — нет фикстуры или ключей")
+                done.signal()
+                return
+            }
+            var tracker = ScreenshotTaskTracker()
+            tracker.add(jpeg)
+            switch await ChainText.collect(strong, PromptBuilder.screenshotRequest(images: tracker.task!.images, language: "ru")) {
+            case .success(let text):
+                tracker.setSolution(text, taskID: tracker.task!.id)
+                check(tracker.task?.statement != nil, "условие из решения: \(tracker.task?.statement ?? "—")")
+            case .failure(let e):
+                check(false, "решение: \(e)")
+                result.ok = false
+                done.signal()
+                return
+            }
+            let summary = tracker.active()?.promptSummary
+            let chain = ChainFactory.chain(settings: settings, secrets: secrets, providers: ChainFactory.providers())
+            func ask(_ q: String, memory: MemoryContext = MemoryContext(), profile: Profile? = nil, task: String? = summary) async -> String {
+                try? await Task.sleep(for: .seconds(2))
+                let ctx = FollowUpContext(activeTask: task, isFollowUp: FollowUpDetector.isFollowUp(q))
+                let r = PromptBuilder.hintRequest(question: q, transcript: [], cards: [], baseCard: nil, profile: profile, redactPII: true,
+                                                  answerLanguage: "ru", memory: memory, followUp: ctx)
+                switch await ChainText.collect(chain, r) {
+                case .success(let t): return t.lowercased()
+                case .failure(let e): return "нет ответа: \(e)"
+                }
+            }
+            let complexity = await ask("А сложность?")
+            check(complexity.contains("o(n)") && !complexity.contains("нет ответа"), "«А сложность?» — про задачу: O(n) | \(complexity.prefix(100))")
+            let sorted = await ask("А если массив отсортирован?")
+            check(["указател", "pointer", "o(1)"].contains { sorted.contains($0) }, "«А если массив отсортирован?» — два указателя / O(1) памяти | \(sorted.prefix(100))")
+            let why = await ask("Почему словарь, а не два цикла?")
+            check(["n²", "n^2", "n2)", "квадрат", "n * n", "n·n"].contains { why.contains($0) }, "«Почему словарь?» — сравнение с O(n²) | \(why.prefix(100))")
+            let about = await ask("Расскажите о себе.", profile: PromptScenarios.sampleProfile)
+            check(!["twosum", "target", "o(n)", "словар"].contains { about.contains($0) } && about.contains("7"),
+                  "«Расскажите о себе» при активной задаче — без задачи | \(about.prefix(100))")
+            let memory = MemoryContext(recent: [MemoryContext.Item(minutesAgo: 1, question: "Какой брокер сообщений вы использовали?", answer: "",
+                                                                   shownHint: "**RabbitMQ** — очереди заказов, до 2 млн сообщений в день")])
+            let followUp = await ask("Почему именно его?", memory: memory, task: nil)
+            check(followUp.contains("rabbitmq"), "уточнение без предмета без задачи — к прошлому ответу (RabbitMQ) | \(followUp.prefix(100))")
+            result.ok = ok
+            done.signal()
+        }
+        done.wait()
+        return result.ok ? 0 : 1
+    }
+
     /// `--smoke-review`: разбор после End (COPILOT-09 R-13, R-14) на настоящих моделях — синтетическое интервью и звонок:
     /// комментарий к каждому ответу, «чего не хватило» у слабого ответа, инструкция внутри ответа не выполнена,
     /// «как лучше» без выдуманных цифр, сводка, «Спросить ИИ» по расшифровке и без выдумок.

@@ -30,6 +30,10 @@ enum InterviewCopilotMain {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.memory(runs: (i + 1 < args.count ? Int(args[i + 1]) : nil) ?? 3))
         }
+        if let i = args.firstIndex(of: "--smoke-task"), i + 1 < args.count {
+            setvbuf(stdout, nil, _IOLBF, 0)
+            exit(SmokeTest.task(path: args[i + 1]))
+        }
         if args.contains("--smoke-review") {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.review())
@@ -238,6 +242,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         panelModel.onDismissDetectedCall = { [weak self] in self?.liveSession.dismissDetectedCall() }
         setupOverlayActions()
+        answers.onTaskChange = { [weak self] task in
+            self?.panelModel.taskImages = task?.images ?? []
+            self?.panelModel.taskSolved = task.map { !$0.solution.isEmpty } ?? false
+        }
+        panelModel.onCloseTask = { [weak self] in self?.answers.clearTask() }
         liveSession.onStart = { [weak self] config in self?.sessionStarted(config) }
         liveSession.onEnd = { [weak self] config in self?.sessionEnded(config) }
         liveSession.onTick = { [weak self] in self?.refreshUI() }
@@ -485,6 +494,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         turns.autoEnabled = c.autoGenerate
         panelModel.history.clear()
         panelModel.detection = .idle
+        answers.clearTask()
         // ⌘-схема ParakeetAI — только на время сессии (Q10).
         hotkeys?.registerSession()
         if c.type == .mock {
@@ -501,6 +511,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func sessionEnded(_ c: SessionConfig) {
         hotkeys?.unregisterSession()
+        answers.clearTask()
         if panelModel.chatOpen { panelModel.chatOpen = false; panel.setChatFocus(false) }
         panelModel.detection = .idle
         turns.stop()
@@ -574,6 +585,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         listening.clearTranscript()
         turns.clearPending()
         answers.cancelDraft()
+        answers.clearTask()
         panelModel.detection = .idle
         Log.app.info("transcript cleared")
         refreshUI()
@@ -656,8 +668,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     screenshotFailed("Нет ключа ни для сильной модели, ни для Gemini")
                     return
                 }
-                let turn = Turn(id: -1, text: "Скриншот задачи", speechEndedAt: started, firedAt: started, forced: true)
-                answers.showGenerated(chain: chain, request: PromptBuilder.screenshotRequest(image: jpeg, language: language), label: turn)
+                answers.screenshot(jpeg, chain: chain, language: language)
             } catch {
                 screenshotFailed("Скриншот не получился: \(error)")
             }

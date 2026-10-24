@@ -112,6 +112,13 @@ public struct AnswerHistory: Equatable, Sendable {
         change(&entries[i].versions[j])
     }
 
+    /// Новый заголовок вопроса (задача со скриншота: «Задача: <условие>» после решения).
+    public mutating func retitle(entry entryID: Int, question: String) {
+        guard let i = index(of: entryID) else { return }
+        entries[i].question = question
+        entries[i].title = Self.title(for: question)
+    }
+
     /// Не вопрос («—»): вопрос убирается, просмотр возвращается к предыдущему.
     public mutating func remove(entry entryID: Int) {
         guard let i = index(of: entryID) else { return }

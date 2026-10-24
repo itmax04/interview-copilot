@@ -74,6 +74,11 @@ final class PanelModel {
         self.partial = partial
     }
 
+    // Задача со скриншота (COPILOT-09 R-15): миниатюры снимков; голосовые уточнения относятся к ней.
+    var taskImages: [Data] = []
+    var taskSolved = false
+    var onCloseTask: (() -> Void)?
+
     // Самопроверка (COPILOT-06/07).
     var ownerAnswering = false
     var selfTest = false

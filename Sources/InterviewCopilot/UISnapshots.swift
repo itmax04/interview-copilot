@@ -337,6 +337,17 @@ enum UISnapshots {
                     $0.source = "Нет в базе"; $0.status = .noMatch(["swiftui · 71%", "architecture · 66%", "testing · 52%"])
                 }
             }),
+            ("task", { m in
+                session(m)
+                let shot = (try? Data(contentsOf: URL(fileURLWithPath: "evals/fixtures/two-sum.png"))) ?? Data()
+                m.taskImages = [shot, shot]
+                m.taskSolved = true
+                let ids = m.history.begin(question: "Задача: найти индексы двух чисел с суммой target.", turnID: nil, kind: .screenshot)
+                m.history.update(entry: ids.entry, version: ids.version) {
+                    $0.text = "1. **Task** — найти индексы двух чисел с суммой target.\n2. **Approach** — словарь «значение → индекс», один проход.\n4. **Complexity** — O(n) времени, O(n) памяти."
+                    $0.source = "Claude · screenshot"; $0.latency = 3.1; $0.status = .complete
+                }
+            }),
             ("answer-failed", { m in
                 session(m)
                 let ids = m.history.begin(question: "Какой у вас опыт со SwiftUI?", turnID: 1, kind: .hint)
