@@ -218,6 +218,46 @@ public enum PromptScenarios {
                      let uk = ["і", "ї", "є", "років"].contains { t.contains($0) }
                      return uk ? nil : "язык сменился: «\(firstLine(text))»"
                  }),
+        // COPILOT-09 R-12, AC-06: настройки ответа меняют форму, факты — из профиля.
+        Scenario(name: "стиль: короткий сплошной текст", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
+                 profile: sampleProfile, session: SessionPrompt(style: AnswerStyle(format: .script, length: .short)),
+                 check: { text in
+                     let words = AnswerShape.words(text)
+                     if words > 40 { return "длиннее 40 слов: \(words)" }
+                     if AnswerShape.bulletCount(text) > 0 || text.contains("**") { return "есть пункты или жирный: «\(firstLine(text))»" }
+                     return text.contains("7") || text.lowercased().contains("сім") ? nil : "потерян факт (7 років): «\(firstLine(text))»"
+                 }),
+        Scenario(name: "стиль: только пункты", question: "Як ви обробляєте помилки в мережевому шарі застосунку?", language: "uk",
+                 memory: MemoryContext(), profile: sampleProfile, session: SessionPrompt(style: AnswerStyle(format: .bullets)),
+                 check: { text in
+                     let prose = AnswerShape.proseLines(text), bullets = AnswerShape.bulletCount(text)
+                     return prose == 0 && bullets >= 2 ? nil : "пунктов \(bullets), строк не пунктами \(prose): «\(firstLine(text))»"
+                 }),
+        Scenario(name: "стиль: подробный, факты те же", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
+                 profile: sampleProfile, session: SessionPrompt(style: AnswerStyle(length: .detailed)),
+                 check: { text in
+                     let words = AnswerShape.words(text)
+                     if words < 70 || words > 180 { return "не подробный: \(words) слов" }
+                     // Факты профиля сохранены и не искажены; недостающее модель достраивает по общему правилу
+                     // «импровизировать» (COPILOT-08) — это не нарушение стиля.
+                     if !text.contains("7") { return "потерян стаж 7 років: «\(firstLine(text))»" }
+                     let t = text.lowercased()
+                     if t.contains("млн"), !t.contains("1,2") && !t.contains("1.2") { return "искажено число пользователей: «\(firstLine(text))»" }
+                     let years = text.matches(of: /(\d+)[\s\u{2011}-]*(?:річн|рок|років)/).compactMap { Int($0.1) }
+                     let wrong = years.filter { ![7, 5, 3].contains($0) }
+                     return wrong.isEmpty ? nil : "искажён стаж \(wrong): «\(firstLine(text))»"
+                 }),
+        Scenario(name: "стиль: обычный звонок коротко", question: "Когда сможете прислать смету и сколько это будет стоить?",
+                 language: "ru", memory: MemoryContext(), profile: Profile(name: "p"),
+                 materials: [MaterialHit(source: "смета.md", text: "Смета для клиента: 3 недели работы, 12 000 $, старт с 1 ноября.", score: 0.6)],
+                 session: SessionPrompt(type: .regular, style: AnswerStyle(format: .script, length: .short, tone: .formal)),
+                 check: { text in
+                     let words = AnswerShape.words(text)
+                     if words > 40 { return "длиннее 40 слов: \(words)" }
+                     if AnswerShape.bulletCount(text) > 0 { return "есть пункты: «\(firstLine(text))»" }
+                     // Сумма цифрами или словами («двенадцать тысяч») — обе верны.
+                     return text.contains("12") || text.lowercased().contains("двенадцат") ? nil : "нет суммы из материалов: «\(firstLine(text))»"
+                 }),
         Scenario(name: "материалы: чужой фрагмент игнорируется", question: "Яке у вас хобі?", language: "uk", memory: MemoryContext(),
                  profile: sampleProfile,
                  materials: [MaterialHit(source: "system-design.md", text: "Rate limiting на API: алгоритм token bucket в Redis, лимит на пользователя и на IP.", score: 0.48)],

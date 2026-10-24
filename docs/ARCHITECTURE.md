@@ -52,7 +52,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | `…/Turns` | конец вопроса | `TurnDetector` (чистая логика, вся покрыта тестами), `TurnEval` |
 | `…/Profiles` | профили, загрузка файлов, материалы (COPILOT-08) | `ProfileLibrary` (создать, переключить, удалить, перенос старого `profile/`, материалы), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md), `MaterialChunker`, `MaterialIndex`, `MaterialIndexBuilder` |
 | `…/Bank` | профиль и база ответов | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML: `BankCard` со статусом ответа, `QuestionBankWriter`), `QuestionImport` (правила + модель), `QuestionPreparation` (формулировки, черновики), `BankMatcher`, `TextEmbedder` |
-| `…/Answer` | выбор: карточка / нет в базе / генерация; история ответов | `AnswerRouter`, `AnswerHistory` (`AnswerEntry` → `AnswerVersion`: hint / bank / strong / screenshot / refine, статусы, ←/→, «новый ответ») |
+| `…/Answer` | выбор: карточка / нет в базе / генерация; история ответов | `AnswerRouter`, `AnswerStyle` (формат, длина, тон → правило промпта; `AnswerShape` — проверка формы), `AnswerHistory` (`AnswerEntry` → `AnswerVersion`: hint / bank / strong / screenshot / refine, статусы, ←/→, «новый ответ») |
 | `…/LLM` | провайдеры и промпт | `PromptBuilder` (все правила для модели), `ProviderChain` + `ChainFactory`, `Providers` (Gemini, DeepSeek, Anthropic, OpenAI-совместимые: Groq, Cerebras, свой API), `SSEClient`, `KeyVerifier` |
 | `…/Memory` | память интервью | `InterviewMemory`, `SessionExchange`, `MemoryContext`, `ReferenceDetector`, `PromptScenarios` |
 | `…/Storage` | история сессий | `SessionRecord` (с `config` сессии), `SessionStore` |
@@ -63,7 +63,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | `…/Hotkeys`, `…/Menu` | глобальные клавиши (Carbon), состав меню | `HotkeyCenter`, `HotkeyAction`, `MenuLayout` (без AppKit — тестируется) |
 | `…/Usage`, `…/Privacy`, `…/Models`, `…/Capture`, `…/Logging` | расход и бюджет, фильтр ПД, загрузка моделей с SHA256, скриншот, логи | `UsageMeter`, `PIIFilter`, `ModelDownloader`, `ScreenshotService`, `Log` |
 | `Sources/CopilotEmbeddings` | bge-m3 через llama.cpp (отдельно из-за заголовков ggml) | `LlamaEmbedder` |
-| `Sources/InterviewCopilot` | приложение: связывает всё | `AppDelegate` (App.swift — вся проводка колбэков), `LiveSessionController` (Start/End, таймер, определение звонка), `SessionWizard` (мастер), `ListeningController` (в т. ч. `standby` без сессии), `TurnController`, `AnswerController`, `SessionController` (история), `PanelController` (свернуть, следующий экран, фокус чата, проверка видимости)/`PanelView`/`AnswerCardView`, `Theme`, настройки, профиль, история |
+| `Sources/InterviewCopilot` | приложение: связывает всё | `AppDelegate` (App.swift — вся проводка колбэков), `LiveSessionController` (Start/End, таймер, определение звонка), `SessionWizard` (мастер), `AnswerStyleEditor`/`StylePreview` (стиль ответа с предпросмотром), `ListeningController` (в т. ч. `standby` без сессии), `TurnController`, `AnswerController`, `SessionController` (история), `PanelController` (свернуть, следующий экран, фокус чата, проверка видимости)/`PanelView`/`AnswerCardView`, `Theme`, настройки, профиль, история |
 | `Sources/copilot-eval` | CLI замеров | см. §6 |
 
 Правило: логика — в `CopilotCore` (тестируется без UI), приложение только связывает и показывает.

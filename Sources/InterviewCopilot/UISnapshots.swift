@@ -100,6 +100,20 @@ enum UISnapshots {
             shot("wizard-\(step.rawValue + 1)", NSSize(width: 820, height: 600), SessionWizardView(state: wizard))
         }
 
+        // Стиль ответа (COPILOT-09 R-12): редактор с готовым предпросмотром — без запроса к модели.
+        let styleContext = StylePreview.Context(settings: model.settings, secrets: model.secrets, profile: bank.profile, language: "uk")
+        for (name, style, sample) in [
+            ("style-editor", AnswerStyle.standard,
+             "**7 років в iOS, останні 5 — у ФінБанку, 3 роки тімлідом.**\n- Мобільний банк на 1,2 млн користувачів\n- Перевів платежі на SwiftUI без зупинки релізів\n- Менторю трьох розробників"),
+            ("style-editor-script", AnswerStyle(format: .script, length: .short, tone: .friendly),
+             "Я iOS-розробник із семирічним досвідом, останні п'ять років — у ФінБанку, де три роки веду команду і перевів платежі на SwiftUI."),
+        ] {
+            let preview = StylePreview(style: style, context: styleContext)
+            preview.showSnapshot(text: sample, source: "Groq · 1,1 с")
+            shot(name, NSSize(width: 760, height: 520), AnswerStyleEditor(preview: preview, onSave: { _ in }, onSaveDefault: { _ in }, onCancel: {})
+                .background(Color(nsColor: .windowBackgroundColor)))
+        }
+
         // История сессий.
         let store = SessionStore(directory: AppPaths.sessions)
         try? store.save(sampleSession(store))

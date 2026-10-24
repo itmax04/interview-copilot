@@ -77,6 +77,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarController?
     private lazy var settingsWindow = SettingsWindowController(model: model, hotkeyFailures: { [weak self] in
         self?.hotkeys?.failures ?? [:]
+    }, stylePreviewContext: { [weak self] in
+        guard let self else { return nil }
+        // Ответ по умолчанию (R-12) — предпросмотр по активному профилю, как собеседование.
+        return StylePreview.Context(settings: self.model.settings, secrets: self.model.secrets,
+                                    profile: self.model.settings.useProfile ? self.bank.profile : nil,
+                                    generalInstructions: self.bank.generalInstructions,
+                                    language: self.model.settings.language.whisperCode ?? "uk")
     })
     private lazy var permissionsWindow = PermissionsWindowController(listening: listening)
     private lazy var onboarding: OnboardingWindowController = makeOnboarding()

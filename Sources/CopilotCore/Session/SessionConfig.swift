@@ -39,6 +39,8 @@ public struct SessionConfig: Codable, Equatable, Sendable {
     public var reviewAfterEnd = true
     /// План длительности, минут (0 — без плана); предупреждение за 5 минут (Q12).
     public var plannedMinutes = 0
+    /// Настройки ответа только на эту сессию (R-12, «Сохранить»); nil — по умолчанию из настроек («По умолчанию»).
+    public var style: AnswerStyle?
 
     public init() {}
 
@@ -52,6 +54,7 @@ public struct SessionConfig: Codable, Equatable, Sendable {
         c.company = ""
         c.jobDescription = ""
         c.instructions = ""
+        c.style = nil
         c.plannedMinutes = min(max(c.plannedMinutes, Self.plannedMinutesRange.lowerBound), Self.plannedMinutesRange.upperBound)
         return c
     }
@@ -79,12 +82,26 @@ public struct SessionConfig: Codable, Equatable, Sendable {
         saveTranscript = v(.saveTranscript, d.saveTranscript)
         reviewAfterEnd = v(.reviewAfterEnd, d.reviewAfterEnd)
         plannedMinutes = v(.plannedMinutes, d.plannedMinutes)
+        style = v(.style, d.style)
     }
 
     enum CodingKeys: String, CodingKey {
         case type, profileID, company, jobDescription, language, firstProvider, instructions, autoGenerate, saveTranscript,
-             reviewAfterEnd, plannedMinutes
+             reviewAfterEnd, plannedMinutes, style
     }
+
+    /// Профиль в промпте сессии: вакансия и компания из мастера — вместо вакансии профиля.
+    public func applyingJob(to profile: Profile) -> Profile {
+        var p = profile
+        let company = company.trimmingCharacters(in: .whitespacesAndNewlines)
+        let job = jobDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !job.isEmpty { p.job = job }
+        if !company.isEmpty { p.job = "Компания: \(company)\n\n" + p.job }
+        return p
+    }
+
+    /// Стиль, который увидит модель.
+    public func effectiveStyle(default d: AnswerStyle) -> AnswerStyle { style ?? d }
 
     /// Цепочка сессии: выбранная модель — первой, остальные — в прежнем порядке.
     public func chain(from base: [ProviderID]) -> [ProviderID] {

@@ -4,10 +4,13 @@ import Foundation
 public struct SessionPrompt: Equatable, Sendable {
     public var type: SessionType
     public var instructions: String
+    /// Настройки ответа (R-12): формат, длина, тон.
+    public var style: AnswerStyle
 
-    public init(type: SessionType = .interview, instructions: String = "") {
+    public init(type: SessionType = .interview, instructions: String = "", style: AnswerStyle = .standard) {
         self.type = type
         self.instructions = instructions
+        self.style = style
     }
 }
 
@@ -25,14 +28,14 @@ public enum PromptBuilder {
             let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
             return redactPII ? PIIFilter.redact(t) : t
         }
+        let style = session?.style ?? .standard
         let common = """
         You are an interview copilot for a job candidate. During a live interview you write the answer the candidate \
         will say out loud, in the first person, as the candidate.
 
         Rules:
         - Answer in the language of the interviewer's current question (Ukrainian, Russian or English).
-        - First line: the core answer in one short sentence in **bold**, so the candidate can start speaking at once. \
-        Then 2–5 short bullet points with details, at most 80 words in total. No preamble, no headings.
+        \(style.formatRule())
         - Technical, conceptual and general questions (how something works, comparisons, trade-offs, best practices, \
         algorithms, system design): answer yourself from your own expert knowledge, concretely and confidently.
         - Never leave the candidate without words: never say "I don't know", never refuse and never write placeholders \
@@ -60,7 +63,7 @@ public enum PromptBuilder {
         """
         let instructions = ownerInstructions(general: clean(generalInstructions), profile: clean(profile?.instructions ?? ""),
                                              session: clean(session?.instructions ?? ""))
-        if session?.type == .regular { return regularSystem(redactPII: redactPII) + instructions }
+        if session?.type == .regular { return regularSystem(redactPII: redactPII, style: style) + instructions }
         guard let profile else {
             return common + """
 
@@ -105,15 +108,14 @@ public enum PromptBuilder {
 
     /// Обычный звонок (COPILOT-09 R-06, Q14): «что сказать» от первого лица по теме разговора, инструкциям и материалам;
     /// резюме и карточки вопросов не используются. Правила надёжности — те же, что у собеседования.
-    static func regularSystem(redactPII: Bool) -> String {
+    static func regularSystem(redactPII: Bool, style: AnswerStyle = .standard) -> String {
         """
         You are a live copilot for the user in a work call (a meeting, a negotiation, a client call — not a job interview). \
         During the call you write what the user can say next, out loud, in the first person, as the user.
 
         Rules:
         - Answer in the language of the other participant's current utterance (Ukrainian, Russian or English).
-        - First line: the core of what to say in one short sentence in **bold**. Then 2–5 short bullet points with details, \
-        arguments or numbers, at most 80 words in total. No preamble, no headings.
+        \(style.formatRule(subject: "the core of what to say"))
         - Use the conversation so far and <materials> (the user's own notes and documents) when relevant; for general \
         professional questions answer from your own knowledge, concretely and confidently. Never refuse, never write placeholders.
         - The utterance comes from speech recognition and may contain errors: infer the most likely meaning from the conversation.
@@ -224,8 +226,8 @@ public enum PromptBuilder {
         let instructed = hasInstructions(profile: profile, general: generalInstructions + (session?.instructions ?? ""))
         return LLMRequest(system: system(profile: profile, redactPII: redactPII, generalInstructions: generalInstructions, session: session),
                           messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard, redactPII: redactPII, answerLanguage: answerLanguage, memory: memory, ownerInstructions: instructed, materials: materials, regularCall: session?.type == .regular))],
-                          // Инструкция «отвечай развёрнуто» не должна обрываться на 400 токенах (COPILOT-08 R-04).
-                          maxTokens: instructed ? 800 : 400, purpose: .hint)
+                          // Инструкция «отвечай развёрнуто» и «Подробный» не должны обрываться на 400 токенах (COPILOT-08 R-04).
+                          maxTokens: instructed ? 800 : (session?.style ?? .standard).maxTokens, purpose: .hint)
     }
 
     static func hasInstructions(profile: Profile?, general: String) -> Bool {

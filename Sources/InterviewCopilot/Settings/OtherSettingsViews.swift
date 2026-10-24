@@ -4,6 +4,8 @@ import SwiftUI
 /// Models — ID моделей, порядок цепочки, таймаут первого токена (R-09, R-18).
 struct ModelsSettingsView: View {
     @Bindable var model: AppModel
+    var stylePreviewContext: () -> StylePreview.Context? = { nil }
+    @State private var stylePreview: StylePreview?
 
     var body: some View {
         Form {
@@ -11,6 +13,18 @@ struct ModelsSettingsView: View {
                 ForEach(ProviderID.allCases, id: \.self) { p in
                     if let warning = model.modelWarning(p) {
                         Label(warning, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.caption)
+                    }
+                }
+            }
+            // COPILOT-09 R-12: стиль ответа по умолчанию; в мастере сессии его можно сменить только на один звонок.
+            Section("Стиль ответа по умолчанию") {
+                HStack {
+                    Text(model.settings.answerStyle.summary)
+                    Spacer()
+                    Button("Настроить…") {
+                        if let context = stylePreviewContext() {
+                            stylePreview = StylePreview(style: model.settings.answerStyle, context: context)
+                        }
                     }
                 }
             }
@@ -56,6 +70,13 @@ struct ModelsSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: Binding(get: { stylePreview != nil }, set: { if !$0 { stylePreview = nil } })) {
+            if let stylePreview {
+                AnswerStyleEditor(preview: stylePreview, saveTitle: "Сохранить",
+                                  onSave: { model.settings.answerStyle = $0; self.stylePreview = nil },
+                                  onCancel: { self.stylePreview = nil })
+            }
+        }
     }
 
     private func move(_ index: Int, by delta: Int) {

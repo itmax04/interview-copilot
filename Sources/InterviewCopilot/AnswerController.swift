@@ -48,7 +48,12 @@ final class AnswerController {
 
     private var isRegularCall: Bool { session()?.type == .regular }
 
-    private var sessionPrompt: SessionPrompt? { session().map { SessionPrompt(type: $0.type, instructions: $0.instructions) } }
+    /// Тип, указания и стиль ответа сессии; без сессии (ИИ-собеседование, смоки) — стиль по умолчанию из настроек.
+    private var sessionPrompt: SessionPrompt? {
+        let d = model.settings.answerStyle
+        guard let c = session() else { return d == .standard ? nil : SessionPrompt(style: d) }
+        return SessionPrompt(type: c.type, instructions: c.instructions, style: c.effectiveStyle(default: d))
+    }
 
     /// Профиль в промпте: обычный звонок — только инструкции профиля (без резюме и карточек, Q14); собеседование —
     /// с вакансией и компанией из мастера вместо вакансии профиля.
@@ -56,14 +61,7 @@ final class AnswerController {
         let s = session()
         if s?.type == .regular { return Profile(name: bank.profile.name, instructions: bank.profile.instructions) }
         guard settings.useProfile else { return nil }
-        var p = bank.profile
-        if let s {
-            let company = s.company.trimmingCharacters(in: .whitespacesAndNewlines)
-            let job = s.jobDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !job.isEmpty { p.job = job }
-            if !company.isEmpty { p.job = "Компания: \(company)\n\n" + p.job }
-        }
-        return p
+        return s?.applyingJob(to: bank.profile) ?? bank.profile
     }
 
     struct AnswerRecord {

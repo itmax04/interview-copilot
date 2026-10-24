@@ -151,6 +151,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var activeProfileID: String?
     /// Последние настройки мастера сессии — по умолчанию для следующей (COPILOT-09 R-01).
     public var lastSessionConfig: SessionConfig?
+    /// Настройки ответа по умолчанию (COPILOT-09 R-12): формат, длина, тон.
+    public var answerStyle = AnswerStyle.standard
     /// Порог совпадения с карточкой (R-07: «по умолчанию 0,85, уточняется eval bank» → 0,74 по eval P-06, ADR-0001).
     public var bankThreshold: Double = 0.74
     /// Модель эмбеддингов в `…/models/` (ADR-0001 п. 6: bge-m3 по eval P-06).
@@ -287,6 +289,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         useProfile = v(.useProfile, d.useProfile)
         activeProfileID = v(.activeProfileID, d.activeProfileID)
         lastSessionConfig = v(.lastSessionConfig, d.lastSessionConfig)
+        answerStyle = v(.answerStyle, d.answerStyle)
         bankThreshold = v(.bankThreshold, d.bankThreshold)
         embeddingModel = v(.embeddingModel, d.embeddingModel)
         piiFilterEnabled = v(.piiFilterEnabled, d.piiFilterEnabled)

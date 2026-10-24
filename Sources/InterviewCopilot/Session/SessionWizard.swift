@@ -98,6 +98,41 @@ final class SessionWizardModel {
         config.validationErrors(profileExists: config.profileID.map { id in bank.profiles.contains { $0.id == id } } ?? false)
     }
 
+    /// Редактор стиля ответа (R-12) открыт — предпросмотр живёт, пока открыт лист.
+    var stylePreview: StylePreview?
+
+    /// Стиль сессии: свой («Сохранить») или по умолчанию из настроек.
+    var effectiveStyle: AnswerStyle { config.effectiveStyle(default: model.settings.answerStyle) }
+
+    func openStyleEditor() {
+        var settings = model.settings
+        settings.chain = config.chain(from: settings.chain)
+        var profile: Profile?
+        if let id = config.profileID, bank.profiles.contains(where: { $0.id == id }) {
+            let p = bank.library.load(id)
+            switch config.type {
+            case .regular: profile = Profile(name: p.name, instructions: p.instructions)
+            case .interview, .mock:
+                if settings.useProfile { profile = config.applyingJob(to: p) }
+            }
+        }
+        let context = StylePreview.Context(settings: settings, secrets: model.secrets, profile: profile,
+                                           generalInstructions: bank.generalInstructions, sessionType: config.type == .regular ? .regular : .interview,
+                                           sessionInstructions: config.instructions, language: config.language.whisperCode ?? "uk")
+        stylePreview = StylePreview(style: effectiveStyle, context: context)
+    }
+
+    /// «Сохранить для сессии» — только этот звонок; «По умолчанию» — настройки и этот звонок.
+    func saveStyle(_ style: AnswerStyle, asDefault: Bool) {
+        if asDefault {
+            model.settings.answerStyle = style
+            config.style = nil
+        } else {
+            config.style = style == model.settings.answerStyle ? nil : style
+        }
+        stylePreview = nil
+    }
+
     /// Модели с ключами в порядке цепочки — для выбора первой.
     var providersWithKeys: [ProviderID] { model.settings.chain.filter { model.hasKey[$0] == true } }
 
@@ -240,6 +275,14 @@ struct SessionWizardView: View {
         }
         .frame(width: 820, height: 600)
         .tint(Theme.accent)
+        .sheet(isPresented: Binding(get: { state.stylePreview != nil }, set: { if !$0 { state.stylePreview = nil } })) {
+            if let preview = state.stylePreview {
+                AnswerStyleEditor(preview: preview,
+                                  onSave: { state.saveStyle($0, asDefault: false) },
+                                  onSaveDefault: { state.saveStyle($0, asDefault: true) },
+                                  onCancel: { state.stylePreview = nil })
+            }
+        }
     }
 
     // MARK: Колонка шагов
@@ -361,6 +404,20 @@ struct SessionWizardView: View {
                     ForEach(state.providersWithKeys, id: \.self) { Text($0.displayName).tag(ProviderID?.some($0)) }
                 }
                 Text("Выбранная модель — первой, остальные из цепочки — запасными.").font(.footnote).foregroundStyle(.secondary)
+            }
+            if state.config.type != .mock {
+                ThemeCard {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Стиль ответа").font(.headline)
+                            Text(state.effectiveStyle.summary).foregroundStyle(.secondary)
+                            Text(state.config.style == nil ? "По умолчанию — меняется в Settings → Models" : "Только для этой сессии")
+                                .font(.footnote).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Настроить…") { state.openStyleEditor() }
+                    }
+                }
             }
             ThemeCard {
                 Text("Указания на эту сессию").font(.headline)
