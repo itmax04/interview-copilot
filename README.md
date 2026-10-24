@@ -51,6 +51,8 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
 - Метрики созвона: `scripts/metrics.py --last 30m` (AC-01…AC-03), память: `scripts/footprint-monitor.sh 10` (AC-05).
 - Живые проверки из приложения: `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`
   и `--smoke-screenshot evals/fixtures/two-sum.png` (тратят квоту Gemini).
+- `--smoke-memory [N]` — синтетические сценарии памяти и правил промпта (ловушка «вы упоминали», возврат к ответу,
+  зарплата, обрывок) через цепочку из настроек, каждый N раз (COPILOT-07; ~6·N запросов к бесплатным провайдерам).
 - CLI: `swift run -c release copilot-eval <stt|stt-parakeet|stt-stream|turn|bank|exit-check>`.
 - Что и как тестировать дальше — [docs/changes/COPILOT-01/test-plan.md](docs/changes/COPILOT-01/test-plan.md).
 

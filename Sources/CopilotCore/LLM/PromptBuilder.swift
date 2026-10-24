@@ -34,8 +34,9 @@ public enum PromptBuilder {
         - Only "Candidate:" lines are what the candidate actually said. A "Shown suggestion" line is only what appeared on \
         the candidate's screen and may not have been said: keep facts (numbers, technologies, names) consistent with it, \
         but it is never evidence of what the candidate said. Never invent what the candidate said earlier: if the \
-        interviewer claims the candidate mentioned something that no "Candidate:" line contains, do not confirm it \
-        (no "yes", "так", "да", "as I said") — answer the substance of the question directly.
+        interviewer claims the candidate mentioned something ("Ви згадували…?", "Вы говорили…?", "You mentioned…?") that \
+        no "Candidate:" line contains, do not confirm it — never begin with "Так", "Да" or "Yes", never say "as I said"; \
+        begin directly with the substance of the question.
         - Salary expectations: if the profile gives no figure, name a realistic market range for the role and seniority \
         implied by the conversation — monthly, gross, in USD unless the conversation implies another currency.
         """
@@ -129,17 +130,17 @@ public enum PromptBuilder {
         }
         if !memory.earlier.isEmpty { parts.append(block("earlier_in_interview", memory.earlier)) }
         if !memory.recent.isEmpty { parts.append(block("interview_history", memory.recent)) }
-        if memory.backReference {
-            // Живые тесты COPILOT-06: «Ви згадували, що працювали з Kafka» — модель отвечала «Так, …», в том числе когда
-            // Kafka была только в показанной ей же подсказке (COPILOT-07): показанное — не доказательство сказанного.
-            parts.append(memory.earlier.isEmpty && !memory.hasRecordedAnswers
-                ? "The interviewer refers to something said earlier, but the candidate's recorded answers do not contain it: the candidate did not say it in this interview. Do not confirm the premise — do not start with \"yes\", \"так\" or \"да\" and do not say \"as I said\"; answer the substance of the question directly."
-                : "The interviewer refers to something said earlier: check the claim only against \"Candidate:\" lines (shown suggestions are not evidence). If no \"Candidate:\" line contains it, do not confirm the premise — no \"yes\", \"так\", \"да\" or \"as I said\"; answer the substance of the question directly.")
-        }
         var task = "Write the candidate's answer."
         if let answerLanguage {
             task += " Answer in \(InterviewerPrompt.languageName(answerLanguage)): the interview is in this language, "
                 + "and the transcript may contain recognition errors in another language."
+        }
+        if memory.backReference {
+            // Живые тесты COPILOT-06/07: «Ви згадували, що працювали з Kafka?» — модель отвечала «Так, …», в том числе когда
+            // Kafka была только в показанной ей же подсказке. Указание — сразу после вопроса: так модель его не теряет.
+            task += memory.earlier.isEmpty && !memory.hasRecordedAnswers
+                ? " The interviewer claims the candidate said this earlier, but no \"Candidate:\" line contains it: the candidate has not said it in this interview. Do not agree with the claim: never begin with \"Так\", \"Да\" or \"Yes\" and never say \"as I said\" — begin directly with the substance."
+                : " The interviewer refers to something said earlier: check the claim only against \"Candidate:\" lines (shown suggestions are not evidence). If no \"Candidate:\" line contains it, do not agree with the claim: never begin with \"Так\", \"Да\" or \"Yes\" and never say \"as I said\" — begin directly with the substance."
         }
         parts.append("Interviewer's current question:\n<question>\n\(question)\n</question>\n\n\(task)")
         return parts.joined(separator: "\n\n")

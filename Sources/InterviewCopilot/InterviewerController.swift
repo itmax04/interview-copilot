@@ -44,6 +44,8 @@ final class InterviewerController {
     var onBegin: (() -> Void)?
     var onEnd: (() -> Void)?
     var onPermissions: (() -> Void)?
+    /// Ответ владельца на вопрос закончен — в память интервью, как ответ на созвоне (COPILOT-07).
+    var onOwnerAnswer: ((String) -> Void)?
     var onUsage: ((ProviderID, String, TokenUsage) -> Void)?
     var onProviderError: ((ProviderID, LLMError) -> Void)?
 
@@ -256,6 +258,7 @@ final class InterviewerController {
     private func answerFinished() {
         guard let question, let a = answer else { return }
         let text = a.text
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { onOwnerAnswer?(text) }
         if let i = records.firstIndex(where: { $0.id == question.id }) {
             records[i].answer = text
             records[i].answerSeconds = a.speechSeconds

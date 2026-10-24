@@ -125,14 +125,24 @@ public final class InterviewMemory: @unchecked Sendable {
         }
     }
 
-    /// Уточнённый текст реплики (Whisper, R-37) заменяет быстрый в вопросах, где он встречается.
+    /// Уточнённый текст реплики (Whisper, R-37) заменяет быстрый в вопросах и ответах последних обменов, где он встречается.
     public func reviseText(_ old: String, to new: String) {
         let old = old.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !old.isEmpty, old != new else { return }
+        let new = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !old.isEmpty, !new.isEmpty, old != new else { return }
         lock.withLock {
-            for i in exchanges.indices.reversed().prefix(3) where exchanges[i].question.contains(old) {
-                exchanges[i].question = exchanges[i].question.replacingOccurrences(of: old, with: new)
-                embeddings[exchanges[i].id] = nil
+            for i in exchanges.indices.reversed().prefix(3) {
+                var changed = false
+                if exchanges[i].question.contains(old) {
+                    exchanges[i].question = exchanges[i].question.replacingOccurrences(of: old, with: new)
+                    changed = true
+                }
+                // Ответ владельца в самопроверке (⌃⌥A) — тоже черновик Parakeet до уточнения (COPILOT-07).
+                if let j = exchanges[i].answer.lastIndex(of: old) {
+                    exchanges[i].answer[j] = new
+                    changed = true
+                }
+                if changed { embeddings[exchanges[i].id] = nil }
             }
         }
     }

@@ -21,6 +21,10 @@ enum InterviewCopilotMain {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.screenshot(path: args[i + 1]))
         }
+        if let i = args.firstIndex(of: "--smoke-memory") {
+            setvbuf(stdout, nil, _IOLBF, 0)
+            exit(SmokeTest.memory(runs: (i + 1 < args.count ? Int(args[i + 1]) : nil) ?? 3))
+        }
         if args.contains("--smoke-llm") {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.run())
@@ -152,6 +156,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         testCall.onPermissions = { [weak self] in self?.permissionsWindow.show() }
         listening.onOwnerTranscript = { [weak self] event in self?.interviewer.handleOwnerTranscript(event) }
         interviewer.onEnd = { [weak self] in self?.refreshUI() }
+        interviewer.onOwnerAnswer = { [weak self] text in
+            self?.memory.addAnswer(text)
+            self?.saveMemory()
+        }
         interviewer.onPermissions = { [weak self] in self?.permissionsWindow.show() }
         interviewer.onUsage = { [weak self] provider, modelID, u in self?.recordUsage(provider, modelID, u) }
         interviewer.onProviderError = { [weak self] provider, error in
@@ -198,6 +206,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.embed = { [weak self] in self?.bank.embedFunction }
         listening.onOwnerSaid = { [weak self] text in
             self?.memory.addAnswer(text)
+            self?.saveMemory()
+        }
+        listening.onOwnerRevised = { [weak self] fast, text in
+            self?.memory.reviseText(fast, to: text)
             self?.saveMemory()
         }
         if testCallOnly {

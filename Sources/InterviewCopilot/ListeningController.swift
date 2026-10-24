@@ -94,6 +94,10 @@ final class ListeningController {
     private let ownerActive = LockedFlag()
     /// Фраза владельца прошла фильтры — в память интервью (COPILOT-06).
     var onOwnerSaid: ((String) -> Void)?
+    /// Уточнённый текст ответа владельца в самопроверке (Whisper приходит через ~3 с, иногда уже после ⌃⌥A): (черновик, итог).
+    var onOwnerRevised: ((String, String) -> Void)?
+    /// Черновой текст ответов владельца по номеру реплики — до уточнения.
+    private var ownerFastText: [Int: String] = [:]
 
     /// Самопроверка: «сейчас отвечаю я» (⌃⌥A, COPILOT-06) — речь с микрофона идёт ответом в память, а не вопросом.
     private(set) var ownerAnswering = false
@@ -613,10 +617,17 @@ final class ListeningController {
             onOwnerTranscript?(event)
             return
         }
+        // Уточнение ответа владельца — и после выхода из режима ответа: реплика уже записана ответом, не вопросом.
+        if case .revised(let u, let text, _) = event, let fast = ownerFastText.removeValue(forKey: u) {
+            onOwnerRevised?(fast, text)
+            return
+        }
         // Самопроверка, режим ответа (⌃⌥A): итог — ответ владельца в память; для хода — как шум, вопросов нет.
         if ownerAnswering, source == .microphone {
             switch event {
-            case .final(_, let text, _, let phraseEnd, _):
+            case .final(let u, let text, _, let phraseEnd, _):
+                ownerFastText[u] = text
+                if ownerFastText.count > 20, let oldest = ownerFastText.keys.min() { ownerFastText.removeValue(forKey: oldest) }
                 onOwnerSaid?(text)
                 Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=self-test")
                 onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))

@@ -54,6 +54,45 @@ enum SmokeTest {
         return result.ok ? 0 : 1
     }
 
+    /// `--smoke-memory [N]`: синтетические сценарии памяти и правил промпта (COPILOT-07) через цепочку из настроек,
+    /// каждый N раз (по умолчанию 3). Печатаются провайдер, PASS/FAIL и первая строка ответа (данные синтетические).
+    static func memory(runs: Int) -> Int32 {
+        let settings = SettingsStore().load()
+        let secrets = KeychainStore()
+        let done = DispatchSemaphore(value: 0)
+        let result = ResultBox()
+        Task.detached {
+            let chain = ChainFactory.chain(settings: settings, secrets: secrets, providers: ChainFactory.providers())
+            var passed = 0, total = 0
+            for scenario in PromptScenarios.all {
+                for run in 1...runs {
+                    var text = ""
+                    var provider = "?"
+                    var failure = ""
+                    for await e in chain.run(PromptScenarios.request(scenario)) {
+                        switch e {
+                        case .finished(let p, let m): provider = "\(p.rawValue)/\(m)"
+                        case .text(let t): text += t
+                        case .restart: text = ""
+                        case .exhausted(let r): failure = r
+                        default: break
+                        }
+                    }
+                    total += 1
+                    let verdict = failure.isEmpty ? scenario.check(text) : "нет ответа: \(failure)"
+                    if verdict == nil { passed += 1 }
+                    print("\(verdict == nil ? "PASS" : "FAIL") [\(scenario.name) #\(run)] \(provider) | "
+                          + (verdict ?? PromptScenarios.firstLine(text)))
+                }
+            }
+            print("memory smoke: \(passed)/\(total)")
+            result.ok = passed == total
+            done.signal()
+        }
+        done.wait()
+        return result.ok ? 0 : 1
+    }
+
     static func run() -> Int32 {
         let settings = SettingsStore().load()
         let secrets = KeychainStore()
