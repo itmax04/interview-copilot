@@ -42,25 +42,20 @@ enum UISnapshots {
         }
 
         // Настройки — каждая вкладка.
-        let tabs: [(String, AnyView)] = [
-            ("keys", AnyView(KeysSettingsView(model: model))), ("models", AnyView(ModelsSettingsView(model: model))),
-            ("audio", AnyView(AudioSettingsView(model: model))), ("bank", AnyView(BankSettingsView(model: model))),
-            ("privacy", AnyView(PrivacySettingsView(model: model))), ("panel", AnyView(PanelSettingsView(model: model))),
-            ("hotkeys", AnyView(HotkeysSettingsView(model: model, failures: { [:] }))), ("budget", AnyView(BudgetSettingsView(model: model))),
-        ]
-        for (name, view) in tabs {
-            shot("settings-\(name)", NSSize(width: 600, height: name == "audio" ? 1100 : 520), SettingsFrame(selected: name) { view })
+        // P17: контейнер с разделами слева; длинная страница звука — выше.
+        for t in SettingsTab.allCases {
+            let name = t.rawValue.lowercased()
+            shot("settings-\(name)", NSSize(width: 1000, height: t == .audio ? 1240 : 680),
+                 SettingsView(model: model, hotkeyFailures: { [:] }, tab: t))
         }
 
         // Окно «Профиль» — каждая вкладка.
         let preparer = QuestionPreparer(bank: bank, model: model)
-        let profileTabs: [(String, AnyView)] = [
-            ("resume", AnyView(DocumentEditor(bank: bank, doc: .resume))), ("facts", AnyView(DocumentEditor(bank: bank, doc: .facts))),
-            ("job", AnyView(DocumentEditor(bank: bank, doc: .job))), ("instructions", AnyView(InstructionsEditor(bank: bank))),
-            ("materials", AnyView(MaterialsView(bank: bank))), ("questions", AnyView(QuestionsView(bank: bank, preparer: preparer))),
-        ]
-        for (name, view) in profileTabs {
-            shot("profile-\(name)", NSSize(width: 760, height: 580), ProfileFrame(bank: bank, selected: name) { view })
+        // P13: профиль — список профилей, шапка с бейджами, вкладки с иконками.
+        let profileTabs: [(String, ProfileView.Tab)] = [("resume", .resume), ("facts", .facts), ("job", .job),
+                                                        ("instructions", .instructions), ("materials", .materials), ("questions", .questions)]
+        for (name, tab) in profileTabs {
+            shot("profile-\(name)", NSSize(width: 1100, height: 720), ProfileView(bank: bank, preparer: preparer, tab: tab))
         }
 
         if let card = bank.cards.first(where: { $0.status == .draft }) {
@@ -130,6 +125,18 @@ enum UISnapshots {
         reviewed.review?.summary = nil
         shot("history-review-failed", NSSize(width: 720, height: 680), SessionDetail(session: reviewed, reviews: nil, onDelete: {})
             .background(Color(nsColor: .windowBackgroundColor)))
+
+        // Главное окно (COPILOT-09 этап 6, P12): все разделы на синтетических данных.
+        let ws = WorkspaceModel()
+        ws.recognitionStatus = "Распознавание: Parakeet v3"
+        ws.recognizerReady = true
+        ws.selectedSession = reviewed.id
+        for section in WorkspaceSection.allCases {
+            ws.section = section
+            let name = ["Сегодня": "today", "Сессии": "sessions", "Профили": "profiles", "ИИ-собеседование": "mock", "Настройки": "settings"][section.rawValue]!
+            shot("workspace-\(name)", NSSize(width: 1180, height: 780),
+                 WorkspaceView(workspace: ws, model: model, bank: bank, store: store, reviews: nil, preparer: preparer))
+        }
 
         // Мастер первого запуска и разрешения.
         let onboarding = OnboardingState(model: model, listening: listening, onFinish: {})

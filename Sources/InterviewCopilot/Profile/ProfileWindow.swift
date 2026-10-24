@@ -20,7 +20,7 @@ final class ProfileWindowController {
             let w = NSWindow(contentViewController: NSHostingController(rootView: ProfileView(bank: bank, preparer: preparer)))
             w.title = "Профиль"
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            w.setContentSize(NSSize(width: 760, height: 580))
+            w.setContentSize(NSSize(width: 1100, height: 720))
             w.isReleasedWhenClosed = false
             w.center()
             window = w
@@ -41,25 +41,62 @@ struct ProfileView: View {
     @State private var naming: NamingMode?
     @State private var newName = ""
     @State private var confirmDelete = false
+    @State private var tab: Tab
 
     enum NamingMode { case create, rename }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
-            TabView {
-                ForEach([ProfileDocument.resume, .facts, .job], id: \.self) { doc in
-                    DocumentEditor(bank: bank, doc: doc).tabItem { Text(doc.title) }
-                }
-                InstructionsEditor(bank: bank).tabItem { Text("Инструкции") }
-                MaterialsView(bank: bank).tabItem { Text("Материалы") }
-                QuestionsView(bank: bank, preparer: preparer).tabItem { Text("Вопросы") }
+    /// P13: разделы профиля — вкладки с иконками.
+    enum Tab: String, CaseIterable, Identifiable {
+        case resume = "Резюме", facts = "Факты о себе", job = "Вакансия", instructions = "Инструкции"
+        case materials = "Материалы", questions = "Вопросы"
+        var id: String { rawValue }
+        var symbol: String {
+            switch self {
+            case .resume: "doc.text"
+            case .facts: "person"
+            case .job: "briefcase"
+            case .instructions: "list.bullet.rectangle"
+            case .materials: "paperclip"
+            case .questions: "text.bubble"
             }
-            .id(bank.activeID)   // другой профиль — свежие тексты во всех вкладках
-            footer
         }
-        .padding(16)
-        .frame(minWidth: 640, minHeight: 480)
+    }
+
+    init(bank: BankController, preparer: QuestionPreparer, tab: Tab = .resume) {
+        self.bank = bank
+        self.preparer = preparer
+        _tab = State(initialValue: tab)
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            profileList
+            Rectangle().fill(IC.line).frame(width: 1)
+            VStack(alignment: .leading, spacing: 14) {
+                header
+                tabBar
+                Group {
+                    switch tab {
+                    case .resume: DocumentEditor(bank: bank, doc: .resume)
+                    case .facts: DocumentEditor(bank: bank, doc: .facts)
+                    case .job: DocumentEditor(bank: bank, doc: .job)
+                    case .instructions: InstructionsEditor(bank: bank)
+                    case .materials: MaterialsView(bank: bank)
+                    case .questions: QuestionsView(bank: bank, preparer: preparer)
+                    }
+                }
+                .id("\(bank.activeID ?? "")-\(tab.rawValue)")   // другой профиль — свежие тексты
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .padding(12)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(IC.line))
+                footer
+            }
+            .padding(24)
+        }
+        .frame(minWidth: 760, minHeight: 520)
+        .background(IC.background)
+        .environment(\.colorScheme, .light)
         .alert(naming == .create ? "Новый профиль" : "Переименовать профиль", isPresented: Binding {
             naming != nil
         } set: { if !$0 { naming = nil } }) {
@@ -78,20 +115,101 @@ struct ProfileView: View {
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 8) {
-            Picker("Профиль", selection: Binding(get: { bank.activeID ?? "" }, set: { bank.select($0) })) {
-                ForEach(bank.profiles) { p in Text(p.name).tag(p.id) }
+    /// P13: список профилей с «+ Новый профиль».
+    private var profileList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Профили").font(.system(size: 17, weight: .semibold))
+                Spacer()
+                Button { newName = ""; naming = .create } label: { Image(systemName: "plus").frame(width: 28, height: 28) }
+                    .buttonStyle(ICButtonStyle())
+                    .keyboardShortcut("n")
+                    .help("Новый профиль")
+                    .accessibilityLabel("Новый профиль")
             }
-            .frame(maxWidth: 320)
-            Button("Новый…") { newName = ""; naming = .create }
-                .keyboardShortcut("n")
-            Button("Переименовать…") { newName = bank.profile.name; naming = .rename }
-            Button("Удалить…", role: .destructive) { confirmDelete = true }
+            .padding(.bottom, 6)
+            ForEach(bank.profiles) { p in
+                let active = p.id == bank.activeID
+                Button { bank.select(p.id) } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "person").font(.system(size: 16)).frame(width: 22)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(p.name).font(.system(size: 13, weight: active ? .semibold : .regular)).lineLimit(1)
+                            if active { Text("Активный").font(.system(size: 11)).foregroundStyle(IC.secondary) }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .foregroundStyle(active ? IC.accent : IC.ink)
+                    .padding(10)
+                    .background(active ? IC.accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(active ? .isSelected : [])
+            }
+            Button { newName = ""; naming = .create } label: {
+                Label("Новый профиль", systemImage: "plus.circle").font(.system(size: 13)).padding(10)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(IC.secondary)
             Spacer()
-            Button("Папка") { bank.openProfileFolder() }
-                .help("Открыть папку профиля в Finder")
         }
+        .padding(16)
+        .frame(width: 250)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(bank.profile.name).font(.system(size: 28, weight: .bold)).lineLimit(1)
+                HStack(spacing: 8) {
+                    if bank.profile.resume.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        ICBadge(text: "Нет резюме", color: IC.amber, dot: true)
+                    } else {
+                        ICBadge(text: "Резюме ✓", color: IC.green)
+                    }
+                    ICBadge(text: "\(bank.materials.count) \(RussianPlural.form(bank.materials.count, "материал", "материала", "материалов"))", color: IC.secondary)
+                    ICBadge(text: RussianPlural.questions(bank.cards.count), color: IC.secondary)
+                }
+            }
+            Spacer()
+            Button { newName = bank.profile.name; naming = .rename } label: { Label("Переименовать", systemImage: "pencil") }
+                .buttonStyle(ICButtonStyle())
+            Menu {
+                Button("Открыть папку профиля") { bank.openProfileFolder() }
+                Divider()
+                Button("Удалить профиль…", role: .destructive) { confirmDelete = true }
+            } label: {
+                Image(systemName: "ellipsis").frame(width: 30, height: 30)
+            }
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel("Еще")
+        }
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 2) {
+            ForEach(Tab.allCases) { t in
+                let selected = t == tab
+                Button { tab = t } label: {
+                    VStack(spacing: 8) {
+                        Label(t.rawValue, systemImage: t.symbol)
+                            .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                            .foregroundStyle(selected ? IC.accent : Color(hex: 0x45516C))
+                            .padding(.horizontal, 10)
+                        Rectangle().fill(selected ? IC.accent : .clear).frame(height: 2)
+                    }
+                    .fixedSize()
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+            Spacer()
+        }
+        .overlay(alignment: .bottom) { Rectangle().fill(IC.line).frame(height: 1) }
     }
 
     private var footer: some View {

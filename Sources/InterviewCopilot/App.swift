@@ -93,6 +93,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                     generalInstructions: self.bank.generalInstructions,
                                     language: self.model.settings.language.whisperCode ?? "uk")
     })
+    /// Главное окно (COPILOT-09 этап 6, P12): «Сегодня», «Сессии», «Профили», «ИИ-собеседование», «Настройки».
+    private let workspaceModel = WorkspaceModel()
+    private lazy var workspace = WorkspaceWindowController(
+        workspace: workspaceModel, model: model, bank: bank, store: sessions.store, reviews: reviews,
+        hotkeyFailures: { [weak self] in self?.hotkeys?.failures ?? [:] },
+        stylePreviewContext: { [weak self] in
+            guard let self else { return nil }
+            return StylePreview.Context(settings: self.model.settings, secrets: self.model.secrets,
+                                        profile: self.model.settings.useProfile ? self.bank.profile : nil,
+                                        generalInstructions: self.bank.generalInstructions,
+                                        language: self.model.settings.language.whisperCode ?? "uk")
+        })
     private lazy var permissionsWindow = PermissionsWindowController(listening: listening)
     private lazy var onboarding: OnboardingWindowController = makeOnboarding()
 
@@ -228,7 +240,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         panelModel.onAnswerFiltered = { [weak self] text in self?.turns.answerFiltered(text) }
 
-        panelModel.onOpenSettings = { [weak self] in self?.settingsWindow.show() }
+        panelModel.onOpenSettings = { [weak self] in self?.workspace.show(.settings) }
         panelModel.onOpenPermissions = { [weak self] in self?.permissionsWindow.show() }
         panelModel.onRetry = { [weak self] in
             guard let self else { return }
@@ -321,9 +333,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             permissionsWindow.show()
         }
         startDownloadProgressMirror()
+        setupWorkspace()
         if openInterviewer { handle(MenuAction.aiInterview) }
-        if openSettings { settingsWindow.show() }
-        if openProfile { profileWindow.show() }
+        if openSettings { workspace.show(.settings) }
+        if openProfile { workspace.show(.profiles) }
+        // P12: главное окно — домашний экран; при первом запуске сначала мастер.
+        if model.settings.onboardingCompleted, !openSettings, !openProfile, !openInterviewer { workspace.show(.today) }
     }
 
     private func recordUsage(_ provider: ProviderID, _ modelID: String, _ u: TokenUsage) {
@@ -404,6 +419,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         state.sessionTimer = liveSession.clock?.elapsedText()
         menuBar?.state = state
 
+        workspaceModel.sessionActive = liveSession.isActive
+        workspaceModel.sessionTimer = liveSession.clock?.elapsedText()
+        workspaceModel.recognitionStatus = listening.sttStatus
+        workspaceModel.recognizerReady = listening.recognizerLoaded
         panelModel.sessionActive = liveSession.isActive
         panelModel.sessionTimer = liveSession.clock?.elapsedText()
         panelModel.planNotice = liveSession.planNotice
@@ -523,7 +542,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Разбор (R-13, Q15): сразу после End в фоне; окно открывается на этой сессии — расшифровка видна сразу.
         if c.reviewAfterEnd, c.saveTranscript, let record, record.canBeReviewed, sessions.store.load(record.id) != nil {
             reviews.start(record.id)
-            historyWindow.show(select: record.id)
+            workspace.show(.sessions, select: record.id)
         }
     }
 
@@ -589,6 +608,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.detection = .idle
         Log.app.info("transcript cleared")
         refreshUI()
+    }
+
+    private func setupWorkspace() {
+        workspaceModel.onCreateSession = { [weak self] in self?.showWizard() }
+        workspaceModel.onTestCall = { [weak self] in self?.handle(MenuAction.practice) }
+        workspaceModel.onMock = { [weak self] in self?.handle(MenuAction.aiInterview) }
+        workspaceModel.onShowPanel = { [weak self] in self?.panel.show() }
+        workspaceModel.onEndSession = { [weak self] in self?.liveSession.end() }
+        workspaceModel.onOpenPermissions = { [weak self] in self?.permissionsWindow.show() }
     }
 
     private func setupOverlayActions() {
@@ -727,13 +755,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             c.type = .mock
             startSession(c)
         case .settings:
-            settingsWindow.show()
+            workspace.show(.settings)
         case .quit:
             NSApp.terminate(nil)
         case .togglePause:
             togglePause()
         case .sessionHistory:
-            historyWindow.show()
+            workspace.show(.sessions)
         case .newSession:
             showWizard()
         case .endSession:
@@ -751,7 +779,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .questionBank:
             bank.openQuestions()
         case .editProfile, .profile:
-            profileWindow.show()
+            workspace.show(.profiles)
         default:
             // Остальные действия подключаются на шагах P-06…P-10.
             break

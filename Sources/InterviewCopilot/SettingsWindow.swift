@@ -58,25 +58,82 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .budget: "dollarsign.circle"
         }
     }
+    /// P17: названия разделов по-русски.
+    var title: String {
+        switch self {
+        case .keys: "Ключи моделей"
+        case .models: "Модели и ответы"
+        case .audio: "Звук и распознавание"
+        case .bank: "База вопросов"
+        case .privacy: "Приватность"
+        case .panel: "Оверлей"
+        case .hotkeys: "Горячие клавиши"
+        case .budget: "Бюджет"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .keys: "Для старта достаточно одного бесплатного ключа Groq — console.groq.com/keys."
+        case .models: "Порядок моделей, запасные, стиль ответа по умолчанию и таймауты."
+        case .audio: "Источник звука, язык, распознавание, фильтры речи и ваш голос."
+        case .bank: "Порог совпадения с вашими ответами и модель поиска."
+        case .privacy: "Фильтр личных данных и срок хранения истории на этом Mac."
+        case .panel: "Прозрачность, размер текста и ширина оверлея."
+        case .hotkeys: "⌃⌥ работают всегда; ⌘-клавиши — только во время сессии."
+        case .budget: "Расход платных моделей и лимит на месяц."
+        }
+    }
 }
 
 struct SettingsView: View {
     @Bindable var model: AppModel
     let hotkeyFailures: () -> [HotkeyAction: String]
     var stylePreviewContext: () -> StylePreview.Context? = { nil }
+    @State private var tab: SettingsTab
 
+    init(model: AppModel, hotkeyFailures: @escaping () -> [HotkeyAction: String],
+         stylePreviewContext: @escaping () -> StylePreview.Context? = { nil }, tab: SettingsTab = .keys) {
+        self.model = model
+        self.hotkeyFailures = hotkeyFailures
+        self.stylePreviewContext = stylePreviewContext
+        _tab = State(initialValue: tab)
+    }
+
+    /// P17: слева разделы, справа страница с заголовком; содержимое страниц — прежние формы настроек.
     var body: some View {
-        TabView {
-            KeysSettingsView(model: model).tabItem { Label(SettingsTab.keys.rawValue, systemImage: SettingsTab.keys.symbol) }
-            ModelsSettingsView(model: model, stylePreviewContext: stylePreviewContext).tabItem { Label(SettingsTab.models.rawValue, systemImage: SettingsTab.models.symbol) }
-            AudioSettingsView(model: model).tabItem { Label(SettingsTab.audio.rawValue, systemImage: SettingsTab.audio.symbol) }
-            BankSettingsView(model: model).tabItem { Label(SettingsTab.bank.rawValue, systemImage: SettingsTab.bank.symbol) }
-            PrivacySettingsView(model: model).tabItem { Label(SettingsTab.privacy.rawValue, systemImage: SettingsTab.privacy.symbol) }
-            PanelSettingsView(model: model).tabItem { Label(SettingsTab.panel.rawValue, systemImage: SettingsTab.panel.symbol) }
-            HotkeysSettingsView(model: model, failures: hotkeyFailures).tabItem { Label(SettingsTab.hotkeys.rawValue, systemImage: SettingsTab.hotkeys.symbol) }
-            BudgetSettingsView(model: model).tabItem { Label(SettingsTab.budget.rawValue, systemImage: SettingsTab.budget.symbol) }
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(SettingsTab.allCases) { t in
+                    ICSidebarRow(title: t.title, icon: t.symbol, selected: tab == t) { tab = t }
+                }
+                Spacer()
+            }
+            .padding(14)
+            .frame(width: 262)
+            .background(IC.sidebar.opacity(0.6))
+            Rectangle().fill(IC.line).frame(width: 1)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(tab.title).font(.system(size: 26, weight: .bold)).padding(.horizontal, 28).padding(.top, 24)
+                Text(tab.subtitle).font(.system(size: 13)).foregroundStyle(IC.secondary).padding(.horizontal, 28)
+                page.padding(.horizontal, 12).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
         }
-        .padding(20)
-        .frame(width: 600, height: 460)
+        .frame(minWidth: 760, minHeight: 520)
+        .background(IC.background)
+        .environment(\.colorScheme, .light)
+    }
+
+    @ViewBuilder private var page: some View {
+        switch tab {
+        case .keys: KeysSettingsView(model: model)
+        case .models: ModelsSettingsView(model: model, stylePreviewContext: stylePreviewContext)
+        case .audio: AudioSettingsView(model: model)
+        case .bank: BankSettingsView(model: model)
+        case .privacy: PrivacySettingsView(model: model)
+        case .panel: PanelSettingsView(model: model)
+        case .hotkeys: HotkeysSettingsView(model: model, failures: hotkeyFailures)
+        case .budget: BudgetSettingsView(model: model)
+        }
     }
 }
