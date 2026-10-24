@@ -24,6 +24,11 @@ final class AppModel {
     private(set) var hasKey: [ProviderID: Bool] = [:]
     private(set) var keyStatus: [ProviderID: String] = [:]
     private(set) var checking: Set<ProviderID> = []
+    /// Дополнительные ключи (слоты 2…5) по провайдерам — значения в UI не попадают (COPILOT-09: несколько аккаунтов).
+    private(set) var extraSlots: [ProviderID: [Int]] = [:]
+    /// Статус и проверка дополнительного ключа — по имени `groq#2`.
+    private(set) var slotStatus: [String: String] = [:]
+    private(set) var checkingSlots: Set<String> = []
     /// Список моделей, полученный при последней успешной проверке ключа (для сверки ID на P-07).
     private(set) var availableModels: [ProviderID: [String]] = [:]
 
@@ -44,7 +49,10 @@ final class AppModel {
     func refreshKeys() {
         let secrets = self.secrets
         Task {
-            let found = await Task.detached { Dictionary(uniqueKeysWithValues: ProviderID.allCases.map { ($0, secrets.contains($0)) }) }.value
+            let accounts = await Task.detached { secrets.accounts() }.value
+            let slots = Dictionary(uniqueKeysWithValues: ProviderID.allCases.map { ($0, secrets.slots($0, in: accounts)) })
+            let found = slots.mapValues { !$0.isEmpty }
+            extraSlots = slots.mapValues { $0.filter { $0 > 1 } }
             if found != hasKey {
                 hasKey = found
                 onChange?()
@@ -69,9 +77,64 @@ final class AppModel {
         onChange?()
     }
 
-    /// Провайдер ответил 400/401/403 — показать «ключ недействителен» в настройках (R-09).
-    func markInvalidKey(_ provider: ProviderID, _ error: LLMError) {
-        keyStatus[provider] = "Ключ недействителен: \(error.description)"
+    /// Провайдер ответил 400/401/403 — показать «ключ недействителен» у этого ключа в настройках (R-09).
+    func markInvalidKey(_ provider: ProviderID, slot: Int = 1, _ error: LLMError) {
+        if slot <= 1 {
+            keyStatus[provider] = "Ключ недействителен: \(error.description)"
+        } else {
+            slotStatus[KeySlots.account(provider, slot)] = "Ключ недействителен: \(error.description)"
+        }
+    }
+
+    /// Еще один ключ того же провайдера (другой аккаунт): когда у первого кончается лимит, ответ идет со следующего.
+    func addExtraKey(_ value: String, for provider: ProviderID) {
+        let secrets = self.secrets
+        guard let slot = secrets.freeExtraSlot(provider) else {
+            keyStatus[provider] = "Не больше \(KeySlots.max) ключей на провайдера"
+            return
+        }
+        do {
+            try secrets.set(value, for: provider, slot: slot)
+            slotStatus[KeySlots.account(provider, slot)] = "Сохранён"
+            Log.llm.info("extra key saved provider=\(provider.rawValue, privacy: .public) slot=\(slot)")
+        } catch {
+            keyStatus[provider] = "\(error)"
+        }
+        refreshKeys()
+        onChange?()
+    }
+
+    func deleteKey(_ provider: ProviderID, slot: Int) {
+        guard slot > 1 else { deleteKey(provider); return }
+        do {
+            try secrets.delete(provider, slot: slot)
+            slotStatus[KeySlots.account(provider, slot)] = nil
+        } catch {
+            keyStatus[provider] = "\(error)"
+        }
+        refreshKeys()
+        onChange?()
+    }
+
+    func checkKey(_ provider: ProviderID, slot: Int) {
+        guard slot > 1 else { checkKey(provider); return }
+        let account = KeySlots.account(provider, slot)
+        guard !checkingSlots.contains(account) else { return }
+        checkingSlots.insert(account)
+        slotStatus[account] = "Проверяю…"
+        let secrets = self.secrets
+        Task {
+            let read = await Task.detached { () -> Result<String?, Error> in Result { try secrets.get(provider, slot: slot) } }.value
+            guard case .success(let value) = read, let key = value else {
+                checkingSlots.remove(account)
+                slotStatus[account] = "Нет ключа"
+                return
+            }
+            let result = await verifier.verify(provider, key: key)
+            checkingSlots.remove(account)
+            slotStatus[account] = result.summary
+            onChange?()
+        }
     }
 
     func deleteKey(_ provider: ProviderID) {

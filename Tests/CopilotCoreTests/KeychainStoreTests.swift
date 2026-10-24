@@ -7,7 +7,7 @@ import Testing
 struct KeychainStoreTests {
     private func withStore(_ body: (KeychainStore) throws -> Void) rethrows {
         let store = KeychainStore(service: "com.itmax04.interviewcopilot.tests.\(UUID().uuidString)")
-        defer { for p in ProviderID.allCases { try? store.delete(p) } }
+        defer { for p in ProviderID.allCases { for slot in KeySlots.range { try? store.delete(p, slot: slot) } } }
         try body(store)
     }
 
@@ -47,6 +47,20 @@ struct KeychainStoreTests {
     @Test func deleteMissingIsNoop() throws {
         try withStore { store in
             try store.delete(.deepseek)
+        }
+    }
+
+    @Test func extraKeysLiveInTheirOwnSlots() throws {
+        try withStore { store in
+            #expect(store.accounts().isEmpty)
+            try store.set(fakeA, for: .groq)
+            try store.set(fakeB, for: .groq, slot: 2)
+            #expect(store.accounts() == ["groq", "groq#2"])
+            #expect(store.slots(.groq) == [1, 2])
+            #expect(try store.get(.groq) == fakeA && store.get(.groq, slot: 2) == fakeB)
+            #expect(store.keys(.groq).map(\.slot) == [1, 2])
+            try store.delete(.groq, slot: 2)
+            #expect(store.slots(.groq) == [1])
         }
     }
 

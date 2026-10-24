@@ -209,7 +209,9 @@ struct TodayView: View {
                     }
                     readiness("Распознавание", "waveform", recognition, workspace.recognizerReady) {}
                     let first = model.settings.chain.first { model.hasKey[$0] == true }
-                    readiness("Модели", "cpu", first?.displayName ?? "Добавьте ключ в Настройках", first != nil) {
+                    let keyCount = first.map { 1 + (model.extraSlots[$0]?.count ?? 0) } ?? 0
+                    let modelsDetail = first.map { keyCount > 1 ? "\($0.displayName) · \(keyCount) \(RussianPlural.form(keyCount, "ключ", "ключа", "ключей"))" : $0.displayName }
+                    readiness("Модели", "cpu", modelsDetail ?? "Добавьте ключ в Настройках", first != nil) {
                         if first == nil { workspace.section = .settings }
                     }
                     readiness("Профиль", "person", profileDetail, !bank.profile.resume.isEmpty) { workspace.section = .profiles }

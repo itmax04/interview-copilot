@@ -13,6 +13,8 @@ public enum ChainEvent: Sendable, Equatable {
     case restart(ProviderID)
     /// Провайдер не ответил; `invalidKey` — показать «ключ недействителен» в настройках (R-09).
     case providerFailed(ProviderID, LLMError)
+    /// Тот же отказ с номером ключа (несколько ключей одного провайдера): «ключ недействителен» — у этого ключа, а не у всех.
+    case keyFailed(ProviderID, slot: Int, LLMError)
     case usage(ProviderID, model: String, TokenUsage)
     case finished(ProviderID, model: String)
     /// Ни один провайдер не ответил (S-04: «Модели недоступны: <причина>»).
@@ -31,22 +33,34 @@ public final class ProviderHealth: @unchecked Sendable {
     public init() {}
 
     static func key(_ p: ProviderID, _ model: String) -> String { "\(p.rawValue)/\(model)" }
+    static func key(_ p: ProviderID, _ model: String, slot: Int) -> String { "\(p.rawValue)/\(model)#\(slot)" }
 
-    public func isCoolingDown(_ p: ProviderID, _ model: String, now: Date = Date()) -> Bool {
-        lock.withLock { (until[Self.key(p, model)] ?? .distantPast) > now }
-    }
-
-    public func reportFailure(_ p: ProviderID, _ model: String, _ error: LLMError, now: Date = Date()) {
-        switch error {
-        case .firstTokenTimeout, .http(429, _), .network: break
-        case .http(let s, _) where s >= 500: break
-        default: return
+    /// Модель «остывает» целиком (таймаут, 5xx, сеть) или только этот ключ (429 — лимит аккаунта): другой ключ того же
+    /// провайдера в это время пробуется первым.
+    public func isCoolingDown(_ p: ProviderID, _ model: String, slot: Int = 1, now: Date = Date()) -> Bool {
+        lock.withLock {
+            (until[Self.key(p, model)] ?? .distantPast) > now || (until[Self.key(p, model, slot: slot)] ?? .distantPast) > now
         }
-        lock.withLock { until[Self.key(p, model)] = now.addingTimeInterval(cooldown) }
     }
 
-    public func reportSuccess(_ p: ProviderID, _ model: String) {
-        lock.withLock { until[Self.key(p, model)] = nil }
+    public func reportFailure(_ p: ProviderID, _ model: String, slot: Int = 1, _ error: LLMError, now: Date = Date()) {
+        switch error {
+        case .http(429, _):
+            lock.withLock { until[Self.key(p, model, slot: slot)] = now.addingTimeInterval(cooldown) }
+        case .firstTokenTimeout, .network:
+            lock.withLock { until[Self.key(p, model)] = now.addingTimeInterval(cooldown) }
+        case .http(let s, _) where s >= 500:
+            lock.withLock { until[Self.key(p, model)] = now.addingTimeInterval(cooldown) }
+        default:
+            return
+        }
+    }
+
+    public func reportSuccess(_ p: ProviderID, _ model: String, slot: Int = 1) {
+        lock.withLock {
+            until[Self.key(p, model)] = nil
+            until[Self.key(p, model, slot: slot)] = nil
+        }
     }
 
     public func reset() { lock.withLock { until.removeAll() } }
@@ -60,12 +74,18 @@ public struct ProviderChain: Sendable {
         public var provider: LLMProvider
         public var model: String
         public var key: String?
+        /// Номер ключа у провайдера (1 — основной): лимит 429 и «ключ недействителен» — у ключа, а не у провайдера.
+        public var keySlot: Int
 
-        public init(provider: LLMProvider, model: String, key: String?) {
+        public init(provider: LLMProvider, model: String, key: String?, keySlot: Int = 1) {
             self.provider = provider
             self.model = model
             self.key = key
+            self.keySlot = keySlot
         }
+
+        /// Ключ шага для «недействителен — больше не пробуем»: тот же ключ и с запасной моделью.
+        var keyID: String { "\(provider.id.rawValue)#\(keySlot)" }
     }
 
     public var steps: [Step]
@@ -86,8 +106,8 @@ public struct ProviderChain: Sendable {
     func orderedUsableSteps() -> [Step] {
         var usable = steps.filter { $0.key?.isEmpty == false }
         if let health {
-            let fresh = usable.filter { !health.isCoolingDown($0.provider.id, $0.model) }
-            let cooling = usable.filter { health.isCoolingDown($0.provider.id, $0.model) }
+            let fresh = usable.filter { !health.isCoolingDown($0.provider.id, $0.model, slot: $0.keySlot) }
+            let cooling = usable.filter { health.isCoolingDown($0.provider.id, $0.model, slot: $0.keySlot) }
             usable = fresh + cooling
         }
         return usable
@@ -107,29 +127,30 @@ public struct ProviderChain: Sendable {
                     return
                 }
                 var attemptIndex = 0
-                var invalidKey = Set<ProviderID>()
+                var invalidKey = Set<String>()
                 for step in usable {
                     if Task.isCancelled { break }
                     let pid = step.provider.id
-                    // 400/401/403 — у этого провайдера больше не пробуем, в том числе запасную модель (R-09).
-                    if invalidKey.contains(pid) { continue }
+                    // 400/401/403 — с этим ключом больше не пробуем, в том числе запасную модель (R-09); другой ключ — да.
+                    if invalidKey.contains(step.keyID) { continue }
                     continuation.yield(.attempt(pid, model: step.model))
                     if attemptIndex > 0 { continuation.yield(.restart(pid)) }
                     attemptIndex += 1
                     do {
                         try await Self.runStep(step, request: request, timeout: firstTokenTimeout, start: start, continuation: continuation)
-                        health?.reportSuccess(pid, step.model)
+                        health?.reportSuccess(pid, step.model, slot: step.keySlot)
                         continuation.finish()
                         return
                     } catch let error as LLMError {
                         if error == .cancelled || Task.isCancelled { break }
                         var detail = ""
                         if case .http(_, let m) = error { detail = m }
-                        Log.llm.error("provider \(pid.rawValue, privacy: .public) model=\(step.model, privacy: .public) failed: \(error.description, privacy: .public) \(String(detail.prefix(200)), privacy: .public)")
+                        Log.llm.error("provider \(pid.rawValue, privacy: .public) model=\(step.model, privacy: .public) key=\(step.keySlot) failed: \(error.description, privacy: .public) \(String(detail.prefix(200)), privacy: .public)")
                         continuation.yield(.providerFailed(pid, error))
-                        health?.reportFailure(pid, step.model, error)
-                        reasons.append("\(pid.displayName) \(step.model): \(error.description)")
-                        if error.isInvalidKey { invalidKey.insert(pid) }
+                        continuation.yield(.keyFailed(pid, slot: step.keySlot, error))
+                        health?.reportFailure(pid, step.model, slot: step.keySlot, error)
+                        reasons.append("\(pid.displayName)\(step.keySlot > 1 ? " (ключ \(step.keySlot))" : "") \(step.model): \(error.description)")
+                        if error.isInvalidKey { invalidKey.insert(step.keyID) }
                         guard error.triggersFallback else { break }
                     } catch {
                         if Task.isCancelled { break }
@@ -245,16 +266,24 @@ public enum ChainFactory {
                              providers: [ProviderID: LLMProvider]) -> ProviderChain {
         var steps: [ProviderChain.Step] = []
         CustomEndpoint.shared.update(from: settings)
+        // Какие ключи есть — одним запросом к Связке ключей; значения читаются только у них.
+        let accounts = secrets.accounts()
         for p in settings.chain {
             guard let provider = providers[p] else { continue }
             if p == .custom, !customConfigured(settings) { continue }
             if settings.paidProvidersSuspended && isPaid(p, settings: settings) { continue }
-            let key = try? secrets.get(p)
-            steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: key))
+            // Несколько ключей одного провайдера — подряд: кончился лимит (429) у первого — сразу следующий ключ,
+            // потом следующий провайдер.
+            // Без ключа — шаг с пустым ключом, как раньше: цепочка пропустит его при запуске.
+            let found = secrets.keys(p, in: accounts)
+            let keys: [(slot: Int, key: String?)] = found.isEmpty ? [(1, nil)] : found.map { ($0.slot, $0.key) }
+            for k in keys {
+                steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: k.key, keySlot: k.slot))
+            }
             // Запасная модель Gemini сразу после основной: при перегрузке основной ответ всё равно бесплатный.
             let backup = settings.modelIDs.geminiBackup.trimmingCharacters(in: .whitespaces)
             if p == .gemini, !backup.isEmpty, backup != settings.modelIDs.effective(.gemini) {
-                steps.append(ProviderChain.Step(provider: provider, model: backup, key: key))
+                for k in keys { steps.append(ProviderChain.Step(provider: provider, model: backup, key: k.key, keySlot: k.slot)) }
             }
         }
         return ProviderChain(steps: steps, firstTokenTimeout: settings.firstTokenTimeout, health: .shared,
@@ -268,19 +297,25 @@ public enum ChainFactory {
         if fallbackToGemini && settings.strongProvider != .gemini { order.append(.gemini) }
         var steps: [ProviderChain.Step] = []
         CustomEndpoint.shared.update(from: settings)
+        let accounts = secrets.accounts()
         for p in order {
-            guard let provider = providers[p], let key = try? secrets.get(p), !key.isEmpty else { continue }
+            guard let provider = providers[p] else { continue }
+            let keys = secrets.keys(p, in: accounts)
+            if keys.isEmpty { continue }
             if p == .custom, !customConfigured(settings) { continue }
             if settings.paidProvidersSuspended && isPaid(p, settings: settings) { continue }
-            steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: key))
+            for k in keys {
+                steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: k.key, keySlot: k.slot))
+            }
             let backup = settings.modelIDs.geminiBackup.trimmingCharacters(in: .whitespaces)
             if p == .gemini, fallbackToGemini, !backup.isEmpty, backup != settings.modelIDs.effective(.gemini) {
-                steps.append(ProviderChain.Step(provider: provider, model: backup, key: key))
+                for k in keys { steps.append(ProviderChain.Step(provider: provider, model: backup, key: k.key, keySlot: k.slot)) }
             }
         }
         guard let first = steps.first else { return nil }
-        // Скриншот без ключа Anthropic уходит в Gemini (S-06); ручной вызов — только сильная модель (S-05).
-        return ProviderChain(steps: fallbackToGemini ? steps : [first], firstTokenTimeout: max(settings.firstTokenTimeout, 8))
+        // Скриншот без ключа Anthropic уходит в Gemini (S-06); ручной вызов — только сильная модель (S-05), но все ее ключи.
+        let manual = steps.filter { $0.provider.id == first.provider.id }
+        return ProviderChain(steps: fallbackToGemini ? steps : manual, firstTokenTimeout: max(settings.firstTokenTimeout, 8))
     }
 }
 
@@ -318,10 +353,10 @@ extension ProviderChain {
                 var winner: Int?
                 var hadWinner = false
                 var reasons: [String] = []
-                var invalidKey = Set<ProviderID>()
+                var invalidKey = Set<String>()
 
                 func launch() {
-                    while next < usable.count, invalidKey.contains(usable[next].provider.id) { next += 1 }
+                    while next < usable.count, invalidKey.contains(usable[next].keyID) { next += 1 }
                     guard next < usable.count else { return }
                     let i = next
                     next += 1
@@ -364,11 +399,12 @@ extension ProviderChain {
                     let pid = step.provider.id
                     var detail = ""
                     if case .http(_, let m) = error { detail = m }
-                    Log.llm.error("provider \(pid.rawValue, privacy: .public) model=\(step.model, privacy: .public) failed: \(error.description, privacy: .public) \(String(detail.prefix(200)), privacy: .public)")
+                    Log.llm.error("provider \(pid.rawValue, privacy: .public) model=\(step.model, privacy: .public) key=\(step.keySlot) failed: \(error.description, privacy: .public) \(String(detail.prefix(200)), privacy: .public)")
                     continuation.yield(.providerFailed(pid, error))
-                    health?.reportFailure(pid, step.model, error)
-                    reasons.append("\(pid.displayName) \(step.model): \(error.description)")
-                    if error.isInvalidKey { invalidKey.insert(pid) }
+                    continuation.yield(.keyFailed(pid, slot: step.keySlot, error))
+                    health?.reportFailure(pid, step.model, slot: step.keySlot, error)
+                    reasons.append("\(pid.displayName)\(step.keySlot > 1 ? " (ключ \(step.keySlot))" : "") \(step.model): \(error.description)")
+                    if error.isInvalidKey { invalidKey.insert(step.keyID) }
                 }
 
                 launch()
@@ -398,7 +434,7 @@ extension ProviderChain {
                             let pid = usable[i].provider.id
                             let model = models[i] ?? usable[i].model
                             if let u = usages[i] { continuation.yield(.usage(pid, model: model, u)) }
-                            health?.reportSuccess(pid, usable[i].model)
+                            health?.reportSuccess(pid, usable[i].model, slot: usable[i].keySlot)
                             continuation.yield(.finished(pid, model: model))
                             for (_, t) in tasks { t.cancel() }
                             continuation.finish()

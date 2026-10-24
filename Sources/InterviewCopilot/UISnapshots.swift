@@ -21,6 +21,7 @@ enum UISnapshots {
         let secrets = InMemorySecretStore()
         try? secrets.set("synthetic-key-0000", for: .groq)
         try? secrets.set("synthetic-key-0000", for: .gemini)
+        try? secrets.set("synthetic-key-0001", for: .groq, slot: 2)   // второй ключ Groq — строка «Ключ 2»
         let model = AppModel(settingsStore: SettingsStore(defaults: UserDefaults(suiteName: suite)!), secrets: secrets)
         model.settings.onboardingCompleted = true
         let listening = ListeningController(model: model)

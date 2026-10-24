@@ -30,6 +30,7 @@ private struct KeyRow: View {
     @Bindable var model: AppModel
     let provider: ProviderID
     @State private var input = ""
+    @State private var extraInput = ""
 
     private var title: String {
         switch provider {
@@ -68,7 +69,50 @@ private struct KeyRow: View {
                 Button("Удалить", role: .destructive) { model.deleteKey(provider) }
                     .disabled(model.hasKey[provider] != true)
             }
+            extraKeys
         }
+    }
+
+    /// Еще ключи того же провайдера (другие аккаунты): кончился лимит у одного (429) — ответ сразу идет со следующего,
+    /// и этот ключ несколько минут не пробуется первым.
+    @ViewBuilder private var extraKeys: some View {
+        let slots = model.extraSlots[provider] ?? []
+        ForEach(slots, id: \.self) { slot in
+            let account = KeySlots.account(provider, slot)
+            HStack {
+                Image(systemName: "key.fill").foregroundStyle(.secondary).accessibilityHidden(true)
+                Text("Ключ \(slot)")
+                Text(model.slotStatus[account] ?? "Сохранён").foregroundStyle(.secondary).lineLimit(2)
+                Spacer()
+                if model.checkingSlots.contains(account) { ProgressView().controlSize(.small) }
+                Button("Проверить") { model.checkKey(provider, slot: slot) }
+                    .disabled(model.checkingSlots.contains(account))
+                Button("Удалить", role: .destructive) { model.deleteKey(provider, slot: slot) }
+            }
+            .accessibilityElement(children: .combine)
+        }
+        if model.hasKey[provider] == true, slots.count < KeySlots.max - 1 {
+            HStack {
+                SecureField("Еще ключ — другого аккаунта", text: $extraInput)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(addExtra)
+                    .accessibilityLabel("Дополнительный ключ \(title)")
+                Button("Добавить", action: addExtra)
+                    .disabled(extraInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            if slots.isEmpty {
+                Text("Можно добавить до \(KeySlots.max - 1) ключей: когда у одного кончается лимит, ответ сразу идет со следующего, "
+                     + "и только потом — со следующего провайдера.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func addExtra() {
+        let value = extraInput
+        extraInput = ""
+        guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        model.addExtraKey(value, for: provider)
     }
 
     private func save() {

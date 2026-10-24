@@ -246,8 +246,10 @@ final class AnswerController {
     private func account(_ event: ChainEvent) {
         switch event {
         case .providerFailed(let p, let error):
-            if error.isInvalidKey { model.markInvalidKey(p, error) }
             onProviderError?(p, error)
+        case .keyFailed(let p, let slot, let error):
+            // «Ключ недействителен» — у этого ключа: остальные ключи провайдера продолжают работать.
+            if error.isInvalidKey { model.markInvalidKey(p, slot: slot, error) }
         case .usage(let p, let m, let u):
             onUsage?(p, m, u)
         default:
@@ -293,7 +295,7 @@ final class AnswerController {
             case .restart:
                 text = ""
                 self.panel.history.update(entry: slot.entry, version: slot.version) { $0.text = "" }
-            case .providerFailed:
+            case .providerFailed, .keyFailed:
                 break // учтено в `account`
             case .usage(_, _, let u):
                 usage = u // учтено в `account`
