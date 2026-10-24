@@ -1,47 +1,30 @@
 import Foundation
 import Yams
 
-/// Профиль владельца — R-21: `…/InterviewCopilot/profile/` (profile.yaml, resume.md, job.md, stories.md, questions.yaml).
-/// При первом запуске копируется из `profile.example/`. В Git не попадает (.gitignore, AC-06).
+/// Профиль владельца — R-21, COPILOT-08 R-01: папка профиля (profile.yaml, resume.md, job.md, stories.md, instructions.md,
+/// questions.yaml). Профилей несколько (`ProfileLibrary`). В Git не попадает (.gitignore, AC-06).
 public struct Profile: Equatable, Sendable {
     public var name: String
     public var defaultLanguage: String?
     public var resume: String
     public var job: String
+    /// «Факты о себе»: истории STAR, достижения, причины ухода, ожидания (COPILOT-08 Q4).
     public var stories: String
+    /// Инструкции владельца для этого профиля (COPILOT-08 R-04) — указания модели, а не данные.
+    public var instructions: String
 
-    public init(name: String, defaultLanguage: String? = nil, resume: String = "", job: String = "", stories: String = "") {
+    public init(name: String, defaultLanguage: String? = nil, resume: String = "", job: String = "", stories: String = "",
+                instructions: String = "") {
         self.name = name
         self.defaultLanguage = defaultLanguage
         self.resume = resume
         self.job = job
         self.stories = stories
+        self.instructions = instructions
     }
 }
 
 public enum ProfileStore {
-    public static let files = ["profile.yaml", "resume.md", "job.md", "stories.md", "questions.yaml"]
-
-    /// Копирует недостающие файлы из примера (существующие файлы владельца не трогает).
-    @discardableResult
-    public static func ensureProfile(at dir: URL, example: URL?) throws -> [String] {
-        let fm = FileManager.default
-        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        guard let example else { return [] }
-        var copied: [String] = []
-        for file in files {
-            let target = dir.appendingPathComponent(file)
-            let source = example.appendingPathComponent(file)
-            if !fm.fileExists(atPath: target.path), fm.fileExists(atPath: source.path) {
-                // Чтение и запись, а не copyItem: copyItem клонирует файл (clonefile), и если .app лежит в iCloud Drive,
-                // клонирование зависает в File Provider (замер P-06: главный поток висел в clonefileat).
-                try Data(contentsOf: source).write(to: target, options: .atomic)
-                copied.append(file)
-            }
-        }
-        return copied
-    }
-
     public static func load(from dir: URL) -> Profile {
         func read(_ f: String) -> String {
             (try? String(contentsOf: dir.appendingPathComponent(f), encoding: .utf8)) ?? ""
@@ -52,7 +35,8 @@ public enum ProfileStore {
             if let n = yaml["name"] as? String, !n.isEmpty { name = n }
             lang = yaml["default_language"] as? String
         }
-        return Profile(name: name, defaultLanguage: lang, resume: read("resume.md"), job: read("job.md"), stories: read("stories.md"))
+        return Profile(name: name, defaultLanguage: lang, resume: read("resume.md"), job: read("job.md"), stories: read("stories.md"),
+                       instructions: read("instructions.md"))
     }
 }
 

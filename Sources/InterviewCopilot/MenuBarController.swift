@@ -14,6 +14,8 @@ final class MenuBarController: NSObject, NSMenuDelegate {
     var onSelectLanguage: (RecognitionLanguage) -> Void = { _ in }
     /// Profile → название профиля (true) или «Без профиля» (false), R-40.
     var onSelectUseProfile: (Bool) -> Void = { _ in }
+    /// Profile → выбор профиля (COPILOT-08 R-01).
+    var onSelectProfile: (String) -> Void = { _ in }
     var onSelectStrongModel: (ProviderID) -> Void = { _ in }
     /// Провайдеры с сохранённым ключом (подменю Models).
     var providersWithKeys: () -> Set<ProviderID> = { [] }
@@ -123,12 +125,16 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 sub.addItem(actionItem(lang.menuTitle, checked: lang == state.language) { [weak self] in self?.onSelectLanguage(lang) })
             }
         case .profile:
-            sub.addItem(actionItem(state.profileName, checked: state.useProfile) { [weak self] in self?.onSelectUseProfile(true) })
+            for p in state.profiles {
+                sub.addItem(actionItem(p.name, checked: state.useProfile && p.id == state.activeProfileID) { [weak self] in
+                    self?.onSelectProfile(p.id)
+                })
+            }
             sub.addItem(actionItem("\(MenuLayout.noProfileTitle) — модель отвечает сама", checked: !state.useProfile) { [weak self] in
                 self?.onSelectUseProfile(false)
             })
             sub.addItem(.separator())
-            let open = NSMenuItem(title: "Open profile folder", action: #selector(itemSelected(_:)), keyEquivalent: "")
+            let open = NSMenuItem(title: "Профили…", action: #selector(itemSelected(_:)), keyEquivalent: "")
             open.target = self
             open.representedObject = MenuAction.editProfile.rawValue
             sub.addItem(open)

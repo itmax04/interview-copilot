@@ -48,7 +48,8 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | `…/STT` | распознавание | `StreamingTranscriber` (сегментация, итоги, уточнение), `ParakeetEngine`, `WhisperEngine`, `HybridRecognizer` |
 | `…/Filter` | что не распознавать и не показывать | `SileroSpeechGate`, `LanguageGate`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
 | `…/Turns` | конец вопроса | `TurnDetector` (чистая логика, вся покрыта тестами), `TurnEval` |
-| `…/Bank` | профиль и база ответов | `ProfileStore`, `QuestionBank` (YAML), `BankMatcher`, `TextEmbedder` |
+| `…/Profiles` | профили и загрузка файлов (COPILOT-08) | `ProfileLibrary` (создать, переключить, удалить, перенос старого `profile/`), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md) |
+| `…/Bank` | профиль и база ответов | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML), `BankMatcher`, `TextEmbedder` |
 | `…/Answer` | выбор: карточка / нет в базе / генерация | `AnswerRouter` |
 | `…/LLM` | провайдеры и промпт | `PromptBuilder` (все правила для модели), `ProviderChain` + `ChainFactory`, `Providers` (Gemini, DeepSeek, Anthropic, OpenAI-совместимые: Groq, Cerebras, свой API), `SSEClient`, `KeyVerifier` |
 | `…/Memory` | память интервью | `InterviewMemory`, `SessionExchange`, `MemoryContext`, `ReferenceDetector`, `PromptScenarios` |
@@ -66,13 +67,18 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 
 ## 4. Данные на диске
 `~/Library/Application Support/InterviewCopilot/` (подменяется `INTERVIEWCOPILOT_HOME`):
-- `profile/` — `profile.yaml`, `resume.md`, `job.md`, `stories.md`, `questions.yaml` (пример — `profile.example/`);
+- `profiles/<id>/` — `profile.yaml` (имя), `resume.md`, `stories.md` (факты о себе), `job.md`, `instructions.md`
+  (инструкции профиля), `questions.yaml`, `sources/` (загруженные исходники); права 700/600. Активный — `AppSettings.activeProfileID`;
+- `instructions.md` — общие инструкции владельца (для всех профилей и «Без профиля»). Старая папка `profile/` переносится в
+  `profiles/` при запуске, неизменённая копия примера удаляется; `profile.example/` — только для тестов и eval;
 - `models/` — Whisper, bge-m3, Parakeet, Silero, CAM++, LocalVQE (списки и SHA256: `models.sha256`, `parakeet-models.json`, `filter-models.json`);
 - `sessions/*.json` — история (реплики, ходы, обмены с ответами владельца), права 600, удаляется по сроку;
 - `voice/owner.json` — отпечаток голоса (192 числа), права 600; `usage.json` — расход.
 Настройки — UserDefaults `com.itmax04.interviewcopilot`, ключ `settings.v1`. Ключи API — только Связка ключей.
 
 ## 5. Как делать типичные изменения
+- **Инструкции владельца** — блок `<owner_instructions>` в конце `PromptBuilder.system`: важнее правил стиля и формата,
+  но не правил надёжности; профиль, материалы, реплики — по-прежнему данные.
 - **Правило для модели** — `PromptBuilder.system` / `user`; закрепить тестом в `Tests/CopilotCoreTests/` и, если поведение
   модели, — сценарием в `PromptScenarios` + живой прогон `--smoke-memory`.
 - **Провайдер LLM** — `ProviderID` + `ProviderEndpoints` + реализация `LLMProvider` (SSE) + `ChainFactory.providers` +
@@ -88,7 +94,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 ## 6. Проверки
 | Что | Команда |
 |---|---|
-| Быстро | `swift build && swift test` (245 тестов) |
+| Быстро | `swift build && swift test` (255 тестов) |
 | Полностью | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh` |
 | Звуковые eval | `scripts/run-evals.sh filter voice` (нужны модели Parakeet, Silero, CAM++) |
 | CLI | `swift run -c release copilot-eval <stt|stt-parakeet|stt-hybrid|stt-stream|turn|bank|filter-text|filter|voice|voice-enroll|enhance|memory|exit-check>` |
@@ -120,6 +126,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | COPILOT-05 | фильтры: Silero, язык с терминами, отпечаток голоса, LocalVQE, речь владельца на созвоне | `feat/copilot-05-speech-filter` |
 | COPILOT-06 | память интервью, «Новое интервью», подсказка вместо незаписанного ответа, ⌃⌥A | `feat/copilot-06-session-memory` |
 | COPILOT-07 | аудит и доводка: ловушки «вы упоминали», привязка к ходу, меню «Сейчас отвечаю я», история, `--smoke-memory` | `feat/copilot-07-hardening` |
+| COPILOT-08 | профили: окно «Профиль», PDF/Word/RTF/текст, инструкции владельца, материалы, вопросы с ответами (по этапам) | `feat/copilot-08-profiles` |
 
 Ветки идут цепочкой (каждая от предыдущей); `main` пока содержит только начальный коммит — слияние решает владелец.
 

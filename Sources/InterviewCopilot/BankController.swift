@@ -4,15 +4,23 @@ import CopilotEmbeddings
 import Foundation
 import Observation
 
-/// Профиль и база вопросов в приложении: копирование примера при первом запуске (R-21), загрузка, наблюдение
-/// за `questions.yaml` с перечитыванием и пересчётом эмбеддингов в фоне (S-10), поиск по ходу (R-07).
+/// Профили и база вопросов в приложении (COPILOT-08 R-01): перенос старой папки `profile/`, активный профиль, загрузка,
+/// наблюдение за `questions.yaml` с перечитыванием и пересчётом эмбеддингов в фоне (S-10), поиск по ходу (R-07).
 @MainActor
 @Observable
 final class BankController {
-    private(set) var profile = Profile(name: "Profile")
+    private(set) var profile = Profile(name: ProfileLibrary.defaultName)
     private(set) var cards: [BankCard] = []
     private(set) var error: String?
     private(set) var status = "База не загружена"
+
+    let library = ProfileLibrary()
+    private(set) var profiles: [ProfileInfo] = []
+    private(set) var activeID: String?
+    /// Общие инструкции владельца — для всех профилей и «Без профиля» (R-04).
+    private(set) var generalInstructions = ""
+    /// Активный профиль сменился (сохранить в настройки).
+    var onActiveProfileChange: ((String) -> Void)?
 
     private var index: BankIndex?
     private var builder: BankIndexBuilder?
@@ -20,9 +28,11 @@ final class BankController {
     private var embedderModel: String?
     var onChange: (() -> Void)?
 
-    var questionsURL: URL { AppPaths.profile.appendingPathComponent("questions.yaml") }
+    var questionsURL: URL? { activeID.map { library.questionsURL($0) } }
+    var activeDirectory: URL? { activeID.map { library.directory($0) } }
 
     /// Пример профиля внутри .app (scripts/build-app.sh) или рядом с исходниками при запуске из SwiftPM.
+    /// С COPILOT-08 не копируется владельцу: по нему узнаётся неизменённый старый профиль, который удаляется (Q12).
     static var exampleProfileURL: URL? {
         if let url = Bundle.main.url(forResource: "profile.example", withExtension: nil) { return url }
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -30,20 +40,107 @@ final class BankController {
         return FileManager.default.fileExists(atPath: repo.path) ? repo : nil
     }
 
-    func start(embeddingModel: String) {
+    func start(embeddingModel: String, activeProfileID: String?) {
         do {
-            let copied = try ProfileStore.ensureProfile(at: AppPaths.profile, example: Self.exampleProfileURL)
-            if !copied.isEmpty { Log.app.info("profile created from example: \(copied.count) files") }
+            switch try library.migrateLegacy(AppPaths.profile, example: Self.exampleProfileURL) {
+            case .none: break
+            case .removedExample: Log.app.info("legacy example profile removed")
+            case .moved: Log.app.info("legacy profile moved to profiles/")
+            }
+            if library.list().isEmpty { try library.create(name: ProfileLibrary.defaultName) }
         } catch {
             self.error = "Профиль: \(error.localizedDescription)"
         }
-        profile = ProfileStore.load(from: AppPaths.profile)
+        generalInstructions = ProfileLibrary.readGeneralInstructions()
+        profiles = library.list()
+        activeID = profiles.first { $0.id == activeProfileID }?.id ?? profiles.first?.id
         loadEmbedder(embeddingModel)
         reload()
-        watcher = FileWatcher(url: questionsURL) { [weak self] in
+        armWatcher()
+    }
+
+    private func armWatcher() {
+        watcher?.stop()
+        guard let url = questionsURL else { watcher = nil; return }
+        watcher = FileWatcher(url: url) { [weak self] in
             Task { @MainActor in self?.reload() }
         }
         watcher?.start()
+    }
+
+    // MARK: Профили (COPILOT-08 R-01, R-03)
+
+    func select(_ id: String) {
+        guard id != activeID, profiles.contains(where: { $0.id == id }) else { return }
+        activeID = id
+        index = nil   // карточки прежнего профиля не должны находиться, пока строится новый индекс
+        reload()
+        armWatcher()
+        onActiveProfileChange?(id)
+    }
+
+    @discardableResult
+    func createProfile(name: String) -> ProfileInfo? {
+        do {
+            let info = try library.create(name: name)
+            profiles = library.list()
+            select(info.id)
+            return info
+        } catch {
+            self.error = "Профиль: \(error.localizedDescription)"
+            onChange?()
+            return nil
+        }
+    }
+
+    func renameActive(to name: String) {
+        guard let id = activeID else { return }
+        do { try library.rename(id, to: name) } catch { self.error = "Профиль: \(error.localizedDescription)" }
+        profiles = library.list()
+        reload()
+    }
+
+    /// Удаление активного профиля; последний профиль не удаляется — вместо него создаётся пустой.
+    func deleteActive() {
+        guard let id = activeID else { return }
+        do {
+            try library.delete(id)
+            if library.list().isEmpty { try library.create(name: ProfileLibrary.defaultName) }
+        } catch {
+            self.error = "Профиль: \(error.localizedDescription)"
+        }
+        profiles = library.list()
+        activeID = nil
+        if let first = profiles.first { select(first.id) } else { onChange?() }
+    }
+
+    func text(_ doc: ProfileDocument) -> String {
+        guard let id = activeID else { return "" }
+        return library.read(doc, of: id)
+    }
+
+    func save(_ text: String, _ doc: ProfileDocument) {
+        guard let id = activeID else { return }
+        do { try library.write(text, doc, of: id) } catch { self.error = "Профиль: \(error.localizedDescription)" }
+        profile = library.load(id)
+        if doc != .instructions { onChange?() }
+    }
+
+    /// Файл → текст раздела (R-02). Ошибку (скан, формат) — текстом для окна профиля.
+    func importFile(_ url: URL, as doc: ProfileDocument) -> Result<String, Error> {
+        guard let id = activeID else { return .failure(DocumentTextError.unreadable(url.lastPathComponent)) }
+        let result = Result { try library.importFile(url, as: doc, into: id) }
+        if case .success = result {
+            profile = library.load(id)
+            Log.app.info("profile document imported: \(doc.rawValue, privacy: .public) ext=\(url.pathExtension.lowercased(), privacy: .public)")
+            onChange?()
+        }
+        return result
+    }
+
+    func saveGeneralInstructions(_ text: String) {
+        do { try ProfileLibrary.writeGeneralInstructions(text) } catch { self.error = "Инструкции: \(error.localizedDescription)" }
+        generalInstructions = text
     }
 
     /// Освобождение моделей до выхода (ggml-metal падает, если ресурсы живы во время статических деструкторов).
@@ -79,10 +176,15 @@ final class BankController {
 
     /// Перечитать базу. При ошибке остаётся прежняя рабочая версия (S-10).
     func reload() {
-        profile = ProfileStore.load(from: AppPaths.profile)
+        guard let id = activeID, let questionsURL else {
+            cards = []
+            onChange?()
+            return
+        }
+        profile = library.load(id)
         let parsed: [BankCard]
         do {
-            parsed = try QuestionBankParser.load(questionsURL)
+            parsed = FileManager.default.fileExists(atPath: questionsURL.path) ? try QuestionBankParser.load(questionsURL) : []
             error = nil
         } catch let e as QuestionBankError {
             error = e.description
@@ -98,11 +200,12 @@ final class BankController {
         onChange?()
         guard let builder else { return }
         status = "Пересчитываю эмбеддинги…"
-        Task.detached(priority: .utility) { [builder, parsed] in
+        Task.detached(priority: .utility) { [builder, parsed, id] in
             let started = Date()
             let result = Result { try builder.build(parsed) }
             await MainActor.run { [weak self] in
-                guard let self else { return }
+                // Профиль успели сменить — индекс прежнего не нужен.
+                guard let self, self.activeID == id else { return }
                 switch result {
                 case .success(let index):
                     self.index = index
@@ -132,10 +235,12 @@ final class BankController {
     }
 
     func openQuestions() {
-        NSWorkspace.shared.open(questionsURL)
+        guard let url = questionsURL else { return }
+        NSWorkspace.shared.open(url)
     }
 
     func openProfileFolder() {
-        NSWorkspace.shared.open(AppPaths.profile)
+        guard let dir = activeDirectory else { return }
+        NSWorkspace.shared.open(dir)
     }
 }

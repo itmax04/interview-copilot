@@ -8,7 +8,7 @@
 Claude → свой API; первые слова — около 1 с после вопроса. Отсеивает шум, чужой язык и чужие голоса, помнит всё интервью.
 По горячей клавише отправляет скриншот задачи в сильную модель. Пользователь один — владелец; распространение не планируется.
 
-Статус: **0.4.0** (COPILOT-07) — [docs/changes/COPILOT-07/handoff.md](docs/changes/COPILOT-07/handoff.md).
+Статус: **0.5.0** (COPILOT-08, этап 1 — профили и инструкции) — [docs/changes/COPILOT-08/handoff.md](docs/changes/COPILOT-08/handoff.md).
 **Новому разработчику или агенту — начать с [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: поток данных, модули,
 где что лежит, как вносить типичные изменения и как проверять.
 
@@ -40,8 +40,9 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
 - **Mode**: Question bank only / Bank + hint / Generate every answer.
 - **Settings → Audio**: Parakeet v3 (основной локальный движок) или Whisper; для Whisper — large-v3-turbo и «Точный итоговый текст». Смена движка не требует перезапуска.
 - **Language**: Auto (UK/RU/EN) или конкретный язык — для Whisper известный язык точнее и быстрее. Parakeet сохраняет мультиязычный текст; настройка задаёт метку языка.
-- **Question bank…** — `~/Library/Application Support/InterviewCopilot/profile/questions.yaml`
-  (формат — spec R-06; по 2+ формулировки на язык для каждой карточки). **Edit resume & stories…** — папка профиля.
+- **Профиль: резюме, инструкции…** (или запуск с `--args --profile`) — окно «Профиль»: профили под вакансии, резюме,
+  факты о себе, вакансия (загрузка PDF, Word, RTF, TXT, Markdown или текст вручную), инструкции профиля и общие.
+  Переключение профиля — меню **Profile**. **Question bank…** — `questions.yaml` активного профиля (формат — spec R-06).
 - Горячие клавиши (переназначаются в Settings → Hotkeys): ⌃⌥↩ ответить сейчас (и на серую строку), ⌃⌥S скриншот,
   ⌃⌥H панель, ⌃⌥P пауза, ⌃⌥C сильная модель, ⌃⌥A «сейчас отвечаю я» в самопроверке (есть и в меню).
 - **Новое интервью** — память начинается заново (и сама: смена приложения звонка, тишина > 30 мин); **Session history…** —
@@ -51,7 +52,7 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
   срок истории, вид панели, бюджет на платных провайдеров.
 
 ## Проверка
-- Быстрая: `swift build && swift test` (245 тестов).
+- Быстрая: `swift build && swift test` (255 тестов).
 - Полная: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh`.
 - Evals: `scripts/run-evals.sh [bank|turn|filter-text|memory|filter|voice]` — пороги и baseline в [evals/README.md](evals/README.md).
 - Метрики созвона: `scripts/metrics.py --last 30m` (AC-01…AC-03), память: `scripts/footprint-monitor.sh 10` (AC-05).

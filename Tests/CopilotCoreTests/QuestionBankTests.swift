@@ -85,18 +85,11 @@ struct QuestionBankTests {
         #expect(throws: QuestionBankError.self) { try QuestionBankParser.parse("id: a\nanswer: b") }
     }
 
-    @Test func profileCopiedOnceAndLoaded() throws {
-        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("profile-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let copied = try ProfileStore.ensureProfile(at: dir, example: Self.exampleURL)
-        #expect(Set(copied) == Set(ProfileStore.files))
-        // Правки владельца не перезаписываются при следующем запуске.
-        try "- id: mine\n  questions: [q]\n  answer: a\n".write(to: dir.appendingPathComponent("questions.yaml"), atomically: true, encoding: .utf8)
-        #expect(try ProfileStore.ensureProfile(at: dir, example: Self.exampleURL).isEmpty)
-        #expect(try QuestionBankParser.load(dir.appendingPathComponent("questions.yaml")).map(\.id) == ["mine"])
-        let profile = ProfileStore.load(from: dir)
+    @Test func exampleProfileLoads() {
+        let profile = ProfileStore.load(from: Self.exampleURL)
         #expect(profile.name == "Senior iOS Developer")
         #expect(profile.resume.contains("Senior iOS"))
+        #expect(profile.instructions.isEmpty)
     }
 
     @Test func fileWatcherSeesAtomicSave() async throws {

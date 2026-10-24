@@ -223,7 +223,7 @@ struct PromptScenarioCheckTests {
     }
 
     @Test func scenariosUseNoProfileAndBackReference() {
-        #expect(PromptScenarios.all.count == 6)
+        #expect(PromptScenarios.all.count == 10)
         let trap = PromptScenarios.request(PromptScenarios.all[0])
         #expect(trap.system.contains("No candidate profile is given"))
         #expect(trap.messages[0].text.contains("Shown suggestion (may not have been said): Я працював з широким стеком"))

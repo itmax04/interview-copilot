@@ -8,8 +8,36 @@ public enum PromptScenarios {
         public var question: String
         public var language: String
         public var memory: MemoryContext
+        /// Профиль и общие инструкции (COPILOT-08); nil — «Без профиля».
+        public var profile: Profile? = nil
+        public var general = ""
         /// nil — PASS, иначе причина FAIL.
         public var check: @Sendable (String) -> String?
+
+        public init(name: String, question: String, language: String, memory: MemoryContext, profile: Profile? = nil,
+                    general: String = "", check: @escaping @Sendable (String) -> String?) {
+            self.name = name
+            self.question = question
+            self.language = language
+            self.memory = memory
+            self.profile = profile
+            self.general = general
+            self.check = check
+        }
+    }
+
+    /// Синтетический профиль для сценариев COPILOT-08.
+    static let sampleProfile = Profile(name: "Тест", resume: """
+        Олексій Коваль — Senior iOS Developer, 7 років досвіду.
+        ФінБанк (2021–2026): мобільний банк, 1,2 млн користувачів, команда з 6 iOS-розробників, переписав платежі на SwiftUI.
+        Технології: Swift, SwiftUI, Combine, RabbitMQ, PostgreSQL.
+        """)
+
+    static func bullets(_ text: String) -> Int {
+        text.split(whereSeparator: \.isNewline).filter {
+            let t = $0.trimmingCharacters(in: .whitespaces)
+            return t.hasPrefix("- ") || t.hasPrefix("• ") || t.hasPrefix("* ")
+        }.count
     }
 
     /// Первая строка ответа без разметки, в нижнем регистре.
@@ -70,11 +98,38 @@ public enum PromptScenarios {
                  }),
         Scenario(name: "обрывок — не вопрос", question: "Є таке питання.", language: "uk", memory: MemoryContext(),
                  check: { text in PromptBuilder.isNoAnswer(text) ? nil : "ответ вместо «—»: «\(firstLine(text))»" }),
+        // COPILOT-08: инструкции владельца и факты резюме.
+        Scenario(name: "инструкция: без списков, 2 предложения", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
+                 profile: { var p = sampleProfile; p.instructions = "Відповідай двома реченнями, без списків і без жирного шрифту."; return p }(),
+                 check: { text in
+                     bullets(text) == 0 && !text.contains("**") ? nil : "есть список или жирный: «\(firstLine(text))»"
+                 }),
+        Scenario(name: "инструкция: не упоминать Kafka", question: "Які брокери повідомлень ви використовували?", language: "uk",
+                 memory: MemoryContext(), profile: sampleProfile,
+                 general: "Ніколи не згадуй Kafka — я з нею не працював. Говори про RabbitMQ.",
+                 check: { text in
+                     let t = text.lowercased()
+                     if t.contains("kafka") || t.contains("кафк") { return "упомянута Kafka: «\(firstLine(text))»" }
+                     return t.contains("rabbitmq") ? nil : "нет RabbitMQ: «\(firstLine(text))»"
+                 }),
+        Scenario(name: "факт из резюме", question: "Скільки користувачів було у вашому останньому проєкті?", language: "uk",
+                 memory: MemoryContext(), profile: sampleProfile,
+                 check: { text in
+                     let t = text.lowercased()
+                     return (t.contains("1,2") || t.contains("1.2")) && (t.contains("млн") || t.contains("мільйон") || t.contains("million")) ? nil : "нет 1,2 млн из резюме: «\(firstLine(text))»"
+                 }),
+        Scenario(name: "инструкция: язык ответа", question: "Чому ви хочете змінити роботу?", language: "uk", memory: MemoryContext(),
+                 profile: sampleProfile, general: "Always answer in English, whatever the interview language.",
+                 check: { text in
+                     let letters = text.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+                     let latin = letters.filter { $0.isASCII }.count
+                     return letters.isEmpty || Double(latin) / Double(letters.count) > 0.8 ? nil : "не по-английски: «\(firstLine(text))»"
+                 }),
     ]
 
     /// Запрос подсказки сценария — как в приложении в режиме «Без профиля».
     public static func request(_ s: Scenario) -> LLMRequest {
-        PromptBuilder.hintRequest(question: s.question, transcript: [], cards: [], baseCard: nil, profile: nil, redactPII: true,
-                                  answerLanguage: s.language, memory: s.memory)
+        PromptBuilder.hintRequest(question: s.question, transcript: [], cards: [], baseCard: nil, profile: s.profile, redactPII: true,
+                                  answerLanguage: s.language, memory: s.memory, generalInstructions: s.general)
     }
 }

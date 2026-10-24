@@ -243,8 +243,9 @@ struct ProviderChainTests {
     }
 
     @Test func slowButStartedStreamIsNotTimedOut() async {
-        // Первый токен пришёл вовремя — дальше медленный поток не прерывается.
-        let chain = ProviderChain(steps: [step(.gemini, .reply(["a", "b", "c"], delay: 0.15))], firstTokenTimeout: 0.3)
+        // Первый токен пришёл вовремя — дальше медленный поток не прерывается. Первый токен через 0,4 с при таймауте 1 с
+        // (запас под нагрузкой параллельных тестов: при 0,15/0,3 тест иногда падал), весь поток — 1,2 с, дольше таймаута.
+        let chain = ProviderChain(steps: [step(.gemini, .reply(["a", "b", "c"], delay: 0.4))], firstTokenTimeout: 1)
         #expect(text(await run(chain)) == "abc")
     }
 

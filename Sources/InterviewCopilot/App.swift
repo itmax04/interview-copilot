@@ -32,7 +32,7 @@ enum InterviewCopilotMain {
 
         let app = NSApplication.shared
         let delegate = AppDelegate(testCallOnly: args.contains("--test-call"), openInterviewer: args.contains("--ai-interview"),
-                                   openSettings: args.contains("--settings"))
+                                   openSettings: args.contains("--settings"), openProfile: args.contains("--profile"))
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
         app.run()
@@ -45,10 +45,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let openInterviewer: Bool
     /// `--settings`: открыть настройки (вкладка Keys) сразу при запуске — ввод ключей без мыши и меню.
     private let openSettings: Bool
-    init(testCallOnly: Bool = false, openInterviewer: Bool = false, openSettings: Bool = false) {
+    /// `--profile`: открыть окно «Профиль» при запуске (COPILOT-08) — загрузка резюме без мыши и меню.
+    private let openProfile: Bool
+    init(testCallOnly: Bool = false, openInterviewer: Bool = false, openSettings: Bool = false, openProfile: Bool = false) {
         self.testCallOnly = testCallOnly
         self.openInterviewer = openInterviewer && !testCallOnly
         self.openSettings = openSettings
+        self.openProfile = openProfile
         super.init()
     }
     private let model = AppModel()
@@ -78,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var answers = AnswerController(model: model, bank: bank, panel: panelModel)
     private let sessions = SessionController()
     private lazy var historyWindow = SessionHistoryWindowController(sessions: sessions)
+    private lazy var profileWindow = ProfileWindowController(bank: bank)
     private lazy var usage: UsageMeter = {
         let url = Bundle.main.url(forResource: "pricing", withExtension: "json")
             ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../Resources/pricing.json")
@@ -106,6 +110,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar.onSelectMode = { [weak self] mode in self?.model.settings.mode = mode }
         menuBar.onSelectLanguage = { [weak self] lang in self?.model.settings.language = lang }
         menuBar.onSelectUseProfile = { [weak self] use in self?.model.settings.useProfile = use }
+        menuBar.onSelectProfile = { [weak self] id in
+            self?.bank.select(id)
+            self?.model.settings.useProfile = true
+        }
         menuBar.onSelectStrongModel = { [weak self] p in self?.model.settings.strongProvider = p }
         menuBar.providersWithKeys = { [weak self] in
             Set(ProviderID.allCases.filter { self?.model.hasKey[$0] == true })
@@ -219,7 +227,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         sessions.currentSource = { [weak self] in self?.listening.source.displayName }
         sessions.start(source: nil, retentionDays: model.settings.historyRetentionDays)
-        bank.start(embeddingModel: model.settings.embeddingModel)
+        bank.onActiveProfileChange = { [weak self] id in self?.model.settings.activeProfileID = id }
+        bank.start(embeddingModel: model.settings.embeddingModel, activeProfileID: model.settings.activeProfileID)
 
         listening.start()
         turns.start()
@@ -237,6 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startDownloadProgressMirror()
         if openInterviewer { interviewer.start() }
         if openSettings { settingsWindow.show() }
+        if openProfile { profileWindow.show() }
     }
 
     private func recordUsage(_ provider: ProviderID, _ modelID: String, _ u: TokenUsage) {
@@ -307,6 +317,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var state = model.menuState(listening: listening.listeningStatus, profileName: bank.profile.name,
                                     cardCount: bank.cards.count)
         state.bankError = bank.error
+        state.profiles = bank.profiles
+        state.activeProfileID = bank.activeID
         state.statusLine = usage.statusLine
         state.hotkeys = model.settings.hotkeys
         state.panelVisible = panel.isVisible
@@ -492,7 +504,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .questionBank:
             bank.openQuestions()
         case .editProfile, .profile:
-            bank.openProfileFolder()
+            profileWindow.show()
         default:
             // Остальные действия подключаются на шагах P-06…P-10.
             break

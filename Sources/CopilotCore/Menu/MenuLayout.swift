@@ -78,6 +78,9 @@ public struct MenuState: Sendable, Equatable {
     public var selfTest = false
     /// Идёт запись ответа владельца (⌃⌥A).
     public var ownerAnswering = false
+    /// Профили для подменю Profile и активный (COPILOT-08 R-01).
+    public var profiles: [ProfileInfo] = []
+    public var activeProfileID: String?
 
     public init(listening: ListeningStatus = .idle, mode: AnswerMode = .bankAndHint,
                 chain: [ProviderID] = [.gemini, .deepseek, .anthropic], language: RecognitionLanguage = .auto,
@@ -147,7 +150,8 @@ public enum MenuLayout {
                 MenuItemSpec(.profile, "Profile: \(s.useProfile ? s.profileName : MenuLayout.noProfileTitle)", symbol: "person", submenu: true),
                 MenuItemSpec(.questionBank, s.bankError ?? "Question bank (\(s.bankCardCount) cards)…",
                              symbol: s.bankError == nil ? "book" : "exclamationmark.triangle"),
-                MenuItemSpec(.editProfile, "Edit resume & stories…", symbol: "doc.text"),
+                // COPILOT-08 R-03: окно «Профиль» — резюме, факты, вакансия, инструкции, файлы.
+                MenuItemSpec(.editProfile, "Профиль: резюме, инструкции…", symbol: "doc.text"),
                 MenuItemSpec(.practice, "Тестовый звонок…", symbol: "phone"),
                 MenuItemSpec(.aiInterview, "ИИ-собеседование…", symbol: "person.wave.2"),
             ],

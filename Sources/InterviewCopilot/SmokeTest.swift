@@ -79,6 +79,7 @@ enum SmokeTest {
                         }
                     }
                     total += 1
+                    try? await Task.sleep(for: .seconds(2))   // бесплатные лимиты: ~30 запросов в минуту
                     let verdict = failure.isEmpty ? scenario.check(text) : "нет ответа: \(failure)"
                     if verdict == nil { passed += 1 }
                     print("\(verdict == nil ? "PASS" : "FAIL") [\(scenario.name) #\(run)] \(provider) | "

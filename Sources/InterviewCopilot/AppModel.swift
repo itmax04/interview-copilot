@@ -127,7 +127,7 @@ final class AppModel {
         return missing.isEmpty ? nil : "\(p.displayName): нет модели \(missing.joined(separator: ", ")) в списке провайдера"
     }
 
-    func menuState(listening: ListeningStatus, profileName: String = "Profile", cardCount: Int = 0) -> MenuState {
+    func menuState(listening: ListeningStatus, profileName: String = ProfileLibrary.defaultName, cardCount: Int = 0) -> MenuState {
         // Свой API без адреса и модели в строке «Models: …» не показывается (COPILOT-04 R-06).
         MenuState(listening: listening, mode: settings.mode,
                   chain: settings.chain.filter { $0 != .custom || ChainFactory.customConfigured(settings) }, language: settings.language,

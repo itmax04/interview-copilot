@@ -119,7 +119,7 @@ final class AnswerController {
         PromptBuilder.hintRequest(question: question, transcript: transcript(), cards: top, baseCard: base,
                                   profile: settings.useProfile ? bank.profile : nil, redactPII: settings.piiFilterEnabled,
                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question),
-                                  memory: memory)
+                                  memory: memory, generalInstructions: bank.generalInstructions)
     }
 
     private func route(_ turn: Turn, match: BankMatch, settings: AppSettings) {
@@ -390,7 +390,7 @@ final class AnswerController {
                                                   profile: settings.useProfile ? bank.profile : nil,
                                                   redactPII: settings.piiFilterEnabled,
                                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text),
-                                                  memory: memory)
+                                                  memory: memory, generalInstructions: bank.generalInstructions)
         // Задержка для сильной модели считаем от нажатия.
         let manual = Turn(id: turn.id, text: turn.text, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         generate(turn: manual, chain: chain, request: request, fallbackTop: lastMatch?.top ?? [], strong: true)
