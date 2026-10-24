@@ -88,8 +88,6 @@ final class WorkspaceWindowController {
             w.titleVisibility = .hidden
             w.setContentSize(NSSize(width: 1180, height: 780))
             w.minSize = NSSize(width: 980, height: 640)
-            // P00, P12: светлые окна, темный — только оверлей.
-            w.appearance = NSAppearance(named: .aqua)
             w.isReleasedWhenClosed = false
             w.setFrameAutosaveName("InterviewCopilotWorkspace")
             if w.frame.origin == .zero { w.center() }
@@ -121,8 +119,7 @@ struct WorkspaceView: View {
         .foregroundStyle(IC.ink)
         .tint(IC.accent)
         .background(IC.background)
-        .environment(\.colorScheme, .light)
-    }
+            }
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -283,7 +280,7 @@ struct TodayView: View {
         }
         .padding(32)
         .frame(maxWidth: .infinity, minHeight: 250, alignment: .leading)
-        .background(LinearGradient(colors: [Color(hex: 0xDCE6FF), Color(hex: 0xF3F6FF)], startPoint: .topLeading, endPoint: .bottomTrailing),
+        .background(LinearGradient(colors: [IC.heroStart, IC.heroEnd], startPoint: .topLeading, endPoint: .bottomTrailing),
                     in: RoundedRectangle(cornerRadius: 20))
     }
 
@@ -301,7 +298,7 @@ struct TodayView: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
-            .background(.white, in: RoundedRectangle(cornerRadius: 12))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
@@ -409,7 +406,7 @@ struct TodayView: View {
                 ProgressView(value: Double(own + drafts), total: Double(max(1, cards.count))).tint(IC.accent)
                 prepRow("Ваши ответы", own, cards.count, IC.green)
                 prepRow("Черновики — проверить", drafts, cards.count, IC.amber)
-                prepRow("Без ответа", none, cards.count, Color(hex: 0xA1A1AA))
+                prepRow("Без ответа", none, cards.count, IC.neutral)
                 prepRow("Формулировки uk / ru / en", phrased, cards.count, IC.accent)
                 Button { workspace.section = .profiles } label: {
                     Label("Подготовить", systemImage: "doc.text").frame(maxWidth: .infinity)
@@ -423,7 +420,7 @@ struct TodayView: View {
     private func prepRow(_ title: String, _ n: Int, _ total: Int, _ color: Color) -> some View {
         HStack {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(title).font(.system(size: 12)).foregroundStyle(Color(hex: 0x45516C))
+            Text(title).font(.system(size: 12)).foregroundStyle(IC.ink2)
             Spacer()
             Text("\(n) / \(total)").font(.system(size: 12)).foregroundStyle(IC.secondary).monospacedDigit()
         }

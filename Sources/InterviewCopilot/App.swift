@@ -169,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         hotkeys = HotkeyCenter { [weak self] action in self?.handle(action) }
         lastSettings = model.settings
+        applyAppearance()
         applySettings(force: true)
 
         model.onChange = { [weak self] in self?.settingsChanged() }
@@ -355,8 +356,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func settingsChanged() {
+        applyAppearance()
         applySettings(force: false)
         refreshUI()
+    }
+
+    /// Тема окон (COPILOT-10): «как в системе» — appearance не задается; оверлей закреплен темным в PanelController.
+    private func applyAppearance() {
+        let wanted: NSAppearance? = switch model.settings.theme {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+        if NSApp.appearance?.name != wanted?.name { NSApp.appearance = wanted }
     }
 
     private func applySettings(force: Bool) {

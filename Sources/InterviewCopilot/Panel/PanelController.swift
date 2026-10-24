@@ -26,6 +26,8 @@ final class PanelController {
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
         panel.isOpaque = false
+        // Оверлей всегда темный (COPILOT-10): темная тема окон его не меняет, светлая — тоже.
+        panel.appearance = NSAppearance(named: .darkAqua)
         panel.backgroundColor = .clear
         panel.hasShadow = true
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {

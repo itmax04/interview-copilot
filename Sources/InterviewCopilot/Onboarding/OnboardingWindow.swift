@@ -144,11 +144,10 @@ struct OnboardingView: View {
             .padding(20)
         }
         .frame(width: 860, height: 600)
-        .background(Color.white)
+        .background(IC.background)
         .foregroundStyle(IC.ink)
         .tint(IC.accent)
-        .environment(\.colorScheme, .light)
-    }
+            }
 
     private var stepper: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -159,7 +158,7 @@ struct OnboardingView: View {
                 }
                 VStack(spacing: 8) {
                     ZStack {
-                        Circle().fill(done ? IC.green : current ? IC.accent : Color.white).frame(width: 36, height: 36)
+                        Circle().fill(done ? IC.green : current ? IC.accent : IC.card).frame(width: 36, height: 36)
                             .overlay(Circle().strokeBorder(done || current ? .clear : IC.line))
                         if done { Image(systemName: "checkmark").font(.system(size: 14, weight: .bold)).foregroundStyle(.white) }
                         else { Text("\(s.rawValue + 1)").font(.system(size: 15, weight: .medium)).foregroundStyle(current ? .white : IC.secondary) }
@@ -234,7 +233,7 @@ private struct KeyStep: View {
                 .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(.leading, 12).padding(4)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.accent.opacity(0.6), lineWidth: 1.5))
             HStack(spacing: 8) {
                 Image(systemName: saved ? "checkmark.circle.fill" : "circle.dashed").foregroundStyle(saved ? IC.green : IC.secondary)
@@ -254,7 +253,7 @@ private struct KeyStep: View {
                 }
             }
             .padding(14)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
         }
     }

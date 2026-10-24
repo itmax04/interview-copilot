@@ -13,6 +13,23 @@ public enum AudioSourceSetting: Codable, Equatable, Sendable {
     case microphone
 }
 
+/// Тема окон (COPILOT-10): как в системе, светлая или темная. Оверлей на звонке всегда темный.
+public enum AppTheme: String, Codable, CaseIterable, Sendable {
+    case system, light, dark
+}
+
+/// Язык интерфейса (COPILOT-10): как в системе, русский или английский. Подсказки на звонке — на языке собеседника.
+public enum InterfaceLanguage: String, Codable, CaseIterable, Sendable {
+    case system, ru, en
+
+    /// Фактический язык: «как в системе» — русский, если первый язык macOS русский, украинский или белорусский, иначе английский.
+    public func resolved(preferred: [String] = Locale.preferredLanguages) -> InterfaceLanguage {
+        guard self == .system else { return self }
+        let first = (preferred.first ?? "en").lowercased()
+        return ["ru", "uk", "be"].contains { first.hasPrefix($0) } ? .ru : .en
+    }
+}
+
 public enum PanelFontSize: String, Codable, CaseIterable, Sendable {
     case small = "S", medium = "M", large = "L"
 
@@ -165,6 +182,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     // Panel
     public var panelOpacity: Double = 0.92
     public var panelFontSize: PanelFontSize = .medium
+    /// Тема окон и язык интерфейса (COPILOT-10).
+    public var theme: AppTheme = .system
+    public var interfaceLanguage: InterfaceLanguage = .system
     /// P01: шире прежних 380 pt — кнопки действий с подсказками клавиш помещаются в строку.
     public var panelWidth: Double = 420
     /// Масштаб оверлея (COPILOT-09 R-11): меню «Крупнее / Мельче / Обычный размер».
@@ -297,6 +317,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         historyRetentionDays = v(.historyRetentionDays, d.historyRetentionDays)
         panelOpacity = v(.panelOpacity, d.panelOpacity)
         panelFontSize = v(.panelFontSize, d.panelFontSize)
+        theme = v(.theme, d.theme)
+        interfaceLanguage = v(.interfaceLanguage, d.interfaceLanguage)
         panelWidth = v(.panelWidth, d.panelWidth)
         panelZoom = v(.panelZoom, d.panelZoom)
         panelHiddenFromCapture = v(.panelHiddenFromCapture, d.panelHiddenFromCapture)

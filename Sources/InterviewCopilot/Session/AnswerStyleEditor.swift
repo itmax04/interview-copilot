@@ -178,8 +178,7 @@ struct AnswerStyleEditor: View {
         .background(IC.background)
         .foregroundStyle(IC.ink)
         .tint(IC.accent)
-        .environment(\.colorScheme, .light)
-        .onAppear { preview.schedule(delay: .zero) }
+                .onAppear { preview.schedule(delay: .zero) }
         .onDisappear { preview.cancel() }
     }
 
@@ -206,7 +205,7 @@ struct AnswerStyleEditor: View {
             if expanded { content() }
         }
         .padding(14)
-        .background(expanded ? IC.accent.opacity(0.05) : Color.white, in: RoundedRectangle(cornerRadius: 14))
+        .background(expanded ? IC.accent.opacity(0.05) : IC.card, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(expanded ? IC.accent.opacity(0.3) : IC.line))
     }
 
@@ -226,7 +225,7 @@ struct AnswerStyleEditor: View {
             }
         }
         .padding(4)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 11))
+        .background(IC.card, in: RoundedRectangle(cornerRadius: 11))
         .overlay(RoundedRectangle(cornerRadius: 11).strokeBorder(IC.line))
     }
 
@@ -260,10 +259,10 @@ struct AnswerStyleEditor: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 Text("Вопрос").font(.system(size: 13, weight: .medium))
-                Text(preview.questionText).font(.system(size: 13)).foregroundStyle(Color(hex: 0x45516C))
+                Text(preview.questionText).font(.system(size: 13)).foregroundStyle(IC.ink2)
             }
             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
             VStack(alignment: .leading, spacing: 8) {
                 Text("Предлагаемый ответ").font(.system(size: 13, weight: .medium)).foregroundStyle(IC.accent)

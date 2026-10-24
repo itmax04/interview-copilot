@@ -311,8 +311,7 @@ struct SessionWizardView: View {
         .background(IC.background)
         .foregroundStyle(IC.ink)
         .tint(IC.accent)
-        .environment(\.colorScheme, .light)
-        .sheet(isPresented: Binding(get: { state.stylePreview != nil }, set: { if !$0 { state.stylePreview = nil } })) {
+                .sheet(isPresented: Binding(get: { state.stylePreview != nil }, set: { if !$0 { state.stylePreview = nil } })) {
             if let preview = state.stylePreview {
                 AnswerStyleEditor(preview: preview,
                                   onSave: { state.saveStyle($0, asDefault: false) },
@@ -335,7 +334,7 @@ struct SessionWizardView: View {
                     let done = s.rawValue < state.step.rawValue, current = s == state.step
                     HStack(spacing: 14) {
                         ZStack {
-                            Circle().fill(current ? IC.accent : Color.white).frame(width: 34, height: 34)
+                            Circle().fill(current ? IC.accent : IC.card).frame(width: 34, height: 34)
                                 .overlay(Circle().strokeBorder(current ? .clear : IC.line))
                             if done {
                                 Image(systemName: "checkmark").font(.system(size: 13, weight: .bold)).foregroundStyle(IC.accent)
@@ -388,7 +387,7 @@ struct SessionWizardView: View {
             }
         }
         .padding(4)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
     }
 
@@ -443,7 +442,7 @@ struct SessionWizardView: View {
                         .font(.system(size: 13))
                         .frame(minHeight: 130)
                         .padding(6)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                        .background(IC.card, in: RoundedRectangle(cornerRadius: 10))
                         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
                         .accessibilityLabel("Описание вакансии")
                     Text("Пусто — берется вакансия из профиля.").font(.system(size: 11)).foregroundStyle(IC.secondary)
@@ -477,12 +476,12 @@ struct SessionWizardView: View {
 
     private func row<Content: View>(_ icon: String, _ title: String, @ViewBuilder _ content: () -> Content) -> some View {
         HStack(spacing: 14) {
-            Image(systemName: icon).font(.system(size: 17)).frame(width: 24).foregroundStyle(Color(hex: 0x45516C))
+            Image(systemName: icon).font(.system(size: 17)).frame(width: 24).foregroundStyle(IC.ink2)
             Text(title).font(.system(size: 14)).frame(width: 150, alignment: .leading)
             content().frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
     }
 
@@ -567,7 +566,7 @@ struct SessionWizardView: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
             row("clock", "План длительности") {
                 HStack {
@@ -599,7 +598,7 @@ struct SessionWizardView: View {
             }
             ForEach(state.preflight) { item in
                 HStack(alignment: .center, spacing: 14) {
-                    Image(systemName: icon(item.id)).font(.system(size: 18)).frame(width: 26).foregroundStyle(Color(hex: 0x45516C))
+                    Image(systemName: icon(item.id)).font(.system(size: 18)).frame(width: 26).foregroundStyle(IC.ink2)
                     Text(item.title).font(.system(size: 15, weight: .medium)).frame(width: 150, alignment: .leading)
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
@@ -612,7 +611,7 @@ struct SessionWizardView: View {
                     actionButton(item)
                 }
                 .padding(.horizontal, 16).padding(.vertical, 12)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
                 .accessibilityElement(children: .combine)
             }

@@ -106,8 +106,11 @@ enum UISnapshots {
         ] {
             let preview = StylePreview(style: style, context: styleContext)
             preview.showSnapshot(text: sample, source: "Groq · 1,1 с")
-            shot(name, NSSize(width: 900, height: 600), AnswerStyleEditor(preview: preview, onSave: { _ in }, onSaveDefault: { _ in }, onCancel: {})
-                .background(Color(nsColor: .windowBackgroundColor)))
+            for dark in [false, true] {
+                shot(dark ? "dark-" + name : name, NSSize(width: 900, height: 600), dark: dark,
+                     AnswerStyleEditor(preview: preview, onSave: { _ in }, onSaveDefault: { _ in }, onCancel: {})
+                        .background(Color(nsColor: .windowBackgroundColor)))
+            }
         }
 
         // История сессий.
@@ -140,11 +143,26 @@ enum UISnapshots {
                  WorkspaceView(workspace: ws, model: model, bank: bank, store: store, reviews: nil, preparer: preparer))
         }
 
+        // COPILOT-10: темная тема окон.
+        for (name, section) in [("today", WorkspaceSection.today), ("sessions", .sessions)] {
+            ws.section = section
+            shot("dark-workspace-\(name)", NSSize(width: 1180, height: 780), dark: true,
+                 WorkspaceView(workspace: ws, model: model, bank: bank, store: store, reviews: nil, preparer: preparer))
+        }
+        shot("dark-settings-general", NSSize(width: 1000, height: 680), dark: true, SettingsView(model: model, hotkeyFailures: { [:] }, tab: .general))
+        shot("settings-general", NSSize(width: 1000, height: 680), SettingsView(model: model, hotkeyFailures: { [:] }, tab: .general))
+        wizard.step = .settings
+        shot("dark-wizard-2", NSSize(width: 900, height: 640), dark: true, SessionWizardView(state: wizard))
+        shot("dark-profile-resume", NSSize(width: 1100, height: 720), dark: true, ProfileView(bank: bank, preparer: preparer, tab: .resume))
+        shot("dark-history-summary", NSSize(width: 950, height: 820), dark: true,
+             SessionDetail(session: sampleSession(store), reviews: nil, onBack: {}, onDelete: {}))
+
         // Мастер первого запуска и разрешения.
         let onboarding = OnboardingState(model: model, listening: listening, onFinish: {})
         for step in OnboardingState.Step.allCases {
             onboarding.step = step
             shot("onboarding-\(step.rawValue + 1)", NSSize(width: 860, height: 600), OnboardingView(state: onboarding))
+            if step == .key { shot("dark-onboarding-2", NSSize(width: 860, height: 600), dark: true, OnboardingView(state: onboarding)) }
         }
         shot("permissions", NSSize(width: 600, height: 420), PermissionsView(listening: listening).padding(20))
 

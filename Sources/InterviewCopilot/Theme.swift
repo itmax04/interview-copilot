@@ -22,7 +22,7 @@ struct ThemeCard<Content: View>: View {
         VStack(alignment: .leading, spacing: Theme.gap * 1.5) { content }
             .padding(Theme.gap * 2)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.radius + 2))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: Theme.radius + 2))
             .overlay(RoundedRectangle(cornerRadius: Theme.radius + 2).strokeBorder(IC.line))
     }
 }

@@ -35,6 +35,7 @@ final class SettingsWindowController {
 }
 
 enum SettingsTab: String, CaseIterable, Identifiable {
+    case general = "General"
     case keys = "Keys"
     case models = "Models"
     case audio = "Audio"
@@ -48,6 +49,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var symbol: String {
         switch self {
+        case .general: "gearshape"
         case .keys: "key"
         case .models: "cylinder"
         case .audio: "waveform"
@@ -61,6 +63,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     /// P17: названия разделов по-русски.
     var title: String {
         switch self {
+        case .general: "Основное"
         case .keys: "Ключи моделей"
         case .models: "Модели и ответы"
         case .audio: "Звук и распознавание"
@@ -74,6 +77,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var subtitle: String {
         switch self {
+        case .general: "Тема оформления и язык интерфейса — меняются сразу."
         case .keys: "Для старта достаточно одного бесплатного ключа Groq. Можно добавить еще ключи: кончился лимит у одного — ответ идет со следующего."
         case .models: "Порядок моделей, запасные, стиль ответа по умолчанию и таймауты."
         case .audio: "Источник звука, язык, распознавание, фильтры речи и ваш голос."
@@ -121,11 +125,11 @@ struct SettingsView: View {
         }
         .frame(minWidth: 760, minHeight: 520)
         .background(IC.background)
-        .environment(\.colorScheme, .light)
-    }
+            }
 
     @ViewBuilder private var page: some View {
         switch tab {
+        case .general: GeneralSettingsView(model: model)
         case .keys: KeysSettingsView(model: model)
         case .models: ModelsSettingsView(model: model, stylePreviewContext: stylePreviewContext)
         case .audio: AudioSettingsView(model: model)

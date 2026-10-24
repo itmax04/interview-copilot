@@ -88,7 +88,7 @@ struct ProfileView: View {
                 .id("\(bank.activeID ?? "")-\(tab.rawValue)")   // другой профиль — свежие тексты
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .padding(12)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+                .background(IC.card, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(IC.line))
                 footer
             }
@@ -96,8 +96,7 @@ struct ProfileView: View {
         }
         .frame(minWidth: 760, minHeight: 520)
         .background(IC.background)
-        .environment(\.colorScheme, .light)
-        .alert(naming == .create ? "Новый профиль" : "Переименовать профиль", isPresented: Binding {
+                .alert(naming == .create ? "Новый профиль" : "Переименовать профиль", isPresented: Binding {
             naming != nil
         } set: { if !$0 { naming = nil } }) {
             TextField("Название, например «iOS в банк»", text: $newName)
@@ -197,7 +196,7 @@ struct ProfileView: View {
                     VStack(spacing: 8) {
                         Label(t.rawValue, systemImage: t.symbol)
                             .font(.system(size: 13, weight: selected ? .semibold : .regular))
-                            .foregroundStyle(selected ? IC.accent : Color(hex: 0x45516C))
+                            .foregroundStyle(selected ? IC.accent : IC.ink2)
                             .padding(.horizontal, 10)
                         Rectangle().fill(selected ? IC.accent : .clear).frame(height: 2)
                     }

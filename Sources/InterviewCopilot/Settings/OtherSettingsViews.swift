@@ -2,6 +2,37 @@ import CopilotCore
 import SwiftUI
 
 /// Models — ID моделей, порядок цепочки, таймаут первого токена (R-09, R-18).
+/// Основное (COPILOT-10): тема окон и язык интерфейса. Оверлей на звонке всегда темный — так он читается поверх видео.
+struct GeneralSettingsView: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Тема", selection: $model.settings.theme) {
+                    Text("Как в системе").tag(AppTheme.system)
+                    Text("Светлая").tag(AppTheme.light)
+                    Text("Темная").tag(AppTheme.dark)
+                }
+                .pickerStyle(.segmented)
+                Text("Оверлей на звонке всегда темный — так он читается поверх видео.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section {
+                Picker("Язык интерфейса", selection: $model.settings.interfaceLanguage) {
+                    Text("Как в системе").tag(InterfaceLanguage.system)
+                    Text("Русский").tag(InterfaceLanguage.ru)
+                    Text("English").tag(InterfaceLanguage.en)
+                }
+                .pickerStyle(.segmented)
+                Text("Разбор после звонка и ответы «Спросить ИИ» — тоже на этом языке. Подсказки на звонке — на языке собеседника.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
 struct ModelsSettingsView: View {
     @Bindable var model: AppModel
     var stylePreviewContext: () -> StylePreview.Context? = { nil }

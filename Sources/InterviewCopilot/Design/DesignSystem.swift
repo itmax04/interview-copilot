@@ -2,22 +2,46 @@ import AppKit
 import SwiftUI
 
 /// P00: единые цвета, типографика и поверхности ImageGen. Компоненты остаются нативными и доступными.
+/// COPILOT-10: у каждого цвета — светлое и темное значение; окно берет нужное по своей теме (Настройки → Основное).
 enum IC {
-    static let accent = Color(hex: 0x4C6EF5)
-    static let green = Color(hex: 0x2FB344)
-    static let amber = Color(hex: 0xF59F00)
-    static let red = Color(hex: 0xE03131)
-    static let ink = Color(hex: 0x16181D)
-    static let secondary = Color(hex: 0x7B849B)
-    static let line = Color(hex: 0xE5E7EB)
-    static let background = Color(hex: 0xF5F7FB)
-    static let sidebar = Color(hex: 0xF0F3FA)
+    static let accent = Color.dynamic(light: 0x4C6EF5, dark: 0x6382FF)
+    static let green = Color.dynamic(light: 0x2FB344, dark: 0x40C057)
+    static let amber = Color.dynamic(light: 0xF59F00, dark: 0xFAB005)
+    static let red = Color.dynamic(light: 0xE03131, dark: 0xFA5252)
+    /// Основной текст.
+    static let ink = Color.dynamic(light: 0x16181D, dark: 0xECEEF3)
+    /// Иконки и второстепенный текст строк.
+    static let ink2 = Color.dynamic(light: 0x45516C, dark: 0xB4BAC8)
+    /// Текст в карточках (ответы, сводка).
+    static let body = Color.dynamic(light: 0x343942, dark: 0xD3D7DF)
+    static let secondary = Color.dynamic(light: 0x7B849B, dark: 0x9AA1B2)
+    static let line = Color.dynamic(light: 0xE5E7EB, dark: 0x30343C)
+    static let background = Color.dynamic(light: 0xF5F7FB, dark: 0x15171C)
+    static let sidebar = Color.dynamic(light: 0xF0F3FA, dark: 0x1A1D23)
+    /// Поверхность карточек, полей и кнопок.
+    static let card = Color.dynamic(light: 0xFFFFFF, dark: 0x1F2228)
+    /// Подложка переключателей вкладок.
+    static let muted = Color.dynamic(light: 0xEDF0F7, dark: 0x24272E)
+    /// Реплики собеседника в расшифровке.
+    static let bubble = Color.dynamic(light: 0xF0F2F6, dark: 0x262A31)
+    static let neutral = Color(hex: 0xA1A1AA)
+    static let heroStart = Color.dynamic(light: 0xDCE6FF, dark: 0x1E2A4F)
+    static let heroEnd = Color.dynamic(light: 0xF3F6FF, dark: 0x191C24)
 }
 
 extension Color {
     init(hex: UInt32) {
         self.init(.sRGB, red: Double((hex >> 16) & 255)/255, green: Double((hex >> 8) & 255)/255,
                   blue: Double(hex & 255)/255, opacity: 1)
+    }
+
+    /// Цвет, который сам выбирает значение по теме окна (светлая / темная).
+    static func dynamic(light: UInt32, dark: UInt32) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let hex = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+            return NSColor(srgbRed: CGFloat((hex >> 16) & 255) / 255, green: CGFloat((hex >> 8) & 255) / 255,
+                           blue: CGFloat(hex & 255) / 255, alpha: 1)
+        })
     }
 }
 
@@ -32,7 +56,7 @@ struct ICButtonStyle: ButtonStyle {
             .padding(.horizontal, 14).padding(.vertical, 10)
             .foregroundStyle(primary || destructive || dark ? Color.white : IC.ink)
             .background(RoundedRectangle(cornerRadius: 10).fill(
-                destructive ? IC.red : primary ? IC.accent : dark ? Color.white.opacity(0.08) : Color.white))
+                destructive ? IC.red : primary ? IC.accent : dark ? Color.white.opacity(0.08) : IC.card))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(
                 primary || destructive ? Color.clear : dark ? Color.white.opacity(0.12) : IC.line))
             .opacity(!enabled ? 0.45 : configuration.isPressed ? 0.72 : 1)
@@ -45,7 +69,7 @@ struct ICCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         content.padding(padding).frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 16))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(IC.line))
     }
 }
@@ -88,7 +112,7 @@ struct ICSidebarRow: View {
                 Text(title).font(.system(size: 13, weight: selected ? .semibold : .regular))
                 Spacer(minLength: 0)
             }
-            .foregroundStyle(selected ? IC.accent : Color(hex: 0x45516C))
+            .foregroundStyle(selected ? IC.accent : IC.ink2)
             .padding(.horizontal, 12).padding(.vertical, 12)
             .background(selected ? IC.accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
             .contentShape(Rectangle())

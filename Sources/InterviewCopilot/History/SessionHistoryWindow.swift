@@ -60,8 +60,7 @@ struct SessionHistoryView: View {
         .background(IC.background)
         .foregroundStyle(IC.ink)
         .tint(IC.accent)
-        .environment(\.colorScheme, .light)
-        .onAppear {
+                .onAppear {
             sessions = store.list()
             if let initialSelection, sessions.contains(where: { $0.id == initialSelection }) { selection = initialSelection }
         }
@@ -97,7 +96,7 @@ struct SessionHistoryView: View {
                 TextField("Найти по компании или вопросу…", text: $search).textFieldStyle(.plain)
             }
             .padding(10)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
             if sessions.isEmpty {
                 ICEmptyState(icon: "clock", title: "Сессий пока нет",
@@ -139,7 +138,7 @@ private struct SessionRow: View {
             Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(IC.secondary)
         }
         .padding(14)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
         .contentShape(Rectangle())
     }
@@ -234,8 +233,7 @@ struct SessionDetail: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(IC.background)
         .foregroundStyle(IC.ink)
-        .environment(\.colorScheme, .light)
-        .confirmationDialog("Удалить сессию вместе с разбором?", isPresented: $confirmDelete) {
+                .confirmationDialog("Удалить сессию вместе с разбором?", isPresented: $confirmDelete) {
             Button("Удалить", role: .destructive, action: onDelete)
         }
     }
@@ -319,9 +317,9 @@ struct SessionDetail: View {
                 Button { tab = t } label: {
                     Label(t.rawValue, systemImage: t.symbol)
                         .font(.system(size: 14, weight: selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? IC.accent : Color(hex: 0x45516C))
+                        .foregroundStyle(selected ? IC.accent : IC.ink2)
                         .frame(maxWidth: .infinity).padding(.vertical, 9)
-                        .background(selected ? Color.white : .clear, in: RoundedRectangle(cornerRadius: 9))
+                        .background(selected ? IC.card : .clear, in: RoundedRectangle(cornerRadius: 9))
                         .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(selected ? IC.accent.opacity(0.5) : .clear))
                         .contentShape(Rectangle())
                 }
@@ -330,7 +328,7 @@ struct SessionDetail: View {
             }
         }
         .padding(4)
-        .background(Color(hex: 0xEDF0F7), in: RoundedRectangle(cornerRadius: 12))
+        .background(IC.muted, in: RoundedRectangle(cornerRadius: 12))
     }
 
     // MARK: Сводка
@@ -362,7 +360,7 @@ struct SessionDetail: View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 10) {
                 Label("Общее впечатление", systemImage: "lightbulb").font(.system(size: 15, weight: .semibold)).foregroundStyle(IC.ink)
-                Text(s.overview).font(.system(size: 13)).foregroundStyle(Color(hex: 0x343942)).textSelection(.enabled)
+                Text(s.overview).font(.system(size: 13)).foregroundStyle(IC.body).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                 if !s.topics.isEmpty {
                     FlowChips(items: s.topics)
@@ -378,7 +376,7 @@ struct SessionDetail: View {
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .topLeading)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 14))
             .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(IC.line))
             if !s.nextSteps.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
@@ -386,7 +384,7 @@ struct SessionDetail: View {
                     ForEach(Array(s.nextSteps.enumerated()), id: \.offset) { i, step in
                         HStack(alignment: .top, spacing: 10) {
                             Text("\(i + 1)").font(.system(size: 12, weight: .semibold)).foregroundStyle(IC.accent)
-                                .frame(width: 24, height: 24).background(Color.white, in: Circle())
+                                .frame(width: 24, height: 24).background(IC.card, in: Circle())
                             Text(step).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                         }
                     }
@@ -423,7 +421,7 @@ struct SessionDetail: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(isRegular ? "Вы сказали:" : "Вы ответили:").font(.system(size: 12, weight: .semibold)).foregroundStyle(IC.secondary)
                     Text(e.answerText.isEmpty ? "Ваш ответ не записан" : "«\(e.answerText)»")
-                        .font(.system(size: 13)).foregroundStyle(e.answerText.isEmpty ? IC.secondary : Color(hex: 0x343942))
+                        .font(.system(size: 13)).foregroundStyle(e.answerText.isEmpty ? IC.secondary : IC.body)
                         .textSelection(.enabled)
                         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                         .background(IC.background, in: RoundedRectangle(cornerRadius: 10))
@@ -434,7 +432,7 @@ struct SessionDetail: View {
                             Label("Подсказка на экране", systemImage: "doc.text").font(.system(size: 12))
                         }
                         .padding(10)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                        .background(IC.card, in: RoundedRectangle(cornerRadius: 10))
                         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
                     }
                 }
@@ -462,7 +460,7 @@ struct SessionDetail: View {
             }
         }
         .padding(16)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+        .background(IC.card, in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(IC.line))
     }
 
@@ -480,7 +478,7 @@ struct SessionDetail: View {
                     TextField("Найти в расшифровке…", text: $search).textFieldStyle(.plain)
                 }
                 .padding(9)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                .background(IC.card, in: RoundedRectangle(cornerRadius: 10))
                 .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
                 Picker("Говорящие", selection: $speaker) {
                     Text("Все").tag(TimelineEntry.Speaker?.none)
@@ -543,7 +541,7 @@ struct SessionDetail: View {
                             ICLogo(size: 30)
                             MarkdownText(qa.answer, fontSize: 13).textSelection(.enabled)
                                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                                .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
                         }
                     }
@@ -559,7 +557,7 @@ struct SessionDetail: View {
                     .textFieldStyle(.plain)
                     .onSubmit { send(question) }
                     .padding(12)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                    .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
                 Button { send(question) } label: { Image(systemName: "paperplane.fill").frame(width: 20, height: 20) }
                     .buttonStyle(ICButtonStyle(primary: true))
@@ -596,7 +594,7 @@ private struct TranscriptBubble: View {
                 Label("Подсказка показана · \(line.clock)", systemImage: "sparkles").font(.system(size: 12)).foregroundStyle(IC.ink)
             }
             .padding(10)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
             .padding(.leading, 46)
         } else {
@@ -605,7 +603,7 @@ private struct TranscriptBubble: View {
                 Image(systemName: "person.fill").font(.system(size: 14)).foregroundStyle(owner ? .white : IC.secondary)
                     .frame(width: 34, height: 34)
                     .background(owner ? AnyShapeStyle(LinearGradient(colors: [Color(hex: 0x4388FF), Color(hex: 0x7048E8)], startPoint: .top, endPoint: .bottom))
-                                      : AnyShapeStyle(Color(hex: 0xE5E7EB)), in: Circle())
+                                      : AnyShapeStyle(IC.line), in: Circle())
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(owner ? "Вы" : asker).font(.system(size: 12, weight: .semibold))
@@ -613,7 +611,7 @@ private struct TranscriptBubble: View {
                     }
                     Text(line.text).font(.system(size: 13)).textSelection(.enabled)
                         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                        .background(owner ? IC.accent.opacity(0.08) : Color(hex: 0xF0F2F6), in: RoundedRectangle(cornerRadius: 12))
+                        .background(owner ? IC.accent.opacity(0.08) : IC.bubble, in: RoundedRectangle(cornerRadius: 12))
                 }
             }
             .accessibilityElement(children: .combine)
