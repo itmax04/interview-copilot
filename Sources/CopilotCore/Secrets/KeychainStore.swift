@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 /// Хранилище ключей API — R-23. Значение ключа никогда не логируется и не возвращается в UI после сохранения.
-/// Хранилище ключей. У провайдера до `KeySlots.max` ключей (COPILOT-09: несколько аккаунтов — когда у одного кончается
+/// Хранилище ключей. У провайдера сколько угодно ключей (COPILOT-09: несколько аккаунтов — когда у одного кончается
 /// лимит, ответ идет со следующего). Слот 1 — основной ключ, как раньше.
 public protocol SecretStore: Sendable {
     func set(_ value: String, for provider: ProviderID, slot: Int) throws
@@ -13,12 +13,17 @@ public protocol SecretStore: Sendable {
 }
 
 public enum KeySlots {
-    public static let max = 5
-    public static let range = 1...max
-
-    /// Слот 1 — `groq` (как до COPILOT-09), остальные — `groq#2`, `groq#3`…
+    /// Слот 1 — `groq` (как до COPILOT-09), остальные — `groq#2`, `groq#3`… без ограничения числа.
     public static func account(_ provider: ProviderID, _ slot: Int) -> String {
         slot <= 1 ? provider.rawValue : "\(provider.rawValue)#\(slot)"
+    }
+
+    /// Номер слота по имени ключа: `groq` → 1, `groq#7` → 7; чужой провайдер — nil.
+    public static func slot(of account: String, provider: ProviderID) -> Int? {
+        if account == provider.rawValue { return 1 }
+        let prefix = provider.rawValue + "#"
+        guard account.hasPrefix(prefix), let n = Int(account.dropFirst(prefix.count)), n >= 2 else { return nil }
+        return n
     }
 }
 
@@ -30,7 +35,7 @@ extension SecretStore {
     /// Слоты с ключом, по порядку.
     public func slots(_ provider: ProviderID, in accounts: Set<String>? = nil) -> [Int] {
         let all = accounts ?? self.accounts()
-        return KeySlots.range.filter { all.contains(KeySlots.account(provider, $0)) }
+        return all.compactMap { KeySlots.slot(of: $0, provider: provider) }.sorted()
     }
 
     /// Есть ли у провайдера хоть один ключ — без чтения значений.
@@ -44,10 +49,21 @@ extension SecretStore {
         }
     }
 
-    /// Первый свободный дополнительный слот (2…max); nil — все заняты.
-    public func freeExtraSlot(_ provider: ProviderID) -> Int? {
+    /// Слот для нового дополнительного ключа: первый свободный начиная с 2.
+    public func freeExtraSlot(_ provider: ProviderID) -> Int {
         let used = Set(slots(provider))
-        return (2...KeySlots.max).first { !used.contains($0) }
+        var n = 2
+        while used.contains(n) { n += 1 }
+        return n
+    }
+
+    /// Номера без пропусков после удаления (1, 2, 3…): «Ключ 3» в настройках и в причине ошибки — один и тот же ключ.
+    public func compactSlots(_ provider: ProviderID) throws {
+        for (index, slot) in slots(provider).enumerated() where slot != index + 1 {
+            guard let value = try get(provider, slot: slot) else { continue }
+            try set(value, for: provider, slot: index + 1)
+            try delete(provider, slot: slot)
+        }
     }
 }
 

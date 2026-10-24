@@ -24,7 +24,7 @@ final class AppModel {
     private(set) var hasKey: [ProviderID: Bool] = [:]
     private(set) var keyStatus: [ProviderID: String] = [:]
     private(set) var checking: Set<ProviderID> = []
-    /// Дополнительные ключи (слоты 2…5) по провайдерам — значения в UI не попадают (COPILOT-09: несколько аккаунтов).
+    /// Дополнительные ключи (слоты 2, 3…) по провайдерам — значения в UI не попадают (COPILOT-09: несколько аккаунтов).
     private(set) var extraSlots: [ProviderID: [Int]] = [:]
     /// Статус и проверка дополнительного ключа — по имени `groq#2`.
     private(set) var slotStatus: [String: String] = [:]
@@ -73,6 +73,7 @@ final class AppModel {
         } catch {
             keyStatus[provider] = "\(error)"
         }
+        ProviderHealth.shared.reset()   // ключи изменились — прежние «лимит» и «недействителен» больше не про них
         refreshKeys()
         onChange?()
     }
@@ -89,10 +90,7 @@ final class AppModel {
     /// Еще один ключ того же провайдера (другой аккаунт): когда у первого кончается лимит, ответ идет со следующего.
     func addExtraKey(_ value: String, for provider: ProviderID) {
         let secrets = self.secrets
-        guard let slot = secrets.freeExtraSlot(provider) else {
-            keyStatus[provider] = "Не больше \(KeySlots.max) ключей на провайдера"
-            return
-        }
+        let slot = secrets.freeExtraSlot(provider)
         do {
             try secrets.set(value, for: provider, slot: slot)
             slotStatus[KeySlots.account(provider, slot)] = "Сохранён"
@@ -100,18 +98,25 @@ final class AppModel {
         } catch {
             keyStatus[provider] = "\(error)"
         }
+        ProviderHealth.shared.reset()   // ключи изменились — прежние «лимит» и «недействителен» больше не про них
         refreshKeys()
         onChange?()
     }
 
+    /// Удаление любого ключа; остальные перенумеровываются без пропусков (удален основной — его место занимает «Ключ 2»).
     func deleteKey(_ provider: ProviderID, slot: Int) {
-        guard slot > 1 else { deleteKey(provider); return }
         do {
             try secrets.delete(provider, slot: slot)
-            slotStatus[KeySlots.account(provider, slot)] = nil
+            try secrets.compactSlots(provider)
+            // Номера сдвинулись — прежние статусы относятся к другим ключам.
+            for key in slotStatus.keys where KeySlots.slot(of: key, provider: provider) != nil { slotStatus[key] = nil }
+            let left = secrets.slots(provider)
+            keyStatus[provider] = left.isEmpty ? "Удалён" : (slot == 1 ? "Удалён — основным стал следующий ключ" : nil)
+            if left.isEmpty { availableModels[provider] = nil }
         } catch {
             keyStatus[provider] = "\(error)"
         }
+        ProviderHealth.shared.reset()   // ключи изменились — прежние «лимит» и «недействителен» больше не про них
         refreshKeys()
         onChange?()
     }
@@ -137,17 +142,7 @@ final class AppModel {
         }
     }
 
-    func deleteKey(_ provider: ProviderID) {
-        do {
-            try secrets.delete(provider)
-            keyStatus[provider] = "Удалён"
-            availableModels[provider] = nil
-        } catch {
-            keyStatus[provider] = "\(error)"
-        }
-        refreshKeys()
-        onChange?()
-    }
+    func deleteKey(_ provider: ProviderID) { deleteKey(provider, slot: 1) }
 
     func checkKey(_ provider: ProviderID) {
         guard !checking.contains(provider) else { return }

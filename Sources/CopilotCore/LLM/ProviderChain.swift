@@ -29,6 +29,8 @@ public final class ProviderHealth: @unchecked Sendable {
     private let lock = NSLock()
     private var until: [String: Date] = [:]
     public var cooldown: TimeInterval = 300
+    /// Ключ с лимитом (429) без подсказки провайдера, когда пробовать снова.
+    public var rateLimitCooldown: TimeInterval = 60
 
     public init() {}
 
@@ -45,8 +47,14 @@ public final class ProviderHealth: @unchecked Sendable {
 
     public func reportFailure(_ p: ProviderID, _ model: String, slot: Int = 1, _ error: LLMError, now: Date = Date()) {
         switch error {
-        case .http(429, _):
-            lock.withLock { until[Self.key(p, model, slot: slot)] = now.addingTimeInterval(cooldown) }
+        case .http(429, let message):
+            // До сброса лимита по подсказке провайдера (минутный — секунды, дневной — часы), иначе минута.
+            let wait = RetryHint.seconds(inText: message).map { min(max($0, 3), 24 * 3600) } ?? rateLimitCooldown
+            lock.withLock { until[Self.key(p, model, slot: slot)] = now.addingTimeInterval(wait) }
+        case .http(let s, _) where s == 401 || s == 403:
+            // Отозванный ключ — не первым полчаса (иначе каждый вопрос тратит на него запрос); модель и другие ключи живы.
+            // Новый ключ в настройках сбрасывает остывание (`reset`).
+            lock.withLock { until[Self.key(p, model, slot: slot)] = now.addingTimeInterval(1800) }
         case .firstTokenTimeout, .network:
             lock.withLock { until[Self.key(p, model)] = now.addingTimeInterval(cooldown) }
         case .http(let s, _) where s >= 500:

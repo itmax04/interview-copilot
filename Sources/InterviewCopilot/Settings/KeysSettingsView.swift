@@ -91,7 +91,7 @@ private struct KeyRow: View {
             }
             .accessibilityElement(children: .combine)
         }
-        if model.hasKey[provider] == true, slots.count < KeySlots.max - 1 {
+        if model.hasKey[provider] == true {
             HStack {
                 SecureField("Еще ключ — другого аккаунта", text: $extraInput)
                     .textFieldStyle(.roundedBorder)
@@ -100,11 +100,10 @@ private struct KeyRow: View {
                 Button("Добавить", action: addExtra)
                     .disabled(extraInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            if slots.isEmpty {
-                Text("Можно добавить до \(KeySlots.max - 1) ключей: когда у одного кончается лимит, ответ сразу идет со следующего, "
-                     + "и только потом — со следующего провайдера.")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }
+            Text("Ключей — сколько нужно. Сначала по очереди пробуются все ключи этого провайдера: кончился лимит у одного — "
+                 + "ответ сразу идет со следующего; ключ с лимитом ждет сброса и не пробуется первым. Только когда лимит у всех "
+                 + "ключей — следующий провайдер из цепочки.")
+                .font(.footnote).foregroundStyle(.secondary)
         }
     }
 

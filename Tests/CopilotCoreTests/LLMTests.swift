@@ -330,10 +330,12 @@ struct ProviderChainTests {
         #expect(text(second) == "ok")
     }
 
-    @Test func invalidKeyDoesNotCoolDown() {
+    @Test func invalidKeyCoolsOnlyThatKey() {
         let health = ProviderHealth()
+        // Неверный ключ — остывает только этот ключ (несколько ключей, COPILOT-09); модель для других ключей жива.
         health.reportFailure(.gemini, "m", .http(status: 401, message: ""))
-        #expect(!health.isCoolingDown(.gemini, "m"))
+        #expect(health.isCoolingDown(.gemini, "m", slot: 1) && !health.isCoolingDown(.gemini, "m", slot: 2))
+        health.reset()
         health.reportFailure(.gemini, "m", .http(status: 503, message: ""))
         #expect(health.isCoolingDown(.gemini, "m"))
         health.reportSuccess(.gemini, "m")

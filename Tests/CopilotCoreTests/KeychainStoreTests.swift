@@ -7,7 +7,7 @@ import Testing
 struct KeychainStoreTests {
     private func withStore(_ body: (KeychainStore) throws -> Void) rethrows {
         let store = KeychainStore(service: "com.itmax04.interviewcopilot.tests.\(UUID().uuidString)")
-        defer { for p in ProviderID.allCases { for slot in KeySlots.range { try? store.delete(p, slot: slot) } } }
+        defer { for p in ProviderID.allCases { for slot in store.slots(p) { try? store.delete(p, slot: slot) } } }
         try body(store)
     }
 

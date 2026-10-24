@@ -110,7 +110,13 @@ enum SSE {
                     if body.count > 4000 { break }
                 }
             } catch {}
-            throw LLMError.http(status: response.statusCode, message: errorMessage(body, key: key))
+            var message = errorMessage(body, key: key)
+            // 429: когда снова пробовать этот ключ — до обрезки текста (у Groq «try again in» — в конце длинного сообщения).
+            if response.statusCode == 429,
+               let wait = RetryHint.seconds(header: response.value(forHTTPHeaderField: "retry-after"), body: body) {
+                message = RetryHint.tag(wait) + message
+            }
+            throw LLMError.http(status: response.statusCode, message: message)
         }
         return AsyncThrowingStream { continuation in
             let task = Task {
