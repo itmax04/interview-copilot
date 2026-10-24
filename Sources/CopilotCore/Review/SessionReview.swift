@@ -100,7 +100,10 @@ public struct TimelineEntry: Equatable, Sendable, Identifiable {
     public var offset: TimeInterval
 
     /// «12:05».
-    public var clock: String {
+    public var clock: String { Self.clock(offset) }
+
+    /// Время от начала сессии: «12:05», «1:02:05».
+    public static func clock(_ offset: TimeInterval) -> String {
         let s = max(0, Int(offset))
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60) : String(format: "%d:%02d", s / 60, s % 60)
     }

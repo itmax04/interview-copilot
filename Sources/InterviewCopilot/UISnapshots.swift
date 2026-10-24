@@ -116,14 +116,15 @@ enum UISnapshots {
         // Разбор (COPILOT-09 R-13, R-14): вкладки окна сессии и разбор в работе.
         var reviewed = sampleSession(store)
         for (name, tab) in [("history-transcript", SessionDetail.Tab.transcript), ("history-ask", .ask)] {
-            shot(name, NSSize(width: 720, height: 680), SessionDetail(session: reviewed, reviews: nil, tab: tab, onDelete: {})
+            shot(name, NSSize(width: 950, height: 820), SessionDetail(session: reviewed, reviews: nil, tab: tab, onDelete: {})
                 .background(Color(nsColor: .windowBackgroundColor)))
         }
+        shot("history-summary", NSSize(width: 950, height: 820), SessionDetail(session: reviewed, reviews: nil, onBack: {}, onDelete: {}))
         reviewed.review = SessionReview()
         reviewed.review?.status = .failed("Модели недоступны: Groq — лимит запросов (429)")
         reviewed.review?.comments = [sampleSession(store).review!.comments[0]]
         reviewed.review?.summary = nil
-        shot("history-review-failed", NSSize(width: 720, height: 680), SessionDetail(session: reviewed, reviews: nil, onDelete: {})
+        shot("history-review-failed", NSSize(width: 950, height: 820), SessionDetail(session: reviewed, reviews: nil, onDelete: {})
             .background(Color(nsColor: .windowBackgroundColor)))
 
         // Главное окно (COPILOT-09 этап 6, P12): все разделы на синтетических данных.

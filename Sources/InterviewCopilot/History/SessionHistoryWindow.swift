@@ -2,7 +2,7 @@ import AppKit
 import CopilotCore
 import SwiftUI
 
-/// Окно сессий — R-19, COPILOT-09 R-14: список, разбор («Сводка»), расшифровка по говорящим, «Спросить ИИ», удаление.
+/// Отдельное окно сессий (R-19). С COPILOT-09 этап 6 сессии живут в главном окне; окно оставлено для совместимости.
 @MainActor
 final class SessionHistoryWindowController {
     private var window: NSWindow?
@@ -14,7 +14,6 @@ final class SessionHistoryWindowController {
         self.reviews = reviews
     }
 
-    /// `select` — открыть на этой сессии (после End — только что завершенная).
     func show(select: String? = nil) {
         sessions.saveNow()
         let view = SessionHistoryView(store: sessions.store, reviews: reviews, initialSelection: select)
@@ -24,7 +23,7 @@ final class SessionHistoryWindowController {
             let w = NSWindow(contentViewController: NSHostingController(rootView: view))
             w.title = "Сессии"
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            w.setContentSize(NSSize(width: 980, height: 680))
+            w.setContentSize(NSSize(width: 980, height: 720))
             w.isReleasedWhenClosed = false
             w.center()
             window = w
@@ -34,376 +33,632 @@ final class SessionHistoryWindowController {
     }
 }
 
+private let ru = Locale(identifier: "ru_RU")
+
+/// «Сессии» (P15): список сессий → страница сессии с разбором. Разбор идет в фоне — запись перечитывается на каждом шаге.
 struct SessionHistoryView: View {
     let store: SessionStore
     var reviews: ReviewController?
     var initialSelection: String?
     @State private var sessions: [SessionRecord] = []
     @State private var selection: String?
+    @State private var search = ""
     @State private var confirmDeleteAll = false
 
     var body: some View {
-        NavigationSplitView {
-            List(sessions, selection: $selection) { s in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(s.config?.company.isEmpty == false ? s.config!.company : s.startedAt.formatted(date: .abbreviated, time: .shortened))
-                    Text(subtitle(s)).font(.caption).foregroundStyle(.secondary)
-                }
-                .tag(s.id)
-                .contextMenu {
-                    Button("Удалить", role: .destructive) { delete(s.id) }
-                }
-            }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260)
-            .toolbar {
-                ToolbarItem {
-                    Button("Удалить всё", role: .destructive) { confirmDeleteAll = true }
-                        .disabled(sessions.isEmpty)
-                }
-            }
-        } detail: {
+        Group {
             if let id = selection, let s = sessions.first(where: { $0.id == id }) {
-                SessionDetail(session: s, reviews: reviews) { delete(s.id) }
+                SessionDetail(session: s, reviews: reviews, onBack: { selection = nil }) { delete(s.id) }
                     .id(s.id)
             } else {
-                Text(sessions.isEmpty ? "История пуста" : "Выберите сессию").foregroundStyle(.secondary)
+                list
             }
         }
-        .tint(Theme.accent)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(IC.background)
+        .foregroundStyle(IC.ink)
+        .tint(IC.accent)
+        .environment(\.colorScheme, .light)
         .onAppear {
-            selection = initialSelection
-            reload()
+            sessions = store.list()
+            if let initialSelection, sessions.contains(where: { $0.id == initialSelection }) { selection = initialSelection }
         }
-        // Разбор идет в фоне — запись перечитывается при каждом шаге.
-        .onChange(of: reviews?.version) { reload() }
-        .confirmationDialog("Удалить всю историю сессий?", isPresented: $confirmDeleteAll) {
+        .onChange(of: reviews?.version) { sessions = store.list() }
+        .confirmationDialog("Удалить всю историю сессий вместе с разбором?", isPresented: $confirmDeleteAll) {
             Button("Удалить всё", role: .destructive) {
                 try? store.deleteAll()
-                reload()
+                sessions = store.list()
             }
         }
     }
 
-    private func subtitle(_ s: SessionRecord) -> String {
-        var parts = [s.config?.type.title ?? (s.source ?? "—")]
-        if s.config?.company.isEmpty == false { parts.append(s.startedAt.formatted(date: .abbreviated, time: .shortened)) }
-        parts.append(RussianPlural.questions(max(s.exchanges.count, s.turns.count)))
-        if case .done = s.review?.status { parts.append("разбор") }
-        return parts.joined(separator: " · ")
+    private var filtered: [SessionRecord] {
+        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return sessions }
+        return sessions.filter { s in
+            [s.config?.company ?? "", s.source ?? "", s.config?.jobDescription ?? ""].joined(separator: " ").lowercased().contains(q)
+                || s.exchanges.contains { $0.question.lowercased().contains(q) }
+        }
     }
 
-    private func reload() {
-        sessions = store.list()
-        if selection == nil || !sessions.contains(where: { $0.id == selection }) { selection = sessions.first?.id }
+    private var list: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .bottom) {
+                ICPageHeader(title: "Сессии", subtitle: "Звонки, ваши ответы, подсказки и разбор. История хранится только на этом Mac.")
+                Button("Удалить всё", role: .destructive) { confirmDeleteAll = true }
+                    .buttonStyle(ICButtonStyle())
+                    .disabled(sessions.isEmpty)
+            }
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").foregroundStyle(IC.secondary)
+                TextField("Найти по компании или вопросу…", text: $search).textFieldStyle(.plain)
+            }
+            .padding(10)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
+            if sessions.isEmpty {
+                ICEmptyState(icon: "clock", title: "Сессий пока нет",
+                             detail: "Создайте сессию перед звонком — после «Завершить» здесь появятся расшифровка и разбор.")
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(filtered) { s in
+                            Button { selection = s.id } label: { SessionRow(session: s) }
+                                .buttonStyle(.plain)
+                                .contextMenu { Button("Удалить", role: .destructive) { delete(s.id) } }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(28)
     }
 
     private func delete(_ id: String) {
         try? store.delete(id)
         if selection == id { selection = nil }
-        reload()
+        sessions = store.list()
     }
 }
+
+private struct SessionRow: View {
+    let session: SessionRecord
+    var body: some View {
+        HStack(spacing: 14) {
+            CompanyAvatar(name: company, size: 38)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(company).font(.system(size: 14, weight: .semibold))
+                Text(details).font(.system(size: 12)).foregroundStyle(IC.secondary).lineLimit(1)
+            }
+            Spacer()
+            ICBadge(text: session.config?.type.title ?? "Сессия")
+            ReviewStatusBadge(session: session)
+            Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(IC.secondary)
+        }
+        .padding(14)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
+        .contentShape(Rectangle())
+    }
+
+    private var company: String { session.config?.company.isEmpty == false ? session.config!.company : (session.source ?? "Сессия") }
+    private var details: String {
+        var parts = [session.startedAt.formatted(.dateTime.day().month(.wide).hour().minute().locale(ru))]
+        if let end = session.endedAt { parts.append("\(max(1, Int(end.timeIntervalSince(session.startedAt) / 60))) мин") }
+        parts.append(RussianPlural.questions(max(session.exchanges.count, session.turns.count)))
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// Буква компании на цветном квадрате — стабильный цвет по имени, без чужих логотипов.
+struct CompanyAvatar: View {
+    let name: String
+    var size: CGFloat = 32
+    var body: some View {
+        let palette: [Color] = [IC.accent, Color(hex: 0x7048E8), Color(hex: 0x1098AD), Color(hex: 0xE8590C), Color(hex: 0x2B8A3E), Color(hex: 0xC2255C)]
+        let color = palette[name.unicodeScalars.reduce(0) { $0 + Int($1.value) } % palette.count]
+        Text(String(name.prefix(1)).uppercased())
+            .font(.system(size: size * 0.44, weight: .bold)).foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(color, in: RoundedRectangle(cornerRadius: size * 0.26))
+            .accessibilityHidden(true)
+    }
+}
+
+struct ReviewStatusBadge: View {
+    let session: SessionRecord
+    var body: some View {
+        switch session.review?.status {
+        case .done: ICBadge(text: "Разбор готов", color: IC.green, dot: true)
+        case .failed: ICBadge(text: "Разбор прерван", color: IC.amber, dot: true)
+        case .running, .pending: ICBadge(text: "Разбор идет", color: IC.accent, dot: true)
+        case .none: EmptyView()
+        }
+    }
+}
+
+// MARK: Страница сессии (P15, P16)
 
 struct SessionDetail: View {
     enum Tab: String, CaseIterable {
         case summary = "Сводка"
         case transcript = "Расшифровка"
         case ask = "Спросить ИИ"
+        var symbol: String {
+            switch self {
+            case .summary: "doc.text"
+            case .transcript: "text.alignleft"
+            case .ask: "sparkles"
+            }
+        }
     }
 
     let session: SessionRecord
     var reviews: ReviewController?
+    var onBack: (() -> Void)?
     let onDelete: () -> Void
     @State private var tab: Tab
-
-    init(session: SessionRecord, reviews: ReviewController?, tab: Tab = .summary, onDelete: @escaping () -> Void) {
-        self.session = session
-        self.reviews = reviews
-        self.onDelete = onDelete
-        _tab = State(initialValue: tab)
-    }
     @State private var showHints = true
+    @State private var speaker: TimelineEntry.Speaker?
+    @State private var search = ""
     @State private var question = ""
     @State private var confirmDelete = false
 
+    init(session: SessionRecord, reviews: ReviewController?, tab: Tab = .summary, onBack: (() -> Void)? = nil,
+         onDelete: @escaping () -> Void) {
+        self.session = session
+        self.reviews = reviews
+        self.onBack = onBack
+        self.onDelete = onDelete
+        _tab = State(initialValue: tab)
+    }
+
     private var isRegular: Bool { session.config?.type == .regular }
     private var asker: String { isRegular ? "Собеседник" : "Интервьюер" }
+    private var running: Bool { reviews?.running.contains(session.id) == true }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             header
-            reviewStatus
-            Picker("Раздел", selection: $tab) {
-                ForEach(Tab.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            tabs
             switch tab {
             case .summary: summaryTab
             case .transcript: transcriptTab
             case .ask: askTab
             }
         }
-        .padding(20)
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(IC.background)
+        .foregroundStyle(IC.ink)
+        .environment(\.colorScheme, .light)
         .confirmationDialog("Удалить сессию вместе с разбором?", isPresented: $confirmDelete) {
             Button("Удалить", role: .destructive, action: onDelete)
         }
     }
 
-    // MARK: Шапка и статус разбора
+    // MARK: Шапка
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.title3.bold())
-                Text(details).foregroundStyle(.secondary).font(.callout)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 8) {
+                if let onBack {
+                    Button(action: onBack) { Label("К списку сессий", systemImage: "arrow.left") }
+                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(IC.secondary)
+                }
+                Text(title).font(.system(size: 30, weight: .bold)).lineLimit(1)
+                HStack(spacing: 10) {
+                    Text(details).font(.system(size: 14)).foregroundStyle(IC.secondary)
+                    ICBadge(text: session.config?.type.title ?? "Сессия")
+                }
             }
             Spacer()
-            Button("Удалить сессию", role: .destructive) { confirmDelete = true }
+            VStack(alignment: .trailing, spacing: 10) {
+                Button { confirmDelete = true } label: { Image(systemName: "trash").frame(width: 20, height: 20) }
+                    .buttonStyle(ICButtonStyle())
+                    .help("Удалить сессию")
+                    .accessibilityLabel("Удалить сессию")
+                reviewProgress
+            }
         }
     }
 
     private var title: String {
-        let date = session.startedAt.formatted(date: .long, time: .shortened)
-        guard let c = session.config, !c.company.isEmpty else { return date }
-        return "\(c.company) — \(date)"
+        if let c = session.config, !c.company.isEmpty { return c.company }
+        return session.source ?? "Сессия"
     }
 
     private var details: String {
-        var parts: [String] = []
-        if let c = session.config { parts.append(c.type.title) }
+        var parts = [session.startedAt.formatted(.dateTime.day().month(.wide).year().hour().minute().locale(ru))]
         if let end = session.endedAt { parts.append("\(max(1, Int(end.timeIntervalSince(session.startedAt) / 60))) мин") }
-        if let src = session.source { parts.append(src) }
-        parts.append(RussianPlural.questions(max(session.exchanges.count, session.turns.count)))
         return parts.joined(separator: " · ")
     }
 
-    @ViewBuilder private var reviewStatus: some View {
-        let running = reviews?.running.contains(session.id) == true
+    /// P15: «Разбор готов» с полосой; в работе — «N из M», ошибка — причина и «Повторить».
+    @ViewBuilder private var reviewProgress: some View {
         switch session.review?.status {
-        case .running(let done, let total) where running:
-            statusRow(icon: nil, text: total > 0 && done < total ? "Разбор: \(done) из \(total) ответов…" : "Разбор: сводка…", color: .secondary)
-        case .pending where running, .none where running:
-            statusRow(icon: nil, text: "Разбор начинается…", color: .secondary)
-        case .failed(let reason):
-            HStack {
-                statusRow(icon: "exclamationmark.triangle.fill", text: "Разбор не закончен: \(reason). Готовые комментарии и расшифровка сохранены.", color: Theme.warn)
-                Spacer()
-                Button("Повторить") { reviews?.start(session.id) }.disabled(reviews == nil || running)
-            }
         case .done:
-            EmptyView()
+            progress(text: "Разбор готов", value: 1, color: IC.green, icon: "checkmark.circle.fill")
+        case .running(let done, let total) where running:
+            progress(text: total > 0 && done < total ? "Разбор: \(done) из \(total) ответов" : "Разбор: сводка…",
+                     value: total > 0 ? Double(done) / Double(total + 1) : 0.5, color: IC.accent, icon: nil)
+        case .pending where running, .none where running:
+            progress(text: "Разбор начинается…", value: 0.05, color: IC.accent, icon: nil)
+        case .failed(let reason):
+            VStack(alignment: .trailing, spacing: 6) {
+                Label("Разбор не закончен", systemImage: "exclamationmark.triangle.fill").foregroundStyle(IC.amber)
+                    .font(.system(size: 12, weight: .medium))
+                Text(reason).font(.system(size: 11)).foregroundStyle(IC.secondary).lineLimit(2).frame(maxWidth: 300, alignment: .trailing)
+                Button("Повторить") { reviews?.start(session.id) }.buttonStyle(ICButtonStyle(primary: true)).disabled(reviews == nil || running)
+            }
         default:
             if session.canBeReviewed, reviews != nil {
-                HStack {
-                    statusRow(icon: "sparkles", text: session.review == nil ? "Разбора нет" : "Разбор прерван", color: .secondary)
-                    Spacer()
-                    Button(session.review == nil ? "Сделать разбор" : "Продолжить разбор") { reviews?.start(session.id) }
-                        .disabled(running)
-                }
+                Button(session.review == nil ? "Сделать разбор" : "Продолжить разбор") { reviews?.start(session.id) }
+                    .buttonStyle(ICButtonStyle(primary: true)).disabled(running)
             }
         }
     }
 
-    private func statusRow(icon: String?, text: String, color: Color) -> some View {
-        HStack(spacing: 8) {
-            if let icon { Image(systemName: icon).foregroundStyle(color) } else { ProgressView().controlSize(.small) }
-            Text(text).foregroundStyle(color).font(.callout).fixedSize(horizontal: false, vertical: true)
+    private func progress(text: String, value: Double, color: Color, icon: String?) -> some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            HStack(spacing: 6) {
+                if let icon { Image(systemName: icon).foregroundStyle(color) } else { ProgressView().controlSize(.small) }
+                Text(text).font(.system(size: 12, weight: .medium))
+            }
+            ProgressView(value: value).tint(color).frame(width: 260)
         }
     }
 
-    // MARK: Сводка: общая сводка, затем вопрос → ваш ответ → комментарий → подсказка
+    private var tabs: some View {
+        HStack(spacing: 4) {
+            ForEach(Tab.allCases, id: \.self) { t in
+                let selected = t == tab
+                Button { tab = t } label: {
+                    Label(t.rawValue, systemImage: t.symbol)
+                        .font(.system(size: 14, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? IC.accent : Color(hex: 0x45516C))
+                        .frame(maxWidth: .infinity).padding(.vertical, 9)
+                        .background(selected ? Color.white : .clear, in: RoundedRectangle(cornerRadius: 9))
+                        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(selected ? IC.accent.opacity(0.5) : .clear))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(Color(hex: 0xEDF0F7), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    // MARK: Сводка
 
     private var summaryTab: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                if let s = session.review?.summary { summaryCard(s) }
+            VStack(alignment: .leading, spacing: 18) {
+                if let s = session.review?.summary { summaryRow(s) }
                 if session.exchanges.isEmpty {
                     // Сессии до COPILOT-06: только вопросы и подсказки.
                     ForEach(Array(session.turns.enumerated()), id: \.offset) { _, t in
-                        card {
-                            Text(t.question).font(.headline)
-                            Text(t.answer.isEmpty ? "Нет в базе" : t.answer).textSelection(.enabled)
-                            Text(meta(t)).font(.caption).foregroundStyle(.secondary)
+                        ICCard(padding: 16) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(t.question).font(.system(size: 15, weight: .semibold))
+                                MarkdownText(t.answer.isEmpty ? "Нет в базе" : t.answer, fontSize: 13)
+                            }
                         }
                     }
+                } else {
+                    Text("Разбор вопросов (\(session.exchanges.count))").font(.system(size: 18, weight: .semibold))
+                    ForEach(Array(session.exchanges.enumerated()), id: \.element.id) { i, e in exchangeCard(e, number: i + 1) }
                 }
-                ForEach(session.exchanges) { e in exchangeCard(e) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
-    private func summaryCard(_ s: ReviewSummary) -> some View {
-        card {
-            Text("Сводка").font(.headline)
-            if !s.overview.isEmpty { Text(s.overview).textSelection(.enabled) }
-            list("Темы", s.topics, icon: "text.bubble")
-            list("Получилось", s.strengths, icon: "checkmark.circle", color: Theme.ok)
-            list("Что улучшить", s.weaknesses, icon: "arrow.up.circle", color: Theme.warn)
-            list("Договоренности", s.agreements, icon: "handshake")
-            list("Следующие шаги", s.nextSteps, icon: "arrow.right.circle", color: Theme.accent)
-        }
-    }
-
-    @ViewBuilder private func list(_ title: String, _ items: [String], icon: String, color: Color = .secondary) -> some View {
-        if !items.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.subheadline.weight(.semibold)).padding(.top, 4)
-                ForEach(items, id: \.self) { item in
-                    Label { Text(item).textSelection(.enabled) } icon: { Image(systemName: icon).foregroundStyle(color) }
+    private func summaryRow(_ s: ReviewSummary) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Общее впечатление", systemImage: "lightbulb").font(.system(size: 15, weight: .semibold)).foregroundStyle(IC.ink)
+                Text(s.overview).font(.system(size: 13)).foregroundStyle(Color(hex: 0x343942)).textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !s.topics.isEmpty {
+                    FlowChips(items: s.topics)
                 }
             }
-        }
-    }
-
-    private func exchangeCard(_ e: SessionExchange) -> some View {
-        card {
-            Text(e.question).font(.headline).textSelection(.enabled)
-            if e.answerText.isEmpty {
-                Text("Ваш ответ не записан").foregroundStyle(.secondary).font(.callout)
-            } else {
-                Text("Вы: \(e.answerText)").textSelection(.enabled)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(IC.green.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
+            VStack(alignment: .leading, spacing: 12) {
+                bullets(isRegular ? "Договоренности" : "Сильные стороны", isRegular ? s.agreements : s.strengths,
+                        icon: isRegular ? "checkmark.seal.fill" : "checkmark.circle.fill", color: IC.green)
+                if !isRegular { bullets("Зоны для улучшения", s.weaknesses, icon: "exclamationmark.circle.fill", color: IC.red) }
             }
-            if let c = session.review?.comment(for: e.id) {
-                VStack(alignment: .leading, spacing: 4) {
-                    if !c.good.isEmpty { Label(c.good, systemImage: "checkmark.circle").foregroundStyle(Theme.ok) }
-                    if !c.missing.isEmpty { Label(c.missing, systemImage: "exclamationmark.circle").foregroundStyle(Theme.warn) }
-                    if !c.better.isEmpty {
-                        (Text("Лучше: ").fontWeight(.semibold) + Text(c.better)).textSelection(.enabled)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(IC.line))
+            if !s.nextSteps.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Следующие шаги", systemImage: "flag").font(.system(size: 15, weight: .semibold)).foregroundStyle(IC.accent)
+                    ForEach(Array(s.nextSteps.enumerated()), id: \.offset) { i, step in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text("\(i + 1)").font(.system(size: 12, weight: .semibold)).foregroundStyle(IC.accent)
+                                .frame(width: 24, height: 24).background(Color.white, in: Circle())
+                            Text(step).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                        }
                     }
                 }
-                .font(.callout)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Theme.accent.opacity(0.08)))
-            }
-            if let hint = e.hint, !hint.isEmpty {
-                DisclosureGroup("Подсказка на экране") {
-                    MarkdownText(hint, fontSize: 12).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .font(.caption)
+                .padding(16)
+                .frame(width: 260, alignment: .topLeading)
+                .background(IC.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 14))
             }
         }
     }
 
-    // MARK: Расшифровка по говорящим
+    @ViewBuilder private func bullets(_ title: String, _ items: [String], icon: String, color: Color) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(title) (\(items.count))").font(.system(size: 13, weight: .semibold))
+                ForEach(items, id: \.self) { item in
+                    Label { Text(item).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled) }
+                        icon: { Image(systemName: icon).foregroundStyle(color) }
+                }
+            }
+        }
+    }
+
+    private func exchangeCard(_ e: SessionExchange, number: Int) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text("\(number)").font(.system(size: 13, weight: .semibold)).foregroundStyle(IC.accent)
+                    .frame(width: 28, height: 28).background(IC.accent.opacity(0.1), in: Circle())
+                Text(e.question).font(.system(size: 15, weight: .semibold)).textSelection(.enabled)
+                Spacer()
+                Text(clock(e.askedAt)).font(.system(size: 12).monospacedDigit()).foregroundStyle(IC.secondary)
+            }
+            HStack(alignment: .top, spacing: 14) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(isRegular ? "Вы сказали:" : "Вы ответили:").font(.system(size: 12, weight: .semibold)).foregroundStyle(IC.secondary)
+                    Text(e.answerText.isEmpty ? "Ваш ответ не записан" : "«\(e.answerText)»")
+                        .font(.system(size: 13)).foregroundStyle(e.answerText.isEmpty ? IC.secondary : Color(hex: 0x343942))
+                        .textSelection(.enabled)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(IC.background, in: RoundedRectangle(cornerRadius: 10))
+                    if let hint = e.hint, !hint.isEmpty {
+                        DisclosureGroup {
+                            MarkdownText(hint, fontSize: 12).foregroundStyle(IC.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                        } label: {
+                            Label("Подсказка на экране", systemImage: "doc.text").font(.system(size: 12))
+                        }
+                        .padding(10)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                if let c = session.review?.comment(for: e.id) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Комментарий ИИ", systemImage: "sparkles").font(.system(size: 13, weight: .semibold)).foregroundStyle(IC.accent)
+                        if !c.good.isEmpty { (Text("Хорошо: ").fontWeight(.semibold) + Text(c.good)).font(.system(size: 12)) }
+                        if !c.missing.isEmpty { (Text("Не хватило: ").fontWeight(.semibold) + Text(c.missing)).font(.system(size: 12)) }
+                        if !c.better.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Лучше сказать:").font(.system(size: 12, weight: .semibold)).foregroundStyle(IC.accent)
+                                Text("«\(c.better)»").font(.system(size: 12)).textSelection(.enabled)
+                            }
+                            .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(IC.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .background(IC.accent.opacity(0.04), in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.accent.opacity(0.12)))
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.white, in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(IC.line))
+    }
+
+    private func clock(_ date: Date) -> String {
+        TimelineEntry.clock(date.timeIntervalSince(session.startedAt))
+    }
+
+    // MARK: Расшифровка (P16)
 
     private var transcriptTab: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle("Показывать подсказки", isOn: $showHints).toggleStyle(.checkbox)
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 8) {
-                    let lines = session.timeline.filter { showHints || $0.speaker != .hint }
-                    if lines.isEmpty { Text("Расшифровки нет").foregroundStyle(.secondary) }
-                    ForEach(lines) { line in
-                        HStack(alignment: .top, spacing: 10) {
-                            Text(line.clock).font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 52, alignment: .trailing)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(label(line.speaker)).font(.caption.weight(.semibold)).foregroundStyle(color(line.speaker))
-                                if line.speaker == .hint {
-                                    MarkdownText(line.text, fontSize: 12).foregroundStyle(.secondary)
-                                } else {
-                                    Text(line.text).textSelection(.enabled)
-                                }
-                            }
-                            .padding(line.speaker == .hint ? 8 : 0)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(line.speaker == .hint ? Color.secondary.opacity(0.08) : .clear))
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(IC.secondary)
+                    TextField("Найти в расшифровке…", text: $search).textFieldStyle(.plain)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(9)
+                .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
+                Picker("Говорящие", selection: $speaker) {
+                    Text("Все").tag(TimelineEntry.Speaker?.none)
+                    Text(asker).tag(TimelineEntry.Speaker?.some(.interviewer))
+                    Text("Вы").tag(TimelineEntry.Speaker?.some(.owner))
+                }
+                .frame(width: 170)
+                Toggle("Подсказки", isOn: $showHints).toggleStyle(.checkbox)
+            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12) {
+                    let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+                    let lines = session.timeline.filter { line in
+                        (showHints || line.speaker != .hint)
+                            && (speaker == nil || line.speaker == speaker || (line.speaker == .hint && speaker == nil))
+                            && (q.isEmpty || line.text.lowercased().contains(q))
+                    }
+                    if lines.isEmpty { Text("Ничего не найдено").foregroundStyle(IC.secondary) }
+                    ForEach(lines) { line in TranscriptBubble(line: line, asker: asker) }
+                }
+                .frame(maxWidth: 760, alignment: .leading)
             }
         }
     }
 
-    private func label(_ s: TimelineEntry.Speaker) -> String {
-        switch s {
-        case .interviewer: asker
-        case .owner: "Вы"
-        case .hint: "Подсказка"
-        }
-    }
-
-    private func color(_ s: TimelineEntry.Speaker) -> Color {
-        switch s {
-        case .interviewer: Theme.accent
-        case .owner: Theme.ok
-        case .hint: .secondary
-        }
-    }
-
-    // MARK: Спросить ИИ
+    // MARK: Спросить ИИ (P16)
 
     private var askTab: some View {
         let busy = reviews?.asking.contains(session.id) == true
-        return VStack(alignment: .leading, spacing: 10) {
+        let chat = session.review?.chat ?? []
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Text("Спросить ИИ").font(.system(size: 18, weight: .semibold))
+                Circle().fill(reviews == nil ? IC.amber : IC.green).frame(width: 8, height: 8)
+                Text("Отвечает по расшифровке и сводке этой сессии").font(.system(size: 12)).foregroundStyle(IC.secondary)
+            }
+            HStack(spacing: 10) {
+                ForEach(suggestions, id: \.0) { text, icon in
+                    Button { send(text) } label: {
+                        Label(text, systemImage: icon).font(.system(size: 12)).foregroundStyle(IC.accent)
+                            .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(IC.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(reviews == nil || busy)
+                }
+            }
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    let chat = session.review?.chat ?? []
+                VStack(alignment: .leading, spacing: 14) {
                     if chat.isEmpty && !busy {
-                        Text("Спросите о звонке — модель ответит по расшифровке.").foregroundStyle(.secondary)
-                        HStack {
-                            ForEach(suggestions, id: \.self) { s in
-                                Button(s) { send(s) }.buttonStyle(.bordered).controlSize(.small).disabled(reviews == nil)
-                            }
-                        }
+                        Text("Спросите о звонке — например, где ответы были слабее или что подготовить.").foregroundStyle(IC.secondary)
                     }
                     ForEach(chat) { qa in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(qa.question).fontWeight(.semibold)
-                            MarkdownText(qa.answer, fontSize: 13).frame(maxWidth: .infinity, alignment: .leading)
+                        HStack {
+                            Spacer(minLength: 120)
+                            Text(qa.question).font(.system(size: 13)).padding(12)
+                                .background(IC.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
                         }
-                        .padding(10)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.06)))
+                        HStack(alignment: .top, spacing: 10) {
+                            ICLogo(size: 30)
+                            MarkdownText(qa.answer, fontSize: 13).textSelection(.enabled)
+                                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
+                        }
                     }
-                    if busy { HStack { ProgressView().controlSize(.small); Text("Думаю…").foregroundStyle(.secondary) } }
+                    if busy { HStack { ProgressView().controlSize(.small); Text("Думаю…").foregroundStyle(IC.secondary) } }
                     if let error = reviews?.askError[session.id] {
-                        Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(Theme.warn)
+                        Label(error, systemImage: "exclamationmark.triangle.fill").foregroundStyle(IC.amber)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack {
-                TextField("Например: где я отвечал слабее всего?", text: $question)
-                    .textFieldStyle(.roundedBorder)
+            HStack(spacing: 8) {
+                TextField("Спросить что-то об этой сессии…", text: $question)
+                    .textFieldStyle(.plain)
                     .onSubmit { send(question) }
-                Button("Спросить") { send(question) }
-                    .buttonStyle(.borderedProminent)
+                    .padding(12)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
+                Button { send(question) } label: { Image(systemName: "paperplane.fill").frame(width: 20, height: 20) }
+                    .buttonStyle(ICButtonStyle(primary: true))
                     .disabled(busy || reviews == nil || question.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityLabel("Спросить")
             }
         }
     }
 
-    private var suggestions: [String] {
+    private var suggestions: [(String, String)] {
         isRegular
-            ? ["О чем договорились?", "Что мне сделать дальше?"]
-            : ["Где я отвечал слабее всего?", "Что подготовить к следующему этапу?"]
+            ? [("О чем договорились?", "checkmark.seal"), ("Что мне сделать дальше?", "list.bullet"), ("Напиши письмо-итог", "envelope")]
+            : [("Где я отвечал слабее всего?", "chart.bar"), ("Что подтянуть к следующему этапу?", "sparkles"), ("Напиши письмо-благодарность", "envelope")]
     }
 
     private func send(_ text: String) {
-        guard let reviews, !(reviews.asking.contains(session.id)) else { return }
+        guard let reviews, !reviews.asking.contains(session.id) else { return }
         reviews.ask(session.id, question: text)
         question = ""
     }
+}
 
-    // MARK: Общее
+/// P16: реплика с аватаром; подсказка — пунктирной плашкой «Подсказка показана».
+private struct TranscriptBubble: View {
+    let line: TimelineEntry
+    let asker: String
+    @State private var open = false
 
-    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6, content: content)
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.07)))
+    var body: some View {
+        if line.speaker == .hint {
+            DisclosureGroup(isExpanded: $open) {
+                MarkdownText(line.text, fontSize: 12).foregroundStyle(IC.secondary).frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Label("Подсказка показана · \(line.clock)", systemImage: "sparkles").font(.system(size: 12)).foregroundStyle(IC.ink)
+            }
+            .padding(10)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .padding(.leading, 46)
+        } else {
+            let owner = line.speaker == .owner
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "person.fill").font(.system(size: 14)).foregroundStyle(owner ? .white : IC.secondary)
+                    .frame(width: 34, height: 34)
+                    .background(owner ? AnyShapeStyle(LinearGradient(colors: [Color(hex: 0x4388FF), Color(hex: 0x7048E8)], startPoint: .top, endPoint: .bottom))
+                                      : AnyShapeStyle(Color(hex: 0xE5E7EB)), in: Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(owner ? "Вы" : asker).font(.system(size: 12, weight: .semibold))
+                        Text(line.clock).font(.system(size: 11).monospacedDigit()).foregroundStyle(IC.secondary)
+                    }
+                    Text(line.text).font(.system(size: 13)).textSelection(.enabled)
+                        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(owner ? IC.accent.opacity(0.08) : Color(hex: 0xF0F2F6), in: RoundedRectangle(cornerRadius: 12))
+                }
+            }
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
+/// Темы сводки — бейджами в строку с переносом.
+private struct FlowChips: View {
+    let items: [String]
+    var body: some View {
+        FlowLayout(spacing: 6) { ForEach(items, id: \.self) { ICBadge(text: $0, color: IC.secondary) } }
+    }
+}
+
+/// Раскладка «в строку с переносом» для бейджей.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+        return CGSize(width: rows.map(\.width).max() ?? 0, height: rows.reduce(0) { $0 + $1.height } + spacing * CGFloat(max(0, rows.count - 1)))
     }
 
-    private func meta(_ t: SessionRecord.TurnRecord) -> String {
-        var parts = [t.source == "bank" ? "Bank" + (t.cardID.map { " · \($0)" } ?? "") : (t.model ?? t.source)]
-        if let ms = t.cardShownMs { parts.append(String(format: "%.1f с", ms / 1000)) }
-        if let ms = t.firstTokenMs { parts.append(String(format: "первые слова %.1f с", ms / 1000)) }
-        if let i = t.inputTokens, let o = t.outputTokens { parts.append("токены \(i)/\(o)") }
-        if t.forced { parts.append("вручную") }
-        return parts.joined(separator: " · ")
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(width: bounds.width, subviews: subviews) {
+            var x = bounds.minX
+            for i in row.indices {
+                let size = subviews[i].sizeThatFits(.unspecified)
+                subviews[i].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
+        for i in subviews.indices {
+            let size = subviews[i].sizeThatFits(.unspecified)
+            if let last = rows.last, last.width + spacing + size.width <= width {
+                rows[rows.count - 1] = (last.indices + [i], last.width + spacing + size.width, max(last.height, size.height))
+            } else {
+                rows.append(([i], size.width, size.height))
+            }
+        }
+        return rows
     }
 }
 
