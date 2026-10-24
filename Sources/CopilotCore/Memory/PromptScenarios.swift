@@ -11,17 +11,20 @@ public enum PromptScenarios {
         /// Профиль и общие инструкции (COPILOT-08); nil — «Без профиля».
         public var profile: Profile? = nil
         public var general = ""
+        /// Найденные фрагменты материалов (COPILOT-08 R-06).
+        public var materials: [MaterialHit] = []
         /// nil — PASS, иначе причина FAIL.
         public var check: @Sendable (String) -> String?
 
         public init(name: String, question: String, language: String, memory: MemoryContext, profile: Profile? = nil,
-                    general: String = "", check: @escaping @Sendable (String) -> String?) {
+                    general: String = "", materials: [MaterialHit] = [], check: @escaping @Sendable (String) -> String?) {
             self.name = name
             self.question = question
             self.language = language
             self.memory = memory
             self.profile = profile
             self.general = general
+            self.materials = materials
             self.check = check
         }
     }
@@ -125,11 +128,27 @@ public enum PromptScenarios {
                      let latin = letters.filter { $0.isASCII }.count
                      return letters.isEmpty || Double(latin) / Double(letters.count) > 0.8 ? nil : "не по-английски: «\(firstLine(text))»"
                  }),
+        Scenario(name: "материалы: факт из конспекта", question: "Що ви робите з повідомленнями, які не вдалося обробити?",
+                 language: "uk", memory: MemoryContext(), profile: sampleProfile,
+                 materials: [MaterialHit(source: "system-design.md", text: "В ФинБанке RabbitMQ: около двух миллионов сообщений в день, подтверждения доставки (ack) и очередь мёртвых писем для сообщений, которые не обработались за три попытки.", score: 0.62)],
+                 check: { text in
+                     let t = text.lowercased()
+                     let deadLetter = t.contains("dead") || t.contains("мертв") || t.contains("dlq")
+                     let three = ["три", "трьох", "трёх", "three", "3"].contains { t.contains($0) }
+                     return deadLetter && three ? nil : "нет очереди мёртвых писем и трёх попыток: «\(firstLine(text))»"
+                 }),
+        Scenario(name: "материалы: чужой фрагмент игнорируется", question: "Яке у вас хобі?", language: "uk", memory: MemoryContext(),
+                 profile: sampleProfile,
+                 materials: [MaterialHit(source: "system-design.md", text: "Rate limiting на API: алгоритм token bucket в Redis, лимит на пользователя и на IP.", score: 0.48)],
+                 check: { text in
+                     let t = text.lowercased()
+                     return t.contains("redis") || t.contains("token bucket") || t.contains("rate limit") ? "фрагмент не по теме попал в ответ: «\(firstLine(text))»" : nil
+                 }),
     ]
 
     /// Запрос подсказки сценария — как в приложении в режиме «Без профиля».
     public static func request(_ s: Scenario) -> LLMRequest {
         PromptBuilder.hintRequest(question: s.question, transcript: [], cards: [], baseCard: nil, profile: s.profile, redactPII: true,
-                                  answerLanguage: s.language, memory: s.memory, generalInstructions: s.general)
+                                  answerLanguage: s.language, memory: s.memory, generalInstructions: s.general, materials: s.materials)
     }
 }

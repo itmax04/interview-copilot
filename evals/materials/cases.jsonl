@@ -1,0 +1,32 @@
+{"q": "Що таке actor у Swift і як він захищає стан?", "expect": "Actor у Swift захищає свій стан"}
+{"q": "Расскажите про реентерабельность акторов", "expect": "реентрантність"}
+{"q": "What does MainActor guarantee for UI code?", "expect": "MainActor — глобальний актор"}
+{"q": "Коли тип можна позначити Sendable?", "expect": "Sendable позначає типи"}
+{"q": "Чим відрізняється Task від Task.detached?", "expect": "Task.detached — ні"}
+{"q": "How does cancellation work in Swift concurrency?", "expect": "Скасування кооперативне"}
+{"q": "Как обернуть колбэки в асинхронную последовательность?", "expect": "AsyncStream перетворює колбеки"}
+{"q": "Як ви мігрували мережевий шар на async/await?", "expect": "перевели мережевий шар"}
+{"q": "How would you design caching for a slow endpoint?", "expect": "Кэширование: сначала спрашиваем"}
+{"q": "Як ви інвалідуєте кеш при записі?", "expect": "Инвалидация при записи"}
+{"q": "Зачем нужны очереди сообщений?", "expect": "Очереди сообщений нужны"}
+{"q": "How many messages a day did you process with RabbitMQ?", "expect": "двух миллионов сообщений"}
+{"q": "Як уникнути подвійного списання при повторі платежу?", "expect": "Идемпотентность платежей"}
+{"q": "How do you scale database reads?", "expect": "реплики PostgreSQL"}
+{"q": "Какие метрики и алерты вы настраиваете?", "expect": "Наблюдаемость"}
+{"q": "Як реалізувати обмеження частоти запитів до API?", "expect": "token bucket"}
+{"q": "What does the company build?", "expect": "mobile banking app for small businesses"}
+{"q": "Скільки користувачів у продукту компанії?", "expect": "300 thousand monthly active users"}
+{"q": "Из кого состоит команда payments?", "expect": "four iOS engineers"}
+{"q": "Які цілі команди на наступний рік?", "expect": "instant payments"}
+{"q": "What are the interview stages?", "expect": "Interview process"}
+{"q": "Які питання поставити інтерв'юеру наприкінці?", "expect": "Questions to ask the interviewer"}
+{"q": "Почему вы хотите работать в нашей компании?", "expect": "My motivation for this company"}
+{"q": "Що таке TaskGroup?", "expect": "TaskGroup дозволяє паралельно"}
+{"q": "Какое у вас хобби?", "expect": null}
+{"q": "Tell me about a conflict with your manager.", "expect": null}
+{"q": "Чи готові ви до переїзду?", "expect": null}
+{"q": "What is your biggest weakness?", "expect": null}
+{"q": "Як ви навчаєте молодших розробників?", "expect": null}
+{"q": "Какие у вас зарплатные ожидания?", "expect": null}
+{"q": "Do you prefer remote or office work?", "expect": null}
+{"q": "Розкажіть про свій улюблений фільм.", "expect": null}

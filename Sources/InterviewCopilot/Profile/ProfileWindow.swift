@@ -49,6 +49,7 @@ struct ProfileView: View {
                     DocumentEditor(bank: bank, doc: doc).tabItem { Text(doc.title) }
                 }
                 InstructionsEditor(bank: bank).tabItem { Text("Инструкции") }
+                MaterialsView(bank: bank).tabItem { Text("Материалы") }
             }
             .id(bank.activeID)   // другой профиль — свежие тексты во всех вкладках
             footer
@@ -249,5 +250,114 @@ struct InstructionsEditor: View {
         saveTask = nil
         if profileText != bank.text(.instructions) { bank.save(profileText, .instructions) }
         if generalText != bank.generalInstructions { bank.saveGeneralInstructions(generalText) }
+    }
+}
+
+/// Материалы профиля (R-06): конспекты, документация, заметки. Целиком в запрос не идут — только 3–4 фрагмента,
+/// похожие на вопрос (локальный поиск bge-m3).
+struct MaterialsView: View {
+    let bank: BankController
+    @State private var selection: String?
+    @State private var errors: [String] = []
+    @State private var confirmDelete: String?
+    @State private var dropTargeted = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Конспекты, документация, заметки по темам интервью — десятки и сотни страниц. Модель получает только "
+                 + "несколько фрагментов, похожих на текущий вопрос, и использует их факты и термины.")
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Добавить файлы…", action: pickFiles)
+                    .keyboardShortcut("o")
+                Button("Удалить…", role: .destructive) { confirmDelete = selection }
+                    .disabled(selection == nil)
+                    .keyboardShortcut(.delete)
+                Spacer()
+                Text(bank.materialStatus).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+            }
+            ForEach(errors, id: \.self) { e in
+                Label(e, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.callout)
+            }
+            HSplitView {
+                List(bank.materials, selection: $selection) { m in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(m.name).lineLimit(1)
+                        Text("\(m.characters) символов").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .tag(m.name)
+                }
+                .frame(minWidth: 200, idealWidth: 240)
+                .overlay {
+                    if bank.materials.isEmpty {
+                        Text("Перетащите сюда PDF, Word, RTF, TXT или Markdown").foregroundStyle(.secondary).padding()
+                    }
+                }
+                ScrollView {
+                    Text(selection.map { bank.materialText($0) } ?? "Выберите файл, чтобы увидеть прочитанный текст")
+                        .font(.callout)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                }
+                .frame(minWidth: 280)
+            }
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(dropTargeted ? Color.accentColor : .clear, lineWidth: 2))
+            .onDrop(of: [.fileURL], isTargeted: $dropTargeted, perform: drop)
+        }
+        .padding(8)
+        .confirmationDialog("Удалить «\(confirmDelete ?? "")» из материалов?", isPresented: Binding {
+            confirmDelete != nil
+        } set: { if !$0 { confirmDelete = nil } }) {
+            Button("Удалить", role: .destructive) {
+                if let name = confirmDelete { bank.removeMaterial(name) }
+                if selection == confirmDelete { selection = nil }
+                confirmDelete = nil
+            }
+        }
+    }
+
+    private func pickFiles() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = DocumentText.supportedExtensions.compactMap { UTType(filenameExtension: $0) }
+        panel.allowsMultipleSelection = true
+        panel.message = "Материалы для профиля «\(bank.profile.name)»"
+        guard panel.runModal() == .OK else { return }
+        add(panel.urls)
+    }
+
+    private func drop(_ providers: [NSItemProvider]) -> Bool {
+        let box = URLCollector(expected: providers.count) { urls in Task { @MainActor in add(urls) } }
+        for p in providers { _ = p.loadObject(ofClass: URL.self) { url, _ in box.add(url) } }
+        return !providers.isEmpty
+    }
+
+    private func add(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        errors = bank.addMaterials(urls)
+        if selection == nil { selection = urls.first?.lastPathComponent }
+    }
+}
+
+/// Собирает адреса перетащенных файлов (приходят по одному из разных потоков) и отдаёт их разом.
+final class URLCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var urls: [URL] = []
+    private var received = 0
+    private let expected: Int
+    private let done: @Sendable ([URL]) -> Void
+
+    init(expected: Int, done: @escaping @Sendable ([URL]) -> Void) {
+        self.expected = expected
+        self.done = done
+    }
+
+    func add(_ url: URL?) {
+        let finished: [URL]? = lock.withLock {
+            if let url { urls.append(url) }
+            received += 1
+            return received == expected ? urls : nil
+        }
+        if let finished { done(finished) }
     }
 }

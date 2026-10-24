@@ -32,7 +32,8 @@ TurnController → TurnDetector: пауза T (700 мс, после «?» — 35
   + опережающий запрос (draft) на законченную фразу до истечения паузы
                                                                                                     ▼
 AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerController.handle(turn)
-  AnswerController: база (bge-m3, BankMatcher) → AnswerRouter (режим) → карточка | PromptBuilder → ProviderChain
+  AnswerController: BankController.lookup (один эмбеддинг bge-m3: карточки базы + фрагменты материалов) →
+  AnswerRouter (режим) → карточка | PromptBuilder (профиль, инструкции, <materials>, история) → ProviderChain
   (стриминг SSE, параллельный запуск через 1,5 с молчания, автопереход при ошибках) → PanelModel → PanelView
                                                                                                     ▼
 подсказка → InterviewMemory.setHint(turnID); всё — SessionController → SessionStore (JSON, срок хранения)
@@ -48,7 +49,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | `…/STT` | распознавание | `StreamingTranscriber` (сегментация, итоги, уточнение), `ParakeetEngine`, `WhisperEngine`, `HybridRecognizer` |
 | `…/Filter` | что не распознавать и не показывать | `SileroSpeechGate`, `LanguageGate`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
 | `…/Turns` | конец вопроса | `TurnDetector` (чистая логика, вся покрыта тестами), `TurnEval` |
-| `…/Profiles` | профили и загрузка файлов (COPILOT-08) | `ProfileLibrary` (создать, переключить, удалить, перенос старого `profile/`), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md) |
+| `…/Profiles` | профили, загрузка файлов, материалы (COPILOT-08) | `ProfileLibrary` (создать, переключить, удалить, перенос старого `profile/`, материалы), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md), `MaterialChunker`, `MaterialIndex`, `MaterialIndexBuilder` |
 | `…/Bank` | профиль и база ответов | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML), `BankMatcher`, `TextEmbedder` |
 | `…/Answer` | выбор: карточка / нет в базе / генерация | `AnswerRouter` |
 | `…/LLM` | провайдеры и промпт | `PromptBuilder` (все правила для модели), `ProviderChain` + `ChainFactory`, `Providers` (Gemini, DeepSeek, Anthropic, OpenAI-совместимые: Groq, Cerebras, свой API), `SSEClient`, `KeyVerifier` |
@@ -68,7 +69,8 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 ## 4. Данные на диске
 `~/Library/Application Support/InterviewCopilot/` (подменяется `INTERVIEWCOPILOT_HOME`):
 - `profiles/<id>/` — `profile.yaml` (имя), `resume.md`, `stories.md` (факты о себе), `job.md`, `instructions.md`
-  (инструкции профиля), `questions.yaml`, `sources/` (загруженные исходники); права 700/600. Активный — `AppSettings.activeProfileID`;
+  (инструкции профиля), `questions.yaml`, `sources/` (загруженные исходники), `materials/` (текст `*.md` + `sources/`),
+  `materials-index.plist` (векторы фрагментов); права 700/600. Активный — `AppSettings.activeProfileID`;
 - `instructions.md` — общие инструкции владельца (для всех профилей и «Без профиля»). Старая папка `profile/` переносится в
   `profiles/` при запуске, неизменённая копия примера удаляется; `profile.example/` — только для тестов и eval;
 - `models/` — Whisper, bge-m3, Parakeet, Silero, CAM++, LocalVQE (списки и SHA256: `models.sha256`, `parakeet-models.json`, `filter-models.json`);
@@ -94,7 +96,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 ## 6. Проверки
 | Что | Команда |
 |---|---|
-| Быстро | `swift build && swift test` (255 тестов) |
+| Быстро | `swift build && swift test` (260 тестов) |
 | Полностью | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh` |
 | Звуковые eval | `scripts/run-evals.sh filter voice` (нужны модели Parakeet, Silero, CAM++) |
 | CLI | `swift run -c release copilot-eval <stt|stt-parakeet|stt-hybrid|stt-stream|turn|bank|filter-text|filter|voice|voice-enroll|enhance|memory|exit-check>` |

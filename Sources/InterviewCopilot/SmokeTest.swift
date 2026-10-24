@@ -64,7 +64,8 @@ enum SmokeTest {
         Task.detached {
             let chain = ChainFactory.chain(settings: settings, secrets: secrets, providers: ChainFactory.providers())
             var passed = 0, total = 0
-            for scenario in PromptScenarios.all {
+            let only = ProcessInfo.processInfo.environment["INTERVIEWCOPILOT_SMOKE_ONLY"]
+            for scenario in PromptScenarios.all where only.map({ scenario.name.contains($0) }) ?? true {
                 for run in 1...runs {
                     var text = ""
                     var provider = "?"
@@ -84,6 +85,8 @@ enum SmokeTest {
                     if verdict == nil { passed += 1 }
                     print("\(verdict == nil ? "PASS" : "FAIL") [\(scenario.name) #\(run)] \(provider) | "
                           + (verdict ?? PromptScenarios.firstLine(text)))
+                    // Данные синтетические: полный ответ при FAIL — для разбора (INTERVIEWCOPILOT_SMOKE_FULL=1).
+                    if verdict != nil, ProcessInfo.processInfo.environment["INTERVIEWCOPILOT_SMOKE_FULL"] != nil { print(text) }
                 }
             }
             print("memory smoke: \(passed)/\(total)")

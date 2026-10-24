@@ -12,6 +12,8 @@ final class AnswerController {
     private var generation: Task<Void, Never>?
     private(set) var lastQuestion: Turn?
     private var lastMatch: BankMatch?
+    /// Фрагменты материалов последнего вопроса (COPILOT-08 R-06) — и для сильной модели.
+    private var lastMaterials: [MaterialHit] = []
     /// Последние реплики собеседника для промпта (R-11: до 6).
     var transcript: () -> [String] = { [] }
     /// Память интервью (COPILOT-06): последние обмены и найденные по смыслу старые.
@@ -92,18 +94,24 @@ final class AnswerController {
             // «Без профиля» (R-40): база не ищется, модель отвечает сама.
             guard settings.useProfile else {
                 self.lastMatch = nil
+                self.lastMaterials = []
                 self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings)
                 return
             }
-            guard let match = await self.bank.match(turn.text, threshold: settings.bankThreshold) else {
-                // Базы нет (нет модели эмбеддингов) — генерация без карточек, если можно.
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings)
-                return
-            }
+            let found = await self.bank.lookup(turn.text, threshold: settings.bankThreshold)
             guard !Task.isCancelled else { return }
+            self.lastMaterials = found.materials
+            if !found.materials.isEmpty {
+                Log.metrics.notice("materials_found turn=\(turn.id) count=\(found.materials.count) best=\(found.materials[0].score, format: .fixed(precision: 3))")
+            }
+            guard let match = found.match else {
+                // Базы нет (нет модели эмбеддингов) — генерация без карточек, если можно.
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: found.materials)
+                return
+            }
             self.lastMatch = match
             Log.metrics.notice("bank_match turn=\(turn.id) matched=\(match.matched != nil) score=\(match.top.first?.score ?? 0, format: .fixed(precision: 3)) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
-            self.route(turn, match: match, settings: settings)
+            self.route(turn, match: match, settings: settings, materials: found.materials)
         }
     }
 
@@ -115,14 +123,15 @@ final class AnswerController {
     }
 
     private func hintRequest(question: String, base: BankCard?, top: [CardScore], settings: AppSettings,
-                             memory: MemoryContext = MemoryContext()) -> LLMRequest {
+                             memory: MemoryContext = MemoryContext(), materials: [MaterialHit] = []) -> LLMRequest {
         PromptBuilder.hintRequest(question: question, transcript: transcript(), cards: top, baseCard: base,
                                   profile: settings.useProfile ? bank.profile : nil, redactPII: settings.piiFilterEnabled,
                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question),
-                                  memory: memory, generalInstructions: bank.generalInstructions)
+                                  memory: memory, generalInstructions: bank.generalInstructions,
+                                  materials: settings.useProfile ? materials : [])
     }
 
-    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings) {
+    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = []) {
         let modelsAvailable = modelsAvailable(settings)
         switch AnswerRouter.decide(mode: settings.mode, match: match, modelsAvailable: modelsAvailable, useProfile: settings.useProfile) {
         case .bankCard(let card):
@@ -136,7 +145,8 @@ final class AnswerController {
                 guard let self else { return }
                 // История интервью (COPILOT-06) и ключи — не на главном потоке.
                 let memory = await self.memoryContext(for: turn.text, turnID: turn.id)
-                let request = self.hintRequest(question: turn.text, base: base, top: top, settings: settings, memory: memory)
+                let request = self.hintRequest(question: turn.text, base: base, top: top, settings: settings, memory: memory,
+                                               materials: materials)
                 let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
                 guard !Task.isCancelled, self.lastQuestion?.id == turn.id else { return }
                 self.generate(turn: turn, chain: chain, request: request, fallbackTop: top)
@@ -269,6 +279,7 @@ final class AnswerController {
         let text: String
         let startedAt: Double
         var match = BankMatch(matched: nil, top: [])
+        var materials: [MaterialHit] = []
         var fallbackTop: [CardScore] = []
         /// Решено генерировать и запрос к модели запущен (карточка базы опережающего запроса не требует).
         var generating = false
@@ -313,9 +324,13 @@ final class AnswerController {
         let providers = self.providers
         d.task = Task { [weak self] in
             guard let self else { return }
-            if settings.useProfile, let match = await self.bank.match(text, threshold: settings.bankThreshold) { d.match = match }
+            if settings.useProfile {
+                let found = await self.bank.lookup(text, threshold: settings.bankThreshold)
+                if let match = found.match { d.match = match }
+                d.materials = found.materials
+            }
             guard !Task.isCancelled, self.draft === d || d.adopted else { return }
-            if d.adoptedTurn != nil, settings.useProfile { self.lastMatch = d.match }
+            if d.adoptedTurn != nil, settings.useProfile { self.lastMatch = d.match; self.lastMaterials = d.materials }
             guard case .generate(let base, let top) = AnswerRouter.decide(mode: settings.mode, match: d.match,
                                                                            modelsAvailable: self.modelsAvailable(settings),
                                                                            useProfile: settings.useProfile) else {
@@ -324,7 +339,8 @@ final class AnswerController {
                 return
             }
             let memory = await self.memoryContext(for: text)
-            let request = self.hintRequest(question: text, base: base, top: top, settings: settings, memory: memory)
+            let request = self.hintRequest(question: text, base: base, top: top, settings: settings, memory: memory,
+                                           materials: d.materials)
             d.fallbackTop = top
             let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
             guard !Task.isCancelled, self.draft === d || d.adopted else { return }
@@ -349,7 +365,7 @@ final class AnswerController {
     private func adopt(_ d: Draft, turn: Turn) {
         draft = nil
         d.adoptedTurn = turn
-        if model.settings.useProfile { lastMatch = d.match } else { lastMatch = nil }
+        if model.settings.useProfile { lastMatch = d.match; lastMaterials = d.materials } else { lastMatch = nil; lastMaterials = [] }
         Log.metrics.notice("draft_used turn=\(turn.id) started_ms_from_speech_end=\(Int(d.startedAt - turn.speechEndedAt)) lead_ms=\(Int(turn.firedAt - d.startedAt)) generating=\(d.generating)")
         generation = d.task
         d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, strong: false, speculative: true))
@@ -390,7 +406,8 @@ final class AnswerController {
                                                   profile: settings.useProfile ? bank.profile : nil,
                                                   redactPII: settings.piiFilterEnabled,
                                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text),
-                                                  memory: memory, generalInstructions: bank.generalInstructions)
+                                                  memory: memory, generalInstructions: bank.generalInstructions,
+                                                  materials: settings.useProfile ? lastMaterials : [])
         // Задержка для сильной модели считаем от нажатия.
         let manual = Turn(id: turn.id, text: turn.text, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         generate(turn: manual, chain: chain, request: request, fallbackTop: lastMatch?.top ?? [], strong: true)

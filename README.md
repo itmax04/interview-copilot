@@ -8,7 +8,7 @@
 Claude → свой API; первые слова — около 1 с после вопроса. Отсеивает шум, чужой язык и чужие голоса, помнит всё интервью.
 По горячей клавише отправляет скриншот задачи в сильную модель. Пользователь один — владелец; распространение не планируется.
 
-Статус: **0.5.0** (COPILOT-08, этап 1 — профили и инструкции) — [docs/changes/COPILOT-08/handoff.md](docs/changes/COPILOT-08/handoff.md).
+Статус: **0.5.1** (COPILOT-08, этапы 1–2 — профили, инструкции, материалы) — [docs/changes/COPILOT-08/handoff.md](docs/changes/COPILOT-08/handoff.md).
 **Новому разработчику или агенту — начать с [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: поток данных, модули,
 где что лежит, как вносить типичные изменения и как проверять.
 
@@ -42,6 +42,7 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
 - **Language**: Auto (UK/RU/EN) или конкретный язык — для Whisper известный язык точнее и быстрее. Parakeet сохраняет мультиязычный текст; настройка задаёт метку языка.
 - **Профиль: резюме, инструкции…** (или запуск с `--args --profile`) — окно «Профиль»: профили под вакансии, резюме,
   факты о себе, вакансия (загрузка PDF, Word, RTF, TXT, Markdown или текст вручную), инструкции профиля и общие.
+  Вкладка «Материалы» — конспекты и документация (десятки–сотни страниц): в запрос идут 3–4 фрагмента, похожие на вопрос.
   Переключение профиля — меню **Profile**. **Question bank…** — `questions.yaml` активного профиля (формат — spec R-06).
 - Горячие клавиши (переназначаются в Settings → Hotkeys): ⌃⌥↩ ответить сейчас (и на серую строку), ⌃⌥S скриншот,
   ⌃⌥H панель, ⌃⌥P пауза, ⌃⌥C сильная модель, ⌃⌥A «сейчас отвечаю я» в самопроверке (есть и в меню).
@@ -52,9 +53,9 @@ open dist/InterviewCopilot.app # попугай в строке меню; пан
   срок истории, вид панели, бюджет на платных провайдеров.
 
 ## Проверка
-- Быстрая: `swift build && swift test` (255 тестов).
+- Быстрая: `swift build && swift test` (260 тестов).
 - Полная: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh`.
-- Evals: `scripts/run-evals.sh [bank|turn|filter-text|memory|filter|voice]` — пороги и baseline в [evals/README.md](evals/README.md).
+- Evals: `scripts/run-evals.sh [bank|turn|filter-text|memory|materials|filter|voice]` — пороги и baseline в [evals/README.md](evals/README.md).
 - Метрики созвона: `scripts/metrics.py --last 30m` (AC-01…AC-03), память: `scripts/footprint-monitor.sh 10` (AC-05).
 - Живые проверки из приложения: `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`
   и `--smoke-screenshot evals/fixtures/two-sum.png` (тратят квоту Gemini).

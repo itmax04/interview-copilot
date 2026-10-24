@@ -434,6 +434,60 @@ case "exit-check":
     } catch { fail("\(error)", code: 1) }
     print("models released, calling exit(0)")
     exit(0)
+case "materials":
+    // Eval `materials` (COPILOT-08 AC-05): нужный фрагмент синтетических конспектов (uk/ru/en) — в топ-4 при пороге;
+    // вопросы не по материалам — без фрагментов. copilot-eval materials [--threshold 0.xx] [--sweep] [--verbose]
+    args.removeFirst()
+    let threshold = option("--threshold").flatMap(Double.init) ?? MaterialIndex.minScore
+    let sweep = flag("--sweep")
+    let verbose = flag("--verbose")
+    let spec = EmbeddingModels.spec(for: AppSettings.defaultEmbeddingModel)
+    do {
+        let embedder = try LlamaEmbedder(modelPath: AppPaths.model(spec.file).path, prefix: spec.prefix)
+        let docs = URL(fileURLWithPath: "evals/materials/docs")
+        let files = try FileManager.default.contentsOfDirectory(at: docs, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "md" }.sorted { $0.path < $1.path }
+            .map { (source: $0.lastPathComponent, text: try DocumentText.extract(from: $0)) }
+        let t0 = Date()
+        let index = try MaterialIndexBuilder(embedder: embedder, cacheURL: nil).build(files)
+        let buildMs = Date().timeIntervalSince(t0) * 1000
+        let lines = try String(contentsOf: URL(fileURLWithPath: "evals/materials/cases.jsonl"), encoding: .utf8)
+            .split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        var cases: [(q: String, expect: String?, vector: [Float])] = []
+        for line in lines {
+            guard let obj = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any], let q = obj["q"] as? String else { continue }
+            cases.append((q, obj["expect"] as? String, try embedder.embed([q])[0]))
+        }
+        func score(_ t: Double) -> (hits: Int, related: Int, extra: Int, unrelated: Int) {
+            var hits = 0, related = 0, extra = 0, unrelated = 0
+            for c in cases {
+                let found = index.search(c.vector, minScore: t)
+                if let e = c.expect {
+                    related += 1
+                    if found.contains(where: { $0.text.contains(e) }) { hits += 1 }
+                    else if verbose && t == threshold { print("  MISS \(c.q) → \(found.first.map { String($0.text.prefix(60)) } ?? "—")") }
+                } else {
+                    unrelated += 1
+                    if !found.isEmpty {
+                        extra += 1
+                        if verbose && t == threshold { print(String(format: "  EXTRA %@ → %.2f %@", c.q, found[0].score, String(found[0].text.prefix(50)))) }
+                    }
+                }
+            }
+            return (hits, related, extra, unrelated)
+        }
+        if sweep {
+            for t in stride(from: 0.30, through: 0.70, by: 0.05) {
+                let r = score(t)
+                print(String(format: "  threshold=%.2f found=%d/%d extra=%d/%d", t, r.hits, r.related, r.extra, r.unrelated))
+            }
+        }
+        let r = score(threshold)
+        let pass = Double(r.hits) >= 0.9 * Double(r.related) && r.extra * 8 <= r.unrelated * 3
+        print(String(format: "materials: chunks=%d threshold=%.2f AC-05 found_in_top4=%d/%d (≥90%%) unrelated_with_fragments=%d/%d (≤3/8) index_ms=%.0f %@",
+                     index.entries.count, threshold, r.hits, r.related, r.extra, r.unrelated, buildMs, pass ? "PASS" : "FAIL"))
+        finish(pass ? 0 : 1)
+    } catch { fail("\(error)", code: 1) }
 case "bank":
     // Eval `bank` (AC-04): evals/bank/cases.jsonl против profile.example/questions.yaml.
     //   copilot-eval bank [cases.jsonl] [--model file.gguf] [--threshold 0.xx | --tune] [--sweep] [--verbose]

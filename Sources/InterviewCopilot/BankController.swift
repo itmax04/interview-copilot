@@ -22,6 +22,13 @@ final class BankController {
     /// Активный профиль сменился (сохранить в настройки).
     var onActiveProfileChange: ((String) -> Void)?
 
+    /// Материалы активного профиля и их индекс (R-06).
+    private(set) var materials: [MaterialFile] = []
+    private(set) var materialIndex = MaterialIndex.empty
+    private(set) var materialStatus = ""
+    private var embedder: TextEmbedder?
+    private var materialTask: Task<Void, Never>?
+
     private var index: BankIndex?
     private var builder: BankIndexBuilder?
     private var watcher: FileWatcher?
@@ -56,6 +63,7 @@ final class BankController {
         activeID = profiles.first { $0.id == activeProfileID }?.id ?? profiles.first?.id
         loadEmbedder(embeddingModel)
         reload()
+        reloadMaterials()
         armWatcher()
     }
 
@@ -74,7 +82,9 @@ final class BankController {
         guard id != activeID, profiles.contains(where: { $0.id == id }) else { return }
         activeID = id
         index = nil   // карточки прежнего профиля не должны находиться, пока строится новый индекс
+        materialIndex = .empty
         reload()
+        reloadMaterials()
         armWatcher()
         onActiveProfileChange?(id)
     }
@@ -163,15 +173,88 @@ final class BankController {
         do {
             let embedder = try LlamaEmbedder(modelPath: path, prefix: spec.prefix)
             builder = BankIndexBuilder(embedder: embedder, cacheDirectory: AppPaths.cache)
+            self.embedder = embedder
         } catch {
             status = "Ошибка модели эмбеддингов: \(error)"
             builder = nil
+            embedder = nil
         }
     }
 
     func embeddingModelChanged(_ file: String) {
         loadEmbedder(file)
         reload()
+        reloadMaterials()
+    }
+
+    // MARK: Материалы (R-06)
+
+    /// Перечитать список и перестроить индекс в фоне (новые фрагменты считаются, старые — из кэша профиля).
+    func reloadMaterials() {
+        materialTask?.cancel()
+        guard let id = activeID else { materials = []; materialIndex = .empty; return }
+        materials = library.listMaterials(id)
+        guard let embedder else {
+            materialStatus = materials.isEmpty ? "" : "Нет модели эмбеддингов — поиск по материалам выключен"
+            materialIndex = .empty
+            return
+        }
+        if materials.isEmpty { materialIndex = .empty; materialStatus = ""; onChange?(); return }
+        let files = library.materialTexts(id)
+        let builder = MaterialIndexBuilder(embedder: embedder, cacheURL: library.materialsCacheURL(id))
+        materialStatus = "Индексирую материалы…"
+        onChange?()
+        let started = Date()
+        let report: @Sendable (Int, Int) -> Void = { [weak self] done, total in
+            guard total > 0 else { return }
+            Task { @MainActor in self?.materialProgress(done, of: total, profile: id) }
+        }
+        materialTask = Task { [weak self] in
+            let result = await Task.detached(priority: .utility) { () -> Result<MaterialIndex, Error> in
+                Result { try builder.build(files, progress: report, isCancelled: { Task.isCancelled }) }
+            }.value
+            guard let self, !Task.isCancelled, self.activeID == id else { return }
+            self.materialTask = nil
+            switch result {
+            case .success(let index):
+                self.materialIndex = index
+                self.materialStatus = "Материалы: \(self.materials.count) файл(ов), \(index.entries.count) фрагментов — готово"
+                Log.app.info("materials index built files=\(self.materials.count) chunks=\(index.entries.count) ms=\(Int(Date().timeIntervalSince(started) * 1000))")
+            case .failure(let error):
+                if !(error is CancellationError) { self.materialStatus = "Ошибка индекса материалов: \(error)" }
+            }
+            self.onChange?()
+        }
+    }
+
+    private func materialProgress(_ done: Int, of total: Int, profile id: String) {
+        guard activeID == id, materialTask != nil else { return }
+        materialStatus = "Индексирую материалы: \(done) из \(total) новых фрагментов"
+    }
+
+    /// Добавить файлы; ошибки (скан, формат) — по именам файлов.
+    func addMaterials(_ urls: [URL]) -> [String] {
+        guard let id = activeID else { return [] }
+        var errors: [String] = []
+        for url in urls {
+            do { try library.addMaterial(url, into: id) } catch {
+                errors.append((error as? DocumentTextError)?.description ?? "\(url.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+        Log.app.info("materials added=\(urls.count - errors.count) failed=\(errors.count)")
+        reloadMaterials()
+        return errors
+    }
+
+    func removeMaterial(_ name: String) {
+        guard let id = activeID else { return }
+        do { try library.removeMaterial(name, from: id) } catch { self.error = "Материалы: \(error.localizedDescription)" }
+        reloadMaterials()
+    }
+
+    func materialText(_ name: String) -> String {
+        guard let id = activeID else { return "" }
+        return library.readMaterial(name, of: id)
     }
 
     /// Перечитать базу. При ошибке остаётся прежняя рабочая версия (S-10).
@@ -225,12 +308,15 @@ final class BankController {
         return { text in try? builder.embedQuery(text) }
     }
 
-    /// Поиск по базе (R-07). Эмбеддинг хода считается в фоне.
-    func match(_ text: String, threshold: Double) async -> BankMatch? {
-        guard let builder, let index else { return nil }
+    /// Поиск по базе (R-07) и по материалам (COPILOT-08 R-06) — один эмбеддинг хода, в фоне.
+    /// `match` — nil, если базы нет (нет модели или индекс ещё строится).
+    func lookup(_ text: String, threshold: Double) async -> (match: BankMatch?, materials: [MaterialHit]) {
+        guard let builder else { return (nil, []) }
+        let index = self.index
+        let materials = materialIndex
         return await Task.detached(priority: .userInitiated) {
-            guard let v = try? builder.embedQuery(text) else { return nil as BankMatch? }
-            return index.match(v, threshold: threshold)
+            guard let v = try? builder.embedQuery(text) else { return (nil as BankMatch?, [MaterialHit]()) }
+            return (index?.match(v, threshold: threshold), materials.search(v))
         }.value
     }
 

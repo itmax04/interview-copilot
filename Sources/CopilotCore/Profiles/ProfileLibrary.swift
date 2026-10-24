@@ -136,6 +136,62 @@ public final class ProfileLibrary: @unchecked Sendable {
         return text
     }
 
+    // MARK: Материалы (R-06)
+
+    public func materialsDirectory(_ id: String) -> URL { directory(id).appendingPathComponent("materials", isDirectory: true) }
+    /// Кэш векторов фрагментов — внутри профиля: удаляется вместе с ним.
+    public func materialsCacheURL(_ id: String) -> URL { directory(id).appendingPathComponent("materials-index.plist") }
+
+    public func listMaterials(_ id: String) -> [MaterialFile] {
+        let dir = materialsDirectory(id)
+        let files = (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+        return files.filter { $0.pathExtension == "md" && !$0.lastPathComponent.hasPrefix(".") }
+            .map { url in
+                MaterialFile(name: url.deletingPathExtension().lastPathComponent,
+                             characters: ((try? String(contentsOf: url, encoding: .utf8)) ?? "").count)
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    public func readMaterial(_ name: String, of id: String) -> String {
+        (try? String(contentsOf: materialsDirectory(id).appendingPathComponent(name + ".md"), encoding: .utf8)) ?? ""
+    }
+
+    /// Все материалы профиля: (имя файла, текст) — для индекса.
+    public func materialTexts(_ id: String) -> [(source: String, text: String)] {
+        listMaterials(id).map { ($0.name, readMaterial($0.name, of: id)) }
+    }
+
+    /// Добавить файл (R-06): текст — `materials/<имя>.md`, исходник — `materials/sources/<имя>`. Тот же файл — заменяется.
+    @discardableResult
+    public func addMaterial(_ url: URL, into id: String) throws -> MaterialFile {
+        let text = try DocumentText.extract(from: url)
+        let name = url.lastPathComponent
+        try lock.withLock {
+            let dir = materialsDirectory(id)
+            let sources = dir.appendingPathComponent("sources", isDirectory: true)
+            try fm.createDirectory(at: sources, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let copy = sources.appendingPathComponent(name)
+            if copy.standardizedFileURL != url.standardizedFileURL {
+                if fm.fileExists(atPath: copy.path) { try fm.removeItem(at: copy) }
+                try Data(contentsOf: url).write(to: copy, options: .atomic)
+                try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: copy.path)
+            }
+            try writeFile(text, to: dir.appendingPathComponent(name + ".md"))
+        }
+        return MaterialFile(name: name, characters: text.count)
+    }
+
+    public func removeMaterial(_ name: String, from id: String) throws {
+        try lock.withLock {
+            let dir = materialsDirectory(id)
+            for url in [dir.appendingPathComponent(name + ".md"), dir.appendingPathComponent("sources").appendingPathComponent(name)]
+            where fm.fileExists(atPath: url.path) {
+                try fm.removeItem(at: url)
+            }
+        }
+    }
+
     // MARK: Общие инструкции
 
     public static func readGeneralInstructions(at url: URL = AppPaths.generalInstructions) -> String {
