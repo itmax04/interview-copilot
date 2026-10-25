@@ -1,4 +1,5 @@
 import AppKit
+import CopilotCore
 import SwiftUI
 
 /// P00: единые цвета, типографика и поверхности ImageGen. Компоненты остаются нативными и доступными.
@@ -117,6 +118,84 @@ struct ICSidebarRow: View {
             .background(selected ? IC.accent.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 10))
             .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Язык интерфейса — внизу боковой панели (COPILOT-10): глобус, название, стрелка; меню со всеми вариантами.
+struct ICLanguageMenu: View {
+    @Binding var selection: InterfaceLanguage
+
+    var body: some View {
+        Menu {
+            Picker("Язык интерфейса", selection: $selection) {
+                ForEach([InterfaceLanguage.system, .ru, .en], id: \.self) { Text(Self.title($0)).tag($0) }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            HStack(spacing: 9) {
+                Image(systemName: "globe").font(.system(size: 15))
+                Text(Self.title(selection)).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold)).foregroundStyle(IC.secondary)
+            }
+            .foregroundStyle(IC.ink)
+            .padding(.horizontal, 12).padding(.vertical, 10)
+            .background(IC.card, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .accessibilityLabel(L("Язык интерфейса: %@", L(Self.title(selection))))
+    }
+
+    /// Названия языков — на своем языке, как принято в переключателях.
+    static func title(_ language: InterfaceLanguage) -> String {
+        switch language {
+        case .system: L("Как в системе")
+        case .ru: "Русский"
+        case .en: "English"
+        }
+    }
+}
+
+/// Тема окон — сегменты «Светлая / Темная / Авто» с иконками, выбранный — акцентной заливкой.
+struct ICThemeSwitch: View {
+    @Binding var selection: AppTheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let options: [(AppTheme, String, String)] = [
+        (.light, "Светлая", "sun.max"), (.dark, "Темная", "moon"), (.system, "Авто", "desktopcomputer"),
+    ]
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Self.options, id: \.0) { theme, title, icon in
+                let selected = selection == theme
+                Button {
+                    if reduceMotion { selection = theme } else { withAnimation(.easeOut(duration: 0.15)) { selection = theme } }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: icon).font(.system(size: 11, weight: .medium))
+                        Text(L(title)).font(.system(size: 11, weight: selected ? .semibold : .regular)).lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .foregroundStyle(selected ? Color.white : IC.ink2)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 7)
+                    .background(selected ? IC.accent : .clear, in: RoundedRectangle(cornerRadius: 7))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L("Тема: %@", L(title)))
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .padding(3)
+        .background(IC.card, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(IC.line))
     }
 }
 

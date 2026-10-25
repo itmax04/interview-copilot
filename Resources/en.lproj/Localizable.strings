@@ -246,6 +246,11 @@
 "Индексирую материалы…" = "Indexing materials…";
 "Пересчитываю эмбеддинги…" = "Recomputing embeddings…";
 
+/* InterviewCopilot/Design/DesignSystem.swift */
+"Язык интерфейса: %@" = "Interface language: %@";
+"Тема: %@" = "Theme: %@";
+"Авто" = "Auto";
+
 /* InterviewCopilot/History/ReviewController.swift */
 "Модель ответила не в формате разбора — повторите" = "The model did not reply in the review format — try again";
 "Сводка не в формате — повторите" = "The summary is not in the expected format — try again";

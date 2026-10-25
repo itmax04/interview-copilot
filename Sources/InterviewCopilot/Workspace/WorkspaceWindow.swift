@@ -154,6 +154,13 @@ struct WorkspaceView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(statusColor.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
             .accessibilityElement(children: .combine)
+            // Язык и тема — всегда под рукой (COPILOT-10); те же настройки — в «Настройки → Основное».
+            VStack(alignment: .leading, spacing: 8) {
+                Rectangle().fill(IC.line).frame(height: 1).padding(.bottom, 4)
+                ICLanguageMenu(selection: $model.settings.interfaceLanguage)
+                Text("Тема").font(.system(size: 11)).foregroundStyle(IC.secondary).padding(.top, 2)
+                ICThemeSwitch(selection: $model.settings.theme)
+            }
         }
         .padding(16)
         .frame(width: 230)

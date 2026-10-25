@@ -169,6 +169,7 @@ enum UISnapshots {
                renderWeb(page, size: NSSize(width: 1100, height: 760), to: dir.appendingPathComponent("\(name).png")) { count += 1 }
         }
         UILanguage.shared.apply(.ru)
+        ws.recognitionStatus = L("Распознавание: %@", "Parakeet v3")
 
         // COPILOT-10: темная тема окон.
         for (name, section) in [("today", WorkspaceSection.today), ("sessions", .sessions)] {
