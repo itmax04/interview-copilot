@@ -81,7 +81,7 @@ final class WorkspaceWindowController {
         if window == nil {
             let root = WorkspaceView(workspace: workspace, model: model, bank: bank, store: store, reviews: reviews, preparer: preparer,
                                      hotkeyFailures: hotkeyFailures, stylePreviewContext: stylePreviewContext)
-            let w = NSWindow(contentViewController: NSHostingController(rootView: root))
+            let w = NSWindow(contentViewController: NSHostingController(rootView: root.localizedRoot()))
             w.title = "Interview Copilot"
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             w.titlebarAppearsTransparent = true
@@ -229,13 +229,12 @@ struct TodayView: View {
     }
 
     private var recognition: String {
-        let s = workspace.recognitionStatus
-        let name = s.hasPrefix("Распознавание: ") ? String(s.dropFirst("Распознавание: ".count)) : s
+        let name = SessionWizardModel.sttDetail(workspace.recognitionStatus)
         return name.isEmpty ? (model.settings.recognitionBackend == .parakeet ? "Parakeet" : "Whisper") : name
     }
 
     private var profileDetail: String {
-        bank.profile.resume.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "\(bank.profile.name) — добавьте резюме" : bank.profile.name
+        bank.profile.resume.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L("%@ — добавьте резюме", bank.profile.name) : bank.profile.name
     }
 
     private var hero: some View {
@@ -303,7 +302,7 @@ struct TodayView: View {
             .contentShape(RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title): \(detail)")
+        .accessibilityLabel(L("%@: %@", L(title), L(detail)))
     }
 
     private var recentSessions: some View {
@@ -348,8 +347,8 @@ struct TodayView: View {
         let role = s.config?.jobDescription.split(separator: "\n").first.map { String($0.prefix(40)) } ?? ""
         return HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(s.startedAt.formatted(.dateTime.day().month(.wide).year().locale(Locale(identifier: "ru_RU")))).font(.system(size: 13))
-                Text(s.startedAt.formatted(.dateTime.hour().minute().locale(Locale(identifier: "ru_RU")))).font(.system(size: 11)).foregroundStyle(IC.secondary)
+                Text(s.startedAt.formatted(.dateTime.day().month(.wide).year().locale(L10n.locale))).font(.system(size: 13))
+                Text(s.startedAt.formatted(.dateTime.hour().minute().locale(L10n.locale))).font(.system(size: 11)).foregroundStyle(IC.secondary)
             }
             .frame(width: 112, alignment: .leading)
             HStack(spacing: 10) {
@@ -364,7 +363,7 @@ struct TodayView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             ICBadge(text: s.config?.type.title ?? "Сессия").frame(width: 116, alignment: .leading)
-            Text(s.endedAt.map { "\(max(1, Int($0.timeIntervalSince(s.startedAt) / 60))) мин" } ?? "—")
+            Text(s.endedAt.map { L("%lld мин", max(1, Int($0.timeIntervalSince(s.startedAt) / 60))) } ?? "—")
                 .font(.system(size: 13)).frame(width: 64, alignment: .leading)
             reviewBadge(s).frame(width: 80, alignment: .leading)
         }

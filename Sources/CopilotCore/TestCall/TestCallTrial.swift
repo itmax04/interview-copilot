@@ -79,8 +79,8 @@ public struct TestCallTrial: Sendable {
     public mutating func tick(at now: Double) {
         guard result == nil, let endedAt, now - endedAt >= 0.8 else { return }
         guard (!finals.isEmpty && pending.isEmpty) || now - endedAt >= 20 else { return }
-        let problem: String? = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Звук не распознан. Проверьте источник, громкость и разрешение системного звука."
-            : !pending.isEmpty ? "Не все части фразы распознаны за 20 секунд. Повторите тест." : nil
+        let problem: String? = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? L10n.t("Звук не распознан. Проверьте источник, громкость и разрешение системного звука.")
+            : !pending.isEmpty ? L10n.t("Не все части фразы распознаны за 20 секунд. Повторите тест.") : nil
         finish(problem: problem)
     }
 

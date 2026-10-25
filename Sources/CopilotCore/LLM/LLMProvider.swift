@@ -92,17 +92,17 @@ public enum LLMError: Error, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .http(429, _): "лимит запросов (429)"
-        case .http(let s, let m) where s == 401 || s == 403: "ключ недействителен (HTTP \(s))" + (m.isEmpty ? "" : ": \(m)")
-        case .http(400, let m): "неверный запрос или ключ (HTTP 400)" + (m.isEmpty ? "" : ": \(m)")
-        case .http(402, _): "закончились средства на счёте (402)"
+        case .http(429, _): L10n.t("лимит запросов (429)")
+        case .http(let s, let m) where s == 401 || s == 403: L10n.f("ключ недействителен (HTTP %lld)", s) + (m.isEmpty ? "" : ": \(m)")
+        case .http(400, let m): L10n.t("неверный запрос или ключ (HTTP 400)") + (m.isEmpty ? "" : ": \(m)")
+        case .http(402, _): L10n.t("закончились средства на счёте (402)")
         case .http(let s, let m): "HTTP \(s)" + (m.isEmpty ? "" : ": \(m)")
-        case .network(let m): "сеть: \(m)"
-        case .firstTokenTimeout: "нет ответа за отведённое время"
-        case .refusal(let c): "модель отказалась отвечать" + (c.map { " (\($0))" } ?? "")
-        case .noKey: "нет ключа"
-        case .cancelled: "отменено"
-        case .badResponse(let m): "неожиданный ответ: \(m)"
+        case .network(let m): L10n.f("сеть: %@", m)
+        case .firstTokenTimeout: L10n.t("нет ответа за отведённое время")
+        case .refusal(let c): L10n.t("модель отказалась отвечать") + (c.map { " (\($0))" } ?? "")
+        case .noKey: L10n.t("нет ключа")
+        case .cancelled: L10n.t("отменено")
+        case .badResponse(let m): L10n.f("неожиданный ответ: %@", m)
         }
     }
 }

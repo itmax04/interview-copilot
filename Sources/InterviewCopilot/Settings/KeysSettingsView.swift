@@ -100,9 +100,7 @@ private struct KeyRow: View {
                 Button("Добавить", action: addExtra)
                     .disabled(extraInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            Text("Ключей — сколько нужно. Сначала по очереди пробуются все ключи этого провайдера: кончился лимит у одного — "
-                 + "ответ сразу идет со следующего; ключ с лимитом ждет сброса и не пробуется первым. Только когда лимит у всех "
-                 + "ключей — следующий провайдер из цепочки.")
+            Text("Ключей — сколько нужно. Сначала по очереди пробуются все ключи этого провайдера: кончился лимит у одного — ответ сразу идет со следующего; ключ с лимитом ждет сброса и не пробуется первым. Только когда лимит у всех ключей — следующий провайдер из цепочки.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }
@@ -150,9 +148,7 @@ private struct CustomEndpointFields: View {
             }
             .disabled(isFirst)
         }
-        Text("Примеры адресов: OpenRouter https://openrouter.ai/api/v1 · OpenAI https://api.openai.com/v1 · "
-             + "Together https://api.together.xyz/v1 · Mistral https://api.mistral.ai/v1 · Ollama на этом Mac http://localhost:11434/v1 "
-             + "(ключ — любой текст). Скриншоты сюда не отправляются.")
+        Text("Примеры адресов: OpenRouter https://openrouter.ai/api/v1 · OpenAI https://api.openai.com/v1 · Together https://api.together.xyz/v1 · Mistral https://api.mistral.ai/v1 · Ollama на этом Mac http://localhost:11434/v1 (ключ — любой текст). Скриншоты сюда не отправляются.")
             .font(.footnote).foregroundStyle(.secondary)
     }
 }

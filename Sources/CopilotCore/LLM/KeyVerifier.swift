@@ -9,9 +9,9 @@ public enum KeyCheckResult: Equatable, Sendable {
 
     public var summary: String {
         switch self {
-        case .ok(let models): "OK · моделей: \(models.count)"
-        case .invalidKey(let status, let message): "Ключ недействителен (HTTP \(status))" + (message.isEmpty ? "" : ": \(message)")
-        case .failed(let message): "Ошибка: \(message)"
+        case .ok(let models): L10n.f("OK · моделей: %lld", models.count)
+        case .invalidKey(let status, let message): L10n.f("Ключ недействителен (HTTP %lld)", status) + (message.isEmpty ? "" : ": \(message)")
+        case .failed(let message): L10n.f("Ошибка: %@", message)
         }
     }
 }
@@ -25,9 +25,9 @@ public struct KeyVerifier: Sendable {
 
     public func verify(_ provider: ProviderID, key: String) async -> KeyCheckResult {
         let key = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return .failed(message: "нет ключа") }
+        guard !key.isEmpty else { return .failed(message: L10n.t("нет ключа")) }
         if provider == .custom, CustomEndpoint.shared.baseURL == nil {
-            return .failed(message: "не задан адрес API (https://…/v1)")
+            return .failed(message: L10n.t("не задан адрес API (https://…/v1)"))
         }
         do {
             let (data, response) = try await transport.data(for: ProviderEndpoints.listModels(provider, key: key))
@@ -37,13 +37,13 @@ public struct KeyVerifier: Sendable {
             case 400, 401, 403:
                 return .invalidKey(status: response.statusCode, message: Self.errorMessage(data, redacting: key))
             case 429:
-                return .failed(message: "лимит запросов (HTTP 429), повторите позже")
+                return .failed(message: L10n.t("лимит запросов (HTTP 429), повторите позже"))
             default:
                 let detail = Self.errorMessage(data, redacting: key)
                 return .failed(message: "HTTP \(response.statusCode)" + (detail.isEmpty ? "" : ": \(detail)"))
             }
         } catch let error as URLError {
-            return .failed(message: "сеть: \(error.code == .timedOut ? "таймаут" : error.localizedDescription)")
+            return .failed(message: L10n.f("сеть: %@", error.code == .timedOut ? L10n.t("таймаут") : error.localizedDescription))
         } catch {
             return .failed(message: error.localizedDescription)
         }

@@ -15,8 +15,8 @@ final class PermissionsWindowController {
 
     func show() {
         if window == nil {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: PermissionsView(listening: listening)))
-            w.title = "Interview Copilot — разрешения"
+            let w = NSWindow(contentViewController: NSHostingController(rootView: PermissionsView(listening: listening).localizedRoot()))
+            UILanguage.shared.setTitle("Interview Copilot — разрешения", of: w)
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             w.center()
@@ -102,10 +102,10 @@ struct PermissionsView: View {
         switch listening.phase {
         case .noPermission: "Нет разрешения на запись экрана"
         case .idle: "Источник не найден: откройте Meet в Chrome, Zoom или Telegram"
-        case .listening: "Слушаю: \(listening.source.displayName ?? "—")"
+        case .listening: L("Слушаю: %@", listening.source.displayName ?? "—")
         case .paused: "Пауза"
         case .standby: "Сессии нет — приложение не слушает. Создайте сессию в меню"
-        case .error(let message): "Ошибка: \(message)"
+        case .error(let message): L("Ошибка: %@", message)
         }
     }
 

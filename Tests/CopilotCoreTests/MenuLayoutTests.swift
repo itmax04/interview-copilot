@@ -33,19 +33,19 @@ struct MenuLayoutTests {
         #expect(item(.aiInterview).enabled == true)
         #expect(item(.aiInterview).title == "ИИ-собеседование…")
         // Подпись языка (UK/RU/EN).
-        #expect(item(.language).title == "Language: Auto (UK/RU/EN)")
+        #expect(item(.language).title == "Язык звонка: Авто (UK/RU/EN)")
         // A-4: строка статуса — счётчик запросов, не квота.
-        #expect(item(.status).title.contains("req"))
+        #expect(item(.status).title.contains("запр."))
         #expect(item(.status).enabled == false)
     }
 
     @Test func listeningDotReflectsState() {
         let listening = MenuLayout.sections(for: MenuState(listening: .listening(source: "Chrome")))[0][1]
-        #expect(listening.title == "Listening — Chrome")
+        #expect(listening.title == "Слушаю — Chrome")
         #expect(listening.statusDot == .green)
         let paused = MenuLayout.sections(for: MenuState(listening: .paused(source: "Chrome")))[0]
         #expect(paused[1].statusDot == .gray)
-        #expect(paused[2].title == "Resume listening")
+        #expect(paused[2].title == "Продолжить слушать")
         let noPermission = MenuLayout.sections(for: MenuState(listening: .noPermission))[0][1]
         #expect(noPermission.statusDot == .red)
         #expect(noPermission.hasSubmenu == false)
@@ -53,9 +53,9 @@ struct MenuLayoutTests {
 
     @Test func bankErrorShownInMenu() {
         var s = MenuState(bankCardCount: 20)
-        s.bankError = "Question bank: ошибка в строке 7: пустой ответ"
+        s.bankError = "База вопросов: ошибка в строке 7: пустой ответ"
         let item = MenuLayout.sections(for: s).flatMap { $0 }.first { $0.action == .questionBank }
-        #expect(item?.title == "Question bank: ошибка в строке 7: пустой ответ")
+        #expect(item?.title == "База вопросов: ошибка в строке 7: пустой ответ")
     }
 
     @Test func reboundHotkeyShownInMenu() {
@@ -69,11 +69,11 @@ struct MenuLayoutTests {
     @Test func dynamicTitles() {
         let s = MenuState(mode: .bankOnly, profileName: "Senior iOS", bankCardCount: 17, strongModelName: "Claude")
         let items = MenuLayout.sections(for: s).flatMap { $0 }
-        #expect(items.contains { $0.title == "Mode: Question bank only" })
-        #expect(items.contains { $0.title == "Models: Gemini → DeepSeek → Claude" })
-        #expect(items.contains { $0.title == "Profile: Senior iOS" })
-        #expect(items.contains { $0.title == "Question bank (17 cards)…" })
-        #expect(items.contains { $0.title == "Screenshot → Claude" })
+        #expect(items.contains { $0.title == "Режим: Только база вопросов" })
+        #expect(items.contains { $0.title == "Модели: Gemini → DeepSeek → Claude" })
+        #expect(items.contains { $0.title == "Профиль: Senior iOS" })
+        #expect(items.contains { $0.title == "База вопросов (17 карточек)…" })
+        #expect(items.contains { $0.title == "Скриншот → Claude" })
     }
 
     @Test func ownerAnswerItemOnlyInSelfTest() {
@@ -102,6 +102,6 @@ struct MenuLayoutTests {
     @Test func noProfileTitle() {
         // R-40: «Без профиля» вместо названия профиля.
         let items = MenuLayout.sections(for: MenuState(profileName: "Senior iOS", useProfile: false)).flatMap { $0 }
-        #expect(items.contains { $0.title == "Profile: Без профиля" })
+        #expect(items.contains { $0.title == "Профиль: Без профиля" })
     }
 }

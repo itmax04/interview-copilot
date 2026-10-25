@@ -44,7 +44,7 @@ final class PanelController {
         effect.wantsLayer = true
         effect.layer?.cornerRadius = 16
         effect.layer?.masksToBounds = true
-        let hosting = NSHostingView(rootView: PanelView(model: model))
+        let hosting = NSHostingView(rootView: PanelView(model: model).localizedRoot())
         hosting.translatesAutoresizingMaskIntoConstraints = false
         effect.addSubview(hosting)
         NSLayoutConstraint.activate([
@@ -167,12 +167,12 @@ final class PanelController {
             let date = Date().formatted(date: .numeric, time: .shortened)
             Log.app.info("visibility check hidden=\(self.panel.sharingType == .none) share=\(share, format: .fixed(precision: 2))")
             switch VisibilityProbe.verdict(share: share) {
-            case .visible: return "Виден в захвате экрана (\(date), \(os))"
-            case .hidden: return "Не виден в захвате экрана (\(date), \(os))"
-            case .unclear: return "Не удалось определить: оверлей перекрыт или снимок неполный — повторите (\(date))"
+            case .visible: return L("Виден в захвате экрана (%@, %@)", date, os)
+            case .hidden: return L("Не виден в захвате экрана (%@, %@)", date, os)
+            case .unclear: return L("Не удалось определить: оверлей перекрыт или снимок неполный — повторите (%@)", date)
             }
         } catch {
-            return "Не удалось проверить: \(error.localizedDescription)"
+            return L("Не удалось проверить: %@", error.localizedDescription)
         }
     }
 }

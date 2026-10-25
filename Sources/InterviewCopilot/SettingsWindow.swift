@@ -20,9 +20,9 @@ final class SettingsWindowController {
     func show() {
         if window == nil {
             let hosting = NSHostingController(rootView: SettingsView(model: model, hotkeyFailures: hotkeyFailures,
-                                                                   stylePreviewContext: stylePreviewContext))
+                                                                   stylePreviewContext: stylePreviewContext).localizedRoot())
             let w = NSWindow(contentViewController: hosting)
-            w.title = "Interview Copilot Settings"
+            UILanguage.shared.setTitle("Настройки Interview Copilot", of: w)
             w.styleMask = [.titled, .closable, .miniaturizable]
             w.isReleasedWhenClosed = false
             w.center()
@@ -97,19 +97,22 @@ struct SettingsView: View {
     @State private var tab: SettingsTab
 
     init(model: AppModel, hotkeyFailures: @escaping () -> [HotkeyAction: String],
-         stylePreviewContext: @escaping () -> StylePreview.Context? = { nil }, tab: SettingsTab = .keys) {
+         stylePreviewContext: @escaping () -> StylePreview.Context? = { nil }, tab: SettingsTab? = nil) {
         self.model = model
         self.hotkeyFailures = hotkeyFailures
         self.stylePreviewContext = stylePreviewContext
-        _tab = State(initialValue: tab)
+        _tab = State(initialValue: tab ?? Self.lastTab)
     }
+
+    /// Последний открытый раздел: окно перестраивается при смене языка, раздел остается тем же.
+    @MainActor static var lastTab: SettingsTab = .general
 
     /// P17: слева разделы, справа страница с заголовком; содержимое страниц — прежние формы настроек.
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(SettingsTab.allCases) { t in
-                    ICSidebarRow(title: t.title, icon: t.symbol, selected: tab == t) { tab = t }
+                    ICSidebarRow(title: t.title, icon: t.symbol, selected: tab == t) { tab = t; Self.lastTab = t }
                 }
                 Spacer()
             }

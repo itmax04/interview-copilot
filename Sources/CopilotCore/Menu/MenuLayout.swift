@@ -90,7 +90,7 @@ public struct MenuState: Sendable, Equatable {
     public init(listening: ListeningStatus = .idle, mode: AnswerMode = .bankAndHint,
                 chain: [ProviderID] = [.gemini, .deepseek, .anthropic], language: RecognitionLanguage = .auto,
                 profileName: String = "Example", useProfile: Bool = true, bankCardCount: Int = 0, strongModelName: String = "Claude",
-                statusLine: String = "Today: $0.00 · Gemini: 0 req",
+                statusLine: String = "Сегодня: $0.00 · Gemini: 0 запр.",
                 hotkeys: [HotkeyAction: HotkeyBinding] = [:], panelVisible: Bool = false) {
         self.listening = listening
         self.mode = mode
@@ -112,65 +112,65 @@ public struct MenuState: Sendable, Equatable {
 
 public enum MenuLayout {
     /// Пункт подменю Profile и заголовок, когда профиль не используется (R-40).
-    public static let noProfileTitle = "Без профиля"
+    public static var noProfileTitle: String { L10n.t("Без профиля") }
     /// Секции меню сверху вниз; между секциями — разделители. Состав и порядок — R-15.
     public static func sections(for s: MenuState) -> [[MenuItemSpec]] {
         let listeningTitle: String
         let paused: Bool
         switch s.listening {
-        case .listening(let app): listeningTitle = "Listening — \(app)"; paused = false
-        case .paused(let app): listeningTitle = "Paused — \(app)"; paused = true
-        case .noPermission: listeningTitle = "No screen recording permission"; paused = false
-        case .idle: listeningTitle = "Listening — choose source"; paused = false
-        case .noSession: listeningTitle = "Нет сессии — не слушаю"; paused = false
+        case .listening(let app): listeningTitle = L10n.f("Слушаю — %@", app); paused = false
+        case .paused(let app): listeningTitle = L10n.f("Пауза — %@", app); paused = true
+        case .noPermission: listeningTitle = L10n.t("Нет разрешения на запись экрана"); paused = false
+        case .idle: listeningTitle = L10n.t("Слушаю — выберите источник"); paused = false
+        case .noSession: listeningTitle = L10n.t("Нет сессии — не слушаю"); paused = false
         }
         let chainTitle = s.chain.map(\.displayName).joined(separator: " → ")
         var actions = [
-            MenuItemSpec(.answerNow, "Answer now", symbol: "bolt", hotkey: s.hotkey(.answerNow)),
-            MenuItemSpec(.screenshot, "Screenshot → \(s.strongModelName)", symbol: "camera", hotkey: s.hotkey(.screenshot)),
-            MenuItemSpec(.togglePanel, s.panelVisible ? "Hide panel" : "Show panel", symbol: "macwindow",
+            MenuItemSpec(.answerNow, L10n.t("Ответить сейчас"), symbol: "bolt", hotkey: s.hotkey(.answerNow)),
+            MenuItemSpec(.screenshot, L10n.f("Скриншот → %@", s.strongModelName), symbol: "camera", hotkey: s.hotkey(.screenshot)),
+            MenuItemSpec(.togglePanel, s.panelVisible ? L10n.t("Скрыть оверлей") : L10n.t("Показать оверлей"), symbol: "macwindow",
                          hotkey: s.hotkey(.togglePanel)),
-            MenuItemSpec(.sessionHistory, "Session history…", symbol: "clock"),
+            MenuItemSpec(.sessionHistory, L10n.t("История сессий…"), symbol: "clock"),
         ]
         if s.selfTest {
             // Живой тест COPILOT-06: горячую клавишу ⌃⌥A не нашли — ответы не записались. Пункт виден в самопроверке.
-            actions.insert(MenuItemSpec(.ownerAnswer, s.ownerAnswering ? "Закончить мой ответ" : "Сейчас отвечаю я",
+            actions.insert(MenuItemSpec(.ownerAnswer, s.ownerAnswering ? L10n.t("Закончить мой ответ") : L10n.t("Сейчас отвечаю я"),
                                         symbol: s.ownerAnswering ? "stop.circle" : "mic", hotkey: s.hotkey(.ownerAnswer)), at: 1)
         }
         // COPILOT-09 R-02: без сессии приложение не слушает — первым пунктом меню идёт сессия.
         let session = s.sessionActive
-            ? MenuItemSpec(.endSession, "Завершить сессию" + (s.sessionTimer.map { " · \($0)" } ?? ""), symbol: "stop.circle")
-            : MenuItemSpec(.newSession, "Создать сессию…", symbol: "play.circle", hotkey: s.hotkey(.newSession))
+            ? MenuItemSpec(.endSession, L10n.t("Завершить сессию") + (s.sessionTimer.map { " · \($0)" } ?? ""), symbol: "stop.circle")
+            : MenuItemSpec(.newSession, L10n.t("Создать сессию…"), symbol: "play.circle", hotkey: s.hotkey(.newSession))
         return [
             [
                 session,
                 // Без разрешения — пункт без подменю: клик открывает окно разрешений (AC-13).
                 MenuItemSpec(.listeningSource, listeningTitle, symbol: "circle.fill",
                              submenu: s.listening != .noPermission, statusDot: s.listening.dot),
-                MenuItemSpec(.togglePause, paused ? "Resume listening" : "Pause listening",
+                MenuItemSpec(.togglePause, paused ? L10n.t("Продолжить слушать") : L10n.t("Пауза"),
                              symbol: paused ? "play.fill" : "pause.fill", hotkey: s.hotkey(.togglePause)),
             ],
             [
-                MenuItemSpec(.mode, "Mode: \(s.mode.title)", symbol: "brain", submenu: true),
-                MenuItemSpec(.models, "Models: \(chainTitle)", symbol: "cylinder", submenu: true),
-                MenuItemSpec(.language, "Language: \(s.language.menuTitle)", symbol: "globe", submenu: true),
+                MenuItemSpec(.mode, L10n.f("Режим: %@", s.mode.title), symbol: "brain", submenu: true),
+                MenuItemSpec(.models, L10n.f("Модели: %@", chainTitle), symbol: "cylinder", submenu: true),
+                MenuItemSpec(.language, L10n.f("Язык звонка: %@", s.language.menuTitle), symbol: "globe", submenu: true),
             ],
             [
-                MenuItemSpec(.profile, "Profile: \(s.useProfile ? s.profileName : MenuLayout.noProfileTitle)", symbol: "person", submenu: true),
-                MenuItemSpec(.questionBank, s.bankError ?? "Question bank (\(s.bankCardCount) cards)…",
+                MenuItemSpec(.profile, L10n.f("Профиль: %@", s.useProfile ? s.profileName : MenuLayout.noProfileTitle), symbol: "person", submenu: true),
+                MenuItemSpec(.questionBank, s.bankError ?? L10n.f("База вопросов (%lld карточек)…", s.bankCardCount),
                              symbol: s.bankError == nil ? "book" : "exclamationmark.triangle"),
                 // COPILOT-08 R-03: окно «Профиль» — резюме, факты, вакансия, инструкции, файлы.
-                MenuItemSpec(.editProfile, "Профиль: резюме, инструкции…", symbol: "doc.text"),
-                MenuItemSpec(.practice, "Тестовый звонок…", symbol: "phone"),
-                MenuItemSpec(.aiInterview, "ИИ-собеседование…", symbol: "person.wave.2"),
+                MenuItemSpec(.editProfile, L10n.t("Профиль: резюме, инструкции…"), symbol: "doc.text"),
+                MenuItemSpec(.practice, L10n.t("Тестовый звонок…"), symbol: "phone"),
+                MenuItemSpec(.aiInterview, L10n.t("ИИ-собеседование…"), symbol: "person.wave.2"),
             ],
             actions,
             [
                 MenuItemSpec(.status, s.statusLine, symbol: "chart.bar", enabled: false),
             ],
             [
-                MenuItemSpec(.settings, "Settings…", symbol: "gearshape", shortcut: .command(",")),
-                MenuItemSpec(.quit, "Quit", symbol: "power", shortcut: .command("q")),
+                MenuItemSpec(.settings, L10n.t("Настройки…"), symbol: "gearshape", shortcut: .command(",")),
+                MenuItemSpec(.quit, L10n.t("Выйти"), symbol: "power", shortcut: .command("q")),
             ],
         ]
     }

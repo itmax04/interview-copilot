@@ -173,8 +173,7 @@ struct AudioSettingsView: View {
                 Slider(value: questionPauseBinding, in: Double(AppSettings.questionPauseRange.lowerBound)...Double(AppSettings.questionPauseRange.upperBound), step: 50)
             }
             Toggle("Фильтр языка: чужой язык — серым, английские термины сохраняются", isOn: $model.settings.languageFilter)
-            Text("Українська или Русский — проходят оба языка; English — только английский; Auto — украинский, русский, английский. "
-                 + "В звонке целая английская фраза интервьюера проходит; в микрофоне — только термины. Серую строку можно нажать (или \(model.settings.hotkey(.answerNow).displayString)), чтобы ответить.")
+            Text("Українська или Русский — проходят оба языка; English — только английский; Auto — украинский, русский, английский. В звонке целая английская фраза интервьюера проходит; в микрофоне — только термины. Серую строку можно нажать (или \(model.settings.hotkey(.answerNow).displayString)), чтобы ответить.")
                 .font(.footnote).foregroundStyle(.secondary)
             if model.settings.languageFilter && model.settings.recognitionBackend == .whisper && model.settings.language != .auto {
                 // Живой тест H-1 (2026-10-23): английское видео при Whisper + «Українська» стало украинским текстом.

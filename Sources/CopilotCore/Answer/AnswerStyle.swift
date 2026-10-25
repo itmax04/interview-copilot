@@ -14,17 +14,17 @@ public struct AnswerStyle: Codable, Equatable, Hashable, Sendable {
         public var id: String { rawValue }
         public var title: String {
             switch self {
-            case .scriptAndBullets: "Суть + пункты"
-            case .bullets: "Только пункты"
-            case .script: "Сплошной текст"
+            case .scriptAndBullets: L10n.t("Суть + пункты")
+            case .bullets: L10n.t("Только пункты")
+            case .script: L10n.t("Сплошной текст")
             }
         }
         /// Для переключателя (узкая колонка).
         public var shortTitle: String {
             switch self {
-            case .scriptAndBullets: "Суть + пункты"
-            case .bullets: "Пункты"
-            case .script: "Текст"
+            case .scriptAndBullets: L10n.t("Суть + пункты")
+            case .bullets: L10n.t("Пункты")
+            case .script: L10n.t("Текст")
             }
         }
     }
@@ -35,9 +35,9 @@ public struct AnswerStyle: Codable, Equatable, Hashable, Sendable {
         public var id: String { rawValue }
         public var title: String {
             switch self {
-            case .short: "Короткий"
-            case .balanced: "Сбалансированный"
-            case .detailed: "Подробный"
+            case .short: L10n.t("Короткий")
+            case .balanced: L10n.t("Сбалансированный")
+            case .detailed: L10n.t("Подробный")
             }
         }
         /// Предел слов в правиле промпта.
@@ -63,9 +63,9 @@ public struct AnswerStyle: Codable, Equatable, Hashable, Sendable {
         public var id: String { rawValue }
         public var title: String {
             switch self {
-            case .formal: "Формальный"
-            case .neutral: "Нейтральный"
-            case .friendly: "Дружелюбный"
+            case .formal: L10n.t("Формальный")
+            case .neutral: L10n.t("Нейтральный")
+            case .friendly: L10n.t("Дружелюбный")
             }
         }
     }
@@ -134,9 +134,9 @@ public enum StylePreviewQuestion: String, CaseIterable, Sendable, Identifiable {
     public var id: String { rawValue }
     public var title: String {
         switch self {
-        case .about: "О себе"
-        case .behavioral: "Поведенческий"
-        case .technical: "Технический"
+        case .about: L10n.t("О себе")
+        case .behavioral: L10n.t("Поведенческий")
+        case .technical: L10n.t("Технический")
         }
     }
 

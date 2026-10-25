@@ -102,7 +102,7 @@ public enum ChainText {
     public static func collect(_ chain: ProviderChain, _ request: LLMRequest) async -> Result<String, ChainTextError> {
         var text = ""
         var finished = false
-        var reason = "нет ответа"
+        var reason = L10n.t("нет ответа")
         for await event in chain.run(request) {
             switch event {
             case .text(let t): text += t
@@ -118,5 +118,5 @@ public enum ChainText {
 
 public struct ChainTextError: Error, Equatable, CustomStringConvertible {
     public var reason: String
-    public var description: String { "Модели недоступны: \(reason)" }
+    public var description: String { L10n.f("Модели недоступны: %@", reason) }
 }

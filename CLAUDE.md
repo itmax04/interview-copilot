@@ -4,11 +4,11 @@
 Нативное приложение macOS на Swift 6 (SwiftUI + AppKit), сборка через SwiftPM без .xcodeproj.
 Сначала прочитать `docs/ARCHITECTURE.md` (поток данных, модули, типичные изменения, проверки, журнал).
 Карта, команды и ограничения — `README.md`. Стек и причины — `docs/decisions/ADR-0001-stack.md`.
-Задачи — `docs/changes/COPILOT-NN/` (intent → spec → plan → handoff); последняя — с наибольшим номером (сейчас COPILOT-09).
+Задачи — `docs/changes/COPILOT-NN/` (intent → spec → plan → handoff); последняя — с наибольшим номером (сейчас COPILOT-10).
 
 ## Проверки
 - Быстрая: `swift build && swift test`
-- Полная: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh`
+- Полная: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`
 - Команды появляются по шагам plan.md; если команда ещё не существует — так и пиши (NOT RUN), не выдумывай результат.
 
 ## Правила
@@ -32,6 +32,9 @@
   Отклонения от образцов — в `docs/changes/COPILOT-09/handoff.md`. Меню в строке состояния — по-прежнему `docs/design/menu-v2.webp`.
 - Глобальные правила фронтенда владельца (21st.dev, component.gallery, Kinetics, DESIGN.md) относятся к вебу
   и к этому нативному проекту не применяются — источник стиля здесь Apple HIG + картинки. Решение владельца от 2026-10-06.
+- Цвета окон — только токены `IC` (светлый и темный вариант, COPILOT-10); оверлей всегда темный (`ICDark`).
+- Строки интерфейса — по-русски в коде, одной строкой (не склеивать `"…" + "…"`); строка из кода — `L("…")` / `L10n.t`/`f`.
+  Новый текст — перевод в `Resources/en.lproj/Localizable.strings`, проверка — `scripts/check-localization.sh`.
 - Анимации: системные; учитывать «Уменьшить движение» (`accessibilityReduceMotion`).
 
 ## Готово, когда

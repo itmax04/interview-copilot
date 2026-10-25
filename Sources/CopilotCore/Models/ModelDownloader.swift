@@ -27,9 +27,9 @@ public enum ModelDownloadError: Error, CustomStringConvertible, Equatable {
 
     public var description: String {
         switch self {
-        case .checksumMismatch(let f): "SHA256 не совпадает для \(f): файл удалён"
-        case .http(let s): "HTTP \(s) при загрузке"
-        case .notInList(let f): "\(f) нет в списке моделей"
+        case .checksumMismatch(let f): L10n.f("SHA256 не совпадает для %@: файл удалён", f)
+        case .http(let s): L10n.f("HTTP %lld при загрузке", s)
+        case .notInList(let f): L10n.f("%@ нет в списке моделей", f)
         }
     }
 }

@@ -81,9 +81,9 @@ final class AppModel {
     /// Провайдер ответил 400/401/403 — показать «ключ недействителен» у этого ключа в настройках (R-09).
     func markInvalidKey(_ provider: ProviderID, slot: Int = 1, _ error: LLMError) {
         if slot <= 1 {
-            keyStatus[provider] = "Ключ недействителен: \(error.description)"
+            keyStatus[provider] = L("Ключ недействителен: %@", error.description)
         } else {
-            slotStatus[KeySlots.account(provider, slot)] = "Ключ недействителен: \(error.description)"
+            slotStatus[KeySlots.account(provider, slot)] = L("Ключ недействителен: %@", error.description)
         }
     }
 
@@ -182,7 +182,7 @@ final class AppModel {
         if p == .gemini, !settings.modelIDs.geminiBackup.isEmpty, !models.contains(settings.modelIDs.geminiBackup) {
             missing.append(settings.modelIDs.geminiBackup)
         }
-        return missing.isEmpty ? nil : "\(p.displayName): нет модели \(missing.joined(separator: ", ")) в списке провайдера"
+        return missing.isEmpty ? nil : L("%@: нет модели %@ в списке провайдера", p.displayName, missing.joined(separator: ", "))
     }
 
     func menuState(listening: ListeningStatus, profileName: String = ProfileLibrary.defaultName, cardCount: Int = 0) -> MenuState {

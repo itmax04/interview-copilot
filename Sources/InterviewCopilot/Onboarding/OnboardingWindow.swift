@@ -16,8 +16,8 @@ final class OnboardingWindowController {
     func show() {
         state.refresh()
         if window == nil {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: OnboardingView(state: state)))
-            w.title = "Interview Copilot — первый запуск"
+            let w = NSWindow(contentViewController: NSHostingController(rootView: OnboardingView(state: state).localizedRoot()))
+            UILanguage.shared.setTitle("Interview Copilot — первый запуск", of: w)
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             w.center()
@@ -127,6 +127,7 @@ struct OnboardingView: View {
                     Button { state.step = OnboardingState.Step(rawValue: state.step.rawValue - 1)! } label: { Label("Назад", systemImage: "chevron.left") }
                         .buttonStyle(ICButtonStyle())
                 }
+                AppearancePickers(model: state.model)
                 Spacer()
                 if state.step == .models {
                     Button("Готово") { state.finish() }
@@ -167,7 +168,7 @@ struct OnboardingView: View {
                         .fixedSize()
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("Шаг \(s.rawValue + 1): \(title(s))\(current ? ", текущий" : "")")
+                .accessibilityLabel(L("Шаг %lld: %@%@", s.rawValue + 1, L(title(s)), current ? L(", текущий") : ""))
             }
         }
     }
@@ -293,4 +294,30 @@ private struct ModelsStep: View {
             }
         }
     }
+}
+
+/// Тема и язык — с первого экрана (COPILOT-10); те же настройки — в «Настройки → Основное».
+private struct AppearancePickers: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Picker(selection: $model.settings.theme) {
+                Text("Как в системе").tag(AppTheme.system)
+                Text("Светлая").tag(AppTheme.light)
+                Text("Темная").tag(AppTheme.dark)
+            } label: { Image(systemName: "circle.lefthalf.filled").accessibilityLabel(Text("Тема")) }
+            .fixedSize()
+            .help("Тема")
+            Picker(selection: $model.settings.interfaceLanguage) {
+                Text("Как в системе").tag(InterfaceLanguage.system)
+                Text("Русский").tag(InterfaceLanguage.ru)
+                Text("English").tag(InterfaceLanguage.en)
+            } label: { Image(systemName: "globe").accessibilityLabel(Text("Язык интерфейса")) }
+            .fixedSize()
+            .help("Язык интерфейса")
+        }
+        .padding(.leading, 8)
+    }
+
 }

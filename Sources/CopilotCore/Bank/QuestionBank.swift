@@ -14,10 +14,10 @@ public enum AnswerStatus: String, Codable, Sendable, CaseIterable {
 
     public var title: String {
         switch self {
-        case .none: "нет ответа"
-        case .own: "ваш"
-        case .draft: "черновик"
-        case .approved: "подтверждён"
+        case .none: L10n.t("нет ответа")
+        case .own: L10n.t("ваш")
+        case .draft: L10n.t("черновик")
+        case .approved: L10n.t("подтверждён")
         }
     }
 }
@@ -50,14 +50,14 @@ public struct BankCard: Codable, Equatable, Sendable, Identifiable {
     public var isSTAR: Bool { tags.contains { $0.uppercased() == "STAR" } }
 }
 
-/// Ошибка разбора `questions.yaml` с номером строки — для сообщения «Question bank: ошибка в строке N» (S-10).
+/// Ошибка разбора `questions.yaml` с номером строки — для сообщения «База вопросов: ошибка в строке N» (S-10).
 public struct QuestionBankError: Error, Equatable, CustomStringConvertible {
     public var line: Int?
     public var message: String
 
     public var description: String {
-        if let line { return "Question bank: ошибка в строке \(line): \(message)" }
-        return "Question bank: \(message)"
+        if let line { return L10n.f("База вопросов: ошибка в строке %lld: %@", line, message) }
+        return L10n.f("База вопросов: %@", message)
     }
 }
 
@@ -72,23 +72,23 @@ public enum QuestionBankParser {
         }
         guard let node else { return [] }
         guard let items = node.sequence else {
-            throw QuestionBankError(line: node.mark?.line ?? 1, message: "ожидается список карточек (- id: …)")
+            throw QuestionBankError(line: node.mark?.line ?? 1, message: L10n.t("ожидается список карточек (- id: …)"))
         }
         var cards: [BankCard] = []
         var seen: [String: Int] = [:]
         for item in items {
             let line = item.mark?.line ?? 0 // Yams: строки с 1
             guard let map = item.mapping else {
-                throw QuestionBankError(line: line, message: "карточка должна быть словарём с полями id, questions, answer")
+                throw QuestionBankError(line: line, message: L10n.t("карточка должна быть словарём с полями id, questions, answer"))
             }
             guard let id = map["id"]?.string?.trimmingCharacters(in: .whitespaces), !id.isEmpty else {
-                throw QuestionBankError(line: line, message: "нет поля id")
+                throw QuestionBankError(line: line, message: L10n.t("нет поля id"))
             }
             guard id.range(of: "^[a-z0-9-]+$", options: .regularExpression) != nil else {
-                throw QuestionBankError(line: line, message: "id «\(id)» — только строчные латинские буквы, цифры и дефис")
+                throw QuestionBankError(line: line, message: L10n.f("id «%@» — только строчные латинские буквы, цифры и дефис", "\(id)"))
             }
             if let first = seen[id] {
-                throw QuestionBankError(line: line, message: "повтор id «\(id)» (первое в строке \(first))")
+                throw QuestionBankError(line: line, message: L10n.f("повтор id «%@» (первое в строке %@)", "\(id)", "\(first)"))
             }
             seen[id] = line
             let questions: [String]
@@ -100,7 +100,7 @@ public enum QuestionBankParser {
                 questions = []
             }
             guard !questions.isEmpty else {
-                throw QuestionBankError(line: line, message: "в карточке «\(id)» нет ни одного вопроса")
+                throw QuestionBankError(line: line, message: L10n.f("в карточке «%@» нет ни одного вопроса", "\(id)"))
             }
             // COPILOT-08 R-07: вопрос без ответа — правильная карточка (ждёт черновика), в поиск она не идёт.
             let answer = (map["answer"]?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -117,7 +117,7 @@ public enum QuestionBankParser {
     public static func load(_ url: URL) throws -> [BankCard] {
         let text: String
         do { text = try String(contentsOf: url, encoding: .utf8) } catch {
-            throw QuestionBankError(line: nil, message: "не удалось прочитать \(url.lastPathComponent): \(error.localizedDescription)")
+            throw QuestionBankError(line: nil, message: L10n.f("не удалось прочитать %@: %@", "\(url.lastPathComponent)", "\(error.localizedDescription)"))
         }
         return try parse(text)
     }

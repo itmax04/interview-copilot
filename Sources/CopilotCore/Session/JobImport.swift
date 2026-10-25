@@ -22,10 +22,10 @@ public enum JobImportError: Error, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .badURL: "Нужна ссылка http(s) на страницу вакансии"
-        case .network(let m): "Страница не загрузилась: \(m). Вставьте текст вакансии вручную"
-        case .loginWall: "Страница требует входа (например, LinkedIn) — откройте её и вставьте текст вакансии вручную"
-        case .notFound: "На странице не нашлось описания вакансии — вставьте текст вручную"
+        case .badURL: L10n.t("Нужна ссылка http(s) на страницу вакансии")
+        case .network(let m): L10n.f("Страница не загрузилась: %@. Вставьте текст вакансии вручную", m)
+        case .loginWall: L10n.t("Страница требует входа (например, LinkedIn) — откройте её и вставьте текст вакансии вручную")
+        case .notFound: L10n.t("На странице не нашлось описания вакансии — вставьте текст вручную")
         }
     }
 }

@@ -49,7 +49,7 @@ final class QuestionPreparer {
         let byRules = QuestionImport.parseByRules(text)
         if !byRules.isEmpty {
             pendingImport = byRules
-            succeed("В файле найдено вопросов: \(byRules.count). Проверьте и добавьте.")
+            succeed(L("В файле найдено вопросов: %lld. Проверьте и добавьте.", byRules.count))
             Log.app.info("questions import rules=\(byRules.count)")
             return
         }
@@ -68,7 +68,7 @@ final class QuestionPreparer {
             Log.app.info("questions import llm=\(found.count)")
             if found.isEmpty { self.fail("Вопросов в файле не найдено. Добавьте их в таблицу вручную.") } else {
                 self.pendingImport = found
-                self.succeed("Модель нашла вопросов: \(found.count). Проверьте и добавьте.")
+                self.succeed(L("Модель нашла вопросов: %lld. Проверьте и добавьте.", found.count))
             }
         }
     }
@@ -77,7 +77,7 @@ final class QuestionPreparer {
         pendingImport = nil
         guard !items.isEmpty else { return }
         bank.saveCards(QuestionImport.merge(items, into: bank.cards))
-        succeed("Добавлено вопросов: \(items.count). Нажмите «Подготовить», чтобы добавить формулировки и черновики.")
+        succeed(L("Добавлено вопросов: %lld. Нажмите «Подготовить», чтобы добавить формулировки и черновики.", items.count))
     }
 
     // MARK: Подготовка
@@ -126,7 +126,7 @@ final class QuestionPreparer {
                 self.step()
             }
             let drafts = self.bank.cards.filter { $0.status == .draft }.count
-            self.succeed(drafts > 0 ? "Готово. Черновиков на проверку: \(drafts) — подтвердите или поправьте." : "Готово.")
+            self.succeed(drafts > 0 ? L("Готово. Черновиков на проверку: %lld — подтвердите или поправьте.", drafts) : L("Готово."))
             Log.app.info("questions prepared batches=\(phrasing.count + drafting.count)")
         }
     }
@@ -147,7 +147,7 @@ final class QuestionPreparer {
 
     private func step() {
         progress.done += 1
-        message = "Готово \(progress.done) из \(progress.total) частей…"
+        message = L("Готово %lld из %lld частей…", progress.done, progress.total)
     }
 
     private func succeed(_ text: String) {

@@ -150,8 +150,9 @@ public final class UsageMeter: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         rollover()
-        let gemini = state.dayLimited[ProviderID.gemini.rawValue] == true ? "Gemini: limit" : "Gemini: \(state.dayRequests[ProviderID.gemini.rawValue] ?? 0) req"
-        return String(format: "Today: $%.2f · %@", state.dayCost, gemini)
+        let gemini = state.dayLimited[ProviderID.gemini.rawValue] == true
+            ? L10n.t("Gemini: лимит") : L10n.f("Gemini: %lld запр.", state.dayRequests[ProviderID.gemini.rawValue] ?? 0)
+        return L10n.f("Сегодня: $%.2f · %@", state.dayCost, gemini)
     }
 
     private func save() {

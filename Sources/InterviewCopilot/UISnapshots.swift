@@ -30,7 +30,8 @@ enum UISnapshots {
         fillProfile(bank)
         var count = 0
         func shot<V: View>(_ name: String, _ size: NSSize, dark: Bool = false, _ view: V) {
-            if render(view, size: size, dark: dark, to: dir.appendingPathComponent("\(name).png")) { count += 1 }
+            // Корень окна, как в приложении: язык интерфейса, а не системы (иначе литералы — из en.lproj на английской системе).
+            if render(view.localizedRoot(), size: size, dark: dark, to: dir.appendingPathComponent("\(name).png")) { count += 1 }
         }
 
         // Панель (R-16): все состояния.
@@ -79,20 +80,7 @@ enum UISnapshots {
         wizard.jobLink = "https://jobs.example.com/senior-ios"
         for step in SessionWizardModel.Step.allCases {
             wizard.step = step
-            if step == .check {
-                var input = PreflightInput()
-                input.micPeakDB = -28
-                input.callSourceName = "Google Chrome"
-                input.callPeakDB = -90
-                input.recognizerReady = true
-                input.recognizerStatus = "Parakeet v3 + уточнение Whisper turbo"
-                input.providersWithKeys = [.groq, .gemini]
-                input.resumeCharacters = 1_900
-                input.materials = 3
-                input.questions = 9
-                input.preparedQuestions = 1
-                wizard.preflight = Preflight.evaluate(input)
-            }
+            if step == .check { wizard.preflight = Preflight.evaluate(samplePreflight()) }
             shot("wizard-\(step.rawValue + 1)", NSSize(width: 900, height: 640), SessionWizardView(state: wizard))
         }
 
@@ -142,6 +130,45 @@ enum UISnapshots {
             shot("workspace-\(name)", NSSize(width: 1180, height: 780),
                  WorkspaceView(workspace: ws, model: model, bank: bank, store: store, reviews: nil, preparer: preparer))
         }
+
+        // COPILOT-10: английский интерфейс (перевод — из en.lproj пакета или папки Resources проекта).
+        L10n.loadTable(fallbackDirectory: URL(fileURLWithPath: "Resources"))
+        UILanguage.shared.apply(.en)
+        ws.recognitionStatus = L("Распознавание: %@", "Parakeet v3")
+        for (name, section) in [("today", WorkspaceSection.today), ("sessions", .sessions), ("profiles", .profiles), ("mock", .mock)] {
+            ws.section = section
+            shot("en-workspace-\(name)", NSSize(width: 1180, height: 780),
+                 WorkspaceView(workspace: ws, model: model, bank: bank, store: store, reviews: nil, preparer: preparer).localizedRoot())
+        }
+        for t in [SettingsTab.general, .keys, .models] {
+            shot("en-settings-\(t.rawValue.lowercased())", NSSize(width: 1000, height: 680),
+                 SettingsView(model: model, hotkeyFailures: { [:] }, tab: t).localizedRoot())
+        }
+        for step in SessionWizardModel.Step.allCases {
+            wizard.step = step
+            if step == .check { wizard.preflight = Preflight.evaluate(samplePreflight()) }
+            shot("en-wizard-\(step.rawValue + 1)", NSSize(width: 900, height: 640), SessionWizardView(state: wizard).localizedRoot())
+        }
+        shot("en-history-summary", NSSize(width: 950, height: 820),
+             SessionDetail(session: sampleSession(store), reviews: nil, onBack: {}, onDelete: {}).localizedRoot())
+        for (name, configure) in panelStates() where ["idle", "listening", "answer", "no-session"].contains(name) {
+            let pm = PanelModel()
+            pm.hotkeys = model.settings.hotkeys
+            configure(pm)
+            shot("en-panel-\(name)", NSSize(width: 420, height: 540), dark: true,
+                 PanelView(model: pm).background(Color(white: 0.13)).localizedRoot())
+        }
+        let enOnboarding = OnboardingState(model: model, listening: listening, onFinish: {})
+        shot("en-onboarding-1", NSSize(width: 860, height: 600), OnboardingView(state: enOnboarding).localizedRoot())
+        // Страницы в браузере — как их отдает локальный сервер в английском интерфейсе.
+        for (name, folder) in [("en-ai-interview", "Resources/Interviewer"), ("en-test-call", "Resources/TestCall")] {
+            let resources = URL(fileURLWithPath: folder)
+            let page = home.appendingPathComponent("\(name).html")
+            if let data = try? Data(contentsOf: resources.appendingPathComponent("index.html")),
+               (try? localizedPage(data, resources: resources).write(to: page)) != nil,
+               renderWeb(page, size: NSSize(width: 1100, height: 760), to: dir.appendingPathComponent("\(name).png")) { count += 1 }
+        }
+        UILanguage.shared.apply(.ru)
 
         // COPILOT-10: темная тема окон.
         for (name, section) in [("today", WorkspaceSection.today), ("sessions", .sessions)] {
@@ -209,6 +236,22 @@ enum UISnapshots {
     }
 
     // MARK: Синтетические данные
+
+    /// Проверка перед стартом на синтетических результатах, без захвата звука.
+    private static func samplePreflight() -> PreflightInput {
+        var input = PreflightInput()
+        input.micPeakDB = -28
+        input.callSourceName = "Google Chrome"
+        input.callPeakDB = -90
+        input.recognizerReady = true
+        input.recognizerStatus = L("Parakeet v3 + уточнение Whisper turbo")
+        input.providersWithKeys = [.groq, .gemini]
+        input.resumeCharacters = 1_900
+        input.materials = 3
+        input.questions = 9
+        input.preparedQuestions = 1
+        return input
+    }
 
     private static func fillProfile(_ bank: BankController) {
         let example = URL(fileURLWithPath: "profile.example")

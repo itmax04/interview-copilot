@@ -48,12 +48,12 @@ final class SessionWizardController {
             }
         }
         self.state = state
-        let hosting = NSHostingController(rootView: SessionWizardView(state: state))
+        let hosting = NSHostingController(rootView: SessionWizardView(state: state).localizedRoot())
         if let window {
             window.contentViewController = hosting
         } else {
             let w = NSWindow(contentViewController: hosting)
-            w.title = "Создать сессию"
+            UILanguage.shared.setTitle("Создать сессию", of: w)
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             window = w
@@ -221,7 +221,10 @@ final class SessionWizardModel {
 
     /// «Распознавание: Parakeet v3» → «Parakeet v3»: заголовок строки уже говорит «Распознавание».
     static func sttDetail(_ status: String) -> String {
-        status.hasPrefix("Распознавание: ") ? String(status.dropFirst("Распознавание: ".count)) : status
+        for prefix in ["Распознавание: ", L("Распознавание: %@", "")] where status.hasPrefix(prefix) {
+            return String(status.dropFirst(prefix.count))
+        }
+        return status
     }
 
     /// Источник звука звонка — та же настройка, что в меню Listening (R-03: «Выбрать источник»).
@@ -257,6 +260,7 @@ final class SessionWizardModel {
         input.screenPermission = Permissions.screenCaptureGranted
         input.recognizerReady = listening.recognizerLoaded
         input.recognizerStatus = Self.sttDetail(listening.sttStatus)
+        input.recognizerFailed = listening.sttFailed
         input.providersWithKeys = config.chain(from: settings.chain).filter { model.hasKey[$0] == true }
         if let id = config.profileID {
             input.resumeCharacters = bank.library.read(.resume, of: id).trimmingCharacters(in: .whitespacesAndNewlines).count
@@ -276,6 +280,7 @@ final class SessionWizardModel {
             input.callPeakDB = callResult.0 == nil ? nil : (callResult.1 ?? -120)
             input.recognizerReady = listening.recognizerLoaded
             input.recognizerStatus = Self.sttDetail(listening.sttStatus)
+            input.recognizerFailed = listening.sttFailed
             preflight = Preflight.evaluate(input)
             checking = false
             Log.app.info("preflight ok=\(Preflight.canStart(self.preflight)) items=\(self.preflight.map { "\($0.id):\($0.status)" }.joined(separator: ","), privacy: .public)")
@@ -346,7 +351,7 @@ struct SessionWizardView: View {
                             .foregroundStyle(current ? IC.accent : IC.secondary)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Шаг \(s.rawValue + 1): \(s.title)\(current ? ", текущий" : done ? ", пройден" : "")")
+                    .accessibilityLabel(L("Шаг %lld: %@%@", s.rawValue + 1, L(s.title), current ? L(", текущий") : done ? L(", пройден") : ""))
                     if s != SessionWizardModel.Step.allCases.last {
                         Rectangle().stroke(style: StrokeStyle(lineWidth: 1, dash: [3, 3])).foregroundStyle(IC.secondary.opacity(0.5))
                             .frame(width: 1, height: 30).padding(.leading, 17)
@@ -512,7 +517,7 @@ struct SessionWizardView: View {
             }
             row("cpu", "Модель") {
                 Picker("Модель", selection: $state.config.firstProvider) {
-                    Text("По порядку цепочки (\(state.providersWithKeys.first?.displayName ?? "нет ключей"))").tag(ProviderID?.none)
+                    Text(L("По порядку цепочки (%@)", state.providersWithKeys.first?.displayName ?? L("нет ключей"))).tag(ProviderID?.none)
                     ForEach(state.providersWithKeys, id: \.self) { Text($0.displayName).tag(ProviderID?.some($0)) }
                 }
                 .labelsHidden()
@@ -573,7 +578,7 @@ struct SessionWizardView: View {
                     Text(state.config.plannedMinutes == 0 ? "Без плана" : "Предупрежу за 5 минут").font(.system(size: 12)).foregroundStyle(IC.secondary)
                     Spacer()
                     Stepper(value: $state.config.plannedMinutes, in: SessionConfig.plannedMinutesRange, step: 15) {
-                        Text(state.config.plannedMinutes == 0 ? "—" : "\(state.config.plannedMinutes) мин").monospacedDigit()
+                        Text(state.config.plannedMinutes == 0 ? "—" : L("%lld мин", state.config.plannedMinutes)).monospacedDigit()
                     }
                     .fixedSize()
                 }
@@ -654,7 +659,7 @@ struct SessionWizardView: View {
 
     private func statusLabel(_ s: PreflightItem.Status) -> String {
         switch s {
-        case .ok: "Готово"
+        case .ok: "В порядке"
         case .warning: "Внимание"
         case .fail: "Не готово"
         case .checking: "Проверяю"

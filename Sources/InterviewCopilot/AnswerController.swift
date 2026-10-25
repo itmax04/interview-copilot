@@ -95,8 +95,8 @@ final class AnswerController {
             && !(s.paidProvidersSuspended && ChainFactory.isPaid(s.strongProvider, settings: s))
         panel.strongModelAvailable = available
         panel.strongModelName = s.strongProvider.displayName
-        panel.strongModelHint = available ? "Отправить вопрос в \(s.strongProvider.displayName) (\(s.hotkey(.strongModel).displayString))"
-            : "Нет ключа \(s.strongProvider == .anthropic ? "Anthropic" : s.strongProvider.displayName)"
+        panel.strongModelHint = available ? L("Отправить вопрос в %@ (%@)", s.strongProvider.displayName, s.hotkey(.strongModel).displayString)
+            : L("Нет ключа %@", s.strongProvider == .anthropic ? "Anthropic" : s.strongProvider.displayName)
     }
 
     /// Куда пишет запрос: свой вопрос и своя версия в истории панели (COPILOT-09 R-08) — чужие и отменённые запросы
@@ -202,7 +202,7 @@ final class AnswerController {
             v.kind = .bank
             v.text = card.card.answer
             v.tags = card.card.isSTAR ? ["S", "T", "A", "R"] : []
-            v.source = "База · \(card.card.id) · \(Int((card.score * 100).rounded()))%"
+            v.source = L("База · %@ · %lld%%", card.card.id, Int((card.score * 100).rounded()))
             v.latency = shownMs / 1000
             v.status = .complete
         }
@@ -314,9 +314,9 @@ final class AnswerController {
             case .exhausted(let reason):
                 // S-04: понятная ошибка и «Повторить»; ближайшие карточки — в «нет в базе».
                 if fallbackTop.isEmpty {
-                    self.panel.history.update(entry: slot.entry, version: slot.version) { $0.status = .failed("Модели недоступны: \(reason)") }
+                    self.panel.history.update(entry: slot.entry, version: slot.version) { $0.status = .failed(L("Модели недоступны: %@", reason)) }
                 } else {
-                    self.showNoMatch(fallbackTop, turn: turn, reason: "Модели недоступны: \(reason)", slot: slot)
+                    self.showNoMatch(fallbackTop, turn: turn, reason: L("Модели недоступны: %@", reason), slot: slot)
                 }
             }
         }
@@ -490,7 +490,7 @@ final class AnswerController {
         guard let task = tasks.task else { return }
         let slot: Slot
         if !isNew, let entryID = task.entryID, let version = panel.history.beginVersion(of: entryID, kind: .screenshot,
-                                                                                         instruction: "\(task.images.count) снимка") {
+                                                                                         instruction: L("%lld снимка", task.images.count)) {
             panel.history.cancelUnfinished(except: version)
             slot = Slot(entry: entryID, version: version)
         } else {

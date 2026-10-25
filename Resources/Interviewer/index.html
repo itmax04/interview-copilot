@@ -38,6 +38,8 @@
 <script>
 'use strict';
 const $=id=>document.getElementById(id),base=location.pathname,audio=$('audio');
+// Перевод строк скрипта: словарь L10N подставляет приложение для английского интерфейса; {0}, {1} — подстановки.
+const L10N=window.L10N||{},T=(s,...a)=>(L10N[s]??s).replace(/\{(\d)\}/g,(_,i)=>a[i]);
 let snap=null,played=null,endedSent=null,finished=false,renderKey='',editing=false;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function markedText(reference,recognized){
@@ -46,57 +48,57 @@ const a=tokens(reference),b=tokens(recognized),d=Array.from({length:a.length+1},
 for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1].word===b[j-1].word?0:1));
 let i=a.length,j=b.length;const bad=new Set(),missing=[];
 while(i||j){if(i&&j&&a[i-1].word===b[j-1].word&&d[i][j]===d[i-1][j-1]){i--;j--}else if(i&&j&&d[i][j]===d[i-1][j-1]+1){bad.add(--j);i--}else if(i&&d[i][j]===d[i-1][j]+1){missing.unshift(a[--i].raw)}else{bad.add(--j)}}
-let at=0,out='';b.forEach((t,k)=>{out+=esc(recognized.slice(at,t.index))+(bad.has(k)?'<span class="worderror">'+esc(t.raw)+'</span>':esc(t.raw));at=t.index+t.raw.length});out+=esc(recognized.slice(at));return (out||'Нет распознанного текста')+(missing.length?'<span class="missing">Пропущено: '+esc(missing.join(', '))+'</span>':'')}
-async function post(path,body){const r=await fetch(base+path,{method:'POST',body});const v=await r.json();if(!r.ok)throw new Error(v.error||'Не удалось выполнить действие');return v}
+let at=0,out='';b.forEach((t,k)=>{out+=esc(recognized.slice(at,t.index))+(bad.has(k)?'<span class="worderror">'+esc(t.raw)+'</span>':esc(t.raw));at=t.index+t.raw.length});out+=esc(recognized.slice(at));return (out||T('Нет распознанного текста'))+(missing.length?'<span class="missing">'+T('Пропущено: {0}',esc(missing.join(', ')))+'</span>':'')}
+async function post(path,body){const r=await fetch(base+path,{method:'POST',body});const v=await r.json();if(!r.ok)throw new Error(v.error||T('Не удалось выполнить действие'));return v}
 function problem(text){$('problem').textContent=text||'';$('problem').classList.toggle('hidden',!text)}
-const phaseText={setup:'Готовимся',thinking:'Интервьюер готовит вопрос…',speaking:'Интервьюер говорит',answering:'Ваш ответ',finishing:'Дораспознаю ответ…',finished:'Собеседование завершено',failed:'Ошибка'};
+const phaseText={setup:T('Готовимся'),thinking:T('Интервьюер готовит вопрос…'),speaking:T('Интервьюер говорит'),answering:T('Ваш ответ'),finishing:T('Дораспознаю ответ…'),finished:T('Собеседование завершено'),failed:T('Ошибка')};
 const running=s=>['thinking','speaking','answering','finishing'].includes(s?.stage);
-function playQuestion(s){played=s.current.id;endedSent=null;audio.src=base+'audio/'+encodeURIComponent(s.current.id);audio.volume=Number($('volume').value);audio.play().catch(e=>problem('Браузер не дал проиграть голос: '+e.message+'. Нажмите на страницу и «Начать» заново.'))}
+function playQuestion(s){played=s.current.id;endedSent=null;audio.src=base+'audio/'+encodeURIComponent(s.current.id);audio.volume=Number($('volume').value);audio.play().catch(e=>problem(T('Браузер не дал проиграть голос: {0}. Нажмите на страницу и «Начать» заново.',e.message)))}
 async function ended(){if(!played||endedSent===played)return;endedSent=played;try{update(await post('ended?id='+encodeURIComponent(played)))}catch(e){problem(e.message)}}
 function renderTurns(s){
 const key=JSON.stringify(s.turns.map(t=>[t.id,t.heard,t.answer,t.corrected,t.answerWER]));
 if(key===renderKey||editing)return;renderKey=key;
 const q=s.turns.reduce((a,t)=>[a[0]+t.questionWords,a[1]+t.questionErrors],[0,0]);
 const c=s.turns.filter(t=>t.answerWords!=null),aw=c.reduce((a,t)=>[a[0]+t.answerWords,a[1]+t.answerErrors],[0,0]);
-$('summary').textContent=s.turns.length?`${s.turns.length} вопр. · вопросы: ${q[0]?(q[1]/q[0]*100).toFixed(1):'0'}% ошибок (${q[1]} из ${q[0]} слов)`+(c.length?` · ваши ответы: ${(aw[1]/aw[0]*100).toFixed(1)}% ошибок по ${c.length} исправленным`:' · исправьте свои ответы, чтобы посчитать точность на вашем голосе'):'Пока пусто.';
-$('turns').innerHTML=s.turns.map(t=>`<div class="turn"><h3><span>Вопрос ${t.index} · ${esc(t.language.toUpperCase())}</span><span class="stats">${t.questionWER.toFixed(1)}% ошибок · ${t.latencyMs==null?'—':(t.latencyMs/1000).toFixed(2)+' с'}${t.provider?' · '+esc(t.provider):''}</span></h3>
-<div class="columns"><div><div class="label">Сказал интервьюер</div><p>${esc(t.question)}</p></div><div><div class="label">Услышало приложение</div><p>${markedText(t.question,t.heard)}</p></div></div>
+$('summary').textContent=s.turns.length?T('{0} вопр. · вопросы: {1}% ошибок ({2} из {3} слов)',s.turns.length,q[0]?(q[1]/q[0]*100).toFixed(1):'0',q[1],q[0])+(c.length?T(' · ваши ответы: {0}% ошибок по {1} исправленным',(aw[1]/aw[0]*100).toFixed(1),c.length):T(' · исправьте свои ответы, чтобы посчитать точность на вашем голосе')):T('Пока пусто.');
+$('turns').innerHTML=s.turns.map(t=>`<div class="turn"><h3><span>${T('Вопрос {0}',t.index)} · ${esc(t.language.toUpperCase())}</span><span class="stats">${T('{0}% ошибок',t.questionWER.toFixed(1))} · ${t.latencyMs==null?'—':T('{0} с',(t.latencyMs/1000).toFixed(2))}${t.provider?' · '+esc(t.provider):''}</span></h3>
+<div class="columns"><div><div class="label">${T('Сказал интервьюер')}</div><p>${esc(t.question)}</p></div><div><div class="label">${T('Услышало приложение')}</div><p>${markedText(t.question,t.heard)}</p></div></div>
 ${t.problem?`<p class="error">${esc(t.problem)}</p>`:''}
-<div class="label" style="margin-top:12px">Ваш ответ — распознано${t.answerSeconds!=null?' · '+t.answerSeconds.toFixed(1)+' с речи':''}</div>
+<div class="label" style="margin-top:12px">${T('Ваш ответ — распознано')}${t.answerSeconds!=null?' · '+T('{0} с речи',t.answerSeconds.toFixed(1)):''}</div>
 <p>${t.corrected?markedText(t.corrected,t.answer):esc(t.answer||'—')}</p>
-${t.answer?`<label class="label" for="fix-${t.id}">Что вы сказали на самом деле</label><textarea id="fix-${t.id}" data-id="${t.id}" maxlength="2500">${esc(t.corrected??t.answer)}</textarea><div class="row" style="margin-top:8px"><button data-save="${t.id}">Сохранить правку</button><small class="stats">${t.answerWER!=null?`Ошибки ответа: ${t.answerWER.toFixed(1)}% (${t.answerErrors} из ${t.answerWords})`:'Исправьте текст, если распознано неверно'}</small></div>`:''}
+${t.answer?`<label class="label" for="fix-${t.id}">${T('Что вы сказали на самом деле')}</label><textarea id="fix-${t.id}" data-id="${t.id}" maxlength="2500">${esc(t.corrected??t.answer)}</textarea><div class="row" style="margin-top:8px"><button data-save="${t.id}">${T('Сохранить правку')}</button><small class="stats">${t.answerWER!=null?T('Ошибки ответа: {0}% ({1} из {2})',t.answerWER.toFixed(1),t.answerErrors,t.answerWords):T('Исправьте текст, если распознано неверно')}</small></div>`:''}
 </div>`).join('');
 $('turns').querySelectorAll('textarea').forEach(a=>{a.onfocus=()=>{editing=true};a.onblur=()=>{setTimeout(()=>{editing=false},300)}});
 $('turns').querySelectorAll('button[data-save]').forEach(b=>b.onclick=async()=>{const id=b.dataset.save,text=$('fix-'+id).value.slice(0,2500);editing=false;try{update(await post('correct?id='+encodeURIComponent(id),text))}catch(e){problem(e.message)}})}
 function update(s){snap=s;const r=running(s);
-$('dot').classList.toggle('ready',s.ready);$('backend').textContent=s.backend;$('source').textContent=s.source;$('models').textContent=s.models||'модель из настроек';
+$('dot').classList.toggle('ready',s.ready);$('backend').textContent=s.backend;$('source').textContent=s.source;$('models').textContent=s.models||T('модель из настроек');
 $('level').style.width=Math.max(0,Math.min(100,(s.levelDB+70)/60*100))+'%';
-$('status').textContent=s.error?s.error:r?phaseText[s.stage]:finished?'Собеседование закрыто.':s.message;
+$('status').textContent=s.error?s.error:r?phaseText[s.stage]:finished?T('Собеседование закрыто.'):s.message;
 $('phase').textContent=phaseText[s.stage]||'—';
-$('progressText').textContent=s.stage==='setup'?'—':`Вопрос ${Math.min(s.index,s.count)} из ${s.count}`;
+$('progressText').textContent=s.stage==='setup'?'—':T('Вопрос {0} из {1}',Math.min(s.index,s.count),s.count);
 $('progress').style.width=(s.count?Math.min(1,(s.turns.length)/s.count)*100:0)+'%';
 ['language','count','auto'].forEach(id=>$(id).disabled=r);
 $('start').disabled=!s.ready||r||finished;$('stop').disabled=!r;$('retry').classList.toggle('hidden',s.stage!=='failed');
 if(s.current){$('question').textContent=s.current.text;$('question').classList.remove('placeholder');
-const heard=s.current.heard||s.current.partial;$('heard').innerHTML=heard?(s.stage==='speaking'?esc(heard):markedText(s.current.text,heard)):(s.stage==='speaking'?'Слушаю…':'—');$('heard').classList.toggle('placeholder',!heard)}
-else if(s.stage==='thinking'){$('question').textContent='Интервьюер готовит вопрос…';$('question').classList.add('placeholder');$('heard').textContent='—'}
+const heard=s.current.heard||s.current.partial;$('heard').innerHTML=heard?(s.stage==='speaking'?esc(heard):markedText(s.current.text,heard)):(s.stage==='speaking'?T('Слушаю…'):'—');$('heard').classList.toggle('placeholder',!heard)}
+else if(s.stage==='thinking'){$('question').textContent=T('Интервьюер готовит вопрос…');$('question').classList.add('placeholder');$('heard').textContent='—'}
 if(s.stage==='speaking'&&s.current?.audio&&played!==s.current.id)playQuestion(s);
 const answering=s.stage==='answering'||s.stage==='finishing';$('answerArea').classList.toggle('hidden',!answering);
-if(answering&&s.answer){const txt=(s.answer.text+' '+s.answer.partial).trim();$('answer').textContent=txt||'Говорите — текст появится по мере распознавания.';$('answer').classList.toggle('placeholder',!txt);
-$('micdot').classList.toggle('on',s.stage==='answering');$('micText').textContent=s.stage==='finishing'?'Дораспознаю последние слова…':(s.autoFinish>0?`Говорите в микрофон Mac. Ответ закончится после ${s.autoFinish} с тишины или по кнопке.`:'Говорите в микрофон Mac. Когда закончите — нажмите «Я ответил».');$('answered').disabled=s.stage!=='answering'}
+if(answering&&s.answer){const txt=(s.answer.text+' '+s.answer.partial).trim();$('answer').textContent=txt||T('Говорите — текст появится по мере распознавания.');$('answer').classList.toggle('placeholder',!txt);
+$('micdot').classList.toggle('on',s.stage==='answering');$('micText').textContent=s.stage==='finishing'?T('Дораспознаю последние слова…'):(s.autoFinish>0?T('Говорите в микрофон Mac. Ответ закончится после {0} с тишины или по кнопке.',s.autoFinish):T('Говорите в микрофон Mac. Когда закончите — нажмите «Я ответил».'));$('answered').disabled=s.stage!=='answering'}
 if(!s.error)problem('');
 $('export').disabled=!s.turns.length;renderTurns(s)}
-async function poll(){if(finished)return;try{const r=await fetch(base+'state');if(!r.ok)throw new Error();update(await r.json())}catch{if(!finished){$('status').textContent='Нет связи с приложением. Откройте ИИ-собеседование снова из меню.';$('dot').classList.remove('ready')}}finally{if(!finished)setTimeout(poll,300)}}
+async function poll(){if(finished)return;try{const r=await fetch(base+'state');if(!r.ok)throw new Error();update(await r.json())}catch{if(!finished){$('status').textContent=T('Нет связи с приложением. Откройте ИИ-собеседование снова из меню.');$('dot').classList.remove('ready')}}finally{if(!finished)setTimeout(poll,300)}}
 audio.addEventListener('ended',ended);
 audio.addEventListener('timeupdate',()=>{if(snap?.stage==='speaking')$('progress').style.width=(audio.duration?audio.currentTime/audio.duration*100:0)+'%'});
-audio.addEventListener('error',()=>{if(snap?.stage==='speaking')problem('Браузер не смог проиграть голос интервьюера.')});
+audio.addEventListener('error',()=>{if(snap?.stage==='speaking')problem(T('Браузер не смог проиграть голос интервьюера.'))});
 $('start').onclick=async()=>{problem('');renderKey='';try{update(await post(`start?lang=${$('language').value}&count=${$('count').value}&auto=${$('auto').value}`))}catch(e){problem(e.message)}};
 $('stop').onclick=async()=>{audio.pause();try{update(await post('stop'))}catch(e){problem(e.message)}};
 $('retry').onclick=async()=>{try{update(await post('retry'))}catch(e){problem(e.message)}};
 $('answered').onclick=async()=>{try{update(await post('answered'))}catch(e){problem(e.message)}};
 $('volume').oninput=()=>{audio.volume=Number($('volume').value)};
 $('export').onclick=()=>{const report={createdAt:new Date().toISOString(),backend:snap.backend,models:snap.models,language:snap.language,normalization:'Word edit distance; case and punctuation ignored; ё=е; numbers not normalized',turns:snap.turns};const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Interview-Copilot-ai-interview-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
-$('close').onclick=async()=>{audio.pause();finished=true;await post('close').catch(()=>{});$('status').textContent='Собеседование завершено. Приложение вернулось к прежнему источнику звука.';['start','stop','close','answered'].forEach(id=>$(id).disabled=true);$('dot').classList.remove('ready')};
+$('close').onclick=async()=>{audio.pause();finished=true;await post('close').catch(()=>{});$('status').textContent=T('Собеседование завершено. Приложение вернулось к прежнему источнику звука.');['start','stop','close','answered'].forEach(id=>$(id).disabled=true);$('dot').classList.remove('ready')};
 window.addEventListener('pagehide',()=>{audio.pause();if(!finished)navigator.sendBeacon(base+'close','')});
 poll();
 </script>

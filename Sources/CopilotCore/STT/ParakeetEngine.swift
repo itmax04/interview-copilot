@@ -28,7 +28,7 @@ public final class ParakeetEngine: SpeechRecognizer, @unchecked Sendable {
 
     public func detectLanguage(_ samples: [Float]) throws -> (String, [String: Float]) {
         // StreamingTranscriber использует nativeMultilingual и не вызывает отдельный детектор.
-        throw ASRError.processingFailed("Parakeet определяет язык вместе с текстом")
+        throw ASRError.processingFailed(L10n.t("Parakeet определяет язык вместе с текстом"))
     }
 
     public func transcribe(_ input: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription {

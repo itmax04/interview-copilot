@@ -17,8 +17,8 @@ final class ProfileWindowController {
 
     func show() {
         if window == nil {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: ProfileView(bank: bank, preparer: preparer)))
-            w.title = "Профиль"
+            let w = NSWindow(contentViewController: NSHostingController(rootView: ProfileView(bank: bank, preparer: preparer).localizedRoot()))
+            UILanguage.shared.setTitle("Профиль", of: w)
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             w.setContentSize(NSSize(width: 1100, height: 720))
             w.isReleasedWhenClosed = false
@@ -295,7 +295,7 @@ struct DocumentEditor: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = DocumentText.supportedExtensions.compactMap { UTType(filenameExtension: $0) }
         panel.allowsMultipleSelection = false
-        panel.message = "Файл для раздела «\(doc.title)»"
+        panel.message = L("Файл для раздела «%@»", L(doc.title))
         guard panel.runModal() == .OK, let url = panel.url else { return }
         load(url)
     }
@@ -317,7 +317,7 @@ struct DocumentEditor: View {
             text = extracted
             saveTask = nil
             failed = false
-            message = "Загружено «\(url.lastPathComponent)»: \(extracted.count) символов. Проверьте текст — его можно поправить здесь."
+            message = L("Загружено «%@»: %lld символов. Проверьте текст — его можно поправить здесь.", url.lastPathComponent, extracted.count)
         case .failure(let error):
             failed = true
             message = (error as? DocumentTextError)?.description ?? error.localizedDescription
@@ -334,9 +334,7 @@ struct InstructionsEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Как модели отвечать: стиль, длина, на чём делать акцент, чего не говорить. Инструкции важнее встроенных правил "
-                 + "оформления; профиль важнее общих. Например: «Отвечай 2–3 предложениями без списков», «Делай акцент на лидерстве», "
-                 + "«Не упоминай Kafka — я с ней не работал», «Отвечай на английском».")
+            Text("Как модели отвечать: стиль, длина, на чём делать акцент, чего не говорить. Инструкции важнее встроенных правил оформления; профиль важнее общих. Например: «Отвечай 2–3 предложениями без списков», «Делай акцент на лидерстве», «Не упоминай Kafka — я с ней не работал», «Отвечай на английском».")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Text("Для профиля «\(bank.profile.name)»").font(.headline)
             TextEditor(text: $profileText)
@@ -385,8 +383,7 @@ struct MaterialsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Конспекты, документация, заметки по темам интервью — десятки и сотни страниц. Модель получает только "
-                 + "несколько фрагментов, похожих на текущий вопрос, и использует их факты и термины.")
+            Text("Конспекты, документация, заметки по темам интервью — десятки и сотни страниц. Модель получает только несколько фрагментов, похожих на текущий вопрос, и использует их факты и термины.")
                 .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button("Добавить файлы…", action: pickFiles)
@@ -442,7 +439,7 @@ struct MaterialsView: View {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = DocumentText.supportedExtensions.compactMap { UTType(filenameExtension: $0) }
         panel.allowsMultipleSelection = true
-        panel.message = "Материалы для профиля «\(bank.profile.name)»"
+        panel.message = L("Материалы для профиля «%@»", bank.profile.name)
         guard panel.runModal() == .OK else { return }
         add(panel.urls)
     }

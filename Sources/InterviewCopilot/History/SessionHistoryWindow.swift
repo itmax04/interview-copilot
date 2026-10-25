@@ -18,10 +18,10 @@ final class SessionHistoryWindowController {
         sessions.saveNow()
         let view = SessionHistoryView(store: sessions.store, reviews: reviews, initialSelection: select)
         if let window {
-            window.contentViewController = NSHostingController(rootView: view)
+            window.contentViewController = NSHostingController(rootView: view.localizedRoot())
         } else {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: view))
-            w.title = "Сессии"
+            let w = NSWindow(contentViewController: NSHostingController(rootView: view.localizedRoot()))
+            UILanguage.shared.setTitle("Сессии", of: w)
             w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             w.setContentSize(NSSize(width: 980, height: 720))
             w.isReleasedWhenClosed = false
@@ -33,7 +33,7 @@ final class SessionHistoryWindowController {
     }
 }
 
-private let ru = Locale(identifier: "ru_RU")
+private var ru: Locale { L10n.locale }
 
 /// «Сессии» (P15): список сессий → страница сессии с разбором. Разбор идет в фоне — запись перечитывается на каждом шаге.
 struct SessionHistoryView: View {
@@ -146,7 +146,7 @@ private struct SessionRow: View {
     private var company: String { session.config?.company.isEmpty == false ? session.config!.company : (session.source ?? "Сессия") }
     private var details: String {
         var parts = [session.startedAt.formatted(.dateTime.day().month(.wide).hour().minute().locale(ru))]
-        if let end = session.endedAt { parts.append("\(max(1, Int(end.timeIntervalSince(session.startedAt) / 60))) мин") }
+        if let end = session.endedAt { parts.append(L("%lld мин", max(1, Int(end.timeIntervalSince(session.startedAt) / 60)))) }
         parts.append(RussianPlural.questions(max(session.exchanges.count, session.turns.count)))
         return parts.joined(separator: " · ")
     }
@@ -271,7 +271,7 @@ struct SessionDetail: View {
 
     private var details: String {
         var parts = [session.startedAt.formatted(.dateTime.day().month(.wide).year().hour().minute().locale(ru))]
-        if let end = session.endedAt { parts.append("\(max(1, Int(end.timeIntervalSince(session.startedAt) / 60))) мин") }
+        if let end = session.endedAt { parts.append(L("%lld мин", max(1, Int(end.timeIntervalSince(session.startedAt) / 60)))) }
         return parts.joined(separator: " · ")
     }
 
@@ -281,7 +281,7 @@ struct SessionDetail: View {
         case .done:
             progress(text: "Разбор готов", value: 1, color: IC.green, icon: "checkmark.circle.fill")
         case .running(let done, let total) where running:
-            progress(text: total > 0 && done < total ? "Разбор: \(done) из \(total) ответов" : "Разбор: сводка…",
+            progress(text: total > 0 && done < total ? L("Разбор: %lld из %lld ответов", done, total) : L("Разбор: сводка…"),
                      value: total > 0 ? Double(done) / Double(total + 1) : 0.5, color: IC.accent, icon: nil)
         case .pending where running, .none where running:
             progress(text: "Разбор начинается…", value: 0.05, color: IC.accent, icon: nil)
@@ -399,7 +399,7 @@ struct SessionDetail: View {
     @ViewBuilder private func bullets(_ title: String, _ items: [String], icon: String, color: Color) -> some View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
-                Text("\(title) (\(items.count))").font(.system(size: 13, weight: .semibold))
+                Text(verbatim: "\(L(title)) (\(items.count))").font(.system(size: 13, weight: .semibold))
                 ForEach(items, id: \.self) { item in
                     Label { Text(item).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true).textSelection(.enabled) }
                         icon: { Image(systemName: icon).foregroundStyle(color) }
@@ -663,9 +663,11 @@ struct FlowLayout: Layout {
     }
 }
 
-/// Склонение числительных для подписей (1 вопрос, 2 вопроса, 5 вопросов).
+/// Склонение числительных для подписей (1 вопрос, 2 вопроса, 5 вопросов). В английском интерфейсе — 1 question /
+/// 5 questions: перевод формы «один» и формы «много» из таблицы.
 enum RussianPlural {
     static func form(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
+        if L10n.isEnglish { return L10n.t(n == 1 ? one : many) }
         let n10 = n % 10, n100 = n % 100
         if n10 == 1 && n100 != 11 { return one }
         if (2...4).contains(n10) && !(12...14).contains(n100) { return few }

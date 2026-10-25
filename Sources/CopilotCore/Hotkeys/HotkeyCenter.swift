@@ -14,17 +14,17 @@ public enum HotkeyAction: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .answerNow: "Ответить сейчас"
-        case .screenshot: "Скриншот → сильная модель"
-        case .togglePanel: "Показать / скрыть панель"
-        case .togglePause: "Пауза"
-        case .strongModel: "Сильная модель"
-        case .ownerAnswer: "Сейчас отвечаю я (самопроверка)"
-        case .newSession: "Создать сессию"
-        case .chat: "Чат: вопрос или уточнение"
-        case .clearTranscript: "Очистить расшифровку"
-        case .previousAnswer: "Предыдущий ответ"
-        case .nextAnswer: "Следующий ответ"
+        case .answerNow: L10n.t("Ответить сейчас")
+        case .screenshot: L10n.t("Скриншот → сильная модель")
+        case .togglePanel: L10n.t("Показать / скрыть панель")
+        case .togglePause: L10n.t("Пауза")
+        case .strongModel: L10n.t("Сильная модель")
+        case .ownerAnswer: L10n.t("Сейчас отвечаю я (самопроверка)")
+        case .newSession: L10n.t("Создать сессию")
+        case .chat: L10n.t("Чат: вопрос или уточнение")
+        case .clearTranscript: L10n.t("Очистить расшифровку")
+        case .previousAnswer: L10n.t("Предыдущий ответ")
+        case .nextAnswer: L10n.t("Следующий ответ")
         }
     }
 }
@@ -138,7 +138,7 @@ public final class HotkeyCenter {
         for action in HotkeyAction.allCases {
             guard let b = bindings[action] ?? HotkeyBinding.defaults[action] else { continue }
             guard b.isValidGlobal else {
-                failures[action] = "нужен модификатор ⌃, ⌥ или ⌘"
+                failures[action] = L10n.t("нужен модификатор ⌃, ⌥ или ⌘")
                 continue
             }
             var ref: EventHotKeyRef?
@@ -147,7 +147,7 @@ public final class HotkeyCenter {
             if status == noErr, let ref {
                 refs[action] = ref
             } else {
-                failures[action] = status == OSStatus(eventHotKeyExistsErr) ? "сочетание занято другим приложением" : "ошибка \(status)"
+                failures[action] = status == OSStatus(eventHotKeyExistsErr) ? L10n.t("сочетание занято другим приложением") : L10n.f("ошибка %lld", Int(status))
                 Log.app.error("hotkey \(action.rawValue, privacy: .public) \(b.displayString, privacy: .public) failed: \(status)")
             }
         }

@@ -74,7 +74,7 @@ public enum SecretStoreError: Error, Equatable, CustomStringConvertible {
     public var description: String {
         switch self {
         case .emptyValue:
-            return "Пустой ключ"
+            return L10n.t("Пустой ключ")
         case .keychain(let status):
             let message = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
             return "Keychain: \(message)"

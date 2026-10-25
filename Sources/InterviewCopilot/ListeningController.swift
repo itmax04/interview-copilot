@@ -31,6 +31,8 @@ final class ListeningController {
     private(set) var transcript: [TranscriptLine] = []
     private(set) var partialText: String?
     private(set) var sttStatus: String = "Модель распознавания не загружена"
+    /// Модель распознавания не загрузилась (нет файла, ошибка) — для проверки перед стартом, независимо от языка текста.
+    private(set) var sttFailed = false
     /// Последнее событие распознавания — для определения хода (P-05).
     var onTranscript: ((TranscriptEvent) -> Void)?
     /// Владелец начал/перестал говорить; время — мс монотонных часов (R-02, S-07).
@@ -183,7 +185,7 @@ final class ListeningController {
         if !VoiceEmbedder.isInstalled(in: AppPaths.models) { return "Модель CAM++ не установлена: scripts/fetch-filter-models.py" }
         guard let print = s.print else { return "Образец голоса не записан" }
         let threshold = voiceGate.effectiveThreshold ?? print.recommendedThreshold
-        return String(format: "Образец: %.0f с речи · порог %.2f%@", print.speechSeconds, threshold, s.embedder == nil ? " · загружаю модель…" : "")
+        return L("Образец: %.0f с речи · порог %.2f%@", print.speechSeconds, threshold, s.embedder == nil ? L(" · загружаю модель…") : "")
     }
 
     /// Канал для фильтра языка: звонок, весь системный звук или микрофон (R-01, Q8).
@@ -201,7 +203,7 @@ final class ListeningController {
         let gate = LanguageGate(setting: model.settings.language, terms: terms)
         guard case .drop(let language) = gate.check(text, channel: gateChannel) else { return nil }
         Log.metrics.notice("filtered reason=lang channel=\(self.gateChannel.rawValue, privacy: .public) lang=\(language, privacy: .public)")
-        return "язык \(language)"
+        return L("язык %@", language)
     }
 
     /// Загрузка Silero в фоне (если включено и модель установлена) и подключение к распознаванию.
@@ -267,7 +269,7 @@ final class ListeningController {
         await beginTestCallCapture(source)
         let micSource = self.micSource ?? makeMicSource()
         self.micSource = micSource
-        do { try micSource.start() } catch { return "Микрофон: \(error)" }
+        do { try micSource.start() } catch { return L("Микрофон: %@", "\(error)") }
         let t = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
         onOwnerSpeaking?(false, t)
         return nil
@@ -601,12 +603,14 @@ final class ListeningController {
             && FileManager.default.fileExists(atPath: AppPaths.parakeetModels.path)
         let path = useParakeet ? AppPaths.parakeetModels.path : AppPaths.model(model.settings.whisperModel).path
         guard FileManager.default.fileExists(atPath: path) else {
-            sttStatus = "Нет модели распознавания: \(model.settings.whisperModel) (scripts/fetch-models.sh)"
+            sttStatus = L("Нет модели распознавания: %@ (scripts/fetch-models.sh)", model.settings.whisperModel)
+            sttFailed = true
             Log.stt.error("whisper model missing: \(self.model.settings.whisperModel, privacy: .public)")
             return
         }
         loadingModel = true
         sttStatus = "Загружаю модель распознавания…"
+        sttFailed = false
         let buffer = self.buffer
         let reducedContext = !model.settings.recognitionAccuracy
         // Гибрид для украинского (R-35): итог украинской фразы — Whisper turbo с языком uk, если файл модели есть.
@@ -677,13 +681,15 @@ final class ListeningController {
             ownerBox.set(ot)
             ownerTranscriber = ot
             updateOwnerChannel()
-            let name = engine is HybridRecognizer ? (model.settings.whisperReviseAllLanguages ? "Parakeet v3 + уточнение Whisper turbo" : "Parakeet v3 + Whisper turbo (UK)")
+            let name = engine is HybridRecognizer ? (model.settings.whisperReviseAllLanguages ? L("Parakeet v3 + уточнение Whisper turbo") : "Parakeet v3 + Whisper turbo (UK)")
                 : engine.nativeMultilingual ? "Parakeet v3" : (path as NSString).lastPathComponent
             let fallback = model.settings.recognitionBackend == .parakeet && !engine.nativeMultilingual
-                ? " (Parakeet не установлен, используется Whisper)" : ""
-            sttStatus = "Распознавание: \(name)\(fallback)"
+                ? L(" (Parakeet не установлен, используется Whisper)") : ""
+            sttStatus = L("Распознавание: %@", name + fallback)
+            sttFailed = false
         case .failure(let error):
-            sttStatus = "Ошибка модели: \(error)"
+            sttStatus = L("Ошибка модели: %@", "\(error)")
+            sttFailed = true
         }
         onChange?()
     }
@@ -742,7 +748,7 @@ final class ListeningController {
         case .foreignVoice(let u, let text, let similarity, let phraseEnd):
             // R-03, R-06: чужой голос — серой строкой; для хода — как шум.
             partialText = nil
-            transcript.append(TranscriptLine(id: u, text: text, language: "", filtered: String(format: "чужой голос %.2f", similarity)))
+            transcript.append(TranscriptLine(id: u, text: text, language: "", filtered: L("чужой голос %.2f", similarity)))
             if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
             onChange?()
             onFiltered?(text)
@@ -790,7 +796,7 @@ final class ListeningController {
         captureRestarts = captureRestarts.filter { now.timeIntervalSince($0) < 600 }
         guard captureRestarts.count < 5 else {
             Log.audio.error("capture stopped, restarts exhausted: \(reason, privacy: .public)")
-            setPhase(.error("Захват звука остановлен macOS (\(reason)). Пауза → Продолжить, чтобы включить снова."))
+            setPhase(.error(L("Захват звука остановлен macOS (%@). Пауза → Продолжить, чтобы включить снова.", "\(reason)")))
             return
         }
         captureRestarts.append(now)

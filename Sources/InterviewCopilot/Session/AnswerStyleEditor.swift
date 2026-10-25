@@ -95,10 +95,10 @@ final class StylePreview {
             }
             guard let self, !Task.isCancelled else { return }
             if let failure, text.isEmpty {
-                self.status = .failed("Модели недоступны: \(failure)")
+                self.status = .failed(L("Модели недоступны: %@", failure))
                 return
             }
-            self.source = "\(provider) · " + String(format: "%.1f с", Date().timeIntervalSince(started))
+            self.source = "\(provider) · " + L("%.1f с", Date().timeIntervalSince(started))
             self.status = .done
             self.cache[key] = (text, self.source)
             Log.app.info("style preview \(key, privacy: .public) words=\(AnswerShape.words(text))")
@@ -144,7 +144,7 @@ struct AnswerStyleEditor: View {
                 optionCard(.format, icon: "doc.text", title: "Формат", value: preview.style.format.title) {
                     segmented($preview.style.format, AnswerStyle.Format.allCases) { $0.shortTitle }
                 }
-                optionCard(.length, icon: "clock", title: "Длина", value: "\(preview.style.length.title) · до \(preview.style.length.maxWords) слов") {
+                optionCard(.length, icon: "clock", title: "Длина", value: L("%@ · до %lld слов", L(preview.style.length.title), preview.style.length.maxWords)) {
                     segmented($preview.style.length, AnswerStyle.Length.allCases) { $0.title }
                 }
                 optionCard(.tone, icon: "waveform", title: "Тон", value: preview.style.tone.title) {
@@ -201,7 +201,7 @@ struct AnswerStyleEditor: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(title): \(value)")
+            .accessibilityLabel(L("%@: %@", L(title), L(value)))
             if expanded { content() }
         }
         .padding(14)

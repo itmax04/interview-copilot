@@ -13,10 +13,10 @@ public enum ScreenshotError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .noPermission: "Нет разрешения «Запись экрана и системного звука»"
-        case .noDisplay: "Не найден дисплей"
-        case .encodeFailed: "Не удалось сжать снимок"
-        case .captureFailed(let m): "Снимок не получен: \(m)"
+        case .noPermission: L10n.t("Нет разрешения «Запись экрана и системного звука»")
+        case .noDisplay: L10n.t("Не найден дисплей")
+        case .encodeFailed: L10n.t("Не удалось сжать снимок")
+        case .captureFailed(let m): L10n.f("Снимок не получен: %@", m)
         }
     }
 }

@@ -13,9 +13,9 @@ public enum SessionType: String, Codable, CaseIterable, Sendable, Identifiable {
 
     public var title: String {
         switch self {
-        case .interview: "Собеседование"
-        case .regular: "Обычный звонок"
-        case .mock: "ИИ-собеседование"
+        case .interview: L10n.t("Собеседование")
+        case .regular: L10n.t("Обычный звонок")
+        case .mock: L10n.t("ИИ-собеседование")
         }
     }
 }
@@ -62,8 +62,8 @@ public struct SessionConfig: Codable, Equatable, Sendable {
     /// Что не так с заполнением (шаг «Детали»); пусто — можно дальше.
     public func validationErrors(profileExists: Bool) -> [String] {
         var out: [String] = []
-        if type == .interview, !profileExists { out.append("Выберите профиль или создайте новый") }
-        if !Self.plannedMinutesRange.contains(plannedMinutes) { out.append("План — от 0 до 240 минут") }
+        if type == .interview, !profileExists { out.append(L10n.t("Выберите профиль или создайте новый")) }
+        if !Self.plannedMinutesRange.contains(plannedMinutes) { out.append(L10n.t("План — от 0 до 240 минут")) }
         return out
     }
 

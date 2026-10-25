@@ -354,10 +354,10 @@ public struct OpenAICompatibleProvider: LLMProvider {
 
     public func makeRequest(_ request: LLMRequest, model: String, key: String) throws -> URLRequest {
         guard request.messages.allSatisfy({ $0.images.isEmpty }) else {
-            throw LLMError.badResponse("\(id.displayName) не принимает изображения")
+            throw LLMError.badResponse(L10n.f("%@ не принимает изображения", id.displayName))
         }
         if id == .custom, CustomEndpoint.shared.baseURL == nil {
-            throw LLMError.badResponse("Свой API: не задан адрес (Settings → Keys)")
+            throw LLMError.badResponse(L10n.t("Свой API: не задан адрес (Настройки → Ключи моделей)"))
         }
         var r = URLRequest(url: ProviderEndpoints.openAIBase(id).appendingPathComponent("chat/completions"))
         r.httpMethod = "POST"

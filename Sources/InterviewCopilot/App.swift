@@ -147,6 +147,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Язык интерфейса (COPILOT-10) — до первого окна и меню: английская таблица из пакета, при запуске из `.build` — из Resources.
+        L10n.loadTable(bundle: .main, fallbackDirectory: URL(fileURLWithPath: "Resources"))
+        UILanguage.shared.apply(model.settings.interfaceLanguage)
         MainMenu.install()
         let menuBar = MenuBarController(onAction: { [weak self] action in self?.handle(action) })
         menuBar.sourceMenuData = { [weak self] in
@@ -357,6 +360,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func settingsChanged() {
         applyAppearance()
+        UILanguage.shared.apply(model.settings.interfaceLanguage)
         applySettings(force: false)
         refreshUI()
     }
@@ -719,7 +723,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 answers.screenshot(jpeg, chain: chain, language: language)
             } catch {
-                screenshotFailed("Скриншот не получился: \(error)")
+                screenshotFailed(L("Скриншот не получился: %@", "\(error)"))
             }
         }
     }

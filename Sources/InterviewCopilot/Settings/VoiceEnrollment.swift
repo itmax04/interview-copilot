@@ -54,7 +54,7 @@ final class VoiceEnrollment {
         let buffer = self.buffer
         let capture = MicrophoneCapture { samples in buffer.append(samples) }
         do { try capture.start() } catch {
-            state = .failed("Микрофон: \(error)")
+            state = .failed(L("Микрофон: %@", "\(error)"))
             return
         }
         self.capture = capture
@@ -82,14 +82,14 @@ final class VoiceEnrollment {
                 guard let print = embedder.makePrint(from: samples) else {
                     return .failure(EnrollmentError(message: "Мало речи: читайте вслух громче и ближе к микрофону (нужно не меньше 5 с речи)"))
                 }
-                do { try print.save() } catch { return .failure(EnrollmentError(message: "Не удалось сохранить: \(error)")) }
+                do { try print.save() } catch { return .failure(EnrollmentError(message: L("Не удалось сохранить: %@", "\(error)"))) }
                 return .success(print)
             }.value
             guard let self else { return }
             switch result {
             case .success(let print):
                 self.print = print
-                self.state = .done(String(format: "Образец сохранён: %.0f с речи, порог %.2f", print.speechSeconds, print.recommendedThreshold))
+                self.state = .done(L("Образец сохранён: %.0f с речи, порог %.2f", print.speechSeconds, print.recommendedThreshold))
                 NotificationCenter.default.post(name: ListeningController.voicePrintChanged, object: nil)
             case .failure(let error):
                 self.state = .failed(error.message)
@@ -153,7 +153,7 @@ struct VoiceSettingsSection: View {
                     .padding(8)
                     .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
                 ProgressView(value: min(elapsed / VoiceEnrollment.duration, 1)) {
-                    Text(String(format: "Читайте вслух обычным голосом · %.0f из %.0f с · уровень %.0f dB",
+                    Text(L("Читайте вслух обычным голосом · %.0f из %.0f с · уровень %.0f dB",
                                 elapsed, VoiceEnrollment.duration, enrollment.levelDB))
                 }
                 Button("Готово — остановить запись") { enrollment.stop() }
@@ -180,7 +180,7 @@ struct VoiceSettingsSection: View {
             Toggle("Порог сходства — автоматически по образцу", isOn: autoThreshold)
             if model.settings.ownerVoiceThreshold > 0 {
                 VStack(alignment: .leading) {
-                    Text(String(format: "Порог: %.2f — выше строже (чужие голоса отсекаются чаще, но может отсечь и вас)", model.settings.ownerVoiceThreshold))
+                    Text(L("Порог: %.2f — выше строже (чужие голоса отсекаются чаще, но может отсечь и вас)", model.settings.ownerVoiceThreshold))
                     Slider(value: $model.settings.ownerVoiceThreshold, in: 0.5...0.9, step: 0.01)
                 }
             }
@@ -193,8 +193,8 @@ struct VoiceSettingsSection: View {
         case .failed(let message): Label(message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
         default:
             if let print = enrollment.print {
-                Label(String(format: "Образец записан %@: %.0f с речи, автопорог %.2f",
-                             print.createdAt.formatted(date: .abbreviated, time: .shortened), print.speechSeconds, print.recommendedThreshold),
+                Label(L("Образец записан %@: %.0f с речи, автопорог %.2f",
+                             print.createdAt.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(L10n.locale)), print.speechSeconds, print.recommendedThreshold),
                       systemImage: "person.wave.2.fill")
             } else {
                 Label("Образец голоса не записан", systemImage: "person.wave.2").foregroundStyle(.secondary)

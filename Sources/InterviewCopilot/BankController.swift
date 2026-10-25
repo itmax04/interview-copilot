@@ -56,7 +56,7 @@ final class BankController {
             }
             if library.list().isEmpty { try library.create(name: ProfileLibrary.defaultName) }
         } catch {
-            self.error = "Профиль: \(error.localizedDescription)"
+            self.error = L("Профиль: %@", "\(error.localizedDescription)")
         }
         generalInstructions = ProfileLibrary.readGeneralInstructions()
         profiles = library.list()
@@ -97,7 +97,7 @@ final class BankController {
             select(info.id)
             return info
         } catch {
-            self.error = "Профиль: \(error.localizedDescription)"
+            self.error = L("Профиль: %@", "\(error.localizedDescription)")
             onChange?()
             return nil
         }
@@ -105,7 +105,7 @@ final class BankController {
 
     func renameActive(to name: String) {
         guard let id = activeID else { return }
-        do { try library.rename(id, to: name) } catch { self.error = "Профиль: \(error.localizedDescription)" }
+        do { try library.rename(id, to: name) } catch { self.error = L("Профиль: %@", "\(error.localizedDescription)") }
         profiles = library.list()
         reload()
     }
@@ -117,7 +117,7 @@ final class BankController {
             try library.delete(id)
             if library.list().isEmpty { try library.create(name: ProfileLibrary.defaultName) }
         } catch {
-            self.error = "Профиль: \(error.localizedDescription)"
+            self.error = L("Профиль: %@", "\(error.localizedDescription)")
         }
         profiles = library.list()
         activeID = nil
@@ -131,7 +131,7 @@ final class BankController {
 
     func save(_ text: String, _ doc: ProfileDocument) {
         guard let id = activeID else { return }
-        do { try library.write(text, doc, of: id) } catch { self.error = "Профиль: \(error.localizedDescription)" }
+        do { try library.write(text, doc, of: id) } catch { self.error = L("Профиль: %@", "\(error.localizedDescription)") }
         profile = library.load(id)
         if doc != .instructions { onChange?() }
     }
@@ -149,7 +149,7 @@ final class BankController {
     }
 
     func saveGeneralInstructions(_ text: String) {
-        do { try ProfileLibrary.writeGeneralInstructions(text) } catch { self.error = "Инструкции: \(error.localizedDescription)" }
+        do { try ProfileLibrary.writeGeneralInstructions(text) } catch { self.error = L("Инструкции: %@", "\(error.localizedDescription)") }
         generalInstructions = text
     }
 
@@ -165,7 +165,7 @@ final class BankController {
         embedderModel = file
         let path = AppPaths.model(file).path
         guard FileManager.default.fileExists(atPath: path) else {
-            status = "Нет модели эмбеддингов: \(file) (scripts/fetch-models.sh)"
+            status = L("Нет модели эмбеддингов: %@ (scripts/fetch-models.sh)", "\(file)")
             builder = nil
             return
         }
@@ -175,7 +175,7 @@ final class BankController {
             builder = BankIndexBuilder(embedder: embedder, cacheDirectory: AppPaths.cache)
             self.embedder = embedder
         } catch {
-            status = "Ошибка модели эмбеддингов: \(error)"
+            status = L("Ошибка модели эмбеддингов: %@", "\(error)")
             builder = nil
             embedder = nil
         }
@@ -218,10 +218,10 @@ final class BankController {
             switch result {
             case .success(let index):
                 self.materialIndex = index
-                self.materialStatus = "Материалы: \(self.materials.count) файл(ов), \(index.entries.count) фрагментов — готово"
+                self.materialStatus = L("Материалы: %@ файл(ов), %@ фрагментов — готово", "\(self.materials.count)", "\(index.entries.count)")
                 Log.app.info("materials index built files=\(self.materials.count) chunks=\(index.entries.count) ms=\(Int(Date().timeIntervalSince(started) * 1000))")
             case .failure(let error):
-                if !(error is CancellationError) { self.materialStatus = "Ошибка индекса материалов: \(error)" }
+                if !(error is CancellationError) { self.materialStatus = L("Ошибка индекса материалов: %@", "\(error)") }
             }
             self.onChange?()
         }
@@ -229,7 +229,7 @@ final class BankController {
 
     private func materialProgress(_ done: Int, of total: Int, profile id: String) {
         guard activeID == id, materialTask != nil else { return }
-        materialStatus = "Индексирую материалы: \(done) из \(total) новых фрагментов"
+        materialStatus = L("Индексирую материалы: %@ из %@ новых фрагментов", "\(done)", "\(total)")
     }
 
     /// Добавить файлы; ошибки (скан, формат) — по именам файлов.
@@ -248,7 +248,7 @@ final class BankController {
 
     func removeMaterial(_ name: String) {
         guard let id = activeID else { return }
-        do { try library.removeMaterial(name, from: id) } catch { self.error = "Материалы: \(error.localizedDescription)" }
+        do { try library.removeMaterial(name, from: id) } catch { self.error = L("Материалы: %@", "\(error.localizedDescription)") }
         reloadMaterials()
     }
 
@@ -261,7 +261,7 @@ final class BankController {
             try Data(QuestionBankWriter.yaml(new).utf8).write(to: url, options: .atomic)
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         } catch {
-            self.error = "Вопросы: \(error.localizedDescription)"
+            self.error = L("Вопросы: %@", "\(error.localizedDescription)")
         }
         reload()
     }
@@ -294,7 +294,7 @@ final class BankController {
             onChange?()
             return
         } catch {
-            self.error = "Question bank: \(error.localizedDescription)"
+            self.error = L("База вопросов: %@", error.localizedDescription)
             onChange?()
             return
         }
@@ -312,10 +312,10 @@ final class BankController {
                 switch result {
                 case .success(let index):
                     self.index = index
-                    self.status = "База: \(parsed.count) карточек"
+                    self.status = L("База: %@ карточек", "\(parsed.count)")
                     Log.app.info("bank index built cards=\(parsed.count) ms=\(Int(Date().timeIntervalSince(started) * 1000))")
                 case .failure(let error):
-                    self.status = "Ошибка индекса: \(error)"
+                    self.status = L("Ошибка индекса: %@", "\(error)")
                 }
                 self.onChange?()
             }

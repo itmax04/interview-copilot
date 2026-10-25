@@ -49,6 +49,8 @@ cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
 # Ресурсы приложения (pricing.json и т.п.) и пример профиля для первого запуска (R-21).
 find "$ROOT/Resources" -maxdepth 1 -type f ! -name Info.plist -exec cp {} "$APP/Contents/Resources/" \;
+# Язык интерфейса (COPILOT-10): en.lproj — перевод, ru.lproj — ключи как есть.
+for lproj in "$ROOT"/Resources/*.lproj; do cp -R "$lproj" "$APP/Contents/Resources/"; done
 cp -R "$ROOT/Resources/TestCall" "$APP/Contents/Resources/TestCall"
 cp -R "$ROOT/Resources/Interviewer" "$APP/Contents/Resources/Interviewer"
 mkdir -p "$APP/Contents/Resources/TestCall/audio"

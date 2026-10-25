@@ -1,0 +1,893 @@
+/* Английский интерфейс (COPILOT-10). Ключ — русская строка из кода. Новые ключи: scripts/check-localization.sh --missing. */
+
+/* CopilotCore/Answer/AnswerStyle.swift */
+"Суть + пункты" = "Gist + bullets";
+"Только пункты" = "Bullets only";
+"Сплошной текст" = "Plain text";
+"Пункты" = "Bullets";
+"Текст" = "Text";
+"Короткий" = "Short";
+"Сбалансированный" = "Balanced";
+"Подробный" = "Detailed";
+"Формальный" = "Formal";
+"Нейтральный" = "Neutral";
+"Дружелюбный" = "Friendly";
+"О себе" = "About you";
+"Поведенческий" = "Behavioral";
+"Технический" = "Technical";
+
+/* CopilotCore/Audio/MicrophoneCapture.swift */
+"Нет разрешения на микрофон" = "No microphone permission";
+"Микрофон недоступен" = "Microphone unavailable";
+
+/* CopilotCore/Audio/SystemAudioCapture.swift */
+"Нет разрешения «Запись экрана и системного звука»" = "No “Screen & System Audio Recording” permission";
+"Не найден дисплей для захвата" = "No display found for capture";
+"Приложение %@ не запущено" = "%@ is not running";
+"Источник не выбран" = "No source selected";
+
+/* CopilotCore/Bank/QuestionBank.swift */
+"нет ответа" = "no answer";
+"ваш" = "yours";
+"черновик" = "draft";
+"подтверждён" = "approved";
+"База вопросов: ошибка в строке %lld: %@" = "Question bank: error on line %lld: %@";
+"База вопросов: %@" = "Question bank: %@";
+"ожидается список карточек (- id: …)" = "expected a list of cards (- id: …)";
+"карточка должна быть словарём с полями id, questions, answer" = "a card must be a mapping with id, questions, answer";
+"нет поля id" = "missing id field";
+"id «%@» — только строчные латинские буквы, цифры и дефис" = "id “%@” — lowercase Latin letters, digits and hyphens only";
+"повтор id «%@» (первое в строке %@)" = "duplicate id “%@” (first on line %@)";
+"в карточке «%@» нет ни одного вопроса" = "card “%@” has no questions";
+"не удалось прочитать %@: %@" = "could not read %@: %@";
+
+/* CopilotCore/Bank/QuestionPreparation.swift */
+"Модели недоступны: %@" = "Models unavailable: %@";
+
+/* CopilotCore/Capture/ScreenshotService.swift */
+"Не найден дисплей" = "No display found";
+"Не удалось сжать снимок" = "Could not compress the screenshot";
+"Снимок не получен: %@" = "Screenshot failed: %@";
+
+/* CopilotCore/Domain/Modes.swift */
+"Только база вопросов" = "Question bank only";
+"База + подсказка" = "Bank + hint";
+"Генерировать каждый ответ" = "Generate every answer";
+"Авто (UK/RU/EN)" = "Auto (UK/RU/EN)";
+
+/* CopilotCore/Hotkeys/HotkeyCenter.swift */
+"Ответить сейчас" = "Answer now";
+"Скриншот → сильная модель" = "Screenshot → strong model";
+"Показать / скрыть панель" = "Show / hide panel";
+"Пауза" = "Pause";
+"Сильная модель" = "Strong model";
+"Сейчас отвечаю я (самопроверка)" = "I'm answering now (self-check)";
+"Чат: вопрос или уточнение" = "Chat: question or refinement";
+"Очистить расшифровку" = "Clear transcript";
+"Следующий ответ" = "Next answer";
+"нужен модификатор ⌃, ⌥ или ⌘" = "needs a ⌃, ⌥ or ⌘ modifier";
+"сочетание занято другим приложением" = "shortcut is taken by another app";
+"ошибка %lld" = "error %lld";
+
+/* CopilotCore/LLM/KeyVerifier.swift */
+"OK · моделей: %lld" = "OK · models: %lld";
+"Ключ недействителен (HTTP %lld)" = "Invalid key (HTTP %lld)";
+"Ошибка: %@" = "Error: %@";
+"нет ключа" = "no key";
+"не задан адрес API (https://…/v1)" = "API address not set (https://…/v1)";
+"лимит запросов (HTTP 429), повторите позже" = "rate limit (HTTP 429), try again later";
+"сеть: %@" = "network: %@";
+"таймаут" = "timeout";
+
+/* CopilotCore/LLM/LLMProvider.swift */
+"лимит запросов (429)" = "rate limit (429)";
+"ключ недействителен (HTTP %lld)" = "invalid key (HTTP %lld)";
+"неверный запрос или ключ (HTTP 400)" = "bad request or key (HTTP 400)";
+"закончились средства на счёте (402)" = "out of account credit (402)";
+"нет ответа за отведённое время" = "no response in time";
+"модель отказалась отвечать" = "the model refused to answer";
+"отменено" = "cancelled";
+"неожиданный ответ: %@" = "unexpected response: %@";
+
+/* CopilotCore/LLM/ProviderChain.swift */
+"нет ключей" = "no keys";
+" (ключ %lld)" = " (key %lld)";
+"пустой ответ" = "empty response";
+
+/* CopilotCore/LLM/Providers.swift */
+"%@ не принимает изображения" = "%@ does not accept images";
+"Свой API: не задан адрес (Настройки → Ключи моделей)" = "Custom API: address not set (Settings → Model keys)";
+
+/* CopilotCore/LLM/SSEClient.swift */
+"не HTTP" = "not HTTP";
+
+/* CopilotCore/Menu/MenuLayout.swift */
+"Без профиля" = "No profile";
+"Слушаю — %@" = "Listening — %@";
+"Пауза — %@" = "Paused — %@";
+"Нет разрешения на запись экрана" = "No screen recording permission";
+"Слушаю — выберите источник" = "Listening — choose a source";
+"Нет сессии — не слушаю" = "No session — not listening";
+"Скриншот → %@" = "Screenshot → %@";
+"Скрыть оверлей" = "Hide overlay";
+"История сессий…" = "Session history…";
+"Закончить мой ответ" = "Finish my answer";
+"Сейчас отвечаю я" = "I'm answering now";
+"Создать сессию…" = "New session…";
+"Продолжить слушать" = "Resume listening";
+"Режим: %@" = "Mode: %@";
+"Модели: %@" = "Models: %@";
+"Язык звонка: %@" = "Call language: %@";
+"Профиль: %@" = "Profile: %@";
+"База вопросов (%lld карточек)…" = "Question bank (%lld cards)…";
+"Профиль: резюме, инструкции…" = "Profile: résumé, instructions…";
+"Тестовый звонок…" = "Test call…";
+"ИИ-собеседование…" = "AI interview…";
+"Настройки…" = "Settings…";
+"Выйти" = "Quit";
+
+/* CopilotCore/Models/ModelDownloader.swift */
+"SHA256 не совпадает для %@: файл удалён" = "SHA256 mismatch for %@: file deleted";
+"HTTP %lld при загрузке" = "HTTP %lld while downloading";
+"%@ нет в списке моделей" = "%@ is not in the model list";
+
+/* CopilotCore/Profiles/DocumentText.swift */
+"Формат .%@ не поддерживается: PDF, Word (.docx), RTF, TXT или Markdown" = "The .%@ format is not supported: use PDF, Word (.docx), RTF, TXT or Markdown";
+"Не удалось прочитать «%@»" = "Could not read “%@”";
+"В «%@» нет текста. Если это скан, сохраните документ с текстовым слоем или вставьте текст вручную" = "“%@” has no text. If it is a scan, save it with a text layer or paste the text manually";
+
+/* CopilotCore/Profiles/ProfileLibrary.swift */
+"Резюме" = "Résumé";
+"Факты о себе" = "Facts about you";
+"Вакансия" = "Job";
+"Мой профиль" = "My profile";
+
+/* CopilotCore/STT/ParakeetEngine.swift */
+"Parakeet определяет язык вместе с текстом" = "Parakeet detects the language together with the text";
+
+/* CopilotCore/STT/WhisperEngine.swift */
+"Модель не найдена: %@" = "Model not found: %@";
+"Не удалось загрузить модель: %@" = "Could not load model: %@";
+"whisper_full вернул %@" = "whisper_full returned %@";
+"Распознавание отменено" = "Recognition cancelled";
+
+/* CopilotCore/Secrets/KeychainStore.swift */
+"Пустой ключ" = "Empty key";
+
+/* CopilotCore/Session/JobImport.swift */
+"Нужна ссылка http(s) на страницу вакансии" = "Needs an http(s) link to the job page";
+"Страница не загрузилась: %@. Вставьте текст вакансии вручную" = "The page did not load: %@. Paste the job text manually";
+"Страница требует входа (например, LinkedIn) — откройте её и вставьте текст вакансии вручную" = "The page requires sign-in (e.g. LinkedIn) — open it and paste the job text manually";
+"На странице не нашлось описания вакансии — вставьте текст вручную" = "No job description found on the page — paste the text manually";
+
+/* CopilotCore/Session/Preflight.swift */
+"Микрофон" = "Microphone";
+"Нет разрешения — без него приложение не слышит ваших ответов" = "No permission — without it the app can't hear your answers";
+"Слышу вас (%.0f dB)" = "I can hear you (%.0f dB)";
+"Тихо — скажите пару слов или проверьте вход звука" = "Quiet — say a few words or check the audio input";
+"Проверяю уровень…" = "Checking level…";
+"Звук звонка" = "Call audio";
+"Звук звонка — %@" = "Call audio — %@";
+"Сигнал есть (%.0f dB)" = "Signal present (%.0f dB)";
+"Нет сигнала %lld с — включите звук вкладки или дождитесь собеседника" = "No signal for %lld s — unmute the tab or wait for the other person";
+"Проверяю сигнал…" = "Checking signal…";
+"Звонок не найден: откройте Meet в Chrome, Zoom или Telegram" = "No call found: open Meet in Chrome, Zoom or Telegram";
+"Распознавание" = "Recognition";
+"Загружаю модель…" = "Loading model…";
+"Нет модели" = "No model";
+"Ошибка" = "Error";
+"Модели" = "Models";
+"Нет ни одного ключа — ответов не будет. Бесплатный ключ Groq — в настройках" = "No keys at all — there will be no answers. Add a free Groq key in Settings";
+"резюме ✓" = "résumé ✓";
+"резюме нет" = "no résumé";
+"материалов: %lld" = "materials: %lld";
+"вопросов: %lld (подготовлено %lld)" = "questions: %lld (prepared %lld)";
+
+/* CopilotCore/Session/SessionConfig.swift */
+"Собеседование" = "Interview";
+"Обычный звонок" = "Regular call";
+"ИИ-собеседование" = "AI interview";
+"Выберите профиль или создайте новый" = "Choose a profile or create a new one";
+"План — от 0 до 240 минут" = "Plan — 0 to 240 minutes";
+
+/* CopilotCore/TestCall/TestCallTrial.swift */
+"Звук не распознан. Проверьте источник, громкость и разрешение системного звука." = "No speech recognized. Check the source, the volume and the system audio permission.";
+"Не все части фразы распознаны за 20 секунд. Повторите тест." = "Not all parts of the phrase were recognized within 20 seconds. Repeat the test.";
+
+/* CopilotCore/Usage/UsageMeter.swift */
+"Gemini: лимит" = "Gemini: limit";
+"Gemini: %lld запр." = "Gemini: %lld req";
+"Сегодня: $%.2f · %@" = "Today: $%.2f · %@";
+
+/* CopilotEmbeddings/LlamaEmbedder.swift */
+"Модель эмбеддингов не найдена: %@" = "Embedding model not found: %@";
+"Не удалось загрузить модель эмбеддингов: %@" = "Could not load embedding model: %@";
+"Ошибка токенизации" = "Tokenization error";
+"llama_decode/encode вернул %@" = "llama_decode/encode returned %@";
+"Модель не вернула эмбеддинг" = "The model returned no embedding";
+
+/* InterviewCopilot/AnswerController.swift */
+"Отправить вопрос в %@ (%@)" = "Send the question to %@ (%@)";
+"Нет ключа %@" = "No %@ key";
+"База · %@ · %lld%%" = "Bank · %@ · %lld%%";
+"%lld снимка" = "%lld screenshots";
+"Модели недоступны: нет ключей" = "Models unavailable: no keys";
+"Нет в базе" = "Not in the bank";
+"Скриншот задачи" = "Task screenshot";
+"Задача: " = "Task: ";
+"уточнение" = "refinement";
+
+/* InterviewCopilot/App.swift */
+"Скриншот не получился: %@" = "Screenshot failed: %@";
+"Нет ключа ни для сильной модели, ни для Gemini" = "No key for the strong model or for Gemini";
+
+/* InterviewCopilot/AppModel.swift */
+"Ключ недействителен: %@" = "Invalid key: %@";
+"%@: нет модели %@ в списке провайдера" = "%@: model %@ is not in the provider's list";
+"Сохранён" = "Saved";
+"Удалён" = "Deleted";
+"Удалён — основным стал следующий ключ" = "Deleted — the next key is now the main one";
+"Проверяю…" = "Checking…";
+"Нет ключа" = "No key";
+
+/* InterviewCopilot/BankController.swift */
+"Инструкции: %@" = "Instructions: %@";
+"Нет модели эмбеддингов: %@ (scripts/fetch-models.sh)" = "No embedding model: %@ (scripts/fetch-models.sh)";
+"Ошибка модели эмбеддингов: %@" = "Embedding model error: %@";
+"Материалы: %@ файл(ов), %@ фрагментов — готово" = "Materials: %@ file(s), %@ chunks — done";
+"Ошибка индекса материалов: %@" = "Materials index error: %@";
+"Индексирую материалы: %@ из %@ новых фрагментов" = "Indexing materials: %@ of %@ new chunks";
+"Материалы: %@" = "Materials: %@";
+"Вопросы: %@" = "Questions: %@";
+"База: %@ карточек" = "Bank: %@ cards";
+"Ошибка индекса: %@" = "Index error: %@";
+"База не загружена" = "Bank not loaded";
+"Нет модели эмбеддингов — поиск по материалам выключен" = "No embedding model — search in materials is off";
+"Индексирую материалы…" = "Indexing materials…";
+"Пересчитываю эмбеддинги…" = "Recomputing embeddings…";
+
+/* InterviewCopilot/History/ReviewController.swift */
+"Модель ответила не в формате разбора — повторите" = "The model did not reply in the review format — try again";
+"Сводка не в формате — повторите" = "The summary is not in the expected format — try again";
+
+/* InterviewCopilot/History/SessionHistoryWindow.swift */
+"Удалить всю историю сессий вместе с разбором?" = "Delete the whole session history together with reviews?";
+"Удалить всё" = "Delete all";
+"Найти по компании или вопросу…" = "Search by company or question…";
+"Удалить" = "Delete";
+"Удалить сессию вместе с разбором?" = "Delete the session together with its review?";
+"К списку сессий" = "Back to sessions";
+"Удалить сессию" = "Delete session";
+"Сделать разбор" = "Review";
+"Продолжить разбор" = "Continue review";
+"Разбор не закончен" = "Review not finished";
+"Повторить" = "Retry";
+"Разбор вопросов (%lld)" = "Question review (%lld)";
+"Общее впечатление" = "Overall impression";
+"Следующие шаги" = "Next steps";
+"Вы сказали:" = "You said:";
+"Вы ответили:" = "You answered:";
+"Ваш ответ не записан" = "Your answer was not recorded";
+"Подсказка на экране" = "Hint on screen";
+"Хорошо: " = "Good: ";
+"Не хватило: " = "Missing: ";
+"Комментарий ИИ" = "AI comment";
+"Лучше сказать:" = "Better to say:";
+"Говорящие" = "Speakers";
+"Подсказки" = "Hints";
+"Найти в расшифровке…" = "Search the transcript…";
+"Все" = "All";
+"Вы" = "You";
+"Ничего не найдено" = "Nothing found";
+"Спросить ИИ" = "Ask AI";
+"Отвечает по расшифровке и сводке этой сессии" = "Answers from this session's transcript and summary";
+"Спросите о звонке — например, где ответы были слабее или что подготовить." = "Ask about the call — for example, where your answers were weaker or what to prepare.";
+"Думаю…" = "Thinking…";
+"Спросить что-то об этой сессии…" = "Ask something about this session…";
+"Спросить" = "Ask";
+"Подсказка показана · %@" = "Hint shown · %@";
+"%lld мин" = "%lld min";
+"Разбор: %lld из %lld ответов" = "Review: %lld of %lld answers";
+"Разбор: сводка…" = "Review: summary…";
+"вопрос" = "question";
+"вопроса" = "questions";
+"вопросов" = "questions";
+"Сессии" = "Sessions";
+"Звонки, ваши ответы, подсказки и разбор. История хранится только на этом Mac." = "Calls, your answers, hints and reviews. History is stored only on this Mac.";
+"Сессий пока нет" = "No sessions yet";
+"Создайте сессию перед звонком — после «Завершить» здесь появятся расшифровка и разбор." = "Create a session before a call — after “End”, the transcript and review appear here.";
+"Сессия" = "Session";
+"Разбор готов" = "Review ready";
+"Разбор прерван" = "Review interrupted";
+"Разбор идет" = "Review in progress";
+"Сводка" = "Summary";
+"Расшифровка" = "Transcript";
+"Интервьюер" = "Interviewer";
+"Разбор начинается…" = "Review starting…";
+"Договоренности" = "Agreements";
+"Сильные стороны" = "Strengths";
+"Зоны для улучшения" = "Areas to improve";
+"О чем договорились?" = "What did we agree on?";
+"Что мне сделать дальше?" = "What should I do next?";
+"Напиши письмо-итог" = "Write a follow-up email";
+"Где я отвечал слабее всего?" = "Where were my answers weakest?";
+"Что подтянуть к следующему этапу?" = "What should I improve before the next round?";
+"Напиши письмо-благодарность" = "Write a thank-you email";
+
+/* InterviewCopilot/InterviewerController.swift */
+"Chrome не открылся: %@" = "Chrome did not open: %@";
+"Вопрос %@" = "Question %@";
+"Синтез речи: %@" = "Speech synthesis: %@";
+"Захват звука: %@" = "Audio capture: %@";
+"Ресурс не найден" = "Resource not found";
+"Открываю собеседование…" = "Opening the interview…";
+"ИИ-собеседование недоступно" = "AI interview unavailable";
+"Откройте собранное приложение InterviewCopilot.app: в нём находится страница собеседования." = "Open the built InterviewCopilot.app: it contains the interview page.";
+"Собеседование закрыто" = "Interview closed";
+"Для ИИ-собеседования нужен Google Chrome: его звук захватывается так же, как звук Meet." = "The AI interview needs Google Chrome: its audio is captured the same way as Meet audio.";
+"Захватываю звук Chrome и микрофон" = "Capturing Chrome audio and the microphone";
+"Не удалось открыть ИИ-собеседование" = "Could not open the AI interview";
+"Настройки распознавания изменились во время вопроса." = "Recognition settings changed during the question.";
+"Модель вернула пустой вопрос" = "The model returned an empty question";
+"Разрешите «Запись экрана и системного аудио» для Interview Copilot в настройках Mac и откройте собеседование снова." = "Allow “Screen & System Audio Recording” for Interview Copilot in Mac settings and open the interview again.";
+"Слушание на паузе. Возобновите его в меню приложения." = "Listening is paused. Resume it from the app menu.";
+"Доступ только из локальной страницы" = "Access only from the local page";
+"Не найдено" = "Not found";
+"Вопрос не найден" = "Question not found";
+"Дождитесь готовности распознавания" = "Wait until recognition is ready";
+"Вопрос уже изменился" = "The question has already changed";
+"Сейчас не время ответа" = "It's not time to answer";
+"Нечего повторять" = "Nothing to repeat";
+"Ответ не найден" = "Answer not found";
+
+/* InterviewCopilot/ListeningController.swift */
+"Образец: %.0f с речи · порог %.2f%@" = "Sample: %.0f s of speech · threshold %.2f%@";
+" · загружаю модель…" = " · loading model…";
+"язык %@" = "language %@";
+"Микрофон: %@" = "Microphone: %@";
+"Нет модели распознавания: %@ (scripts/fetch-models.sh)" = "No recognition model: %@ (scripts/fetch-models.sh)";
+"Parakeet v3 + уточнение Whisper turbo" = "Parakeet v3 + Whisper turbo refinement";
+" (Parakeet не установлен, используется Whisper)" = " (Parakeet not installed, using Whisper)";
+"Распознавание: %@" = "Recognition: %@";
+"Ошибка модели: %@" = "Model error: %@";
+"чужой голос %.2f" = "other voice %.2f";
+"Захват звука остановлен macOS (%@). Пауза → Продолжить, чтобы включить снова." = "macOS stopped audio capture (%@). Pause → Resume to turn it on again.";
+"Модель распознавания не загружена" = "Recognition model not loaded";
+"Модель CAM++ не установлена: scripts/fetch-filter-models.py" = "The CAM++ model is not installed: scripts/fetch-filter-models.py";
+"Модель Silero не установлена: scripts/fetch-filter-models.py" = "The Silero model is not installed: scripts/fetch-filter-models.py";
+"Загружаю Silero…" = "Loading Silero…";
+"Silero загружена" = "Silero loaded";
+"Нет разрешения на микрофон для Interview Copilot" = "No microphone permission for Interview Copilot";
+"Загружаю модель распознавания…" = "Loading the recognition model…";
+"Захват звука остановлен — перезапускаю…" = "Audio capture stopped — restarting…";
+
+/* InterviewCopilot/LiveSessionController.swift */
+"Осталось %lld мин по плану" = "%lld min left in the plan";
+"План превышен на %lld мин" = "Plan exceeded by %lld min";
+
+/* InterviewCopilot/MenuBarController.swift */
+"Цепочка: %@" = "Chain: %@";
+"%@ (нет ключа)" = "%@ (no key)";
+" — нет ключа" = " — no key";
+"Модели и ключи…" = "Models & keys…";
+"%@ — модель отвечает сама" = "%@ — the model answers on its own";
+"Профили…" = "Profiles…";
+
+/* InterviewCopilot/Onboarding/OnboardingWindow.swift */
+"Готово" = "Done";
+"Назад" = "Back";
+"Далее" = "Next";
+"Ключ Groq" = "Groq key";
+"Сохранен — вставьте новый, чтобы заменить" = "Saved — paste a new one to replace it";
+"Вставьте ключ gsk_…" = "Paste a gsk_… key";
+"Проверить" = "Check";
+"Получить ключ на console.groq.com" = "Get a key at console.groq.com";
+"Добавить другие модели позже" = "Add other models later";
+"Cerebras, Gemini, DeepSeek, Claude и свой API — в Настройках → Ключи моделей. Шаг можно пропустить: ваши готовые ответы работают и без ключа." = "Cerebras, Gemini, DeepSeek, Claude and a custom API — in Settings → Model keys. You can skip this step: your prepared answers work without a key.";
+"Модели распознавания речи и поиска по базе работают на этом Mac. Загрузка один раз, файлы проверяются по SHA256." = "Speech recognition and bank search models run on this Mac. Downloaded once, files are verified by SHA256.";
+"Скачать" = "Download";
+"Все модели на месте" = "All models are in place";
+"Загрузка %lld процентов" = "Downloading %lld percent";
+"Шаг %lld: %@%@" = "Step %lld: %@%@";
+", текущий" = ", current";
+"Interview Copilot — первый запуск" = "Interview Copilot — first launch";
+"Разрешите слушать звонок" = "Allow listening to the call";
+"Подключите бесплатную модель" = "Connect a free model";
+"Загрузите модели распознавания" = "Download the recognition models";
+"Звук звонка и микрофон распознаются на этом Mac." = "Call audio and the microphone are recognized on this Mac.";
+"Groq отвечает примерно за 1 с и бесплатен." = "Groq answers in about 1 s and is free.";
+"Речь и поиск по вашим ответам работают локально." = "Speech and search over your answers run locally.";
+"Разрешения" = "Permissions";
+"Бесплатный ключ" = "Free key";
+"Ключ сохранен" = "Key saved";
+
+/* InterviewCopilot/Onboarding/PermissionsView.swift */
+"Чтобы слышать собеседника, нужны разрешения macOS." = "macOS permissions are needed to hear the other person.";
+"Без этого разрешения слушать нельзя. После включения переключателя macOS попросит перезапустить приложение." = "Listening is impossible without this permission. After you turn on the switch, macOS will ask to restart the app.";
+"Уровень: %@" = "Level: %@";
+"Вы говорите" = "You are speaking";
+"Перезапустить приложение" = "Restart the app";
+"Проверить снова" = "Check again";
+"Разрешено" = "Allowed";
+"Не разрешено" = "Not allowed";
+"Открыть Системные настройки" = "Open System Settings";
+"Слушаю: %@" = "Listening: %@";
+"Interview Copilot — разрешения" = "Interview Copilot — permissions";
+"Запись экрана и системного звука" = "Screen & System Audio Recording";
+"Обязательно: через неё приложение получает звук Meet, Zoom или Telegram. Экран не записывается." = "Required: this is how the app gets Meet, Zoom or Telegram audio. The screen is not recorded.";
+"Запросить" = "Request";
+"Нужен только чтобы понять, что вы говорите сами (тогда подсказка не мешает). Ваш голос не расшифровывается и не сохраняется." = "Only needed to tell when you are speaking (so the hint doesn't get in the way). Your voice is not transcribed or stored.";
+"Разрешить" = "Allow";
+"Источник не найден: откройте Meet в Chrome, Zoom или Telegram" = "Source not found: open Meet in Chrome, Zoom or Telegram";
+"Сессии нет — приложение не слушает. Создайте сессию в меню" = "No session — the app is not listening. Create a session from the menu";
+
+/* InterviewCopilot/Panel/AnswerCardView.swift */
+"Показать новый ответ" = "Show the new answer";
+"Готовлю ответ" = "Preparing an answer";
+"Предыдущий ответ" = "Previous answer";
+"Прервано новым вопросом" = "Interrupted by a new question";
+"Новый ответ" = "New answer";
+"Вопрос: " = "Question: ";
+"Скопировать ответ" = "Copy answer";
+"Предыдущий ответ · %@" = "Previous answer · %@";
+"Новая версия ответа: %@" = "New answer version: %@";
+"Копировать код" = "Copy code";
+"Предыдущий ответ %@" = "Previous answer %@";
+"Следующий ответ %@" = "Next answer %@";
+"Версия %lld (%@)" = "Version %lld (%@)";
+"Версия %lld" = "Version %lld";
+"%.1f с" = "%.1f s";
+"Сменить модель" = "Switch model";
+"Ближайшие карточки: " = "Closest cards: ";
+"Короче" = "Shorter";
+"Подробнее" = "More detail";
+"Пример" = "Example";
+
+/* InterviewCopilot/Panel/PanelController.swift */
+"Виден в захвате экрана (%@, %@)" = "Visible in screen capture (%@, %@)";
+"Не виден в захвате экрана (%@, %@)" = "Not visible in screen capture (%@, %@)";
+"Не удалось определить: оверлей перекрыт или снимок неполный — повторите (%@)" = "Could not tell: the overlay is covered or the capture is incomplete — try again (%@)";
+"Не удалось проверить: %@" = "Could not check: %@";
+"Покажите оверлей, чтобы проверить" = "Show the overlay to check";
+
+/* InterviewCopilot/Panel/PanelModel.swift */
+"Уточнить ответ" = "Refine the answer";
+"На всю сессию" = "For the whole session";
+"Нет ключа Anthropic" = "No Anthropic key";
+
+/* InterviewCopilot/Panel/PanelView.swift */
+"На всю сессию: %@" = "For the whole session: %@";
+"Снять указание" = "Remove instruction";
+"Снять указание: %@" = "Remove instruction: %@";
+"Загрузка моделей распознавания…" = "Loading recognition models…";
+"Прогресс загрузки %lld процентов" = "Download progress %lld percent";
+"Уточнения голосом — к этой задаче" = "Voice refinements go to this task";
+"Решаю…" = "Solving…";
+"Закрыть задачу: вопросы больше не относятся к ней" = "Close the task: questions no longer relate to it";
+"Закрыть задачу" = "Close task";
+"Снимок в течение 30 с — к этой же задаче" = "A screenshot within 30 s goes to the same task";
+"Снимок задачи" = "Task screenshot";
+"Добавить снимок" = "Add screenshot";
+"Время сессии %@" = "Session time %@";
+"Приложение перестанет слушать" = "The app will stop listening";
+"Завершить" = "End";
+"Ответить на последнюю реплику сейчас" = "Answer the last line now";
+"Снимок экрана с задачей → решение" = "Screenshot of a task → solution";
+"Вопрос текстом или уточнение ответа" = "Typed question or answer refinement";
+"Меню оверлея" = "Overlay menu";
+"Автоответ на вопросы" = "Auto-answer questions";
+"Крупнее" = "Larger";
+"Мельче" = "Smaller";
+"Обычный размер (%lld%%)" = "Default size (%lld%%)";
+"На другой экран" = "Move to another screen";
+"Скрывать при демонстрации экрана" = "Hide during screen sharing";
+"Проверяю видимость…" = "Checking visibility…";
+"Проверить видимость" = "Check visibility";
+"Открывает мастер: тип звонка, профиль, проверка перед стартом" = "Opens the wizard: call type, profile, pre-start check";
+"Звонок в %@" = "Call in %@";
+"Начать сессию с последними настройками?" = "Start a session with the last settings?";
+"Не сейчас" = "Not now";
+"Начать" = "Start";
+"Очистить расшифровку и «последние реплики» для следующего ответа; память интервью остаётся" = "Clear the transcript and the “recent lines” for the next answer; the interview memory stays";
+"Собеседник" = "Other person";
+"Пауза: ничего не слушаю и не отправляю." = "Paused: not listening or sending anything.";
+"Жду, когда собеседник заговорит…" = "Waiting for the other person to speak…";
+"Очистить" = "Clear";
+"Игнорировано, %@: %@. Ответить" = "Ignored, %@: %@. Answer";
+"игнорировано: %@ · нажмите или %@, чтобы ответить" = "ignored: %@ · click or press %@ to answer";
+"↩ отправить · Esc закрыть" = "↩ send · Esc close";
+"Режим" = "Mode";
+"Отправить" = "Send";
+"Не слышу звонок %lld с — проверьте звук вкладки или источник" = "Can't hear the call for %lld s — check the tab audio or the source";
+"Ваш ответ записывается — %@, чтобы закончить" = "Your answer is being recorded — %@ to finish";
+"Активная задача · %lld %@" = "Active task · %lld %@";
+"снимок" = "screenshot";
+"снимка" = "screenshots";
+"нет сигнала" = "no signal";
+"есть сигнал" = "signal present";
+"тишина" = "silence";
+"Собеседник: %@" = "Other person: %@";
+"Не вопрос · ответить вручную %@" = "Not a question · answer manually %@";
+"Выберите источник: откройте созвон в Chrome, Zoom или Telegram или укажите приложение в меню Interview Copilot в строке меню." = "Choose a source: open the call in Chrome, Zoom or Telegram, or pick the app in the Interview Copilot menu in the menu bar.";
+"Нет разрешения «Запись экрана и системного звука» — без него слушать нельзя." = "No “Screen & System Audio Recording” permission — listening is impossible without it.";
+"Скриншот" = "Screenshot";
+"Чат" = "Chat";
+"Развернуть" = "Expand";
+"Свернуть" = "Collapse";
+"Конец" = "Done";
+"Я отвечаю" = "I'm answering";
+"Нет сессии" = "No session";
+"Нет разрешения" = "No permission";
+"Загрузка моделей" = "Loading models";
+"Сессии нет — приложение не слушает звонок и микрофон." = "No session — the app is not listening to the call or the microphone.";
+"Свернуть расшифровку" = "Collapse transcript";
+"Развернуть расшифровку" = "Expand transcript";
+"Вопрос найден" = "Question detected";
+"Вопрос текстом — ответ как на голосовой" = "Typed question — answered like a spoken one";
+"Как поправить ответ: «короче», «без Kafka», «пример кода»" = "How to fix the answer: “shorter”, “no Kafka”, “code example”";
+"Указание до конца сессии: «отвечай по-английски»" = "Instruction for the rest of the session: “answer in English”";
+
+/* InterviewCopilot/Profile/ProfileWindow.swift */
+"Новый профиль" = "New profile";
+"Переименовать профиль" = "Rename profile";
+"Удалить профиль «%@»?" = "Delete profile “%@”?";
+"Название, например «iOS в банк»" = "Name, e.g. “iOS at a bank”";
+"Создать" = "Create";
+"Сохранить" = "Save";
+"Удалить резюме, инструкции и вопросы профиля" = "Delete the profile's résumé, instructions and questions";
+"Файлы профиля удаляются с этого Mac без возможности восстановления." = "Profile files are deleted from this Mac permanently.";
+"Профили" = "Profiles";
+"Активный" = "Active";
+"Еще" = "More";
+"Переименовать" = "Rename";
+"Открыть папку профиля" = "Open profile folder";
+"Удалить профиль…" = "Delete profile…";
+"В каждый запрос к модели: %lld символов · вопросов в базе: %lld" = "In every model request: %lld characters · questions in the bank: %lld";
+"Длинно: бесплатные лимиты кончаются быстрее, ответ медленнее" = "Long: free limits run out faster and answers are slower";
+"PDF, Word (.docx), RTF, TXT, Markdown — или перетащите файл в поле" = "PDF, Word (.docx), RTF, TXT, Markdown — or drop a file into the field";
+"%lld символов" = "%lld characters";
+"Загрузить файл…" = "Load file…";
+"Как модели отвечать: стиль, длина, на чём делать акцент, чего не говорить. Инструкции важнее встроенных правил оформления; профиль важнее общих. Например: «Отвечай 2–3 предложениями без списков», «Делай акцент на лидерстве», «Не упоминай Kafka — я с ней не работал», «Отвечай на английском»." = "How the model should answer: style, length, what to emphasize, what not to say. Instructions override the built-in formatting rules; profile instructions override general ones. For example: “Answer in 2–3 sentences without lists”, “Emphasize leadership”, “Don't mention Kafka — I haven't worked with it”, “Answer in English”.";
+"Для профиля «%@»" = "For profile “%@”";
+"Общие — для всех профилей и режима «Без профиля»" = "General — for all profiles and “No profile” mode";
+"Инструкции профиля" = "Profile instructions";
+"Общие инструкции" = "General instructions";
+"Удалить «%@» из материалов?" = "Remove “%@” from materials?";
+"Конспекты, документация, заметки по темам интервью — десятки и сотни страниц. Модель получает только несколько фрагментов, похожих на текущий вопрос, и использует их факты и термины." = "Notes, documentation, write-ups on interview topics — tens or hundreds of pages. The model gets only a few chunks similar to the current question and uses their facts and terms.";
+"Добавить файлы…" = "Add files…";
+"Удалить…" = "Delete…";
+"Перетащите сюда PDF, Word, RTF, TXT или Markdown" = "Drop PDF, Word, RTF, TXT or Markdown here";
+"материал" = "material";
+"материала" = "materials";
+"материалов" = "materials";
+"Файл для раздела «%@»" = "File for the “%@” section";
+"Загружено «%@»: %lld символов. Проверьте текст — его можно поправить здесь." = "Loaded “%@”: %lld characters. Check the text — you can edit it here.";
+"Материалы для профиля «%@»" = "Materials for profile “%@”";
+"Инструкции" = "Instructions";
+"Материалы" = "Materials";
+"Вопросы" = "Questions";
+"Нет резюме" = "No résumé";
+"Резюме ✓" = "Résumé ✓";
+"Резюме: места работы, проекты, технологии, достижения. Модель берёт факты отсюда и не противоречит им." = "Résumé: jobs, projects, technologies, achievements. The model takes facts from here and doesn't contradict them.";
+"Факты о себе, которых нет в резюме: истории в формате STAR, цифры, причины ухода, зарплатные ожидания, что важно в работе." = "Facts about you that aren't in the résumé: STAR stories, numbers, reasons for leaving, salary expectations, what matters to you at work.";
+"Вакансия и компания, куда идёте: требования, продукт, стек. Модель подстраивает акценты ответов под неё." = "The job and company you're applying to: requirements, product, stack. The model tailors the focus of answers to it.";
+"Выберите файл, чтобы увидеть прочитанный текст" = "Select a file to see the extracted text";
+
+/* InterviewCopilot/Profile/QuestionPreparer.swift */
+"В файле найдено вопросов: %lld. Проверьте и добавьте." = "Questions found in the file: %lld. Check and add them.";
+"Модель нашла вопросов: %lld. Проверьте и добавьте." = "The model found %lld questions. Check and add them.";
+"Добавлено вопросов: %lld. Нажмите «Подготовить», чтобы добавить формулировки и черновики." = "Questions added: %lld. Click “Prepare” to add phrasings and drafts.";
+"Готово. Черновиков на проверку: %lld — подтвердите или поправьте." = "Done. Drafts to review: %lld — approve or edit them.";
+"Готово." = "Done.";
+"Готово %lld из %lld частей…" = "Done %lld of %lld parts…";
+"Остановлено. Готовое сохранено." = "Stopped. Finished parts are saved.";
+"Разбираю файл моделью" = "Parsing the file with a model";
+"Вопросов в файле не найдено. Добавьте их в таблицу вручную." = "No questions found in the file. Add them to the table manually.";
+"Всё уже подготовлено." = "Everything is already prepared.";
+"Готовлю формулировки и черновики" = "Preparing phrasings and drafts";
+
+/* InterviewCopilot/Profile/QuestionsView.swift */
+"Удалить вопрос?" = "Delete the question?";
+"Примерные вопросы и, если хотите, ваши ответы. На интервью похожий вопрос (другими словами, на другом языке) находится, и модель подстраивает ваш ответ под точную формулировку. «Подготовить» добавит формулировки на трёх языках и черновики ответов там, где ответа нет; ваши ответы не меняются." = "Sample questions and, if you like, your answers. In the interview a similar question (in other words, in another language) is found, and the model adapts your answer to the exact wording. “Prepare” adds phrasings in three languages and draft answers where there is none; your answers stay unchanged.";
+"Не подготовлено вопросов: %lld. Без формулировок на трёх языках похожий вопрос на интервью находится примерно вдвое реже — нажмите «Подготовить»." = "Unprepared questions: %lld. Without phrasings in three languages a similar question is found about half as often — click “Prepare”.";
+"Других формулировок: %lld" = "Other phrasings: %lld";
+"Вопросов пока нет: «Импорт файла…» или «Добавить вопрос»" = "No questions yet: “Import file…” or “Add question”";
+"Выберите вопрос" = "Select a question";
+"%lld вопросов" = "%lld questions";
+"Импорт файла…" = "Import file…";
+"Добавить вопрос" = "Add question";
+"Остановить" = "Stop";
+"Формулировки uk/ru/en и черновики ответов — моделями из цепочки (бесплатно, частями)" = "uk/ru/en phrasings and draft answers — by the chain's models (free, in parts)";
+"Подтвердить черновики (%lld)" = "Approve drafts (%lld)";
+"Другие формулировки — по одной в строке" = "Other phrasings — one per line";
+"Ответ" = "Answer";
+"Другие формулировки" = "Other phrasings";
+"Подтвердить" = "Approve";
+"Удалить вопрос…" = "Delete question…";
+"Найдено вопросов: %lld" = "Questions found: %lld";
+"Снимите отметку с лишнего. Ответы из файла станут вашими; без ответа — «Подготовить» сделает черновик." = "Uncheck what you don't need. Answers from the file become yours; for questions without one, “Prepare” makes a draft.";
+"Добавить (%lld)" = "Add (%lld)";
+"Новый вопрос" = "New question";
+"Файл с вопросами (и ответами) — в любой форме" = "A file with questions (and answers) — in any form";
+"без ответа" = "no answer";
+
+/* InterviewCopilot/Session/AnswerStyleEditor.swift */
+"Ваши инструкции важнее этих настроек" = "Your instructions override these settings";
+"Стиль ответа" = "Answer style";
+"Закрыть" = "Close";
+"Для этой и всех следующих сессий" = "For this and all following sessions";
+"По умолчанию" = "Default";
+"Тип вопроса" = "Question type";
+"Предпросмотр ответа" = "Answer preview";
+"Язык" = "Language";
+"Українська" = "Українська";
+"Русский" = "Русский";
+"Предпросмотр" = "Preview";
+"· по вашему профилю" = "· based on your profile";
+"Сгенерировать заново" = "Regenerate";
+"Вопрос" = "Question";
+"Предлагаемый ответ" = "Suggested answer";
+"%@ · %lld слов" = "%@ · %lld words";
+"Готовлю ответ…" = "Preparing an answer…";
+"%@ · до %lld слов" = "%@ · up to %lld words";
+"Сохранить для сессии" = "Save for the session";
+"Формат" = "Format";
+"Длина" = "Length";
+"Тон" = "Tone";
+
+/* InterviewCopilot/Session/SessionWizard.swift */
+"Без сессии приложение не слушает звонок и микрофон." = "Without a session the app doesn't listen to the call or the microphone.";
+"Детали и настройки звонка" = "Call details and settings";
+"Из профиля берутся инструкции и материалы; резюме и вопросы — нет." = "Instructions and materials come from the profile; the résumé and questions don't.";
+"Профиль" = "Profile";
+"Вставить ссылку на вакансию" = "Paste a job link";
+"Загружаю…" = "Loading…";
+"Загрузить" = "Load";
+"Например, ФинБанк" = "E.g. FinBank";
+"Пусто — берется вакансия из профиля." = "Empty — the profile's job is used.";
+"Описание вакансии" = "Job description";
+"Авто (Zoom → Chrome → Telegram)" = "Auto (Zoom → Chrome → Telegram)";
+"%@ (не запущено)" = "%@ (not running)";
+"Микрофон Mac (самопроверка)" = "Mac microphone (self-check)";
+"Язык звонка" = "Call language";
+"Выбранная модель — первой, остальные из цепочки — запасными." = "The selected model goes first, the rest of the chain are fallbacks.";
+"Только для этой сессии" = "Only for this session";
+"Настроить" = "Customize";
+"Важнее инструкций профиля и общих: «Отвечай по-английски», «Акцент на руководстве командой»." = "Override profile and general instructions: “Answer in English”, “Focus on team leadership”.";
+"Указания на эту сессию" = "Instructions for this session";
+"Дополнительно" = "Advanced";
+"Выключено — ответ только по кнопке «Ответ»; расшифровка идет всегда." = "Off — answers only via the “Answer” button; the transcript always runs.";
+"Расшифровка хранится только на этом Mac %lld дн." = "The transcript is stored only on this Mac for %lld days.";
+"Автоответ на вопросы (рекомендуется)" = "Auto-answer questions (recommended)";
+"Сохранять расшифровку" = "Save the transcript";
+"Разбор после завершения" = "Review after the end";
+"Без плана" = "No plan";
+"Предупрежу за 5 минут" = "I'll warn you 5 minutes before";
+"Проверка перед стартом" = "Pre-start check";
+"Слушаю микрофон и звонок 3 с…" = "Listening to the microphone and the call for 3 s…";
+"Открыть настройки" = "Open settings";
+"Выбрать источник" = "Choose source";
+"Начать всё равно" = "Start anyway";
+"Далее: проверка" = "Next: check";
+"Начать сессию" = "Start session";
+", пройден" = ", done";
+"По порядку цепочки (%@)" = "In chain order (%@)";
+"Детали" = "Details";
+"Настройки" = "Settings";
+"Проверка" = "Check";
+"Загружаю страницу…" = "Loading the page…";
+"Модель выделяет вакансию…" = "The model is extracting the job…";
+"Вакансия загружена — проверьте и поправьте текст" = "Job loaded — check and edit the text";
+"Распознавание: " = "Recognition: ";
+"Ссылка на вакансию" = "Job link";
+"нет резюме" = "no résumé";
+"Собеседование: ответы от вашего лица по резюме, фактам, вакансии, материалам и вопросам профиля." = "Interview: answers in your voice based on the profile's résumé, facts, job, materials and questions.";
+"Обычный звонок: что сказать по теме разговора, вашим инструкциям и материалам. После звонка — сводка и договоренности." = "Regular call: what to say based on the topic, your instructions and materials. After the call — a summary and agreements.";
+"ИИ-собеседование: модель задает вопросы голосом, вы отвечаете в микрофон, подсказки — как на звонке." = "AI interview: the model asks questions by voice, you answer into the microphone, hints work as on a call.";
+"Указания на сессию" = "Session instructions";
+"План длительности" = "Planned duration";
+"В порядке" = "OK";
+"Внимание" = "Warning";
+"Не готово" = "Not ready";
+"Проверяю" = "Checking";
+
+/* InterviewCopilot/Settings/KeysSettingsView.swift */
+"Ключ Gemini бесплатного тарифа (Free tier, стоимость $0)" = "Gemini free-tier key (Free tier, $0)";
+"Ключи хранятся только в Связке ключей macOS и после сохранения не показываются." = "Keys are stored only in the macOS Keychain and are not shown after saving.";
+"Ключ сохранён — введите новый, чтобы заменить" = "Key saved — enter a new one to replace it";
+"Вставьте ключ" = "Paste a key";
+"Ключ %@" = "%@ key";
+"Ключей — сколько нужно. Сначала по очереди пробуются все ключи этого провайдера: кончился лимит у одного — ответ сразу идет со следующего; ключ с лимитом ждет сброса и не пробуется первым. Только когда лимит у всех ключей — следующий провайдер из цепочки." = "Add as many keys as you need. All of this provider's keys are tried in turn first: when one hits its limit, the answer comes from the next right away; a rate-limited key waits for the reset and isn't tried first. Only when all keys are limited does the next provider in the chain take over.";
+"Ключ %lld" = "Key %lld";
+"Еще ключ — другого аккаунта" = "Another key — from another account";
+"Дополнительный ключ %@" = "Additional key %@";
+"Добавить" = "Add";
+"Примеры адресов: OpenRouter https://openrouter.ai/api/v1 · OpenAI https://api.openai.com/v1 · Together https://api.together.xyz/v1 · Mistral https://api.mistral.ai/v1 · Ollama на этом Mac http://localhost:11434/v1 (ключ — любой текст). Скриншоты сюда не отправляются." = "Example addresses: OpenRouter https://openrouter.ai/api/v1 · OpenAI https://api.openai.com/v1 · Together https://api.together.xyz/v1 · Mistral https://api.mistral.ai/v1 · Ollama on this Mac http://localhost:11434/v1 (any text as the key). Screenshots are not sent here.";
+"Адрес API" = "API address";
+"Адрес своего API" = "Custom API address";
+"Нужен адрес https://… (http — только для этого Mac: http://localhost:11434/v1)" = "Needs an https://… address (http only for this Mac: http://localhost:11434/v1)";
+"Модель" = "Model";
+"Модель своего API" = "Custom API model";
+"Свой API — первый в цепочке ответов" = "Custom API is first in the answer chain";
+"Место в цепочке — вкладка Models" = "Chain position — Models & answers tab";
+"Поставить первым в цепочке" = "Make first in the chain";
+"Groq — бесплатно, console.groq.com/keys" = "Groq — free, console.groq.com/keys";
+"Cerebras — пробные кредиты, cloud.cerebras.ai" = "Cerebras — trial credits, cloud.cerebras.ai";
+"Свой API — любой OpenAI-совместимый (OpenRouter, OpenAI, Together, Mistral, Ollama)" = "Custom API — any OpenAI-compatible one (OpenRouter, OpenAI, Together, Mistral, Ollama)";
+"Ключ сохранён" = "Key saved";
+
+/* InterviewCopilot/Settings/OtherSettingsViews.swift */
+"Оверлей на звонке всегда темный — так он читается поверх видео." = "The call overlay is always dark so it reads well over video.";
+"Тема" = "Theme";
+"Как в системе" = "System";
+"Светлая" = "Light";
+"Темная" = "Dark";
+"Разбор после звонка и ответы «Спросить ИИ» — тоже на этом языке. Подсказки на звонке — на языке собеседника." = "The post-call review and “Ask AI” answers use this language too. Hints during a call use the other person's language.";
+"Язык интерфейса" = "Interface language";
+"Стиль ответа по умолчанию" = "Default answer style";
+"ID моделей" = "Model IDs";
+"Цепочка автоперехода" = "Fallback chain";
+"Настроить…" = "Set up…";
+"Gemini (запасная)" = "Gemini (fallback)";
+"Свой API" = "Custom API";
+"Сильная модель (%@, скриншот)" = "Strong model (%@, screenshot)";
+"Выше" = "Up";
+"Ниже" = "Down";
+"Если модель молчит это время, тот же запрос сразу уходит следующей в цепочке; показывается ответ той, что ответила первой. 0 — строго по очереди." = "If the model stays silent this long, the same request goes to the next one in the chain right away; whichever answers first is shown. 0 — strictly in turn.";
+"Таймаут первого токена: %.1f с" = "First token timeout: %.1f s";
+"Параллельный запрос через: %.1f с" = "Parallel request after: %.1f s";
+"Параллельный запрос: выключен" = "Parallel request: off";
+"Для Whisper выбор известного языка помогает распознаванию. Для Parakeet язык задаёт метку расшифровки, текст остаётся мультиязычным." = "For Whisper, choosing a known language helps recognition. For Parakeet the language sets the transcript label; the text stays multilingual.";
+"Итог распознаётся с полным контекстом. Предварительный текст появляется раньше; итог может занять больше времени." = "The final text is recognized with full context. Interim text appears earlier; the final may take longer.";
+"Распознаёт русский, украинский и английский без отдельного определения языка. Аудио обрабатывается на Mac." = "Recognizes Russian, Ukrainian and English without separate language detection. Audio is processed on the Mac.";
+"Подсказка запускается сразу по быстрому тексту Parakeet. Через 2–3 с строку в расшифровке заменяет текст Whisper large-v3-turbo с закреплённым языком: украинский не сползает в русский, термины пишутся правильно. Нужен файл модели turbo; если Mac тормозит на созвоне — выключите второй переключатель." = "The hint starts right away from Parakeet's fast text. After 2–3 s the transcript line is replaced by Whisper large-v3-turbo text with a pinned language: Ukrainian doesn't drift into Russian and terms are spelled correctly. Needs the turbo model file; if the Mac slows down during a call, turn off the second switch.";
+"Для Whisper, экспериментально: на сжатом звуке помогает одним фразам и мешает другим." = "For Whisper, experimental: on compressed audio it helps some phrases and hurts others.";
+"Українська или Русский — проходят оба языка; English — только английский; Auto — украинский, русский, английский. В звонке целая английская фраза интервьюера проходит; в микрофоне — только термины. Серую строку можно нажать (или %@), чтобы ответить." = "Українська or Русский — both languages pass; English — English only; Auto — Ukrainian, Russian, English. On a call a whole English phrase from the interviewer passes; on the microphone only terms do. Click a gray line (or press %@) to answer it.";
+"Нужна модель Silero VAD (scripts/fetch-filter-models.py). Конец фразы не замедляет: проверяется уже закрытая реплика." = "Needs the Silero VAD model (scripts/fetch-filter-models.py). It doesn't delay the end of a phrase: only a finished line is checked.";
+"Модель получает вопрос, как только готов его текст. Если собеседник продолжил, запрос отменяется и уходит заново — запросов к модели становится немного больше." = "The model gets the question as soon as its text is ready. If the other person keeps talking, the request is cancelled and sent again — slightly more model requests.";
+"Источник звука" = "Audio source";
+"Движок распознавания" = "Recognition engine";
+"Модель распознавания" = "Recognition model";
+"Точный итоговый текст" = "Accurate final text";
+"Украинский итог — через Whisper turbo" = "Ukrainian final text — via Whisper turbo";
+"Уточнять через Whisper и русский/английский (термины, имена)" = "Also refine Russian/English via Whisper (terms, names)";
+"Подсказывать распознаванию формулировки из базы вопросов" = "Prompt recognition with phrasings from the question bank";
+"Фильтр языка: чужой язык — серым, английские термины сохраняются" = "Language filter: other languages in gray, English terms kept";
+"С Whisper и выбранным языком любая речь записывается этим языком — английское видео станет «украинским» текстом, и фильтр его не увидит. Для фильтра выберите движок Parakeet." = "With Whisper and a chosen language, any speech is written in that language — an English video becomes “Ukrainian” text and the filter won't see it. Choose the Parakeet engine for the filter.";
+"Нейросетевой детектор речи (Silero): шум без речи не становится репликой" = "Neural speech detector (Silero): noise without speech doesn't become a line";
+"Начинать ответ заранее, не дожидаясь паузы" = "Start answering early, without waiting for the pause";
+"Весь системный звук" = "All system audio";
+"Микрофон Mac (самопроверка, без созвона)" = "Mac microphone (self-check, no call)";
+"Parakeet v3 — локально" = "Parakeet v3 — local";
+"Whisper — локально" = "Whisper — local";
+"Пауза конца вопроса T: %lld мс" = "End-of-question pause T: %lld ms";
+"Пауза после вопроса со знаком «?»: %lld мс" = "Pause after a question ending in “?”: %lld ms";
+"Ниже порога показывается «Нет в базе» и три ближайшие карточки." = "Below the threshold, “Not in the bank” and the three closest cards are shown.";
+"Порог совпадения с карточкой: %lld%%" = "Card match threshold: %lld%%";
+"Удалять email, телефоны и ссылки из профиля перед отправкой в модель" = "Remove emails, phone numbers and links from the profile before sending it to the model";
+"Хранить историю сессий: %lld дн." = "Keep session history: %lld days";
+"Размер шрифта" = "Font size";
+"Непрозрачность: %lld%%" = "Opacity: %lld%%";
+"Ширина панели: %lld pt" = "Panel width: %lld pt";
+"Отмена" = "Cancel";
+"Изменить" = "Change";
+"Сбросить на ⌃⌥" = "Reset to ⌃⌥";
+"Gemini Free продолжает работать после достижения лимита." = "Gemini Free keeps working after the limit is reached.";
+"Месячный лимит, $" = "Monthly limit, $";
+"Лимит достигнут: платные провайдеры выключены." = "Limit reached: paid providers are off.";
+"Включить снова" = "Turn back on";
+"Нажмите сочетание…" = "Press a shortcut…";
+"Нужен модификатор ⌃, ⌥ или ⌘" = "Needs a ⌃, ⌥ or ⌘ modifier";
+
+/* InterviewCopilot/Settings/VoiceEnrollment.swift */
+"Ваш голос" = "Your voice";
+"Действует в режиме «Микрофон Mac» и в ответах на ИИ-собеседовании. Нужен образец голоса и модель CAM++." = "Works in “Mac microphone” mode and for answers in the AI interview. Needs a voice sample and the CAM++ model.";
+"Нажмите кнопку (или Enter) и прочитайте вслух текст, который появится. Сам звук не сохраняется — только «отпечаток» из чисел." = "Click the button (or press Enter) and read aloud the text that appears. The audio itself isn't stored — only a numeric “voiceprint”.";
+"Приложение расшифровывает вашу речь с микрофона и сохраняет её ответом на вопрос в памяти интервью: модель не повторяет сказанное, держит факты согласованными и опирается на них, когда интервьюер возвращается к теме. Ответы видны в истории сессии; текст уходит в модель вместе со следующими вопросами. С образцом голоса чужие голоса и эхо динамиков отсекаются." = "The app transcribes your speech from the microphone and saves it as the answer to the question in the interview memory: the model doesn't repeat what you said, keeps facts consistent and builds on them when the interviewer returns to a topic. Answers are visible in the session history; the text goes to the model with the following questions. With a voice sample, other voices and speaker echo are filtered out.";
+"По замеру распознавание с ним хуже (3,9% → 6,3% ошибок в словах): Parakeet сам устойчив к шуму. Для шума в комнате лучше системный Voice Isolation (Пункт управления → Режим микрофона)." = "Measured recognition is worse with it (3.9% → 6.3% word errors): Parakeet is robust to noise on its own. For room noise, the system Voice Isolation is better (Control Center → Mic Mode).";
+"Только мой голос в микрофоне: чужие голоса, ТВ и видео — серым" = "Only my voice on the microphone: other voices, TV and video in gray";
+"Готово — остановить запись" = "Done — stop recording";
+"Считаю отпечаток голоса…" = "Computing the voiceprint…";
+"Учитывать мои ответы в подсказках (на созвоне)" = "Use my answers in hints (on a call)";
+"Шумоподавление микрофона LocalVQE (экспериментально)" = "LocalVQE microphone noise suppression (experimental)";
+"Порог сходства — автоматически по образцу" = "Similarity threshold — automatic from the sample";
+"Образец голоса не записан" = "No voice sample recorded";
+"Записать образец голоса (25 с)" = "Record a voice sample (25 s)";
+"Перезаписать образец" = "Re-record the sample";
+"Удалить образец" = "Delete sample";
+"Не удалось сохранить: %@" = "Could not save: %@";
+"Образец сохранён: %.0f с речи, порог %.2f" = "Sample saved: %.0f s of speech, threshold %.2f";
+"Читайте вслух обычным голосом · %.0f из %.0f с · уровень %.0f dB" = "Read aloud in your normal voice · %.0f of %.0f s · level %.0f dB";
+"Порог: %.2f — выше строже (чужие голоса отсекаются чаще, но может отсечь и вас)" = "Threshold: %.2f — higher is stricter (other voices are cut more often, but it may cut you too)";
+"Образец записан %@: %.0f с речи, автопорог %.2f" = "Sample recorded %@: %.0f s of speech, auto threshold %.2f";
+"Нет разрешения на микрофон: Системные настройки → Конфиденциальность → Микрофон" = "No microphone permission: System Settings → Privacy → Microphone";
+"Не удалось загрузить модель CAM++" = "Could not load the CAM++ model";
+"Мало речи: читайте вслух громче и ближе к микрофону (нужно не меньше 5 с речи)" = "Too little speech: read louder and closer to the microphone (at least 5 s of speech needed)";
+"Образец удалён" = "Sample deleted";
+
+/* InterviewCopilot/SettingsWindow.swift */
+"Настройки Interview Copilot" = "Interview Copilot Settings";
+"Основное" = "General";
+"Ключи моделей" = "Model keys";
+"Модели и ответы" = "Models & answers";
+"Звук и распознавание" = "Audio & recognition";
+"База вопросов" = "Question bank";
+"Приватность" = "Privacy";
+"Оверлей" = "Overlay";
+"Горячие клавиши" = "Hotkeys";
+"Бюджет" = "Budget";
+"Тема оформления и язык интерфейса — меняются сразу." = "Appearance and interface language — change instantly.";
+"Для старта достаточно одного бесплатного ключа Groq. Можно добавить еще ключи: кончился лимит у одного — ответ идет со следующего." = "One free Groq key is enough to start. You can add more keys: when one hits its limit, the answer comes from the next.";
+"Порядок моделей, запасные, стиль ответа по умолчанию и таймауты." = "Model order, fallbacks, default answer style and timeouts.";
+"Источник звука, язык, распознавание, фильтры речи и ваш голос." = "Audio source, language, recognition, speech filters and your voice.";
+"Порог совпадения с вашими ответами и модель поиска." = "Match threshold for your answers and the search model.";
+"Фильтр личных данных и срок хранения истории на этом Mac." = "Personal data filter and how long history is kept on this Mac.";
+"Прозрачность, размер текста и ширина оверлея." = "Opacity, text size and overlay width.";
+"⌃⌥ работают всегда; ⌘-клавиши — только во время сессии." = "⌃⌥ shortcuts always work; ⌘ shortcuts only during a session.";
+"Расход платных моделей и лимит на месяц." = "Paid model spending and the monthly limit.";
+
+/* InterviewCopilot/TestCallController.swift */
+"Откройте собранное приложение InterviewCopilot.app: в нём находятся тестовые фразы. %@" = "Open the built InterviewCopilot.app: it contains the test phrases. %@";
+"Браузер не открылся: %@" = "The browser did not open: %@";
+"Открываю тестовый звонок…" = "Opening the test call…";
+"Тест закрыт" = "Test closed";
+"Тестовый звонок недоступен" = "Test call unavailable";
+"Установите Chrome или Safari для тестового звонка." = "Install Chrome or Safari for the test call.";
+"Захватываю звук Chrome" = "Capturing Chrome audio";
+"Захватываю системный звук. На время теста выключите другие звуки." = "Capturing system audio. Turn off other sounds during the test.";
+"Не удалось открыть тестовый звонок" = "Could not open the test call";
+"Настройки распознавания изменились. Повторите фразу после загрузки модели." = "Recognition settings changed. Repeat the phrase after the model loads.";
+"Разрешите «Запись экрана и системного аудио» для Interview Copilot в настройках Mac и откройте тест снова." = "Allow “Screen & System Audio Recording” for Interview Copilot in Mac settings and open the test again.";
+"Доступ только из локального теста" = "Access only from the local test";
+"Фраза не найдена" = "Phrase not found";
+"Предыдущая фраза ещё не завершена" = "The previous phrase isn't finished yet";
+"Фраза уже изменилась" = "The phrase has already changed";
+
+/* InterviewCopilot/Workspace/WorkspaceWindow.swift */
+"Ваш AI-помощник\nна собеседованиях" = "Your AI assistant\nfor interviews";
+"Показать оверлей" = "Show overlay";
+"Завершить сессию" = "End session";
+"Готовность к собеседованию" = "Interview readiness";
+"Распознавание речи — на этом Mac. В модели уходит только текст вопроса и нужный контекст." = "Speech recognition runs on this Mac. Only the question text and the needed context go to the models.";
+"Сессия идет" = "Session in progress";
+"Готов к собеседованию" = "Ready for the interview";
+"Подсказки — в оверлее рядом со звонком.\nЗавершите сессию, чтобы получить разбор." = "Hints are in the overlay next to the call.\nEnd the session to get a review.";
+"AI будет слушать, анализировать вопросы\nи подсказывать ответы в реальном времени." = "AI will listen, analyze questions\nand suggest answers in real time.";
+"Создать сессию" = "New session";
+"Пробный звонок" = "Test call";
+"Последние сессии" = "Recent sessions";
+"Все сессии" = "All sessions";
+"Дата и время" = "Date and time";
+"Компания" = "Company";
+"Тип" = "Type";
+"Время" = "Time";
+"Разбор" = "Review";
+"Подготовка" = "Preparation";
+"Вопросы с ответом" = "Questions with answers";
+"Подготовить" = "Prepare";
+"Перед началом" = "Before you start";
+"Вопросы — по резюме и вакансии профиля. Подсказки показываются в оверлее, как на настоящем звонке; после окончания — разбор." = "Questions are based on the profile's résumé and job. Hints are shown in the overlay as on a real call; a review follows at the end.";
+"Сначала завершите текущую сессию." = "End the current session first.";
+"Начать собеседование" = "Start the interview";
+"Один вопрос за раз" = "One question at a time";
+"Интервьюер говорит голосом macOS в браузере. Отвечайте вслух — помощник покажет подсказку, а разбор подскажет, что улучшить." = "The interviewer speaks with a macOS voice in the browser. Answer aloud — the assistant shows a hint, and the review tells you what to improve.";
+"ключ" = "key";
+"ключа" = "keys";
+"ключей" = "keys";
+"%@ — добавьте резюме" = "%@ — add a résumé";
+"Сегодня" = "Today";
+"Готов к звонку" = "Ready for a call";
+"Нужна настройка" = "Setup needed";
+"Готов к использованию" = "Ready to use";
+"Нужен доступ — нажмите" = "Access needed — click";
+"Добавьте ключ в Настройках" = "Add a key in Settings";
+"Здесь появится история" = "History will appear here";
+"После звонка вы сможете вернуться к вопросам, вашим ответам и разбору." = "After a call you can come back to the questions, your answers and the review.";
+"Готов" = "Ready";
+"Прерван" = "Interrupted";
+"Идет" = "In progress";
+"Ваши ответы" = "Your answers";
+"Черновики — проверить" = "Drafts — to review";
+"Без ответа" = "No answer";
+"Формулировки uk / ru / en" = "uk / ru / en phrasings";
+"Репетиция: модель задает вопросы голосом, вы отвечаете в микрофон" = "Rehearsal: the model asks questions by voice, you answer into the microphone";

@@ -10,9 +10,9 @@ public enum DocumentTextError: Error, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .unsupported(let ext): "Формат .\(ext) не поддерживается: PDF, Word (.docx), RTF, TXT или Markdown"
-        case .unreadable(let file): "Не удалось прочитать «\(file)»"
-        case .noText(let file): "В «\(file)» нет текста. Если это скан, сохраните документ с текстовым слоем или вставьте текст вручную"
+        case .unsupported(let ext): L10n.f("Формат .%@ не поддерживается: PDF, Word (.docx), RTF, TXT или Markdown", ext)
+        case .unreadable(let file): L10n.f("Не удалось прочитать «%@»", file)
+        case .noText(let file): L10n.f("В «%@» нет текста. Если это скан, сохраните документ с текстовым слоем или вставьте текст вручную", file)
         }
     }
 }

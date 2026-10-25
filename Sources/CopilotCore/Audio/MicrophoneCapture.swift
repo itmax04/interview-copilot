@@ -17,11 +17,11 @@ public final class MicrophoneCapture: @unchecked Sendable {
     public var isRunning: Bool { lock.withLock { running } }
 
     public func start() throws {
-        guard Permissions.microphone == .granted else { throw AudioCaptureError.failed("Нет разрешения на микрофон") }
+        guard Permissions.microphone == .granted else { throw AudioCaptureError.failed(L10n.t("Нет разрешения на микрофон")) }
         guard !isRunning else { return }
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0 else { throw AudioCaptureError.failed("Микрофон недоступен") }
+        guard format.sampleRate > 0 else { throw AudioCaptureError.failed(L10n.t("Микрофон недоступен")) }
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
             guard let self else { return }
             let samples = self.converter.convert(buffer)

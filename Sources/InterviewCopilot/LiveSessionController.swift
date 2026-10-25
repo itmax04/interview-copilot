@@ -119,7 +119,7 @@ final class LiveSessionController {
     /// Текст для панели: «Осталось 5 мин по плану» / «План превышен на 3 мин».
     var planNotice: String? {
         guard isActive, planWarned, let left = clock?.minutesLeft() else { return nil }
-        return left >= 0 ? "Осталось \(left) мин по плану" : "План превышен на \(-left) мин"
+        return left >= 0 ? L("Осталось %lld мин по плану", left) : L("План превышен на %lld мин", -left)
     }
 }
 

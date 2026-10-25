@@ -144,12 +144,12 @@ struct UsageMeterTests {
         let s = AppSettings()
         meter.record(provider: .gemini, model: "gemini-3.8-flash", usage: TokenUsage(input: 1000, output: 100), settings: s)
         meter.record(provider: .anthropic, model: "claude-sonnet-5-5", usage: TokenUsage(input: 10_000, output: 1000), settings: s)
-        #expect(meter.statusLine == "Today: $0.03 · Gemini: 1 req")
+        #expect(meter.statusLine == "Сегодня: $0,03 · Gemini: 1 запр.")
         meter.recordError(provider: .gemini, error: .http(status: 429, message: ""))
-        #expect(meter.statusLine == "Today: $0.03 · Gemini: limit")
+        #expect(meter.statusLine == "Сегодня: $0,03 · Gemini: лимит")
         // Новый день — дневные счётчики с нуля, месячный копится.
         clock = utc("2026-10-07T12:00:00Z")
-        #expect(meter.statusLine == "Today: $0.00 · Gemini: 0 req")
+        #expect(meter.statusLine == "Сегодня: $0,00 · Gemini: 0 запр.")
         #expect(abs(meter.state.monthCost - 0.03) < 1e-9)
     }
 
@@ -173,6 +173,6 @@ struct UsageMeterTests {
         let a = UsageMeter(pricing: Self.pricing, storage: url)
         a.record(provider: .gemini, model: "gemini-3.8-flash", usage: TokenUsage(input: 1, output: 1), settings: AppSettings())
         let b = UsageMeter(pricing: Self.pricing, storage: url)
-        #expect(b.statusLine.hasSuffix("Gemini: 1 req"))
+        #expect(b.statusLine.hasSuffix("Gemini: 1 запр."))
     }
 }

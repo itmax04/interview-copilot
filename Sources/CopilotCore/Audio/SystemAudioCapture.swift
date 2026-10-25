@@ -10,9 +10,9 @@ public enum AudioCaptureError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .noPermission: "Нет разрешения «Запись экрана и системного звука»"
-        case .noDisplay: "Не найден дисплей для захвата"
-        case .sourceNotRunning(let name): "Приложение \(name) не запущено"
+        case .noPermission: L10n.t("Нет разрешения «Запись экрана и системного звука»")
+        case .noDisplay: L10n.t("Не найден дисплей для захвата")
+        case .sourceNotRunning(let name): L10n.f("Приложение %@ не запущено", name)
         case .failed(let message): message
         }
     }
@@ -111,7 +111,7 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
             let me = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
             return SCContentFilter(display: display, excludingApplications: me, exceptingWindows: [])
         case .none, .microphone:
-            throw AudioCaptureError.failed("Источник не выбран")
+            throw AudioCaptureError.failed(L10n.t("Источник не выбран"))
         }
     }
 

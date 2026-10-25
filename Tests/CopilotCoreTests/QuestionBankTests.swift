@@ -62,7 +62,7 @@ struct QuestionBankTests {
             Issue.record("ожидалась ошибка")
         } catch let error as QuestionBankError {
             #expect(error.line == line)
-            #expect(error.description.hasPrefix("Question bank: ошибка в строке \(line)"))
+            #expect(error.description.hasPrefix("База вопросов: ошибка в строке \(line)"))
         } catch {
             Issue.record("неожиданная ошибка \(error)")
         }

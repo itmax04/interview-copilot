@@ -66,7 +66,7 @@ final class TestCallController {
             if wasActive { onEnd?() }
             let alert = NSAlert()
             alert.messageText = "Тестовый звонок недоступен"
-            alert.informativeText = "Откройте собранное приложение InterviewCopilot.app: в нём находятся тестовые фразы. \(error.localizedDescription)"
+            alert.informativeText = L("Откройте собранное приложение InterviewCopilot.app: в нём находятся тестовые фразы. %@", "\(error.localizedDescription)")
             alert.runModal()
         }
     }
@@ -84,7 +84,7 @@ final class TestCallController {
         workspace.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
             Task { @MainActor in
                 guard let self, self.active, !self.closing else { return }
-                if let error { self.failedToStart("Браузер не открылся: \(error.localizedDescription)"); return }
+                if let error { self.failedToStart(L("Браузер не открылся: %@", "\(error.localizedDescription)")); return }
                 self.captureTask = Task { [weak self] in
                     guard let self else { return }
                     self.captureStarted = true
@@ -164,7 +164,7 @@ final class TestCallController {
         let status: String
         if opening { status = message }
         else if listening.phase == .noPermission { status = "Разрешите «Запись экрана и системного аудио» для Interview Copilot в настройках Mac и откройте тест снова." }
-        else if case .error(let error) = listening.phase { status = "Захват звука: \(error)" }
+        else if case .error(let error) = listening.phase { status = L("Захват звука: %@", "\(error)") }
         else if listening.phase == .paused { status = "Слушание на паузе. Возобновите его в меню приложения." }
         else if !listening.recognitionReady { status = listening.sttStatus }
         else { status = message }
@@ -185,7 +185,11 @@ final class TestCallController {
         let path = String(request.path.dropFirst(prefix.count))
         lastContact = Date()
         if request.method == "GET" {
-            if path.isEmpty { return file("index.html", type: "text/html; charset=utf-8") }
+            if path.isEmpty {
+                let page = file("index.html", type: "text/html; charset=utf-8")
+                return page.status == 200 ? LocalHTTPResponse(body: localizedPage(page.body, resources: resources),
+                                                              contentType: "text/html; charset=utf-8") : page
+            }
             if path == "state" { return state() }
             if path.hasPrefix("audio/") {
                 let id = String(path.dropFirst(6))

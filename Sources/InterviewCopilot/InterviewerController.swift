@@ -116,7 +116,7 @@ final class InterviewerController {
         workspace.open([url], withApplicationAt: chrome, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
             Task { @MainActor in
                 guard let self, self.active, !self.closing else { return }
-                if let error { self.failedToStart("Chrome не открылся: \(error.localizedDescription)"); return }
+                if let error { self.failedToStart(L("Chrome не открылся: %@", "\(error.localizedDescription)")); return }
                 self.captureTask = Task { [weak self] in
                     guard let self else { return }
                     self.captureStarted = true
@@ -218,7 +218,7 @@ final class InterviewerController {
                 case .restart: text = ""
                 case .providerFailed(let p, let error): self?.onProviderError?(p, error)
                 case .usage(let p, let m, let u): self?.onUsage?(p, m, u)
-                case .exhausted(let reason): failure = "Модели недоступны: \(reason)"
+                case .exhausted(let reason): failure = L("Модели недоступны: %@", "\(reason)")
                 default: break
                 }
             }
@@ -233,13 +233,13 @@ final class InterviewerController {
                 guard !Task.isCancelled, self.active, self.stage == .thinking else { return }
                 let id = UUID().uuidString.lowercased()
                 self.question = (id, spoken, audio, provider)
-                let clip = TestCallClip(id: id, language: language, title: "Вопрос \(self.history.count + 1)", text: spoken, file: "")
+                let clip = TestCallClip(id: id, language: language, title: L("Вопрос %@", "\(self.history.count + 1)"), text: spoken, file: "")
                 self.listening.resetTestCallPhrase()
                 self.trial = TestCallTrial(clip: clip)
                 self.stage = .speaking
                 Log.app.notice("interviewer question ready index=\(self.history.count + 1) words=\(TranscriptComparison.words(spoken).count) wav_bytes=\(audio.count)")
             } catch {
-                self.fail("Синтез речи: \(error)")
+                self.fail(L("Синтез речи: %@", "\(error)"))
             }
         }
     }
@@ -320,7 +320,7 @@ final class InterviewerController {
         let status: String
         if opening { status = message }
         else if listening.phase == .noPermission { status = "Разрешите «Запись экрана и системного аудио» для Interview Copilot в настройках Mac и откройте собеседование снова." }
-        else if case .error(let error) = listening.phase { status = "Захват звука: \(error)" }
+        else if case .error(let error) = listening.phase { status = L("Захват звука: %@", "\(error)") }
         else if listening.phase == .paused { status = "Слушание на паузе. Возобновите его в меню приложения." }
         else if !listening.recognitionReady { status = listening.sttStatus }
         else { status = message }
@@ -400,8 +400,8 @@ final class InterviewerController {
     }
 
     private func page() -> LocalHTTPResponse {
-        guard let data = try? Data(contentsOf: resources.appendingPathComponent("index.html")) else { return .error(404, "Ресурс не найден") }
-        return LocalHTTPResponse(body: data, contentType: "text/html; charset=utf-8")
+        guard let data = try? Data(contentsOf: resources.appendingPathComponent("index.html")) else { return .error(404, L("Ресурс не найден")) }
+        return LocalHTTPResponse(body: localizedPage(data, resources: resources), contentType: "text/html; charset=utf-8")
     }
 
     private static func ranged(_ data: Data, type: String, range: String?) -> LocalHTTPResponse {

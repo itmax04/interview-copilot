@@ -130,7 +130,7 @@ public struct ProviderChain: Sendable {
                 var reasons: [String] = []
                 let usable = orderedUsableSteps()
                 if usable.isEmpty {
-                    continuation.yield(.exhausted(reason: "нет ключей"))
+                    continuation.yield(.exhausted(reason: L10n.t("нет ключей")))
                     continuation.finish()
                     return
                 }
@@ -157,7 +157,7 @@ public struct ProviderChain: Sendable {
                         continuation.yield(.providerFailed(pid, error))
                         continuation.yield(.keyFailed(pid, slot: step.keySlot, error))
                         health?.reportFailure(pid, step.model, slot: step.keySlot, error)
-                        reasons.append("\(pid.displayName)\(step.keySlot > 1 ? " (ключ \(step.keySlot))" : "") \(step.model): \(error.description)")
+                        reasons.append("\(pid.displayName)\(step.keySlot > 1 ? L10n.f(" (ключ %lld)", step.keySlot) : "") \(step.model): \(error.description)")
                         if error.isInvalidKey { invalidKey.insert(step.keyID) }
                         guard error.triggersFallback else { break }
                     } catch {
@@ -206,7 +206,7 @@ public struct ProviderChain: Sendable {
                     }
                 }
                 if let usage { continuation.yield(.usage(pid, model: model, usage)) }
-                if !gotFirst.isSet { throw LLMError.badResponse("пустой ответ") }
+                if !gotFirst.isSet { throw LLMError.badResponse(L10n.t("пустой ответ")) }
                 continuation.yield(.finished(pid, model: model))
             }
             group.addTask {
@@ -349,7 +349,7 @@ extension ProviderChain {
                 let start = DispatchTime.now().uptimeNanoseconds
                 let usable = orderedUsableSteps()
                 if usable.isEmpty {
-                    continuation.yield(.exhausted(reason: "нет ключей"))
+                    continuation.yield(.exhausted(reason: L10n.t("нет ключей")))
                     continuation.finish()
                     return
                 }
@@ -411,7 +411,7 @@ extension ProviderChain {
                     continuation.yield(.providerFailed(pid, error))
                     continuation.yield(.keyFailed(pid, slot: step.keySlot, error))
                     health?.reportFailure(pid, step.model, slot: step.keySlot, error)
-                    reasons.append("\(pid.displayName)\(step.keySlot > 1 ? " (ключ \(step.keySlot))" : "") \(step.model): \(error.description)")
+                    reasons.append("\(pid.displayName)\(step.keySlot > 1 ? L10n.f(" (ключ %lld)", step.keySlot) : "") \(step.model): \(error.description)")
                     if error.isInvalidKey { invalidKey.insert(step.keyID) }
                 }
 
@@ -448,7 +448,7 @@ extension ProviderChain {
                             continuation.finish()
                             return
                         } else if winner == nil, tasks[i] != nil {
-                            fail(i, .badResponse("пустой ответ"))
+                            fail(i, .badResponse(L10n.t("пустой ответ")))
                         }
                     case .failed(let i, let e):
                         guard tasks[i] != nil else { break }

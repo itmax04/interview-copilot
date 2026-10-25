@@ -58,13 +58,14 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | `…/Storage` | история сессий | `SessionRecord` (с `config` сессии, вашими фразами по времени и разбором), `SessionStore` |
 | `…/Review` | разбор после End (COPILOT-09) | `SessionReview` (статус, `ReviewComment`, `ReviewSummary`, `ReviewQA`), `ReviewPrompt` (комментарии порциями, сводка, «Спросить ИИ»), `TimelineEntry` / `SessionRecord.timeline` |
 | `…/Session` | сессия (COPILOT-09) | `SessionConfig`/`SessionType`/`SessionPhase`/`SessionClock`, `Preflight` (проверка перед стартом), `CallDetection`, `JobImport` |
+| `…/Localization` | язык интерфейса (COPILOT-10) | `L10n` (ключ — русская строка, английский — `en.lproj`, `Scope` для тестов), `PageLocalization` (страницы по `en.json`) |
 | `…/Settings` | настройки и пути | `AppSettings` (миграции `schemaVersion`), `SettingsStore` (UserDefaults `settings.v1`), `AppPaths` |
 | `…/Secrets` | ключи API | `KeychainStore` (service `com.itmax04.interviewcopilot`) |
 | `…/Interviewer`, `…/TestCall` | ИИ-собеседование голосом, тестовый звонок в браузере | `InterviewerPrompt`, `SpeechSynth`, `AnswerCapture`, `LocalTestCallServer`, `TranscriptComparison` |
 | `…/Hotkeys`, `…/Menu` | глобальные клавиши (Carbon), состав меню | `HotkeyCenter`, `HotkeyAction`, `MenuLayout` (без AppKit — тестируется) |
 | `…/Usage`, `…/Privacy`, `…/Models`, `…/Capture`, `…/Logging` | расход и бюджет, фильтр ПД, загрузка моделей с SHA256, скриншот, логи | `UsageMeter`, `PIIFilter`, `ModelDownloader`, `ScreenshotService`, `Log` |
 | `Sources/CopilotEmbeddings` | bge-m3 через llama.cpp (отдельно из-за заголовков ggml) | `LlamaEmbedder` |
-| `Sources/InterviewCopilot` | приложение: связывает всё | `AppDelegate` (App.swift — вся проводка колбэков), `LiveSessionController` (Start/End, таймер, определение звонка), `Workspace/WorkspaceWindow` (главное окно: «Сегодня», «Сессии», «Профили», «ИИ-собеседование», «Настройки»), `Design/DesignSystem` (IC — цвета и компоненты P00, ICDark — оверлей), `SessionWizard` (мастер), `AnswerStyleEditor`/`StylePreview` (стиль ответа с предпросмотром), `ListeningController` (в т. ч. `standby` без сессии), `TurnController`, `AnswerController`, `SessionController` (история), `ReviewController` (разбор в фоне), `PanelController` (свернуть, следующий экран, фокус чата, проверка видимости)/`PanelView`/`AnswerCardView`, `Theme`, настройки, профиль, история |
+| `Sources/InterviewCopilot` | приложение: связывает всё | `AppDelegate` (App.swift — вся проводка колбэков), `LiveSessionController` (Start/End, таймер, определение звонка), `Workspace/WorkspaceWindow` (главное окно: «Сегодня», «Сессии», «Профили», «ИИ-собеседование», «Настройки»), `Design/DesignSystem` (IC — динамические цвета светлой и темной темы и компоненты P00, ICDark — оверлей), `Design/Localization` (`UILanguage`, `localizedRoot`, `L(…)`, перегрузки `Text(String)` и др.), `SessionWizard` (мастер), `AnswerStyleEditor`/`StylePreview` (стиль ответа с предпросмотром), `ListeningController` (в т. ч. `standby` без сессии), `TurnController`, `AnswerController`, `SessionController` (история), `ReviewController` (разбор в фоне), `PanelController` (свернуть, следующий экран, фокус чата, проверка видимости)/`PanelView`/`AnswerCardView`, `Theme`, настройки, профиль, история |
 | `Sources/copilot-eval` | CLI замеров | см. §6 |
 
 Правило: логика — в `CopilotCore` (тестируется без UI), приложение только связывает и показывает.
@@ -93,14 +94,18 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 - **Горячая клавиша** — новый `HotkeyAction` **только в конец** `allCases` (номер = индекс), умолчание в `HotkeyBinding.defaults`,
   обработка в `AppDelegate.handle(_ action: HotkeyAction)`; подписи в UI — через `hotkey(_:)`, не литералом.
 - **Пункт меню** — `MenuAction` + `MenuLayout.sections` + `AppDelegate.handle(_ action: MenuAction)` + тест `MenuLayoutTests`.
+- **Текст интерфейса** — русская строка одной строкой: литерал SwiftUI переводится сам, строка из кода — `L("…")`
+  (`CopilotCore` — `L10n.t`/`f`); перевод — в `Resources/en.lproj/Localizable.strings`, проверка — `scripts/check-localization.sh`.
+  Новое окно — `.localizedRoot()` на корне и `UILanguage.shared.setTitle(_:of:)` для заголовка. Цвета — только токены `IC`.
 - **Новое поле в истории** — опционально или `decodeIfPresent`: старые файлы должны читаться.
 - **Новая зависимость или модель** — только через запись в `docs/decisions/ADR-0001-stack.md`; модели — с SHA256.
 
 ## 6. Проверки
 | Что | Команда |
 |---|---|
-| Быстро | `swift build && swift test` (277 тестов) |
-| Полностью | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/build-app.sh` |
+| Быстро | `swift build && swift test` (337 тестов) |
+| Полностью | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh` |
+| Переводы | `scripts/check-localization.sh [--unused]` — ключи без перевода, несовпадение форматов |
 | Звуковые eval | `scripts/run-evals.sh filter voice` (нужны модели Parakeet, Silero, CAM++) |
 | CLI | `swift run -c release copilot-eval <stt|stt-parakeet|stt-hybrid|stt-stream|turn|bank|filter-text|filter|voice|voice-enroll|enhance|memory|exit-check>` |
 | Живые (тратят бесплатные лимиты) | `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`, `--smoke-memory 5`, `--smoke-prepare`, `--smoke-session`, `--smoke-review`, `--smoke-task evals/fixtures/two-sum.png`, `--ui-snapshots <папка>` (снимки окон без звука), `--smoke-screenshot evals/fixtures/two-sum.png` |
@@ -132,6 +137,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | COPILOT-06 | память интервью, «Новое интервью», подсказка вместо незаписанного ответа, ⌃⌥A | `feat/copilot-06-session-memory` |
 | COPILOT-07 | аудит и доводка: ловушки «вы упоминали», привязка к ходу, меню «Сейчас отвечаю я», история, `--smoke-memory` | `feat/copilot-07-hardening` |
 | COPILOT-08 | профили: окно «Профиль», PDF/Word/RTF/текст, инструкции владельца, материалы, вопросы с ответами (по этапам) | `feat/copilot-08-profiles` |
+| COPILOT-10 | светлая и темная тема окон, интерфейс на русском и английском (сразу, без перезапуска), разбор на языке интерфейса (версия 0.14) | `feat/copilot-10-theme-language` |
 | COPILOT-09 | уровень ParakeetAI: сессии (мастер, Start/End, проверка, импорт вакансии), живой оверлей, стиль ответа, разбор после End, задачи со скриншотов, редизайн по образцам ImageGen (этапы 1–7, версии 0.7–0.12) | `feat/copilot-09-parakeet-parity` |
 
 Ветки идут цепочкой (каждая от предыдущей); `main` пока содержит только начальный коммит — слияние решает владелец.

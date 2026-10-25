@@ -28,7 +28,7 @@ public struct URLSessionStreamingTransport: StreamingTransport {
 
     public func lines(for request: URLRequest) async throws -> (HTTPURLResponse, AsyncThrowingStream<String, Error>) {
         let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse else { throw LLMError.badResponse("не HTTP") }
+        guard let http = response as? HTTPURLResponse else { throw LLMError.badResponse(L10n.t("не HTTP")) }
         let stream = AsyncThrowingStream<String, Error> { continuation in
             let task = Task {
                 do {

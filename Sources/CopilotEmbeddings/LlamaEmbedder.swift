@@ -11,11 +11,11 @@ public enum EmbedderError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .modelNotFound(let p): "Модель эмбеддингов не найдена: \(p)"
-        case .loadFailed(let p): "Не удалось загрузить модель эмбеддингов: \(p)"
-        case .tokenizeFailed: "Ошибка токенизации"
-        case .decodeFailed(let c): "llama_decode/encode вернул \(c)"
-        case .noEmbeddings: "Модель не вернула эмбеддинг"
+        case .modelNotFound(let p): L10n.f("Модель эмбеддингов не найдена: %@", "\(p)")
+        case .loadFailed(let p): L10n.f("Не удалось загрузить модель эмбеддингов: %@", "\(p)")
+        case .tokenizeFailed: L10n.t("Ошибка токенизации")
+        case .decodeFailed(let c): L10n.f("llama_decode/encode вернул %@", "\(c)")
+        case .noEmbeddings: L10n.t("Модель не вернула эмбеддинг")
         }
     }
 }

@@ -8,9 +8,9 @@ public enum AnswerMode: String, Codable, CaseIterable, Sendable {
 
     public var title: String {
         switch self {
-        case .bankOnly: "Question bank only"
-        case .bankAndHint: "Bank + hint"
-        case .generateAlways: "Generate every answer"
+        case .bankOnly: L10n.t("Только база вопросов")
+        case .bankAndHint: L10n.t("База + подсказка")
+        case .generateAlways: L10n.t("Генерировать каждый ответ")
         }
     }
 }
@@ -25,7 +25,7 @@ public enum RecognitionLanguage: String, Codable, CaseIterable, Sendable {
     /// Подпись в меню «Language: …» (R-15: «Auto (UK/RU/EN)»).
     public var menuTitle: String {
         switch self {
-        case .auto: "Auto (UK/RU/EN)"
+        case .auto: L10n.t("Авто (UK/RU/EN)")
         case .uk: "Українська"
         case .ru: "Русский"
         case .en: "English"
@@ -55,7 +55,7 @@ public enum ProviderID: String, Codable, CaseIterable, Sendable {
         case .anthropic: "Claude"
         case .groq: "Groq"
         case .cerebras: "Cerebras"
-        case .custom: "Свой API"
+        case .custom: L10n.t("Свой API")
         }
     }
 

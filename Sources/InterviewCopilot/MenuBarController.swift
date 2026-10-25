@@ -86,7 +86,7 @@ final class MenuBarController: NSObject, NSMenuDelegate {
         switch action {
         case .listeningSource:
             let (setting, running) = sourceMenuData()
-            sub.addItem(sourceItem("Auto (Zoom → Chrome → Telegram)", .auto, checked: setting == .auto))
+            sub.addItem(sourceItem(L("Авто (Zoom → Chrome → Telegram)"), .auto, checked: setting == .auto))
             if !running.isEmpty { sub.addItem(.separator()) }
             var shown = Set<String>()
             for app in running.sorted(by: { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending })
@@ -96,30 +96,30 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                 sub.addItem(sourceItem(app.name, value, checked: checked))
             }
             sub.addItem(.separator())
-            sub.addItem(sourceItem("All system audio", .allSystem, checked: setting == .allSystem))
+            sub.addItem(sourceItem(L("Весь системный звук"), .allSystem, checked: setting == .allSystem))
             sub.addItem(.separator())
-            sub.addItem(sourceItem("Microphone (practice, no call)", .microphone, checked: setting == .microphone))
+            sub.addItem(sourceItem(L("Микрофон Mac (самопроверка)"), .microphone, checked: setting == .microphone))
         case .mode:
             for mode in AnswerMode.allCases {
                 sub.addItem(actionItem(mode.title, checked: mode == state.mode) { [weak self] in self?.onSelectMode(mode) })
             }
         case .models:
             let keys = providersWithKeys()
-            let info = NSMenuItem(title: "Chain: " + state.chain.map { keys.contains($0) ? $0.displayName : "\($0.displayName) (no key)" }
-                .joined(separator: " → "), action: nil, keyEquivalent: "")
+            let info = NSMenuItem(title: L("Цепочка: %@", state.chain.map { keys.contains($0) ? $0.displayName : L("%@ (нет ключа)", $0.displayName) }
+                .joined(separator: " → ")), action: nil, keyEquivalent: "")
             info.isEnabled = false
             sub.addItem(info)
             sub.addItem(.separator())
-            let header = NSMenuItem(title: "Strong model", action: nil, keyEquivalent: "")
+            let header = NSMenuItem(title: L("Сильная модель"), action: nil, keyEquivalent: "")
             header.isEnabled = false
             sub.addItem(header)
             for p in ProviderID.allCases {
-                sub.addItem(actionItem("  \(p.displayName)" + (keys.contains(p) ? "" : " — no key"), checked: p == strongProvider()) { [weak self] in
+                sub.addItem(actionItem("  \(p.displayName)" + (keys.contains(p) ? "" : L(" — нет ключа")), checked: p == strongProvider()) { [weak self] in
                     self?.onSelectStrongModel(p)
                 })
             }
             sub.addItem(.separator())
-            sub.addItem(actionItem("Models & keys…", checked: false) { [weak self] in self?.onAction(.settings) })
+            sub.addItem(actionItem(L("Модели и ключи…"), checked: false) { [weak self] in self?.onAction(.settings) })
         case .language:
             for lang in RecognitionLanguage.allCases {
                 sub.addItem(actionItem(lang.menuTitle, checked: lang == state.language) { [weak self] in self?.onSelectLanguage(lang) })
@@ -130,11 +130,11 @@ final class MenuBarController: NSObject, NSMenuDelegate {
                     self?.onSelectProfile(p.id)
                 })
             }
-            sub.addItem(actionItem("\(MenuLayout.noProfileTitle) — модель отвечает сама", checked: !state.useProfile) { [weak self] in
+            sub.addItem(actionItem(L("%@ — модель отвечает сама", MenuLayout.noProfileTitle), checked: !state.useProfile) { [weak self] in
                 self?.onSelectUseProfile(false)
             })
             sub.addItem(.separator())
-            let open = NSMenuItem(title: "Профили…", action: #selector(itemSelected(_:)), keyEquivalent: "")
+            let open = NSMenuItem(title: L("Профили…"), action: #selector(itemSelected(_:)), keyEquivalent: "")
             open.target = self
             open.representedObject = MenuAction.editProfile.rawValue
             sub.addItem(open)

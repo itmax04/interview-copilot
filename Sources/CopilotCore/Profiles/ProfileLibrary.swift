@@ -29,10 +29,10 @@ public enum ProfileDocument: String, CaseIterable, Sendable, Identifiable {
 
     public var title: String {
         switch self {
-        case .resume: "Резюме"
-        case .facts: "Факты о себе"
-        case .job: "Вакансия"
-        case .instructions: "Инструкции профиля"
+        case .resume: L10n.t("Резюме")
+        case .facts: L10n.t("Факты о себе")
+        case .job: L10n.t("Вакансия")
+        case .instructions: L10n.t("Инструкции профиля")
         }
     }
 }
@@ -56,7 +56,7 @@ public final class ProfileLibrary: @unchecked Sendable {
         self.root = root
     }
 
-    public static let defaultName = "Мой профиль"
+    public static var defaultName: String { L10n.t("Мой профиль") }
     /// Шапка нового `questions.yaml`: пустой список — тоже правильная база.
     static let emptyQuestions = "# Вопросы профиля (COPILOT-08 R-07). Формат: - id: …, questions: [...], answer: |\n[]\n"
 

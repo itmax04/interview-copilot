@@ -59,10 +59,10 @@ struct PanelView: View {
             Banner(icon: "clock.badge.exclamationmark", text: notice, color: Theme.warn, size: model.fontSize)
         }
         if let silent = model.callSilentSeconds, silent >= 10 {
-            AlertBox(icon: "speaker.slash.fill", text: "Не слышу звонок \(silent) с — проверьте звук вкладки или источник", size: model.fontSize)
+            AlertBox(icon: "speaker.slash.fill", text: L("Не слышу звонок %lld с — проверьте звук вкладки или источник", silent), size: model.fontSize)
         }
         if model.ownerAnswering {
-            Banner(icon: "mic.fill", text: "Ваш ответ записывается — \(model.hotkey(.ownerAnswer)), чтобы закончить", color: Theme.warn,
+            Banner(icon: "mic.fill", text: L("Ваш ответ записывается — %@, чтобы закончить", model.hotkey(.ownerAnswer)), color: Theme.warn,
                    size: model.fontSize)
         }
     }
@@ -73,7 +73,7 @@ struct PanelView: View {
             NoSessionView(model: model)
             if model.history.current != nil { AnswerCard(model: model) }
         case .idle:
-            Message(icon: "ear", text: "Выберите источник: откройте созвон в Chrome, Zoom или Telegram или выберите приложение в меню «Listening».")
+            Message(icon: "ear", text: "Выберите источник: откройте созвон в Chrome, Zoom или Telegram или укажите приложение в меню Interview Copilot в строке меню.")
         case .noPermission:
             VStack(alignment: .leading, spacing: 10) {
                 Message(icon: "lock.shield", text: "Нет разрешения «Запись экрана и системного звука» — без него слушать нельзя.")
@@ -109,7 +109,7 @@ private struct TaskChip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Активная задача · \(model.taskImages.count) \(model.taskImages.count == 1 ? "снимок" : "снимка")")
+                Text(L("Активная задача · %lld %@", model.taskImages.count, model.taskImages.count == 1 ? L("снимок") : L("снимка")))
                     .font(.system(size: max(10, model.fontSize - 3))).foregroundStyle(ICDark.secondary)
                 Spacer()
                 Button { model.onCloseTask?() } label: { Image(systemName: "xmark").font(.system(size: 10, weight: .bold)) }
@@ -251,7 +251,7 @@ private struct Toolbar: View {
     private var statusText: String {
         switch model.state {
         case .noSession: "Нет сессии"
-        case .listening: "Слушаю — \(model.sourceName ?? "—")"
+        case .listening: L("Слушаю — %@", model.sourceName ?? "—")
         case .paused: "Пауза"
         case .idle: "Источник не выбран"
         case .noPermission: "Нет разрешения"
@@ -309,7 +309,7 @@ private struct LevelWave: View {
         }
         .animation(.easeOut(duration: 0.12), value: lit)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label): \(silent ? "нет сигнала" : lit > 0 ? "есть сигнал" : "тишина")")
+        .accessibilityLabel(L("%@: %@", L(label), silent ? L("нет сигнала") : lit > 0 ? L("есть сигнал") : L("тишина")))
     }
 }
 
@@ -415,7 +415,7 @@ private struct TranscriptStrip: View {
                 }
                 .lineLimit(model.transcriptExpanded ? nil : 2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel("Собеседник: \(model.partial ?? model.lines.last?.text ?? "тишина")")
+                .accessibilityLabel(L("Собеседник: %@", model.partial ?? model.lines.last?.text ?? L("тишина")))
                 }
                 Button { model.onClearTranscript?() } label: {
                     HStack(spacing: 5) {
@@ -479,7 +479,7 @@ private struct DetectionChip: View {
         case .preparing: ICStatusPill(text: "Готовлю ответ…", color: IC.accent, spinner: true, size: size)
         case .checking: ICStatusPill(text: "Проверяю…", color: IC.amber, size: size)
         case .detected: ICStatusPill(text: "Вопрос найден", color: IC.green, size: size)
-        case .notQuestion: ICStatusPill(text: "Не вопрос · ответить вручную \(model.hotkey(.answerNow))", color: Color(hex: 0xA1A1AA), size: size)
+        case .notQuestion: ICStatusPill(text: L("Не вопрос · ответить вручную %@", model.hotkey(.answerNow)), color: Color(hex: 0xA1A1AA), size: size)
         }
     }
 

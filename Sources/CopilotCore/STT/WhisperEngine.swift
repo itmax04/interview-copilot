@@ -9,10 +9,10 @@ public enum WhisperError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .modelNotFound(let path): "Модель не найдена: \(path)"
-        case .loadFailed(let path): "Не удалось загрузить модель: \(path)"
-        case .inferenceFailed(let code): "whisper_full вернул \(code)"
-        case .cancelled: "Распознавание отменено"
+        case .modelNotFound(let path): L10n.f("Модель не найдена: %@", path)
+        case .loadFailed(let path): L10n.f("Не удалось загрузить модель: %@", path)
+        case .inferenceFailed(let code): L10n.f("whisper_full вернул %@", "\(code)")
+        case .cancelled: L10n.t("Распознавание отменено")
         }
     }
 }

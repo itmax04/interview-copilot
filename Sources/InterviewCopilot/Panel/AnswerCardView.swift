@@ -41,10 +41,10 @@ struct AnswerCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             if model.history.entries.count > 1 {
                 HStack(spacing: 8) {
-                    navButton("chevron.left", label: "Предыдущий ответ \(model.hotkey(.previousAnswer))",
+                    navButton("chevron.left", label: L("Предыдущий ответ %@", model.hotkey(.previousAnswer)),
                               disabled: model.history.selected == 0) { model.selectPrevious() }
                     Text(model.history.position ?? "").font(.system(size: model.fontSize - 2).monospacedDigit())
-                    navButton("chevron.right", label: "Следующий ответ \(model.hotkey(.nextAnswer))",
+                    navButton("chevron.right", label: L("Следующий ответ %@", model.hotkey(.nextAnswer)),
                               disabled: model.history.isViewingLatest) { model.selectNext() }
                 }
                 .padding(.horizontal, 9).padding(.vertical, 5)
@@ -93,9 +93,9 @@ struct AnswerCard: View {
 
     private func versionTitle(_ v: AnswerVersion, index: Int) -> String {
         switch v.kind {
-        case .refine: "Версия \(index + 1) (\(v.instruction ?? "уточнение"))"
-        case .strong: "Версия \(index + 1) (\(model.strongModelName))"
-        default: "Версия \(index + 1)"
+        case .refine: L("Версия %lld (%@)", index + 1, L(v.instruction ?? "уточнение"))
+        case .strong: L("Версия %lld (%@)", index + 1, model.strongModelName)
+        default: L("Версия %lld", index + 1)
         }
     }
 
@@ -161,7 +161,7 @@ struct AnswerCard: View {
     private func footer(_ version: AnswerVersion) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Text([version.source, version.latency.map { String(format: "%.1f с", $0) }].compactMap { $0 }.filter { !$0.isEmpty }
+                Text([version.source, version.latency.map { L("%.1f с", $0) }].compactMap { $0 }.filter { !$0.isEmpty }
                     .joined(separator: " · "))
                     .font(.system(size: max(9, model.fontSize - 4))).foregroundStyle(.white.opacity(0.55)).lineLimit(1)
                 Spacer()
