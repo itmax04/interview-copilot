@@ -265,6 +265,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         panelModel.onDismissDetectedCall = { [weak self] in self?.liveSession.dismissDetectedCall() }
         setupOverlayActions()
+        // Ширина, выбранная мышью (COPILOT-11), — в настройки: слайдер и следующий запуск видят ее.
+        panel.onResizedByUser = { [weak self] width in
+            guard let self, abs(self.model.settings.panelWidth - width) > 1 else { return }
+            self.model.settings.panelWidth = width
+        }
         answers.onTaskChange = { [weak self] task in
             self?.panelModel.taskImages = task?.images ?? []
             self?.panelModel.taskSolved = task.map { !$0.solution.isEmpty } ?? false
@@ -407,10 +412,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !s.speculativeAnswers { answers.cancelDraft() }
         if !force && s.embeddingModel != old.embeddingModel { bank.embeddingModelChanged(s.embeddingModel) }
         if force || s.recognitionPromptFromBank != old.recognitionPromptFromBank { updateRecognitionPrompt() }
-        panel.onResizedByUser = { [weak self] width in
-            guard let self, abs(self.model.settings.panelWidth - width) > 1 else { return }
-            self.model.settings.panelWidth = width
-        }
         panel.apply(s)
         answers.refreshStrongModelAvailability()
         lastSettings = s
@@ -659,7 +660,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.onToggleChat = { [weak self] in self?.toggleChat() }
         panelModel.onChatSubmit = { [weak self] text, mode in self?.chatSubmit(text, mode: mode) }
         panelModel.onQuickRefine = { [weak self] chip in
-            self?.answers.refine(AnswerController.quickRefinements[chip] ?? chip, label: chip.lowercased())
+            self?.answers.refine(AnswerController.quickRefinements[chip] ?? chip, label: L(chip).lowercased())
         }
         panelModel.onClearTranscript = { [weak self] in self?.clearTranscript() }
         panelModel.onRetryAnswer = { [weak self] id in self?.answers.retry(entry: id) }
@@ -814,8 +815,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             bank.openQuestions()
         case .editProfile, .profile:
             workspace.show(.profiles)
-        default:
-            // Остальные действия подключаются на шагах P-06…P-10.
+        case .mode, .models, .language, .status:
+            // Подменю и строка статуса: выбор обрабатывает MenuBarController (onSelect…), здесь делать нечего.
             break
         }
     }

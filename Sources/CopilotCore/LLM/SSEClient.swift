@@ -143,9 +143,23 @@ enum SSE {
             let dict = (json as? [String: Any]) ?? ((json as? [[String: Any]])?.first ?? [:])
             if let error = dict["error"] as? [String: Any], let m = error["message"] as? String { message = m }
             else if let m = dict["message"] as? String { message = m }
+        } else if !body.hasPrefix("<") {
+            // Простой текст (прокси, «свой API»): причина видна владельцу; HTML-страницы ошибок не показываем.
+            message = body.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         if key.count >= 8 { message = message.replacingOccurrences(of: key, with: "[key]") } // короткие тестовые значения не трогаем
-        return String(message.prefix(200))
+        return String(redactIdentifiers(message).prefix(200))
+    }
+
+    /// Идентификаторы аккаунта и похожее на ключи — не в журнал и не в интерфейс: Groq пишет в ошибке 429 id организации
+    /// (`org_…`), а прокси иногда повторяют ключ из запроса (COPILOT-12).
+    static func redactIdentifiers(_ text: String) -> String {
+        var out = text
+        for (pattern, replacement) in [(#"org_[A-Za-z0-9]{6,}"#, "org_[id]"),
+                                       (#"\b(?:gsk_|sk-ant-|sk-|csk-|AIza)[A-Za-z0-9_\-]{12,}"#, "[key]")] {
+            out = out.replacingOccurrences(of: pattern, with: replacement, options: .regularExpression)
+        }
+        return out
     }
 
     static func json(_ data: String) -> [String: Any]? {

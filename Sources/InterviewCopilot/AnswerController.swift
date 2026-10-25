@@ -285,7 +285,7 @@ final class AnswerController {
                 text += t
                 // «—» — не вопрос: ничего не показываем, пока не станет ясно (R-11).
                 if PromptBuilder.isNoAnswer(text) || (text.count <= 2 && "—–-".contains(text.trimmingCharacters(in: .whitespaces))) { return }
-                let shown = text, source = "\(Self.label(provider, actualModel)) · \(label)", latency = firstMs.map { $0 / 1000 }
+                let shown = text, source = "\(Self.label(provider, actualModel)) · \(Self.kindTitle(label))", latency = firstMs.map { $0 / 1000 }
                 self.panel.history.update(entry: slot.entry, version: slot.version) { v in
                     v.text = shown
                     v.source = source
@@ -422,6 +422,18 @@ final class AnswerController {
         Log.metrics.notice("draft_used turn=\(turn.id) started_ms_from_speech_end=\(Int(d.startedAt - turn.speechEndedAt)) lead_ms=\(Int(turn.firedAt - d.startedAt)) generating=\(d.generating)")
         generation = d.task
         d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, slot: slot, label: "generated", speculative: true))
+    }
+
+    /// Подпись вида ответа рядом с моделью — на языке интерфейса (COPILOT-12: раньше «generated» было по-английски
+    /// и в русском интерфейсе). Остальные метки (быстрые уточнения, текст из чата) приходят уже готовыми.
+    static func kindTitle(_ label: String) -> String {
+        switch label {
+        case "generated": L("ответ модели")
+        case "strong": L("сильная модель")
+        case "screenshot": L("по скриншоту")
+        case "уточнение": L("уточнение")
+        default: label
+        }
     }
 
     static func label(_ p: ProviderID?, _ model: String?) -> String {

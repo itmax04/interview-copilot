@@ -355,6 +355,9 @@ public struct OpenAICompatibleProvider: LLMProvider {
 
     static func isReasoning(_ model: String) -> Bool { model.contains("gpt-oss") }
 
+    /// Сколько токенов добавить к ответу на рассуждение модели gpt-oss: подсказка — «low», скриншот — «medium».
+    static func reasoningHeadroom(_ purpose: LLMPurpose) -> Int { purpose == .screenshot ? 1024 : 512 }
+
     public func makeRequest(_ request: LLMRequest, model: String, key: String) throws -> URLRequest {
         guard request.messages.allSatisfy({ $0.images.isEmpty }) else {
             throw LLMError.badResponse(L10n.f("%@ не принимает изображения", id.displayName))
@@ -381,7 +384,9 @@ public struct OpenAICompatibleProvider: LLMProvider {
         }
         if Self.isReasoning(model) {
             body["reasoning_effort"] = request.purpose == .screenshot ? "medium" : "low"
-            body["max_completion_tokens"] = request.maxTokens + 1024
+            // Запас на рассуждение: у «low» оно короткое (живой тест COPILOT-11: весь вывод с рассуждением ≤ 423 токенов).
+            // Groq считает запрошенный максимум в минутный лимит токенов (TPM), поэтому лишний запас — меньше запросов в минуту.
+            body["max_completion_tokens"] = request.maxTokens + Self.reasoningHeadroom(request.purpose)
             if id == .groq { body["include_reasoning"] = false }
         } else {
             if model.lowercased().contains("qwen") { body["reasoning_effort"] = "none" }

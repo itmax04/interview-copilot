@@ -78,6 +78,18 @@ struct SessionStoreTests {
         #expect(store.list().isEmpty)
     }
 
+    @Test func deleteAllRemovesUnreadableFilesToo() throws {
+        // Поврежденный файл или файл старого формата не виден в списке, но «Удалить всю историю» убирает и его (COPILOT-12).
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try store.save(sample(store, at: Date(timeIntervalSince1970: 1_791_000_000)))
+        try Data("{ not json".utf8).write(to: dir.appendingPathComponent("broken.json"))
+        #expect(store.list().count == 1)
+        try store.deleteAll()
+        let left = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasSuffix(".json") }
+        #expect(left.isEmpty)
+    }
+
     @Test func purgeByRetention() throws {
         let (store, dir) = makeStore()
         defer { try? FileManager.default.removeItem(at: dir) }

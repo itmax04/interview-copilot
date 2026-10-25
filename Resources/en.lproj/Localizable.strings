@@ -210,12 +210,15 @@
 "Отправить вопрос в %@ (%@)" = "Send the question to %@ (%@)";
 "Нет ключа %@" = "No %@ key";
 "База · %@ · %lld%%" = "Bank · %@ · %lld%%";
+"ответ модели" = "model answer";
+"сильная модель" = "strong model";
+"по скриншоту" = "from screenshot";
+"уточнение" = "refinement";
 "%lld снимка" = "%lld screenshots";
 "Модели недоступны: нет ключей" = "Models unavailable: no keys";
 "Нет в базе" = "Not in the bank";
 "Скриншот задачи" = "Task screenshot";
 "Задача: " = "Task: ";
-"уточнение" = "refinement";
 
 /* InterviewCopilot/App.swift */
 "Скриншот не получился: %@" = "Screenshot failed: %@";

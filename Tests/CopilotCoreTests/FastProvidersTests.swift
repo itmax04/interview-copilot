@@ -98,7 +98,7 @@ struct FastProvidersTests {
         let body = try #require(JSONSerialization.jsonObject(with: req.httpBody!) as? [String: Any])
         #expect(body["reasoning_effort"] as? String == "low")
         #expect(body["include_reasoning"] as? Bool == false)
-        #expect(body["max_completion_tokens"] as? Int == 400 + 1024)
+        #expect(body["max_completion_tokens"] as? Int == 400 + 512)   // запас на рассуждение «low» (COPILOT-12)
         #expect(body["stream_options"] == nil)
     }
 

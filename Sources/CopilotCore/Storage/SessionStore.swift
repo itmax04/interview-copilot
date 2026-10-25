@@ -165,8 +165,13 @@ public final class SessionStore: @unchecked Sendable {
         }
     }
 
+    /// Вся история: удаляются все файлы сессий, в том числе те, что не читаются (поврежденные или старого формата) —
+    /// «Удалить всю историю» не должно оставлять расшифровки на диске (COPILOT-12).
     public func deleteAll() throws {
-        for s in list() { try delete(s.id) }
+        try lock.withLock {
+            let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+            for f in files where f.pathExtension == "json" { try FileManager.default.removeItem(at: f) }
+        }
     }
 
     /// Удалить сессии старше `days` дней. Возвращает число удалённых.

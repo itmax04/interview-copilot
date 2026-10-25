@@ -361,24 +361,24 @@ enum UISnapshots {
             ("detecting", { m in session(m); m.detection = .checking; m.partial = "Какой у вас опыт со SwiftUI" }),
             ("thinking", { m in
                 session(m); m.detection = .detected
-                answer(m, "Расскажите о себе.", "**7 лет в iOS, 3 года тимлидом.**\n- Мобильный банк на 1,2 млн пользователей", source: "Groq · generated", latency: 1.1)
+                answer(m, "Расскажите о себе.", "**7 лет в iOS, 3 года тимлидом.**\n- Мобильный банк на 1,2 млн пользователей", source: "Groq · \(AnswerController.kindTitle("generated"))", latency: 1.1)
                 m.history.begin(question: "Какой у вас опыт со SwiftUI?", turnID: 2, kind: .hint)
             }),
             ("answer", { m in
                 session(m); m.detection = .detected; m.strongModelAvailable = true; m.strongModelName = "Claude"
-                answer(m, "Расскажите о себе.", "**7 лет в iOS, 3 года тимлидом.**", source: "Groq · generated", latency: 1.1)
-                answer(m, "Эээ, какой у вас опыт со SwiftUI? И как вы тестируете?", swiftUI, source: "Groq · generated", latency: 1.2)
+                answer(m, "Расскажите о себе.", "**7 лет в iOS, 3 года тимлидом.**", source: "Groq · \(AnswerController.kindTitle("generated"))", latency: 1.1)
+                answer(m, "Эээ, какой у вас опыт со SwiftUI? И как вы тестируете?", swiftUI, source: "Groq · \(AnswerController.kindTitle("generated"))", latency: 1.2)
             }),
             ("answer-history", { m in
                 session(m)
-                answer(m, "Расскажите о себе.", "**7 лет в iOS, 3 года тимлидом.**\n- Мобильный банк на 1,2 млн пользователей", source: "Groq · generated", latency: 1.1)
-                answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · generated", latency: 1.2)
+                answer(m, "Расскажите о себе.", "**7 лет в iOS, 3 года тимлидом.**\n- Мобильный банк на 1,2 млн пользователей", source: "Groq · \(AnswerController.kindTitle("generated"))", latency: 1.1)
+                answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · \(AnswerController.kindTitle("generated"))", latency: 1.2)
                 m.history.selectPrevious()
-                answer(m, "Как вы организуете тестирование?", "• Unit-тесты на бизнес-логику", source: "Groq · generated", latency: 0.9)
+                answer(m, "Как вы организуете тестирование?", "• Unit-тесты на бизнес-логику", source: "Groq · \(AnswerController.kindTitle("generated"))", latency: 0.9)
             }),
             ("answer-versions", { m in
                 session(m)
-                let ids = answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · generated", latency: 1.2)
+                let ids = answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · \(AnswerController.kindTitle("generated"))", latency: 1.2)
                 if let v = m.history.beginVersion(of: ids.entry, kind: .refine, instruction: "короче") {
                     m.history.update(entry: ids.entry, version: v) {
                         $0.text = "**5 лет со SwiftUI, 70% экранов банка.**"; $0.source = "Groq · уточнение"; $0.latency = 0.8; $0.status = .complete
@@ -427,7 +427,7 @@ enum UISnapshots {
             }),
             ("not-question", { m in session(m); m.detection = .notQuestion }),
             ("chat-open", { m in
-                session(m); answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · generated", latency: 1.2)
+                session(m); answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · \(AnswerController.kindTitle("generated"))", latency: 1.2)
                 m.chatOpen = true; m.chatMode = .refine; m.chatText = "без Combine, только async/await"
             }),
             ("session-notes", { m in
@@ -439,7 +439,7 @@ enum UISnapshots {
             ("call-offer", { m in m.state = .noSession; m.callDetected = "Zoom" }),
             ("zoomed", { m in
                 session(m); m.zoom = 1.3
-                answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · generated", latency: 1.2)
+                answer(m, "Какой у вас опыт со SwiftUI?", swiftUI, source: "Groq · \(AnswerController.kindTitle("generated"))", latency: 1.2)
             }),
             ("private", { m in session(m); m.hiddenFromCapture = true; m.visibilityResult = "Не видно в захвате экрана · 24.10.2026, macOS 15.6" }),
             ("error", { $0.state = .error("Захват звука остановлен macOS. Пауза → Продолжить, чтобы включить снова.") }),
