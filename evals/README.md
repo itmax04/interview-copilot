@@ -1,133 +1,137 @@
 # Evals — Interview Copilot
 
-Статус: **accepted** (2026-10-06) · Дата: 2026-10-06 · Связи: [spec.md](../docs/changes/COPILOT-01/spec.md) (R-05, R-07, AC-01…AC-04, AC-10)
-Наборы данных создаются на шагах P-05, P-06 и P-12 плана. Все данные синтетические: реальные резюме и расшифровки сюда не попадают.
+Status: **accepted** (2026-10-06) · Date: 2026-10-06 · Links: [spec.md](../docs/changes/COPILOT-01/spec.md) (R-05, R-07, AC-01…AC-04, AC-10)
+Datasets are created in plan steps P-05, P-06 and P-12. All data is synthetic: real résumés and transcripts never go here.
+Test phrases are intentionally in Ukrainian, Russian and English — the languages the app recognizes.
 
-## Зачем
-Поиск по базе и определение конца вопроса недетерминированы: зависят от модели эмбеддингов, порогов
-и качества расшифровки. Юнит-тесты их не покрывают, поэтому нужны наборы с порогами и baseline.
-Прогон обязателен при смене модели эмбеддингов, модели whisper, порогов или формата базы.
+## Why
+Bank search and end-of-question detection are non-deterministic: they depend on the embedding model, thresholds and
+transcription quality. Unit tests do not cover them, so datasets with thresholds and baselines are needed.
+A run is mandatory when the embedding model, the Whisper model, thresholds or the bank format change.
 
-## Набор `bank` (AC-04)
-- Файл: `evals/bank/cases.jsonl`. Использует `profile.example/questions.yaml`.
-- Строка: `{"q": "Пару слов о вашем опыте?", "lang": "ru", "expected": "about-me"}`;
-  для вопроса вне базы — `"expected": null`.
-- Состав: ≥ 30 перефразировок карточек из базы (≥ 8 на каждый язык uk/ru/en; формулировки не совпадают
-  дословно с `questions` карточек) и ≥ 10 вопросов вне базы.
-- Метрики: точность top-1 на вопросах из базы, доля ложных совпадений на вопросах вне базы, точность top-3.
-- Пороги: top-1 ≥ 85%, ложные совпадения ≤ 10%. Порог score подбирается по этому набору и записывается сюда.
-- Запуск: `scripts/run-evals.sh bank` → `evals/results/bank-<дата>.txt` (в Git не попадает) и сводка в stdout.
-  По умолчанию — конфигурация приложения (модель и порог из настроек); `copilot-eval bank --tune --sweep --model …` — подбор.
-- Состав (P-06): 39 перефразировок (13 uk, 13 ru, 13 en) и 12 вопросов вне базы; дословных совпадений с карточками нет.
-  Отложенный набор `evals/bank/holdout.jsonl` (12 + 4) — для проверки, что порог не подогнан под основной набор.
-- **Порог: 0,74** (bge-m3 Q8_0). Совпадение засчитывается, только если лучшая карточка выше порога и она нужная.
+## `bank` set (AC-04)
+- File: `evals/bank/cases.jsonl`. Uses `profile.example/questions.yaml`.
+- Line: `{"q": "Пару слов о вашем опыте?", "lang": "ru", "expected": "about-me"}`;
+  for a question outside the bank — `"expected": null`.
+- Content: ≥ 30 paraphrases of bank cards (≥ 8 per language uk/ru/en; wording does not match the cards' `questions`
+  verbatim) and ≥ 10 questions outside the bank.
+- Metrics: top-1 accuracy on bank questions, false-match rate on out-of-bank questions, top-3 accuracy.
+- Thresholds: top-1 ≥ 85%, false matches ≤ 10%. The score threshold is tuned on this set and recorded here.
+- Run: `scripts/run-evals.sh bank` → `evals/results/bank-<date>.txt` (not in Git) and a summary on stdout.
+  By default the app configuration is used (model and threshold from settings); `copilot-eval bank --tune --sweep --model …` tunes.
+- Content (P-06): 39 paraphrases (13 uk, 13 ru, 13 en) and 12 out-of-bank questions; no verbatim matches with the cards.
+  Holdout set `evals/bank/holdout.jsonl` (12 + 4) — to check that the threshold is not fitted to the main set.
+- **Threshold: 0.74** (bge-m3 Q8_0). A match counts only if the best card is above the threshold and is the right one.
 
-## Набор `turn` (R-05)
-- Файл: `evals/turn/cases.jsonl` — последовательности сегментов расшифровки с паузами.
-  Пример строки: `{"segments":[["Расскажите",0],["о проекте,",300],["который",900]], "expected_turn_at": null}`.
-- Случаи:
-  - законченный вопрос;
-  - пауза посреди фразы («который… сделали в прошлом году»);
-  - короткие реплики («угу», «так»);
-  - владелец начал говорить;
-  - принудительный ход.
-- Метрики: преждевременные ходы ≤ 10%, пропущенные ходы ≤ 5%, задержка срабатывания = T.
-- Формат строки (P-05): `{"id", "segments": [[текст, начало_мс, конец_мс], …], "expected_turn_at": мс | null,
-  "owner": [[с, по], …], "force_at": мс}`; пара `[текст, t]` — начало = конец = t. Итоговый текст фразы приходит
-  через 500 мс после конца речи (как у распознавания, P-04). `expected_turn_at` — конец последней фразы вопроса.
-  Преждевременный ход: раньше `expected_turn_at`, без последней фразы вопроса или там, где хода быть не должно (`null`).
-- Состав (34): законченные вопросы, пауза посреди фразы (на служебном слове и на «думающей» паузе 550–650 мс),
-  короткие реплики, владелец заговорил, эхо динамиков в микрофоне, принудительный ход; uk / ru / en.
-- Запуск: `scripts/run-evals.sh turn` (или `copilot-eval turn --threshold-ms N --verbose`).
-- Выбор T (P-05): 400 и 500 мс — 3 преждевременных хода из 34 (8,8%), 600 мс — 1 (2,9%), **700 мс — 0**, 1000 мс — 0.
-  По умолчанию оставлено 700 мс (R-05): наименьший порог без преждевременных ходов на наборе.
+## `turn` set (R-05)
+- File: `evals/turn/cases.jsonl` — sequences of transcript segments with pauses.
+  Example line: `{"segments":[["Расскажите",0],["о проекте,",300],["который",900]], "expected_turn_at": null}`.
+- Cases:
+  - a finished question;
+  - a pause in the middle of a phrase ("который… сделали в прошлом году");
+  - short interjections ("угу", "так");
+  - the owner started speaking;
+  - a forced turn.
+- Metrics: premature turns ≤ 10%, missed turns ≤ 5%, trigger latency = T.
+- Line format (P-05): `{"id", "segments": [[text, start_ms, end_ms], …], "expected_turn_at": ms | null,
+  "owner": [[from, to], …], "force_at": ms}`; a pair `[text, t]` means start = end = t. The final phrase text arrives
+  500 ms after speech ends (as with recognition, P-04). `expected_turn_at` is the end of the question's last phrase.
+  A premature turn fires earlier than `expected_turn_at`, without the question's last phrase, or where no turn should
+  happen (`null`).
+- Content (34): finished questions, mid-phrase pauses (on a function word and on a "thinking" pause of 550–650 ms),
+  short interjections, the owner speaking, speaker echo in the microphone, a forced turn; uk / ru / en.
+- Run: `scripts/run-evals.sh turn` (or `copilot-eval turn --threshold-ms N --verbose`).
+- Choosing T (P-05): 400 and 500 ms — 3 premature turns of 34 (8.8%), 600 ms — 1 (2.9%), **700 ms — 0**, 1000 ms — 0.
+  The default stays 700 ms (R-05): the smallest threshold without premature turns on the set.
 
-## Аудио-фикстуры (P-04)
-- `evals/audio/*.wav` — фразы, сгенерированные `say` (uk / ru / en), 16 кГц моно. Используются для замеров whisper
-  и `WhisperEngineTests`.
-- Только синтетический голос.
+## Audio fixtures (P-04)
+- `evals/audio/*.wav` — phrases generated with `say` (uk / ru / en), 16 kHz mono. Used for Whisper measurements and
+  `WhisperEngineTests`.
+- Synthetic voices only.
 
-## Живой сценарий (AC-01…AC-03, AC-10)
-- `evals/live-script.md` — 15 вопросов (5 uk, 5 ru, 5 en) для созвона H-4: часть перефразирует карточки,
-  часть вне базы, один длинный вопрос с паузой посередине.
-- Метрики из логов: `scripts/metrics.py` (медиана и p90 для `phrase_end → transcript_final`, `turn_end → card_shown`,
+## Live script (AC-01…AC-03, AC-10)
+- `evals/live-script.md` — 15 questions (5 uk, 5 ru, 5 en) for the H-4 call: some paraphrase cards, some are outside the
+  bank, one long question with a pause in the middle.
+- Metrics from logs: `scripts/metrics.py` (median and p90 of `phrase_end → transcript_final`, `turn_end → card_shown`,
   `turn_end → first_token`).
 
 ## Baseline
-Заполняется исполнителем на P-06 и P-12: дата, коммит, модели, пороги, результаты.
+Filled in by the executor in P-06 and P-12: date, commit, models, thresholds, results.
 
-| Дата | Commit | Модель эмбеддингов / whisper | Порог | bank top-1 | Ложные | turn premature / missed |
+| Date | Commit | Embedding model / Whisper | Threshold | bank top-1 | False | turn premature / missed |
 |---|---|---|---|---|---|---|
-| 2026-10-06 | P-05 (после `e836139`) | — / whisper small q5_1 | T = 700 мс | NOT RUN (P-06) | NOT RUN (P-06) | 0% / 0% (34 случая) |
-| 2026-10-06 | P-06 (после `61bfd6d`) | bge-m3 Q8_0 / whisper small q5_1 | 0,74; T = 700 мс | 94,9% (отложенный 91,7%) | 0% (отложенный 0%) | 0% / 0% |
+| 2026-10-06 | P-05 (after `e836139`) | — / whisper small q5_1 | T = 700 ms | NOT RUN (P-06) | NOT RUN (P-06) | 0% / 0% (34 cases) |
+| 2026-10-06 | P-06 (after `61bfd6d`) | bge-m3 Q8_0 / whisper small q5_1 | 0.74; T = 700 ms | 94.9% (holdout 91.7%) | 0% (holdout 0%) | 0% / 0% |
 
-## Набор `filter` (COPILOT-05, R-02, R-05; AC-01, AC-02, AC-04)
-- **По тексту** — `evals/filter/text-cases.jsonl` (214 случаев, в Git): фраза, язык в меню, канал, ожидание keep/drop.
-  Запуск: `scripts/run-evals.sh filter-text` (входит в прогон по умолчанию, модели не нужны). Порог: все случаи верны.
-- **По звуку** — `scripts/make-filter-fixtures.py` генерирует 56 файлов в `evals/audio/filter/` (в Git не попадают):
-  вопросы uk/ru/en с терминами (голоса Milena, Lesya, Samantha) и они же на фоне музыки; «ТВ» de/fr/en (Anna, Thomas,
-  Daniel, Fred, Karen) тише вопроса; шум без речи (белый, «улица», клавиатура, гул 50 Гц, музыка). Манифест —
-  `evals/filter/audio-cases.json`. Запуск: `scripts/run-evals.sh filter` (нужны Parakeet и Silero). Файл = одна реплика:
-  Silero → Parakeet → фильтр языка.
-- Пороги: чужой язык отсечён ≥ 90%; нужных фраз потеряно ≤ 5%; вопросы с терминами не отброшены — все; шум без речи — ≤ 1 реплики.
-- **Порог Silero: 0,5** (максимум вероятности речи по кускам 256 мс). На наборе: речь 1,00, шум и тишина — ниже 0,5.
+## `filter` set (COPILOT-05, R-02, R-05; AC-01, AC-02, AC-04)
+- **Text** — `evals/filter/text-cases.jsonl` (214 cases, in Git): phrase, menu language, channel, expected keep/drop.
+  Run: `scripts/run-evals.sh filter-text` (part of the default run, no models needed). Threshold: all cases correct.
+- **Audio** — `scripts/make-filter-fixtures.py` generates 56 files in `evals/audio/filter/` (not in Git): uk/ru/en questions
+  with technical terms (voices Milena, Lesya, Samantha) and the same over music; "TV" in de/fr/en (Anna, Thomas, Daniel,
+  Fred, Karen) quieter than the question; noise without speech (white, "street", keyboard, 50 Hz hum, music). Manifest —
+  `evals/filter/audio-cases.json`. Run: `scripts/run-evals.sh filter` (needs Parakeet and Silero). One file = one
+  utterance: Silero → Parakeet → language filter.
+- Thresholds: foreign language dropped ≥ 90%; wanted phrases lost ≤ 5%; questions with terms never dropped; noise without
+  speech — ≤ 1 utterance.
+- **Silero threshold: 0.5** (maximum speech probability over 256 ms chunks). On the set: speech 1.00, noise and silence below 0.5.
 
-| Дата | Конфигурация | Чужой язык | Потеряно нужных | Термины не отброшены | Шум → реплики |
+| Date | Configuration | Foreign language | Wanted lost | Terms kept | Noise → utterances |
 |---|---|---:|---:|---:|---:|
-| 2026-10-23 | без фильтров (0.1.11) | 0/16 | 0/20 | 8/8 | 0/20 |
-| 2026-10-23 | Silero + фильтр языка (0.2.0) | **16/16** | 1/20 (uk-вопрос на музыке распознан как польский) | 8/8 | 0/20 |
+| 2026-10-23 | no filters (0.1.11) | 0/16 | 0/20 | 8/8 | 0/20 |
+| 2026-10-23 | Silero + language filter (0.2.0) | **16/16** | 1/20 (uk question over music recognized as Polish) | 8/8 | 0/20 |
 
-## Набор `voice` (COPILOT-05 R-03, AC-03)
-- `scripts/make-voice-fixtures.py`: образцы «владельцев» Milena (ru), Lesya (uk), Samantha (en) и по 4 фразы 8 голосов macOS,
-  плюс свой голос на чужом языке (Milena по-английски, Lesya и Samantha по-русски). Звук — `evals/audio/voice/` (не в Git),
-  манифест — `evals/filter/voice-cases.json`. Запуск: `scripts/run-evals.sh voice` (нужна CAM++).
-- Порог — персональный: `VoicePrint.recommendedThreshold` = разброс кусков образца − 0,08, в пределах 0,55…0,85.
-  0,85 — наибольший порог, при котором свой синтетический голос принят 100%: чужие отклонены 92–93%.
+## `voice` set (COPILOT-05 R-03, AC-03)
+- `scripts/make-voice-fixtures.py`: "owner" samples Milena (ru), Lesya (uk), Samantha (en) and 4 phrases each from 8 macOS
+  voices, plus the owner's voice in another language (Milena in English, Lesya and Samantha in Russian). Audio —
+  `evals/audio/voice/` (not in Git), manifest — `evals/filter/voice-cases.json`. Run: `scripts/run-evals.sh voice` (needs CAM++).
+- The threshold is personal: `VoicePrint.recommendedThreshold` = spread of the sample chunks − 0.08, within 0.55…0.85.
+  0.85 is the highest threshold at which the own synthetic voice is accepted 100%: other voices rejected 92–93%.
 
-| Дата | Порог | Свой голос | Свой голос, другой язык | Чужие голоса | Принят свой | Отклонены чужие | CAM++ на реплику |
+| Date | Threshold | Own voice | Own voice, other language | Other voices | Own accepted | Others rejected | CAM++ per utterance |
 |---|---|---|---|---|---:|---:|---:|
-| 2026-10-23 | авто (0,85) | 0,89–0,97 | 0,88–0,95 | 0,33–0,90 (медиана 0,67) | 18/18 | 89/96 (93%) | ~0,2 с |
+| 2026-10-23 | auto (0.85) | 0.89–0.97 | 0.88–0.95 | 0.33–0.90 (median 0.67) | 18/18 | 89/96 (93%) | ~0.2 s |
 
-Синтетические голоса Apple похожи между собой (Milena↔Lesya до 0,89); живые голоса различаются сильнее, но и свой живой
-голос меняется сильнее — поэтому порог персональный и проверяется на живом голосе (H-2).
+Apple's synthetic voices are similar to each other (Milena↔Lesya up to 0.89); live voices differ more, but the owner's
+live voice also varies more — so the threshold is personal and checked on the live voice (H-2).
 
-## Набор `enhance` (COPILOT-05 R-04)
-- `scripts/make-noisy-fixtures.py`: 10 вопросов (Milena ru, Lesya uk, Samantha en) чистыми и на фоне — «улица» (розовый шум,
-  SNR 5 дБ), музыка 5 дБ, клавиатура 5 дБ, немецкая речь «ТВ» 10 дБ. Звук — `evals/audio/noisy/` (не в Git), манифест —
-  `evals/filter/noisy-cases.json`. Запуск: `copilot-eval enhance` (нужны Parakeet и LocalVQE).
+## `enhance` set (COPILOT-05 R-04)
+- `scripts/make-noisy-fixtures.py`: 10 questions (Milena ru, Lesya uk, Samantha en), clean and over a background —
+  "street" (pink noise, SNR 5 dB), music 5 dB, keyboard 5 dB, German "TV" speech 10 dB. Audio — `evals/audio/noisy/`
+  (not in Git), manifest — `evals/filter/noisy-cases.json`. Run: `copilot-eval enhance` (needs Parakeet and LocalVQE).
 
-| Дата | Фон | Parakeet | Parakeet + LocalVQE v1.3 |
+| Date | Background | Parakeet | Parakeet + LocalVQE v1.3 |
 |---|---|---:|---:|
-| 2026-10-23 | чисто | 1,5% | 1,5% |
-| 2026-10-23 | улица 5 дБ | 0,0% | 4,5% |
-| 2026-10-23 | музыка 5 дБ | 1,5% | 1,5% |
-| 2026-10-23 | клавиатура 5 дБ | 1,5% | 3,0% |
-| 2026-10-23 | речь «ТВ» 10 дБ | 14,9% | 20,9% |
-| 2026-10-23 | **всего** | **3,9%** | **6,3%** |
+| 2026-10-23 | clean | 1.5% | 1.5% |
+| 2026-10-23 | street 5 dB | 0.0% | 4.5% |
+| 2026-10-23 | music 5 dB | 1.5% | 1.5% |
+| 2026-10-23 | keyboard 5 dB | 1.5% | 3.0% |
+| 2026-10-23 | "TV" speech 10 dB | 14.9% | 20.9% |
+| 2026-10-23 | **total** | **3.9%** | **6.3%** |
 
-Вывод: шумоподавление перед Parakeet ухудшает распознавание — по умолчанию выключено (настройка «экспериментально»).
-LocalVQE ~48 мс на 1 с звука (M1, CPU).
+Conclusion: noise suppression before Parakeet worsens recognition — off by default (setting marked "experimental").
+LocalVQE ~48 ms per 1 s of audio (M1, CPU).
 
-## Набор `materials` (COPILOT-08 R-06, AC-05)
-- `evals/materials/docs/` — синтетические конспекты: конкурентность Swift (uk), системный дизайн (ru), компания и роль (en);
-  `evals/materials/cases.jsonl` — 24 вопроса по материалам на трёх языках (ожидаемый фрагмент — подстрока) и 8 не по ним.
-- Запуск: `copilot-eval materials [--threshold 0.xx] [--sweep] [--verbose]` (нужна bge-m3). PASS: нужный фрагмент в топ-4
-  у ≥ 90% вопросов, фрагменты у вопросов не по теме — не больше 3 из 8.
+## `materials` set (COPILOT-08 R-06, AC-05)
+- `evals/materials/docs/` — synthetic notes: Swift concurrency (uk), system design (ru), company and role (en);
+  `evals/materials/cases.jsonl` — 24 questions about the materials in three languages (the expected chunk is a substring)
+  and 8 unrelated ones.
+- Run: `copilot-eval materials [--threshold 0.xx] [--sweep] [--verbose]` (needs bge-m3). PASS: the right chunk in the
+  top 4 for ≥ 90% of questions, chunks attached to unrelated questions — no more than 3 of 8.
 
-| Дата | Нарезка | Фрагментов | Порог | Найдено в топ-4 | Не по теме с фрагментом |
+| Date | Chunking | Chunks | Threshold | Found in top 4 | Unrelated with a chunk |
 |---|---|---:|---:|---:|---:|
-| 2026-10-24 | склейка абзацев до 800 | 8 | 0,45 | 22/24 | 3/8 |
-| 2026-10-24 | абзац = фрагмент (склейка коротких до 200) | 16 | 0,45 | 24/24 | 4/8 |
-| 2026-10-24 | то же | 16 | **0,47** | **23/24** | **2/8** |
-| 2026-10-24 | то же | 16 | 0,50 | 21/24 | 2/8 |
+| 2026-10-24 | paragraphs merged up to 800 | 8 | 0.45 | 22/24 | 3/8 |
+| 2026-10-24 | paragraph = chunk (short ones merged up to 200) | 16 | 0.45 | 24/24 | 4/8 |
+| 2026-10-24 | same | 16 | **0.47** | **23/24** | **2/8** |
+| 2026-10-24 | same | 16 | 0.50 | 21/24 | 2/8 |
 
-Промах при 0,47 — «реентерабельность» (ru) против «реентрантність» (uk) в конспекте: редкий термин в разных языках.
+The miss at 0.47 is "реентерабельность" (ru) vs "реентрантність" (uk) in the notes: a rare term in different languages.
 
-## `bank --first-only` (COPILOT-08 AC-04): зачем «Подготовить»
-У каждой карточки примера оставлена только первая формулировка — как вопрос владельца до подготовки.
+## `bank --first-only` (COPILOT-08 AC-04): why "Prepare" matters
+Each card of the example keeps only its first phrasing — as the owner's question before preparation.
 
-| Дата | Формулировки | Порог | top-1 | en / ru / uk | Ложные |
+| Date | Phrasings | Threshold | top-1 | en / ru / uk | False |
 |---|---|---:|---:|---|---:|
-| 2026-10-24 | только первая (ru) | 0,74 | 48,7% | 10/13 · 4/13 · 5/13 | 0/12 |
-| 2026-10-24 | только первая (ru) | 0,65 | 79,5% | 12/13 · 8/13 · 11/13 | 0/12 |
-| 2026-10-24 | 2+ на язык (как после «Подготовить») | 0,74 | **94,9%** | 12/13 · 12/13 · 13/13 | 0/12 |
+| 2026-10-24 | first only (ru) | 0.74 | 48.7% | 10/13 · 4/13 · 5/13 | 0/12 |
+| 2026-10-24 | first only (ru) | 0.65 | 79.5% | 12/13 · 8/13 · 11/13 | 0/12 |
+| 2026-10-24 | 2+ per language (as after "Prepare") | 0.74 | **94.9%** | 12/13 · 12/13 · 13/13 | 0/12 |

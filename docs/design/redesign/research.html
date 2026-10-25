@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Interview Copilot — исследование интерфейса и промпты ImageGen</title>
+<title>Interview Copilot — interface research and ImageGen prompts</title>
 <style>
   @page { size: A4; margin: 16mm 14mm 16mm 14mm; }
   :root { --ink: #1b1f24; --muted: #5d6570; --line: #d9dde3; --accent: #3b5bdb; --soft: #f3f5f8; --warn: #b54708; }
@@ -41,184 +41,184 @@
 <body>
 
 <section class="cover">
-  <div class="eyebrow">Interview Copilot · редизайн · этап 1–2</div>
-  <h1>Исследование текущего интерфейса<br>и промпты для ImageGen</h1>
-  <p class="lead">Полный обход приложения (34 экрана и состояния), анализ структуры, оформления и удобства, требования
-  к новому дизайну с учётом COPILOT-08 и COPILOT-09, и 20 детальных промптов для создания визуальных образцов в ChatGPT.</p>
-  <div class="meta">24 октября 2026 · версия приложения 0.6.0 (build 26) · ветка feat/copilot-09-parakeet-parity<br>
-  Источник скриншотов: режим <code>--ui-snapshots</code> — настоящие окна приложения на синтетических данных
-  (без микрофона, ключей и личных данных). Скриншоты: <code>docs/design/audit-2026-10-24/</code>.</div>
+  <div class="eyebrow">Interview Copilot · redesign · stages 1–2</div>
+  <h1>Research of the current interface<br>and prompts for ImageGen</h1>
+  <p class="lead">A full walkthrough of the app (34 screens and states), an analysis of structure, visual design and usability,
+  requirements for the new design covering COPILOT-08 and COPILOT-09, and 20 detailed prompts for creating visual references in ChatGPT.</p>
+  <div class="meta">24 October 2026 · app version 0.6.0 (build 26) · branch feat/copilot-09-parakeet-parity<br>
+  Screenshot source: the <code>--ui-snapshots</code> mode — real app windows on synthetic data
+  (no microphone, keys or personal data). Screenshots: <code>docs/design/audit-2026-10-24/</code>.</div>
 </section>
 
 <section class="page">
-  <h2>1. Как проводилось исследование</h2>
-  <p>Каждое окно отрисовано самим приложением в служебном режиме <code>--ui-snapshots</code>: настоящие SwiftUI-представления,
-  синтетический профиль из <code>profile.example/</code>, материалы из <code>evals/materials/</code>, вымышленная сессия.
-  Звук, микрофон и запросы к моделям не включались; данные — во временной папке, удалённой после съёмки.</p>
+  <h2>1. How the research was done</h2>
+  <p>Every window was rendered by the app itself in the service mode <code>--ui-snapshots</code>: real SwiftUI views,
+  the synthetic profile from <code>profile.example/</code>, materials from <code>evals/materials/</code>, a fictional session.
+  Audio, microphone and model requests were off; data lived in a temporary folder deleted after the capture.</p>
   <table>
-    <tr><th>Поверхность</th><th>Что снято</th><th>Кол-во</th></tr>
-    <tr><td>Плавающая панель (оверлей)</td><td>Idle, нет разрешения, загрузка моделей, слушаю, готовлю, ответ, ответ с кодом (скриншот), карточка базы, «нет в базе», ошибка, пауза, самопроверка «мой ответ»</td><td>12</td></tr>
-    <tr><td>Настройки</td><td>Keys, Models, Audio, Bank, Privacy, Panel, Hotkeys, Budget</td><td>8</td></tr>
-    <tr><td>Окно «Профиль»</td><td>Резюме, Факты о себе, Вакансия, Инструкции, Материалы, Вопросы, редактор вопроса</td><td>7</td></tr>
-    <tr><td>История сессий</td><td>Список и подробности сессии</td><td>1</td></tr>
-    <tr><td>Первый запуск</td><td>Разрешения, ключ, модели; окно разрешений</td><td>4</td></tr>
-    <tr><td>Страницы в браузере</td><td>ИИ-собеседование, тестовый звонок</td><td>2</td></tr>
+    <tr><th>Surface</th><th>Captured</th><th>Count</th></tr>
+    <tr><td>Floating panel (overlay)</td><td>Idle, no permission, downloading models, listening, preparing, answer, answer with code (screenshot), bank card, "not in the bank", error, paused, self-check "my answer"</td><td>12</td></tr>
+    <tr><td>Settings</td><td>Keys, Models, Audio, Bank, Privacy, Panel, Hotkeys, Budget</td><td>8</td></tr>
+    <tr><td>"Profile" window</td><td>Résumé, Facts about you, Job, Instructions, Materials, Questions, question editor</td><td>7</td></tr>
+    <tr><td>Session history</td><td>List and session details</td><td>1</td></tr>
+    <tr><td>First launch</td><td>Permissions, key, models; permissions window</td><td>4</td></tr>
+    <tr><td>Browser pages</td><td>AI interview, test call</td><td>2</td></tr>
   </table>
-  <div class="note"><b>Не снято автоматически:</b> выпадающее меню в строке меню (NSMenu не рисуется вне экрана — состав ниже
-  по <code>MenuLayout</code>), размытие фона панели (HUD-материал рисуется только поверх реального рабочего стола — на снимках
-  тёмный фон), системные диалоги macOS. Это ограничение способа съёмки, не приложения.</div>
-  <h3>Меню в строке состояния (состав из MenuLayout)</h3>
+  <div class="note"><b>Not captured automatically:</b> the menu-bar dropdown (NSMenu is not drawn off screen — its content below
+  comes from <code>MenuLayout</code>), the panel background blur (the HUD material renders only over a real desktop — snapshots
+  show a dark background), macOS system dialogs. This is a limitation of the capture method, not of the app.</div>
+  <h3>Menu-bar menu (content from MenuLayout)</h3>
   <table>
-    <tr><th>Секция</th><th>Пункты</th></tr>
-    <tr><td>Слушание</td><td>«Listening — &lt;приложение&gt;» (подменю источников: Auto, запущенные приложения, весь системный звук, микрофон) · Pause/Resume ⌃⌥P</td></tr>
-    <tr><td>Режим</td><td>Mode (Question bank only / Bank + hint / Generate every answer) · Models (цепочка, сильная модель) · Language (Auto/UK/RU/EN)</td></tr>
-    <tr><td>Профиль</td><td>Profile (список профилей, «Без профиля», «Профили…») · Question bank (N cards)… · «Профиль: резюме, инструкции…» · Тестовый звонок… · ИИ-собеседование…</td></tr>
-    <tr><td>Действия</td><td>Answer now ⌃⌥↩ · «Сейчас отвечаю я» ⌃⌥A (самопроверка) · Screenshot → Claude ⌃⌥S · Show/Hide panel ⌃⌥H · Новое интервью · Session history…</td></tr>
-    <tr><td>Статус</td><td>«Today: $0.00 · Gemini: N req»</td></tr>
-    <tr><td>Приложение</td><td>Settings… ⌘, · Quit ⌘Q</td></tr>
+    <tr><th>Section</th><th>Items</th></tr>
+    <tr><td>Listening</td><td>"Listening — &lt;app&gt;" (source submenu: Auto, running apps, all system audio, microphone) · Pause/Resume ⌃⌥P</td></tr>
+    <tr><td>Mode</td><td>Mode (Question bank only / Bank + hint / Generate every answer) · Models (chain, strong model) · Language (Auto/UK/RU/EN)</td></tr>
+    <tr><td>Profile</td><td>Profile (profile list, "No profile", "Profiles…") · Question bank (N cards)… · "Profile: résumé, instructions…" · Test call… · AI interview…</td></tr>
+    <tr><td>Actions</td><td>Answer now ⌃⌥↩ · "I'm answering now" ⌃⌥A (self-check) · Screenshot → Claude ⌃⌥S · Show/Hide panel ⌃⌥H · New interview · Session history…</td></tr>
+    <tr><td>Status</td><td>"Today: $0.00 · Gemini: N req"</td></tr>
+    <tr><td>App</td><td>Settings… ⌘, · Quit ⌘Q</td></tr>
   </table>
 </section>
 
 <section class="page">
-  <h2>2. Плавающая панель — главный экран во время звонка</h2>
+  <h2>2. Floating panel — the main screen during a call</h2>
   <div class="shots four">
-    <figure><img src="../audit-2026-10-24/panel-idle.png"><figcaption>Idle — источник не выбран</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-listening.png"><figcaption>Слушаю: реплики, серая отфильтрованная, частичная</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-thinking.png"><figcaption>Готовлю подсказку</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-answer.png"><figcaption>Ответ модели</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-bank-card.png"><figcaption>Карточка базы (STAR)</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-no-match.png"><figcaption>«Нет в базе» + ближайшие</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-answer-code.png"><figcaption>Скриншот задачи → код</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-self-test-answering.png"><figcaption>Самопроверка: «мой ответ»</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-error.png"><figcaption>Ошибка захвата</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-no-permission.png"><figcaption>Нет разрешения</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-downloading.png"><figcaption>Загрузка моделей</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/panel-paused.png"><figcaption>Пауза</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-idle.png"><figcaption>Idle — no source selected</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-listening.png"><figcaption>Listening: lines, a gray filtered one, a partial one</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-thinking.png"><figcaption>Preparing a hint</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-answer.png"><figcaption>Model answer</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-bank-card.png"><figcaption>Bank card (STAR)</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-no-match.png"><figcaption>"Not in the bank" + closest</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-answer-code.png"><figcaption>Task screenshot → code</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-self-test-answering.png"><figcaption>Self-check: "my answer"</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-error.png"><figcaption>Capture error</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-no-permission.png"><figcaption>No permission</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-downloading.png"><figcaption>Downloading models</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/panel-paused.png"><figcaption>Paused</figcaption></figure>
   </div>
-  <h3>Структура</h3>
-  <p>Вертикальная тёмная HUD-панель 380×420: шапка (попугай, статус-капсула, модель, задержка) → «INTERVIEWER» с тремя
-  последними репликами → карточка ответа (источник, Markdown, Copy, ↑ Claude) → подвал с подсказками клавиш.</p>
-  <h3>Что хорошо</h3>
-  <div class="good">Ответ читается: жирная первая строка, короткие пункты, крупный шрифт; серые отфильтрованные реплики кликабельны.</div>
-  <div class="good">Не забирает фокус у звонка (nonactivating panel), на всех рабочих столах, размер и позиция запоминаются.</div>
-  <h3>Проблемы</h3>
-  <div class="issue">Нет панели действий: Answer, Screenshot, Chat доступны только клавишами; подсказки клавиш в подвале — мелкие и далеко от контента.</div>
-  <div class="issue">Нет заголовка «Вопрос: …» над ответом — неясно, на что именно ответ (особенно после смены вопроса).</div>
-  <div class="issue">Нет истории ответов: новый ответ стирает прошлый; нельзя вернуться к ответу 2 минуты назад.</div>
-  <div class="issue">Состояния распознавания вопроса не видны: «проверяю / вопрос найден / не вопрос» происходят молча.</div>
-  <div class="issue">Во время подготовки ответа прошлый ответ исчезает целиком — пустое место вместо приглушённого «предыдущего».</div>
-  <div class="issue">Много пустого места: при 3 строках расшифровки и коротком ответе половина панели пуста; высота не подстраивается.</div>
-  <div class="issue">Подвал в самопроверке переносит слова («скриншо-т», «конец / ответа») — 4 подсказки не помещаются в 380 pt.</div>
-  <div class="issue">Смесь языков: «Listening», «Thinking…», «Copy», «INTERVIEWER» рядом с русским текстом.</div>
-  <div class="issue">Ответ по скриншоту показывает «Жду, когда собеседник заговорит…» — состояние расшифровки не связано с задачей.</div>
-  <div class="issue">Нет таймера сессии, кнопки End, индикаторов микрофона и звука звонка — неясно, слышит ли приложение звонок.</div>
+  <h3>Structure</h3>
+  <p>A vertical dark HUD panel 380×420: header (parrot, status capsule, model, latency) → "INTERVIEWER" with the last three
+  lines → answer card (source, Markdown, Copy, ↑ Claude) → footer with hotkey hints.</p>
+  <h3>What works</h3>
+  <div class="good">The answer is readable: a bold first line, short bullets, a large font; gray filtered lines are clickable.</div>
+  <div class="good">It does not take focus from the call (non-activating panel), shows on all desktops, size and position are remembered.</div>
+  <h3>Problems</h3>
+  <div class="issue">No action bar: Answer, Screenshot, Chat are available only via hotkeys; the hotkey hints in the footer are small and far from the content.</div>
+  <div class="issue">No "Question: …" header above the answer — it is unclear what exactly is being answered (especially after the question changes).</div>
+  <div class="issue">No answer history: a new answer erases the previous one; you cannot go back to an answer from 2 minutes ago.</div>
+  <div class="issue">Question-detection states are invisible: "checking / question detected / not a question" happen silently.</div>
+  <div class="issue">While an answer is being prepared the previous one disappears entirely — an empty space instead of a dimmed "previous".</div>
+  <div class="issue">Lots of empty space: with 3 transcript lines and a short answer half of the panel is empty; the height does not adapt.</div>
+  <div class="issue">The self-check footer wraps words mid-word — 4 hints do not fit into 380 pt.</div>
+  <div class="issue">Mixed languages: "Listening", "Thinking…", "Copy", "INTERVIEWER" next to Russian text.</div>
+  <div class="issue">A screenshot answer shows "Waiting for the other person to speak…" — the transcript state is unrelated to the task.</div>
+  <div class="issue">No session timer, no End button, no microphone and call-audio indicators — it is unclear whether the app hears the call.</div>
 </section>
 
 <section class="page">
-  <h2>3. Окно «Профиль»</h2>
+  <h2>3. "Profile" window</h2>
   <div class="shots">
-    <figure><img src="../audit-2026-10-24/profile-resume.png"><figcaption>Резюме</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/profile-instructions.png"><figcaption>Инструкции (профиль и общие)</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/profile-materials.png"><figcaption>Материалы</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/profile-questions.png"><figcaption>Вопросы</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/profile-question-editor.png"><figcaption>Редактор вопроса</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/profile-job.png"><figcaption>Вакансия</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/profile-resume.png"><figcaption>Résumé</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/profile-instructions.png"><figcaption>Instructions (profile and general)</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/profile-materials.png"><figcaption>Materials</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/profile-questions.png"><figcaption>Questions</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/profile-question-editor.png"><figcaption>Question editor</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/profile-job.png"><figcaption>Job</figcaption></figure>
   </div>
-  <h3>Структура</h3>
-  <p>Шапка (выбор профиля, Новый / Переименовать / Удалить / Папка) → шесть вкладок → в каждой: пояснение, кнопка загрузки,
-  редактор текста или список с деталями.</p>
-  <h3>Проблемы</h3>
-  <div class="issue">Резюме показывается как сырой Markdown в моноширинном редакторе — «## Опыт», «- …»; нет предпросмотра документа.</div>
-  <div class="issue">Длинные пояснения серым над каждой вкладкой занимают первый экран; повторяются по смыслу.</div>
-  <div class="issue">Вопросы: при открытии правая часть пуста («Выберите вопрос»); статусы цветными капсулами без легенды; «+5» непонятно без подсказки.</div>
-  <div class="issue">Материалы: нет состояния каждого файла (прочитан / индексируется / готов / ошибка) — только одна строка статуса справа.</div>
-  <div class="issue">Профиль, вопросы, материалы, история и настройки — пять отдельных окон; нет единого «главного окна».</div>
-  <div class="issue">Не видно, что из профиля реально уходит в запрос (символы — только в подвале), и как профиль связан с сессией.</div>
+  <h3>Structure</h3>
+  <p>Header (profile picker, New / Rename / Delete / Folder) → six tabs → each with an explanation, an upload button,
+  a text editor or a list with details.</p>
+  <h3>Problems</h3>
+  <div class="issue">The résumé is shown as raw Markdown in a monospaced editor ("## Опыт", "- …"); no document preview.</div>
+  <div class="issue">Long gray explanations above every tab take the first screen and repeat each other.</div>
+  <div class="issue">Questions: the right side is empty on open ("Select a question"); statuses are colored capsules without a legend; "+5" is unclear without a tooltip.</div>
+  <div class="issue">Materials: no per-file state (read / indexing / ready / error) — only one status line on the right.</div>
+  <div class="issue">Profile, questions, materials, history and settings are five separate windows; there is no single "main window".</div>
+  <div class="issue">It is not visible what from the profile actually goes into a request (characters only in the footer) or how the profile relates to a session.</div>
 </section>
 
 <section class="page">
-  <h2>4. Настройки</h2>
+  <h2>4. Settings</h2>
   <div class="shots four">
     <figure><img src="../audit-2026-10-24/settings-keys.png"><figcaption>Keys</figcaption></figure>
     <figure><img src="../audit-2026-10-24/settings-models.png"><figcaption>Models</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/settings-audio.png"><figcaption>Audio (очень длинная)</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/settings-audio.png"><figcaption>Audio (very long)</figcaption></figure>
     <figure><img src="../audit-2026-10-24/settings-bank.png"><figcaption>Bank</figcaption></figure>
     <figure><img src="../audit-2026-10-24/settings-privacy.png"><figcaption>Privacy</figcaption></figure>
     <figure><img src="../audit-2026-10-24/settings-panel.png"><figcaption>Panel</figcaption></figure>
     <figure><img src="../audit-2026-10-24/settings-hotkeys.png"><figcaption>Hotkeys</figcaption></figure>
     <figure><img src="../audit-2026-10-24/settings-budget.png"><figcaption>Budget</figcaption></figure>
   </div>
-  <div class="issue">Восемь вкладок с английскими названиями; Audio — около 2 экранов технических переключателей (Whisper turbo, Silero, LocalVQE, пороги в мс).</div>
-  <div class="issue">Нет разделения «обычное / продвинутое»: пороги паузы, порог базы, ID моделей стоят рядом с основными выборами.</div>
-  <div class="issue">Ключи: длинный список провайдеров одинаковыми карточками; непонятно, какой ключ нужен минимально (сейчас — Groq).</div>
-  <div class="issue">Bank и Panel — по одной-две настройки на целую вкладку; «Bank» — устаревшее имя (теперь вопросы профиля).</div>
-  <div class="good">Сильные стороны: всё настраивается без файлов, есть проверка ключей, переназначение клавиш, бюджет.</div>
+  <div class="issue">Eight tabs with English names; Audio is about 2 screens of technical toggles (Whisper turbo, Silero, LocalVQE, thresholds in ms).</div>
+  <div class="issue">No "basic / advanced" split: pause thresholds, the bank threshold and model IDs sit next to the main choices.</div>
+  <div class="issue">Keys: a long list of identical provider cards; it is unclear which key is the minimum (now — Groq).</div>
+  <div class="issue">Bank and Panel hold one or two settings per tab; "Bank" is an outdated name (now profile questions).</div>
+  <div class="good">Strengths: everything is configurable without files; key checks, hotkey remapping and a budget exist.</div>
 </section>
 
 <section class="page">
-  <h2>5. История, первый запуск, браузерные страницы</h2>
+  <h2>5. History, first launch, browser pages</h2>
   <div class="shots">
-    <figure><img src="../audit-2026-10-24/history.png"><figcaption>История сессий</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/onboarding-1.png"><figcaption>Первый запуск: разрешения</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/onboarding-2.png"><figcaption>Первый запуск: «Ключ Gemini»</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/onboarding-3.png"><figcaption>Первый запуск: модели</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/ai-interview.png"><figcaption>ИИ-собеседование (браузер)</figcaption></figure>
-    <figure><img src="../audit-2026-10-24/test-call.png"><figcaption>Тестовый звонок (браузер)</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/history.png"><figcaption>Session history</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/onboarding-1.png"><figcaption>First launch: permissions</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/onboarding-2.png"><figcaption>First launch: "Gemini key"</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/onboarding-3.png"><figcaption>First launch: models</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/ai-interview.png"><figcaption>AI interview (browser)</figcaption></figure>
+    <figure><img src="../audit-2026-10-24/test-call.png"><figcaption>Test call (browser)</figcaption></figure>
   </div>
-  <div class="issue">История: ответы показаны сырым Markdown («**…**», «- …»); дата по-английски («Oct 19, 2026»); нет разбора, комментариев, поиска, разделения «интервьюер / вы».</div>
-  <div class="issue">Первый запуск устарел: шаг «Ключ Gemini», хотя первым в цепочке стоит бесплатный Groq; текст разрешения микрофона «голос не расшифровывается» — неверно с COPILOT-05.</div>
-  <div class="issue">Три визуальных языка: тёмный HUD (панель), светлые системные окна, тёмные веб-страницы со своим стилем (ИИ-собеседование, тестовый звонок).</div>
-  <div class="issue">Нет главного окна и «домашнего» экрана: пользователь начинает со строки меню и не видит, готово ли всё к звонку.</div>
+  <div class="issue">History: answers are shown as raw Markdown ("**…**", "- …"); the date is in English ("Oct 19, 2026"); no review, comments, search or "interviewer / you" split.</div>
+  <div class="issue">First launch is outdated: a "Gemini key" step although free Groq is first in the chain; the microphone permission text "your voice is not transcribed" is wrong since COPILOT-05.</div>
+  <div class="issue">Three visual languages: a dark HUD (panel), light system windows, dark web pages with their own style (AI interview, test call).</div>
+  <div class="issue">No main window or "home" screen: the user starts from the menu bar and cannot see whether everything is ready for a call.</div>
 </section>
 
 <section class="page">
-  <h2>6. Сводный анализ и требования к новому дизайну</h2>
-  <h3>Структура</h3>
+  <h2>6. Summary analysis and requirements for the new design</h2>
+  <h3>Structure</h3>
   <ul>
-    <li>Приложение — набор разрозненных окон вокруг строки меню. Нужна иерархия: <b>Главное окно</b> (подготовка, история,
-    профили, настройки) + <b>Живой оверлей</b> (только звонок) + <b>строка меню</b> (быстрый доступ).</li>
-    <li>Нет объекта «сессия»: подготовка, звонок и разбор не связаны. COPILOT-09 вводит мастер, Start/End, разбор — дизайн
-    строится вокруг жизненного цикла <i>Подготовка → Проверка → Звонок → Разбор</i>.</li>
+    <li>The app is a set of scattered windows around the menu bar. A hierarchy is needed: a <b>main window</b> (preparation,
+    history, profiles, settings) + a <b>live overlay</b> (the call only) + the <b>menu bar</b> (quick access).</li>
+    <li>There is no "session" object: preparation, the call and the review are not connected. COPILOT-09 introduces a wizard,
+    Start/End and a review — the design is built around the lifecycle <i>Preparation → Check → Call → Review</i>.</li>
   </ul>
-  <h3>Оформление</h3>
+  <h3>Visual design</h3>
   <ul>
-    <li>Единый язык: тёмное «стекло» для оверлея, нативные macOS-окна с той же акцентной палитрой и типографикой для главного окна;
-    браузерные страницы — в той же палитре.</li>
-    <li>Один акцент (индиго/синий), семантические цвета состояний (зелёный — слушаю, янтарный — проверяю/черновик, красный — ошибка/End),
-    шрифт SF Pro, сетка 4/8 pt, скругления 10–16 pt.</li>
-    <li>Весь интерфейс по-русски; английские только названия моделей и клавиши.</li>
+    <li>One language: dark "glass" for the overlay, native macOS windows with the same accent palette and typography for the main
+    window; browser pages in the same palette.</li>
+    <li>One accent (indigo/blue), semantic state colors (green — listening, amber — checking/draft, red — error/End),
+    SF Pro, a 4/8 pt grid, corner radii 10–16 pt.</li>
+    <li>The whole interface in Russian; only model names and keys in English.</li>
   </ul>
-  <h3>Удобство</h3>
+  <h3>Usability</h3>
   <ul>
-    <li>Главные действия — видимыми кнопками с подсказками клавиш (как в ParakeetAI), не только клавишами.</li>
-    <li>Состояния — явные и раздельные: источник звука, распознавание, вопрос, генерация, ошибка.</li>
-    <li>Чтение во время речи: заголовок вопроса, первая строка ответа крупно, история ←/→, без прыжков прокрутки.</li>
-    <li>Настройки: базовое отдельно от продвинутого; минимум для старта (один бесплатный ключ) — очевиден.</li>
+    <li>Main actions as visible buttons with hotkey hints (as in ParakeetAI), not only as hotkeys.</li>
+    <li>Explicit, separate states: audio source, recognition, question, generation, error.</li>
+    <li>Reading while speaking: a question header, a large first answer line, ←/→ history, no scroll jumps.</li>
+    <li>Settings: basic separate from advanced; the minimum to start (one free key) is obvious.</li>
   </ul>
-  <h3>Новые функции, которые должен вместить дизайн</h3>
+  <h3>New features the design has to accommodate</h3>
   <table>
-    <tr><th>Из задачи</th><th>Функции</th></tr>
-    <tr><td>COPILOT-08 (готово)</td><td>Профили под вакансии; резюме, факты, вакансия, инструкции (профиль + общие); материалы с поиском фрагментов; вопросы: импорт, таблица, статусы, «Подготовить», черновики</td></tr>
-    <tr><td>COPILOT-09 этап 1</td><td>Мастер «Создать сессию» (Interview / Regular / Mock, профиль, компания, вакансия по ссылке, язык, модель, настройки ответа, Auto Generate, сохранение, разбор, план длительности); проверка перед стартом; Start/End, таймер; «Начать сессию?» при звонке</td></tr>
-    <tr><td>этап 2</td><td>Оверлей: панель Answer ⌘↩ / Screenshot ⌘⇧↩ / Chat ⌘⇧Space, таймер, End; строка расшифровки + Clear; статус Checking / Question detected / No question; карточка «Вопрос: …», история ←/→, предыдущий приглушён; Chat (вопрос, уточнение, «Короче / Подробнее / Пример», указание на сессию); меню: Auto Generate, язык, масштаб, другой экран, Private + проверка</td></tr>
-    <tr><td>этап 3</td><td>Настройки ответа: формат, длина, тон с живым предпросмотром</td></tr>
-    <tr><td>этап 4</td><td>Разбор: сводка, комментарий ИИ к каждому ответу, расшифровка по говорящим, «Спросить ИИ»</td></tr>
-    <tr><td>этап 5</td><td>Скриншот-задача: миниатюры, «добавить снимок», активная задача в контексте</td></tr>
+    <tr><th>From task</th><th>Features</th></tr>
+    <tr><td>COPILOT-08 (done)</td><td>Profiles per job search; résumé, facts, job, instructions (profile + general); materials with chunk search; questions: import, table, statuses, "Prepare", drafts</td></tr>
+    <tr><td>COPILOT-09 stage 1</td><td>"New session" wizard (Interview / Regular / Mock, profile, company, job from a link, language, model, answer settings, Auto Generate, saving, review, planned duration); pre-start check; Start/End, timer; "Start a session?" when a call starts</td></tr>
+    <tr><td>stage 2</td><td>Overlay: Answer ⌘↩ / Screenshot ⌘⇧↩ / Chat ⌘⇧Space bar, timer, End; transcript strip + Clear; status Checking / Question detected / No question; "Question: …" card, ←/→ history, previous dimmed; Chat (question, refinement, "Shorter / More detail / Example", session instruction); menu: Auto Generate, language, zoom, other screen, Private + check</td></tr>
+    <tr><td>stage 3</td><td>Answer settings: format, length, tone with a live preview</td></tr>
+    <tr><td>stage 4</td><td>Review: summary, an AI comment on each answer, transcript by speaker, "Ask AI"</td></tr>
+    <tr><td>stage 5</td><td>Screenshot task: thumbnails, "add screenshot", active task in context</td></tr>
   </table>
 </section>
 
 <section class="page">
-  <h2>7. Как пользоваться промптами в ChatGPT</h2>
+  <h2>7. How to use the prompts in ChatGPT</h2>
   <ol>
-    <li>Сначала <b>P00 — стиль-гайд</b>. Сохраните результат: это опорное изображение.</li>
-    <li>Для каждого следующего промпта прикладывайте картинку P00 и пишите перед промптом: <i>«Use the attached style guide
-    exactly (colors, typography, radii, glass material)»</i>. Так все экраны будут в одном стиле.</li>
-    <li>Размер — указан в каждом промпте (обычно 1536×1024; оверлей — 1024×1536). Если текст на кириллице искажён —
-    попросите «re-render with crisp, correctly spelled Russian UI text» или сгенерируйте английскую версию.</li>
-    <li>Делайте 2–3 варианта на экран и выбирайте лучший. Имена файлов: <code>P07-overlay-answer.png</code> и т. д.</li>
-    <li>Пришлите картинки сюда — по ним будет финальный редизайн после завершения COPILOT-09.</li>
+    <li>First <b>P00 — the style guide</b>. Save the result: it is the reference image.</li>
+    <li>For every following prompt attach the P00 image and write before the prompt: <i>"Use the attached style guide
+    exactly (colors, typography, radii, glass material)"</i>. That keeps all screens in one style.</li>
+    <li>The size is given in each prompt (usually 1536×1024; overlay — 1024×1536). If the Cyrillic text is garbled,
+    ask to "re-render with crisp, correctly spelled Russian UI text" or generate an English version.</li>
+    <li>Make 2–3 variants per screen and pick the best. File names: <code>P07-overlay-answer.png</code> etc.</li>
+    <li>Send the images here — the final redesign after COPILOT-09 is based on them.</li>
   </ol>
-  <div class="note"><b>Общий блок стиля</b> (он уже встроен в каждый промпт ниже): macOS 15 Sequoia native app, Apple Human Interface
+  <div class="note"><b>Common style block</b> (already embedded in every prompt below): macOS 15 Sequoia native app, Apple Human Interface
   Guidelines, SF Pro typography, 8-pt grid, corner radius 12–16 px, subtle 1-px hairlines, accent color indigo #4C6EF5,
   semantic colors: green #2FB344 (listening), amber #F59F00 (checking / draft), red #E03131 (error / end), neutral graphite.
   Live overlay: dark translucent glass (#16181D at 82% with background blur), white text. Main windows: light, clean,
@@ -227,95 +227,95 @@
 </section>
 
 <section class="page">
-  <h2>8. Промпты ImageGen — живой оверлей</h2>
+  <h2>8. ImageGen prompts — live overlay</h2>
 
-  <div class="ptitle"><b>P00 · Стиль-гайд (опорное изображение)</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P00 · Style guide (reference image)</b><span class="tag">1536×1024</span></div>
   <div class="prompt">Design system sheet for a macOS app called "Interview Copilot" (a real-time interview assistant that listens to a call and shows suggested answers). macOS 15 Sequoia, Apple HIG, SF Pro typography, 8-pt grid. Show on one canvas: color palette swatches (indigo accent #4C6EF5, green #2FB344 "Слушаю", amber #F59F00 "Проверяю / Черновик", red #E03131 "Ошибка / Завершить", graphite neutrals); type scale (Title 22, Headline 15 semibold, Body 14, Caption 11) with Russian sample text; buttons (primary indigo, secondary bordered, destructive red, keycap hint chips like "⌘↩", "⌘⇧↩"); status pills with colored dots; a dark translucent glass card (#16181D 82% + blur, white text) next to a light window card; toggles, segmented control, text field, progress bar, list row with status capsule; icons in SF Symbols style. Clean, calm, premium, generous whitespace. Russian labels, crisp correctly spelled Cyrillic, no lorem ipsum, no watermark.</div>
 
-  <div class="ptitle"><b>P01 · Оверлей: слушаю, вопрос найден, ответ появляется</b><span class="tag">1024×1536</span></div>
+  <div class="ptitle"><b>P01 · Overlay: listening, question detected, answer appearing</b><span class="tag">1024×1536</span></div>
   <div class="prompt">macOS floating overlay window (dark translucent glass, #16181D 82%, background blur of a Google Meet call visible behind), width ~460 px, rounded 16 px, floating at the top-right of the screen. Layout top to bottom: (1) Action toolbar: two tiny live indicators (microphone with green level bars, call audio with green level bars), buttons "Ответ ⌘↩", "Скриншот ⌘⇧↩", "Чат ⌘⇧Space" as dark pill buttons with keycap hints, then icons move ✥ and collapse, a timer "12:47", a "⋮" menu and a red "Завершить" button. (2) Transcript strip: one line "Расскажите, как вы организовали тестирование в последнем проекте?" with a small "Interviewer" label, a "Очистить ⌘⇧⌫" chip and an expand icon. (3) Status chip "● Вопрос найден" in green. (4) Answer card: header "Вопрос: Тестирование в последнем проекте", nav arrows "‹ 3 / 7 ›", copy icon; body: first line bold and large "Строили пирамиду тестов: 70% unit, snapshot на ключевые экраны, e2e на оплату."; three short bullets; the last bullet is still streaming with a blinking caret. Footer of the card: "Groq · 1,1 с" and quick action chips "Короче", "Подробнее", "Пример". Russian UI, white text, high contrast, pixel-perfect product mockup.</div>
 
-  <div class="ptitle"><b>P02 · Оверлей: состояния (лента из 6 мини-оверлеев)</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P02 · Overlay: states (a strip of 6 mini overlays)</b><span class="tag">1536×1024</span></div>
   <div class="prompt">One canvas showing six small versions of the same dark-glass macOS overlay (from P01) side by side, each labeled below: (1) "Проверяю…" — transcript line visible, amber spinner chip "Проверяю…"; (2) "Вопрос найден" — green chip; (3) "Не вопрос" — grey chip "Не вопрос · ответить вручную ⌘↩"; (4) "Готовлю ответ…" — new header "Вопрос: Почему вы уходите?" with a thin indigo progress line, the previous answer below is dimmed to 40% with a small label "предыдущий ответ"; (5) "Нет сигнала звонка 8 с" — call-audio indicator red, banner "Не слышу звонок · проверьте вкладку Meet" with button "Выбрать источник"; (6) "Ошибка" — red banner "Модели недоступны: лимит запросов" with buttons "Повторить" and "Сменить модель". Consistent spacing, Russian text, crisp typography.</div>
 
-  <div class="ptitle"><b>P03 · Оверлей: Chat и уточнение ответа</b><span class="tag">1024×1536</span></div>
+  <div class="ptitle"><b>P03 · Overlay: chat and answer refinement</b><span class="tag">1024×1536</span></div>
   <div class="prompt">The dark-glass macOS overlay from P01 with the chat field open at the bottom: a rounded input "Спросите или уточните ответ…" with a send arrow and hint "↩ отправить · Esc закрыть". Above it, the answer card shows version tabs "Версия 1 · Версия 2 (короче)". A small indigo session-instruction badge under the toolbar: "На всю сессию: отвечать по-английски ✕". Quick chips above the input: "Короче", "Подробнее", "Пример кода", "Без жаргона". Russian UI, white text, pixel-perfect.</div>
 
-  <div class="ptitle"><b>P04 · Оверлей: меню ⋮ и проверка видимости</b><span class="tag">1024×1536</span></div>
+  <div class="ptitle"><b>P04 · Overlay: ⋮ menu and visibility check</b><span class="tag">1024×1536</span></div>
   <div class="prompt">The dark-glass overlay with its "⋮" menu open as a dark popover: rows "Автоответ" (toggle on), "Язык звонка: Українська ▾", "Масштаб − 100% + ↺", "На другой экран →", "Скрывать при демонстрации экрана" (toggle) with a secondary button "Проверить видимость", a result line "Проверено 24.10, macOS 15.7: в захвате экрана не видно ✓", divider, "Завершить сессию" in red. Rows have SF Symbol icons and keyboard hints. Russian UI, crisp text, premium macOS feel.</div>
 
-  <div class="ptitle"><b>P05 · Оверлей: скриншот-задача с кодом</b><span class="tag">1024×1536</span></div>
+  <div class="ptitle"><b>P05 · Overlay: screenshot task with code</b><span class="tag">1024×1536</span></div>
   <div class="prompt">The dark-glass overlay answering a coding task captured by screenshot. Under the toolbar: an "Активная задача" bar with two small screenshot thumbnails (+ "Добавить снимок ⌘⇧↩") and a title "Two Sum — найти пару с суммой target". Answer card sections with small headers: "Задача", "Подход" (2 bullets), "Код" — a syntax-highlighted Swift code block in a darker inset with a "Копировать код" button, "Сложность: O(n) по времени, O(n) по памяти", "Проверки" (3 test cases). The transcript strip shows "А какая сложность по памяти?" with chip "уточнение к задаче". Russian UI, monospaced code, pixel-perfect.</div>
 
-  <div class="ptitle"><b>P06 · Оверлей свёрнутый и строка меню</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P06 · Collapsed overlay and menu bar</b><span class="tag">1536×1024</span></div>
   <div class="prompt">Left half: the overlay collapsed into a single compact dark-glass toolbar bar (indicators, "Ответ ⌘↩", "Скриншот", "Чат", timer "08:15", expand icon, red "Завершить"), floating over a Zoom call. Right half: the macOS menu bar dropdown of the app (parrot icon in menu bar), light vibrancy menu: header row "● Сессия идёт · Senior iOS — ФинБанк · 08:15", items "Показать оверлей ⌃⌥H", "Ответить сейчас ⌘↩", "Сделать скриншот ⌘⇧↩", "Завершить сессию", divider, "Создать сессию… ⌃⌥N", "Профили…", "История сессий…", divider, "Сегодня: 42 запроса · $0,00", "Настройки… ⌘,", "Выйти ⌘Q". Russian text, native macOS menu styling.</div>
 </section>
 
 <section class="page">
-  <h2>9. Промпты ImageGen — сессия</h2>
+  <h2>9. ImageGen prompts — session</h2>
 
-  <div class="ptitle"><b>P07 · Мастер «Создать сессию» — шаг 1 «Детали»</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P07 · "New session" wizard — step 1 "Details"</b><span class="tag">1536×1024</span></div>
   <div class="prompt">macOS sheet/modal window "Создать сессию", light theme, two-column layout. Left narrow column: title "Создать сессию", subtitle "Детали и настройки звонка", vertical stepper "1 Детали" (active, indigo), "2 Настройки", "3 Проверка", and at the bottom secondary buttons "Пробный звонок" and "Как это работает". Right column: segmented control "Собеседование | Обычный звонок | ИИ-собеседование" (first selected); field "Профиль" dropdown "Senior iOS — ФинБанк" with small chips "резюме ✓ · 3 материала · 24 вопроса"; button with sparkle icon "Вставить ссылку на вакансию"; fields "Компания" ("ФинБанк"), "Описание вакансии" (multiline, filled with a short realistic description); bottom right buttons "Отмена" and primary indigo "Далее". Clean, spacious, Russian UI, pixel-perfect.</div>
 
-  <div class="ptitle"><b>P08 · Мастер — шаг 2 «Настройки»</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P08 · Wizard — step 2 "Settings"</b><span class="tag">1536×1024</span></div>
   <div class="prompt">Same "Создать сессию" window, step 2 active. Right column grouped list with icons: "Язык звонка" → dropdown "Авто (UK / RU / EN)"; "Модель" → dropdown "Groq · gpt-oss-120b (бесплатно)"; "Стиль ответа" → "Сценарий + пункты · Сбалансированный · Нейтральный" with button "Настроить"; "Указания на сессию" → button "+ Добавить"; section "Дополнительно": toggles "Автоответ на вопросы (рекомендуется)", "Сохранять расшифровку", "Разбор после завершения"; "План длительности" stepper "60 мин". Caption under toggles in small grey: "Расшифровка хранится только на этом Mac 30 дней". Buttons "Назад" and primary "Далее: проверка". Russian UI, light theme.</div>
 
-  <div class="ptitle"><b>P09 · Мастер — шаг 3 «Проверка перед стартом»</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P09 · Wizard — step 3 "Pre-start check"</b><span class="tag">1536×1024</span></div>
   <div class="prompt">Same window, step 3 "Проверка". A checklist with live results: "Микрофон — MacBook Pro" green check and a small live level meter; "Звук звонка — Google Chrome (Meet)" amber warning "нет сигнала 5 с · включите звук вкладки" with button "Выбрать источник"; "Распознавание — Parakeet v3, локально" green; "Модели — Groq, Gemini" green with "ключи проверены"; "Скриншоты — разрешение есть" green; "Профиль — резюме, 3 материала, 24 вопроса (подготовлено 20)" green. Big primary indigo button "Начать сессию" and secondary "Начать всё равно". Russian UI, clean light theme, pixel-perfect.</div>
 
-  <div class="ptitle"><b>P10 · Уведомление «Начать сессию?»</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P10 · "Start a session?" notification</b><span class="tag">1536×1024</span></div>
   <div class="prompt">macOS desktop with a Zoom meeting window, and a native macOS notification banner in the top-right corner from "Interview Copilot" (parrot app icon): title "Звонок в Zoom", text "Начать сессию с профилем «Senior iOS — ФинБанк»?", action buttons "Начать" and "Настроить…". Realistic macOS Sequoia look, Russian text.</div>
 
-  <div class="ptitle"><b>P11 · Настройки ответа с живым предпросмотром</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P11 · Answer settings with a live preview</b><span class="tag">1536×1024</span></div>
   <div class="prompt">macOS modal "Стиль ответа", light theme, two panes. Left: three rows with icons and chevrons — "Формат: Сценарий + пункты", "Длина: Сбалансированный", "Тон: Нейтральный"; one row is expanded showing a segmented control "Короткий | Сбалансированный | Подробный". Bottom buttons "По умолчанию" and primary "Сохранить для сессии". Right pane: dropdown "Тип вопроса: Поведенческий"; label "Предпросмотр · по вашему профилю"; a preview card with "Вопрос: Расскажите о конфликте в команде" and an answer — bold first line, 3 bullets — rendered like the overlay answer; a tiny "обновлено 1,2 с назад" caption. Russian UI, crisp text.</div>
 </section>
 
 <section class="page">
-  <h2>10. Промпты ImageGen — главное окно, профиль, разбор</h2>
+  <h2>10. ImageGen prompts — main window, profile, review</h2>
 
-  <div class="ptitle"><b>P12 · Главное окно: «Сегодня» (новый домашний экран)</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P12 · Main window: "Today" (new home screen)</b><span class="tag">1536×1024</span></div>
   <div class="prompt">macOS main window "Interview Copilot", light theme, left sidebar with sections: "Сегодня" (selected), "Сессии", "Профили", "ИИ-собеседование", "Настройки", and at the bottom a status "● Готов к звонку". Main area: large greeting card "Готов к собеседованию" with primary indigo button "Создать сессию ⌃⌥N" and secondary "Пробный звонок"; a readiness row of four small cards ("Микрофон ✓", "Распознавание ✓ Parakeet", "Модели ✓ Groq", "Профиль ✓ Senior iOS — ФинБанк"); "Последние сессии" list with 3 rows (date, company, type chip "Собеседование", duration, score dot); a card "Подготовка" with progress "Вопросы подготовлены 20 / 24" and button "Подготовить". Calm, premium, spacious, Russian UI, pixel-perfect.</div>
 
-  <div class="ptitle"><b>P13 · Главное окно: Профиль — резюме</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P13 · Main window: Profile — résumé</b><span class="tag">1536×1024</span></div>
   <div class="prompt">Same main window, sidebar "Профили" selected with a secondary list of profiles ("Senior iOS — ФинБанк" selected, "Backend — стартап", "+ Новый профиль"). Content header: profile name, chips "резюме ✓", "3 материала", "24 вопроса", buttons "Переименовать", "⋯". Horizontal tabs: "Резюме" (selected), "Факты о себе", "Вакансия", "Инструкции", "Материалы", "Вопросы". Resume tab: a drop zone card "Перетащите PDF, Word или текст · или Загрузить файл ⌘O" collapsed to a slim bar with "cv-2026.pdf · прочитано 3 862 символа · заменить"; below, a two-pane view: left editable text, right a formatted preview of the resume (name, headings "Опыт", "Навыки", bullets). Footer hint: "В каждый запрос: 4 120 символов". Russian, light theme.</div>
 
-  <div class="ptitle"><b>P14 · Профиль — материалы и вопросы</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P14 · Profile — materials and questions</b><span class="tag">1536×1024</span></div>
   <div class="prompt">Same main window, profile "Вопросы" tab. Toolbar: "Импорт файла ⌘I", "Добавить вопрос", primary "Подготовить (4)" and a progress capsule "Готовлю формулировки… 2 из 4". Left: table of questions with columns "Вопрос", "Ответ", "Формулировки", status capsules with legend ("ваш" green, "черновик" amber, "подтверждён" indigo, "нет ответа" grey). Right: detail editor for the selected question — question field, answer editor with status "черновик" and button "Подтвердить", list of phrasings grouped by language flags UK / RU / EN. A small inset in the corner shows the "Материалы" tab state: three files with per-file states "готов ✓", "индексирую 60%", "скан — нет текста ⚠". Russian UI, light theme.</div>
 
-  <div class="ptitle"><b>P15 · Разбор сессии — «Сводка»</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P15 · Session review — "Summary"</b><span class="tag">1536×1024</span></div>
   <div class="prompt">macOS window "Сессия · ФинБанк · 24 октября, 14:00 · 48 мин", light theme. Tabs: "Сводка" (selected), "Расшифровка", "Спросить ИИ". Top: summary card "Общее впечатление" with 3 strengths and 2 improvements, "Следующие шаги" (e.g. "Тех. интервью в четверг"). Below: list of question cards — each shows question title, "Вы ответили:" quote in regular text, "Подсказка на экране" collapsed chip, and an AI comment block with a small sparkle icon: "Хорошо: конкретные цифры. Не хватило: результата для бизнеса. Лучше сказать: …". A small progress line at the top "Разбор готов". Russian, pixel-perfect.</div>
 
-  <div class="ptitle"><b>P16 · Разбор — расшифровка и «Спросить ИИ»</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P16 · Review — transcript and "Ask AI"</b><span class="tag">1536×1024</span></div>
   <div class="prompt">Same session window split view. Left: tab "Расшифровка" — chat-like transcript with speaker labels and timestamps: "Интервьюер 14:02" (grey bubble), "Вы 14:02" (indigo-tinted bubble), and between them a dashed small card "Подсказка показана" (collapsed). Right: tab "Спросить ИИ" — a chat pane with suggested prompts chips ("Какие вопросы были про архитектуру?", "Напиши письмо-благодарность", "Что подтянуть к следующему этапу?") and one answered message. Russian UI, light theme, clean.</div>
 
-  <div class="ptitle"><b>P17 · Настройки (новые)</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P17 · Settings (new)</b><span class="tag">1536×1024</span></div>
   <div class="prompt">macOS Settings window in System Settings style: left sidebar with icons "Основное", "Модели и ключи", "Звук и распознавание", "Ваш голос", "Ответы", "Горячие клавиши", "Приватность", "Бюджет". Selected "Модели и ключи": a top card "Для старта достаточно одного бесплатного ключа Groq" with status "Groq ✓ проверен"; a reorderable list "Порядок моделей" with drag handles (Groq, Cerebras, Gemini, DeepSeek, Claude, Свой API) each with status dot and "бесплатно"/"платно" tag; collapsed section "Дополнительно" (ID моделей, параллельный запрос, таймаут). Russian UI, light theme, pixel-perfect.</div>
 
-  <div class="ptitle"><b>P18 · Первый запуск</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P18 · First launch</b><span class="tag">1536×1024</span></div>
   <div class="prompt">macOS onboarding window, light theme, 4 steps shown as a horizontal progress at the top: "Разрешения ✓", "Бесплатный ключ" (active), "Модели", "Профиль". Active step content: big title "Подключите бесплатную модель", text "Groq отвечает за ~1 с и бесплатен", a secure field "Ключ Groq" with button "Проверить", link "Получить ключ на console.groq.com", a secondary option "Добавить другие модели позже". Illustration: small parrot mascot icon. Buttons "Назад" and primary "Далее". Russian, friendly, clean.</div>
 
-  <div class="ptitle"><b>P19 · ИИ-собеседование (в стиле приложения)</b><span class="tag">1536×1024</span></div>
+  <div class="ptitle"><b>P19 · AI interview (in the app style)</b><span class="tag">1536×1024</span></div>
   <div class="prompt">Main window section "ИИ-собеседование", light theme matching the app: left — setup card (language "Русский", "Вопросов: 6", "Профиль: Senior iOS — ФинБанк", "Длительность 30 мин", primary "Начать собеседование"); right — live area with a large round speaking indicator for the AI interviewer (indigo waveform), the current question in big text "Как вы бы спроектировали офлайн-режим?", below "Вы отвечаете…" with a green microphone level and the live transcript of the candidate; a timeline of 6 question dots (2 done). Russian UI, calm and focused.</div>
 </section>
 
 <section class="page">
-  <h2>11. Последовательность дальше</h2>
+  <h2>11. Next sequence</h2>
   <table>
-    <tr><th>Шаг</th><th>Кто</th><th>Результат</th></tr>
-    <tr><td>1. Исследование и скриншоты</td><td>сделано</td><td>этот документ, 34 PNG в <code>docs/design/audit-2026-10-24/</code></td></tr>
-    <tr><td>2. Промпты ImageGen</td><td>сделано</td><td>20 промптов (P00–P19), они же в <code>docs/design/redesign/prompts.md</code></td></tr>
-    <tr><td>3. Визуальные образцы</td><td>владелец в ChatGPT</td><td>картинки P00–P19 → прислать в чат</td></tr>
-    <tr><td>4. Архитектурное обновление</td><td>исполнитель</td><td>COPILOT-09 этапы 1–5 (сессии, оверлей, стиль ответа, разбор, скриншоты) — функции без финального визуала</td></tr>
-    <tr><td>5. Полный редизайн</td><td>исполнитель</td><td>только после шага 4: главное окно, оверлей, мастер, разбор, настройки, первый запуск, браузерные страницы — по образцам</td></tr>
+    <tr><th>Step</th><th>Who</th><th>Result</th></tr>
+    <tr><td>1. Research and screenshots</td><td>done</td><td>this document, 34 PNGs in <code>docs/design/audit-2026-10-24/</code></td></tr>
+    <tr><td>2. ImageGen prompts</td><td>done</td><td>20 prompts (P00–P19), also in <code>docs/design/redesign/prompts.md</code></td></tr>
+    <tr><td>3. Visual references</td><td>owner in ChatGPT</td><td>images P00–P19 → send to the chat</td></tr>
+    <tr><td>4. Architectural update</td><td>executor</td><td>COPILOT-09 stages 1–5 (sessions, overlay, answer style, review, screenshots) — features without the final visuals</td></tr>
+    <tr><td>5. Full redesign</td><td>executor</td><td>only after step 4: main window, overlay, wizard, review, settings, first launch, browser pages — following the references</td></tr>
   </table>
-  <div class="note">Порядок по вашему требованию: редизайн не начинается, пока архитектурное обновление (COPILOT-09) не завершено полностью.
-  Шаги 3 и 4 могут идти одновременно: вы генерируете образцы, я делаю функции.</div>
-  <h3>Найденные ошибки текущего интерфейса — исправить в архитектурном этапе (не ждут редизайна)</h3>
+  <div class="note">Order as requested by the owner: the redesign does not start until the architectural update (COPILOT-09) is complete.
+  Steps 3 and 4 can run in parallel: the owner generates references while the executor builds the features.</div>
+  <h3>Defects found in the current interface — to fix during the architectural stage (they do not wait for the redesign)</h3>
   <ul>
-    <li>Первый запуск: шаг «Ключ Gemini» → «Бесплатный ключ (Groq)».</li>
-    <li>Окно разрешений: «голос не расшифровывается» — неверно с COPILOT-05; заменить на актуальное описание.</li>
-    <li>История: ответы — сырой Markdown; дата по-английски.</li>
-    <li>Подвал панели в самопроверке переносит слова.</li>
+    <li>First launch: the "Gemini key" step → "Free key (Groq)".</li>
+    <li>Permissions window: "your voice is not transcribed" is wrong since COPILOT-05; replace with an accurate description.</li>
+    <li>History: answers are raw Markdown; the date is in English.</li>
+    <li>The panel footer in self-check mode wraps words.</li>
   </ul>
 </section>
 

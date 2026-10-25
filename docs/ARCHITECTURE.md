@@ -1,155 +1,169 @@
-# Interview Copilot — устройство приложения
+# Interview Copilot — architecture reference
 
-Документ для нового разработчика или агента: что делает приложение, как идут данные, где что лежит, как менять
-и проверять. Начните отсюда, затем — `CLAUDE.md` (правила работы) и комплект последней задачи в `docs/changes/`.
+For a new developer or agent: what the app does, how data flows, where things live, how to change and verify them.
+Start with [`AGENTS.md`](../AGENTS.md) (onboarding), then this document, then `CLAUDE.md` (working rules) and the latest
+task folder in `docs/changes/`.
 
-## 1. Что это
-Личное приложение macOS (Swift 6, SwiftUI + AppKit, SwiftPM, без .xcodeproj): попугай в строке меню и плавающая панель.
-Во время созвона (Google Meet в браузере, Zoom, Telegram) приложение:
-1. слушает звук собеседника (ScreenCaptureKit, звук одного приложения) и, отдельно, микрофон владельца;
-2. **локально** расшифровывает речь (Parakeet v3 через FluidAudio; Whisper через whisper.cpp — запасной и для уточнения);
-3. отсеивает шум, чужую речь и чужие голоса;
-4. определяет конец вопроса (ход);
-5. показывает ответ: карточку из базы владельца или подсказку языковой модели (Groq → Cerebras → Gemini → DeepSeek →
-   Claude → свой API), со стримингом, первые слова — около 1 с после конца вопроса;
-6. помнит интервью целиком: вопросы, ответы владельца, показанные подсказки.
+## 1. What it is
+A personal macOS app (Swift 6, SwiftUI + AppKit, SwiftPM, no `.xcodeproj`): a parrot in the menu bar, a main window and a
+floating overlay. During a call (Google Meet in a browser, Zoom, Telegram) the app:
+1. listens to the other person's audio (ScreenCaptureKit, audio of a single app) and, separately, to the owner's microphone;
+2. transcribes speech **locally** (Parakeet v3 via FluidAudio; Whisper via whisper.cpp as an alternative and for refinement);
+3. filters out noise, foreign-language speech and other voices;
+4. detects the end of a question (a turn);
+5. shows an answer: a card from the owner's bank or a language-model hint (Groq → Cerebras → Gemini → DeepSeek →
+   Claude → custom API), streamed; the first words appear about 1 s after the question ends;
+6. remembers the whole interview: questions, the owner's answers, shown hints — and reviews it after the call.
 
-Языки: украинский, русский, английский. Пользователь один — владелец. Звук на диск не пишется.
+Languages: Ukrainian, Russian, English. One user — the owner. No audio is written to disk.
 
-## 2. Поток данных
+## 2. Data flow
 ```
-звук приложения звонка ─► SystemAudioCapture ─► AudioRingBuffer (30 с) ─► StreamingTranscriber ─┐
-микрофон владельца ─► MicActivityDetector (говорит ли владелец) ─► TurnDetector                    │
-                    └► второй StreamingTranscriber (ответы владельца) ─► InterviewMemory.addAnswer   │
-                                                                                                    ▼
-StreamingTranscriber: EnergyVAD режет фразы → [LocalVQE, выкл.] → Silero «есть ли речь» →
-  Parakeet (итог ~0,1 с) → HallucinationFilter → отпечаток голоса CAM++ (режим микрофона) →
-  события .partial / .final / .revised (уточнение Whisper turbo, ~3 с) / .foreignVoice / .discarded
-                                                                                                    │
-ListeningController.handle: фильтр языка (LanguageGate + словарь терминов) → строка в панели или серая строка
-                                                                                                    ▼
-TurnController → TurnDetector: пауза T (700 мс, после «?» — 350 мс), речь владельца, эхо → Turn
-  + опережающий запрос (draft) на законченную фразу до истечения паузы
-                                                                                                    ▼
+call app audio ─► SystemAudioCapture ─► AudioRingBuffer (30 s) ─► StreamingTranscriber ─┐
+owner mic ─► MicActivityDetector (is the owner speaking) ─► TurnDetector                  │
+          └► second StreamingTranscriber (owner answers) ─► InterviewMemory.addAnswer     │
+                                                                                          ▼
+StreamingTranscriber: EnergyVAD splits phrases → [LocalVQE, off] → Silero "is it speech" →
+  Parakeet (final ~0.1 s) → HallucinationFilter → CAM++ voiceprint (microphone mode) →
+  events .partial / .final / .revised (Whisper turbo refine, ~3 s) / .foreignVoice / .discarded
+                                                                                          │
+ListeningController.handle: language filter (LanguageGate + term dictionary) → overlay line or a gray line
+                                                                                          ▼
+TurnController → TurnDetector: pause T (700 ms; 350 ms after "?"), owner speech, echo → Turn
+  + speculative request (draft) for a finished phrase before the pause expires
+                                                                                          ▼
 AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerController.handle(turn)
-  AnswerController: BankController.lookup (один эмбеддинг bge-m3: карточки базы + фрагменты материалов) →
-  AnswerRouter (режим) → карточка | PromptBuilder (профиль, инструкции, <materials>, история) → ProviderChain
-  (стриминг SSE, параллельный запуск через 1,5 с молчания, автопереход при ошибках) → AnswerHistory (вопрос → версии;
-  каждый запрос пишет только в свою версию) → PanelModel → PanelView (оверлей: Toolbar, TranscriptStrip, AnswerCard, ChatField)
-                                                                                                    ▼
-подсказка → InterviewMemory.setHint(turnID); всё — SessionController → SessionStore (JSON, срок хранения)
+  AnswerController: BankController.lookup (one bge-m3 embedding: bank cards + material chunks) →
+  AnswerRouter (mode) → card | PromptBuilder (profile, instructions, <materials>, history) → ProviderChain
+  (SSE streaming, key rotation, parallel request to another provider after `hedgeAfter`, fallback, last resort) →
+  AnswerHistory (question → versions; each request writes only to its own version) → PanelModel → PanelView
+  (overlay: toolbar, transcript strip, answer card, chat field)
+                                                                                          ▼
+hint → InterviewMemory.setHint(turnID); everything → SessionController → SessionStore (JSON, retention) →
+ReviewController (post-call comments, summary, "Ask AI")
 ```
-Главный поток (`@MainActor`) — UI и контроллеры. Распознавание, эмбеддинги, Связка ключей и сеть — в фоне
-(`Task.detached`, очереди транскрайбера). Между потоками — маленькие `…Box` с `NSLock` (`TranscriberBox`, `VoiceGateBox`,
-`EnhancerBox`, `AudioRouteBox`).
+The main actor (`@MainActor`) owns the UI and controllers. Recognition, embeddings, Keychain and networking run in the
+background (`Task.detached`, transcriber queues). Cross-thread state uses small `…Box` classes with `NSLock`
+(`TranscriberBox`, `VoiceGateBox`, `EnhancerBox`, `AudioRouteBox`).
 
-## 3. Модули
-| Папка | Что | Ключевые типы |
+## 3. Modules
+| Folder | What | Key types |
 |---|---|---|
-| `Sources/CopilotCore/Audio` | захват, VAD, буфер, разрешения | `SystemAudioCapture`, `MicrophoneCapture`, `EnergyVAD`, `AudioRingBuffer`, `AudioSourceResolver` |
-| `…/STT` | распознавание | `StreamingTranscriber` (сегментация, итоги, уточнение), `ParakeetEngine`, `WhisperEngine`, `HybridRecognizer` |
-| `…/Filter` | что не распознавать и не показывать | `SileroSpeechGate`, `LanguageGate`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
-| `…/Turns` | конец вопроса | `TurnDetector` (чистая логика, вся покрыта тестами), `TurnEval` |
-| `…/Profiles` | профили, загрузка файлов, материалы (COPILOT-08) | `ProfileLibrary` (создать, переключить, удалить, перенос старого `profile/`, материалы), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md), `MaterialChunker`, `MaterialIndex`, `MaterialIndexBuilder` |
-| `…/Bank` | профиль и база ответов | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML: `BankCard` со статусом ответа, `QuestionBankWriter`), `QuestionImport` (правила + модель), `QuestionPreparation` (формулировки, черновики), `BankMatcher`, `TextEmbedder` |
-| `…/Answer` | выбор: карточка / нет в базе / генерация; история ответов | `AnswerRouter`, `ScreenshotTask`/`ScreenshotTaskTracker` (задача со скриншота, 30 с, `<active_task>`), `FollowUpDetector` (короткие уточнения), `AnswerStyle` (формат, длина, тон → правило промпта; `AnswerShape` — проверка формы), `AnswerHistory` (`AnswerEntry` → `AnswerVersion`: hint / bank / strong / screenshot / refine, статусы, ←/→, «новый ответ») |
-| `…/LLM` | провайдеры и промпт | `PromptBuilder` (все правила для модели), `ProviderChain` + `ChainFactory`, `Providers` (Gemini, DeepSeek, Anthropic, OpenAI-совместимые: Groq, Cerebras, свой API), `SSEClient`, `KeyVerifier` |
-| `…/Memory` | память интервью | `InterviewMemory`, `SessionExchange`, `MemoryContext`, `ReferenceDetector`, `PromptScenarios` |
-| `…/Storage` | история сессий | `SessionRecord` (с `config` сессии, вашими фразами по времени и разбором), `SessionStore` |
-| `…/Review` | разбор после End (COPILOT-09) | `SessionReview` (статус, `ReviewComment`, `ReviewSummary`, `ReviewQA`), `ReviewPrompt` (комментарии порциями, сводка, «Спросить ИИ»), `TimelineEntry` / `SessionRecord.timeline` |
-| `…/Session` | сессия (COPILOT-09) | `SessionConfig`/`SessionType`/`SessionPhase`/`SessionClock`, `Preflight` (проверка перед стартом), `CallDetection`, `JobImport` |
-| `…/Localization` | язык интерфейса (COPILOT-10) | `L10n` (ключ — русская строка, английский — `en.lproj`, `Scope` для тестов), `PageLocalization` (страницы по `en.json`) |
-| `…/Settings` | настройки и пути | `AppSettings` (миграции `schemaVersion`), `SettingsStore` (UserDefaults `settings.v1`), `AppPaths` |
-| `…/Secrets` | ключи API | `KeychainStore` (service `com.itmax04.interviewcopilot`) |
-| `…/Interviewer`, `…/TestCall` | ИИ-собеседование голосом, тестовый звонок в браузере | `InterviewerPrompt`, `SpeechSynth`, `AnswerCapture`, `LocalTestCallServer`, `TranscriptComparison` |
-| `…/Hotkeys`, `…/Menu` | глобальные клавиши (Carbon), состав меню | `HotkeyCenter`, `HotkeyAction`, `MenuLayout` (без AppKit — тестируется) |
-| `…/Usage`, `…/Privacy`, `…/Models`, `…/Capture`, `…/Logging` | расход и бюджет, фильтр ПД, загрузка моделей с SHA256, скриншот, логи | `UsageMeter`, `PIIFilter`, `ModelDownloader`, `ScreenshotService`, `Log` |
-| `Sources/CopilotEmbeddings` | bge-m3 через llama.cpp (отдельно из-за заголовков ggml) | `LlamaEmbedder` |
-| `Sources/InterviewCopilot` | приложение: связывает всё | `AppDelegate` (App.swift — вся проводка колбэков), `LiveSessionController` (Start/End, таймер, определение звонка), `Workspace/WorkspaceWindow` (главное окно: «Сегодня», «Сессии», «Профили», «ИИ-собеседование», «Настройки»), `Design/DesignSystem` (IC — динамические цвета светлой и темной темы и компоненты P00, ICDark — оверлей), `Design/Localization` (`UILanguage`, `localizedRoot`, `L(…)`, перегрузки `Text(String)` и др.), `SessionWizard` (мастер), `AnswerStyleEditor`/`StylePreview` (стиль ответа с предпросмотром), `ListeningController` (в т. ч. `standby` без сессии), `TurnController`, `AnswerController`, `SessionController` (история), `ReviewController` (разбор в фоне), `PanelController` (свернуть, следующий экран, фокус чата, проверка видимости)/`PanelView`/`AnswerCardView`, `Theme`, настройки, профиль, история |
-| `Sources/copilot-eval` | CLI замеров | см. §6 |
+| `Sources/CopilotCore/Audio` | capture, VAD, buffer, permissions | `SystemAudioCapture`, `MicrophoneCapture`, `EnergyVAD`, `AudioRingBuffer`, `AudioSourceResolver` |
+| `…/STT` | recognition | `StreamingTranscriber` (segmentation, finals, refinement), `ParakeetEngine`, `WhisperEngine`, `HybridRecognizer` |
+| `…/Filter` | what not to recognize or show | `SileroSpeechGate`, `LanguageGate`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
+| `…/Turns` | end of question | `TurnDetector` (pure logic, fully tested), `TurnEval` |
+| `…/Profiles` | profiles, file import, materials (COPILOT-08) | `ProfileLibrary` (create, switch, delete, migrate the old `profile/`, materials), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md), `MaterialChunker`, `MaterialIndex`, `MaterialIndexBuilder` |
+| `…/Bank` | profile and answer bank | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML: `BankCard` with an answer status, `QuestionBankWriter`), `QuestionImport` (rules + model), `QuestionPreparation` (phrasings, drafts), `BankMatcher`, `TextEmbedder` |
+| `…/Answer` | card / no match / generation; answer history | `AnswerRouter`, `ScreenshotTask`/`ScreenshotTaskTracker` (screenshot task, 30 s, `<active_task>`), `FollowUpDetector` (short follow-ups), `AnswerStyle` (format, length, tone → prompt rule; `AnswerShape` checks the shape), `AnswerHistory` (`AnswerEntry` → `AnswerVersion`: hint / bank / strong / screenshot / refine, statuses, ←/→, "new answer") |
+| `…/LLM` | providers and prompt | `PromptBuilder` (all rules for the model), `ProviderChain` + `ProviderHealth` + `ChainFactory`, `Providers` (Gemini, DeepSeek, Anthropic, OpenAI-compatible: Groq, Cerebras, custom API), `SSEClient` (incl. `SSE.redactIdentifiers`), `RetryHint`, `KeyVerifier` |
+| `…/Memory` | interview memory | `InterviewMemory`, `SessionExchange`, `MemoryContext`, `ReferenceDetector`, `PromptScenarios` (live prompt checks) |
+| `…/Storage` | session history | `SessionRecord` (with the session `config`, the owner's timed utterances and the review), `SessionStore` |
+| `…/Review` | review after End (COPILOT-09) | `SessionReview` (status, `ReviewComment`, `ReviewSummary`, `ReviewQA`), `ReviewPrompt` (comments in batches, summary, "Ask AI"), `TimelineEntry` / `SessionRecord.timeline` |
+| `…/Session` | session (COPILOT-09) | `SessionConfig`/`SessionType`/`SessionPhase`/`SessionClock`, `Preflight` (pre-start check), `CallDetection`, `JobImport` |
+| `…/Localization` | UI language (COPILOT-10) | `L10n` (key = Russian string, English from `en.lproj`, `Scope` for tests), `PageLocalization` (web pages via `en.json`) |
+| `…/Settings` | settings, paths, overlay geometry | `AppSettings` (`schemaVersion` migrations), `SettingsStore` (UserDefaults `settings.v1`), `AppPaths`, `PanelResizing` |
+| `…/Secrets` | API keys | `KeychainStore` (service `com.itmax04.interviewcopilot`, unlimited slots `groq`, `groq#2`, …), `KeySlots` |
+| `…/Interviewer`, `…/TestCall` | AI voice interview, browser test call | `InterviewerPrompt`, `SpeechSynth`, `AnswerCapture`, `LocalTestCallServer`, `TranscriptComparison` |
+| `…/Hotkeys`, `…/Menu` | global hotkeys (Carbon), menu content | `HotkeyCenter`, `HotkeyAction`, `MenuLayout` (no AppKit — testable) |
+| `…/Usage`, `…/Privacy`, `…/Models`, `…/Capture`, `…/Logging` | spending and budget, PII filter, model download with SHA256, screenshots, logs | `UsageMeter`, `PIIFilter`, `ModelDownloader`, `ScreenshotService`, `Log` |
+| `Sources/CopilotEmbeddings` | bge-m3 via llama.cpp (separate because of ggml headers) | `LlamaEmbedder` |
+| `Sources/InterviewCopilot` | the app: wires everything | `AppDelegate` (App.swift — all callback wiring), `LiveSessionController` (Start/End, timer, call detection), `Workspace/WorkspaceWindow` (main window: Today, Sessions, Profiles, AI interview, Settings; language and theme switchers in the sidebar), `Design/DesignSystem` (`IC` — dynamic light/dark colors and components, `ICDark` — overlay), `Design/Localization` (`UILanguage`, `localizedRoot`, `L(…)`, `Text(String)` overloads), `SessionWizard`, `AnswerStyleEditor`/`StylePreview`, `ListeningController` (incl. `standby` without a session), `TurnController`, `AnswerController`, `SessionController` (history), `ReviewController` (background review), `PanelController` (collapse, next screen, chat focus, visibility check)/`PanelResize`/`PanelView`/`AnswerCardView`, settings, profile, history |
+| `Sources/copilot-eval` | measurement CLI | see §6 |
 
-Правило: логика — в `CopilotCore` (тестируется без UI), приложение только связывает и показывает.
+Rule: logic belongs in `CopilotCore` (tested without UI); the app only wires and displays.
 
-## 4. Данные на диске
-`~/Library/Application Support/InterviewCopilot/` (подменяется `INTERVIEWCOPILOT_HOME`):
-- `profiles/<id>/` — `profile.yaml` (имя), `resume.md`, `stories.md` (факты о себе), `job.md`, `instructions.md`
-  (инструкции профиля), `questions.yaml`, `sources/` (загруженные исходники), `materials/` (текст `*.md` + `sources/`),
-  `materials-index.plist` (векторы фрагментов); права 700/600. Активный — `AppSettings.activeProfileID`;
-- `instructions.md` — общие инструкции владельца (для всех профилей и «Без профиля»). Старая папка `profile/` переносится в
-  `profiles/` при запуске, неизменённая копия примера удаляется; `profile.example/` — только для тестов и eval;
-- `models/` — Whisper, bge-m3, Parakeet, Silero, CAM++, LocalVQE (списки и SHA256: `models.sha256`, `parakeet-models.json`, `filter-models.json`);
-- `sessions/*.json` — история (реплики, ходы, обмены с ответами владельца), права 600, удаляется по сроку;
-- `voice/owner.json` — отпечаток голоса (192 числа), права 600; `usage.json` — расход.
-Настройки — UserDefaults `com.itmax04.interviewcopilot`, ключ `settings.v1`. Ключи API — только Связка ключей.
+## 4. Data on disk
+`~/Library/Application Support/InterviewCopilot/` (override with `INTERVIEWCOPILOT_HOME`):
+- `profiles/<id>/` — `profile.yaml` (name), `resume.md`, `stories.md` (facts about the candidate), `job.md`,
+  `instructions.md` (profile instructions), `questions.yaml`, `sources/` (uploaded originals), `materials/` (text `*.md`
+  + `sources/`), `materials-index.plist` (chunk vectors); permissions 700/600. Active profile — `AppSettings.activeProfileID`;
+- `instructions.md` — the owner's general instructions (all profiles and "No profile"). The legacy `profile/` folder is
+  migrated into `profiles/` on launch, an unchanged copy of the example is removed; `profile.example/` is for tests and evals only;
+- `models/` — Whisper, bge-m3, Parakeet, Silero, CAM++, LocalVQE (lists and SHA256: `models.sha256`,
+  `parakeet-models.json`, `filter-models.json`);
+- `sessions/*.json` — history (utterances, turns, exchanges with the owner's answers, review), permissions 600, purged by
+  retention; "Delete all history" also removes unreadable files;
+- `voice/owner.json` — voiceprint (192 numbers), 600; `usage.json` — spending.
+Settings — UserDefaults `com.itmax04.interviewcopilot`, key `settings.v1`. API keys — Keychain only.
 
-## 5. Как делать типичные изменения
-- **Инструкции владельца** — блок `<owner_instructions>` в конце `PromptBuilder.system`: важнее правил стиля и формата,
-  но не правил надёжности; профиль, материалы, реплики — по-прежнему данные.
-- **Правило для модели** — `PromptBuilder.system` / `user`; закрепить тестом в `Tests/CopilotCoreTests/` и, если поведение
-  модели, — сценарием в `PromptScenarios` + живой прогон `--smoke-memory`.
-- **Провайдер LLM** — `ProviderID` + `ProviderEndpoints` + реализация `LLMProvider` (SSE) + `ChainFactory.providers` +
-  `AppSettings.chain` (миграция) + `KeyVerifier`; фикстуры потоков — `Tests/CopilotCoreTests/Fixtures/`.
-- **Настройка** — поле в `AppSettings` (+ декодирование со значением по умолчанию, `normalized()`), UI в `Settings/`,
-  реакция — в `AppDelegate.applySettings`.
-- **Горячая клавиша** — новый `HotkeyAction` **только в конец** `allCases` (номер = индекс), умолчание в `HotkeyBinding.defaults`,
-  обработка в `AppDelegate.handle(_ action: HotkeyAction)`; подписи в UI — через `hotkey(_:)`, не литералом.
-- **Пункт меню** — `MenuAction` + `MenuLayout.sections` + `AppDelegate.handle(_ action: MenuAction)` + тест `MenuLayoutTests`.
-- **Текст интерфейса** — русская строка одной строкой: литерал SwiftUI переводится сам, строка из кода — `L("…")`
-  (`CopilotCore` — `L10n.t`/`f`); перевод — в `Resources/en.lproj/Localizable.strings`, проверка — `scripts/check-localization.sh`.
-  Новое окно — `.localizedRoot()` на корне и `UILanguage.shared.setTitle(_:of:)` для заголовка. Цвета — только токены `IC`.
-- **Цепочка моделей** — порядок попыток и отказов в `ProviderChain` (последовательный `run` и параллельный `runHedged`): ключи
-  провайдера по очереди → следующий провайдер → `lastResort` (ожидание сброса ключа ≤ 25 с, терпеливый таймаут). Остывание — в
-  `ProviderHealth` (429 — ключ, таймаут/5xx — модель целиком). Новая модель с особым таймаутом — `Step.minFirstTokenTimeout`.
-- **Размер оверлея** — полосы `PanelResizeHandle` (AppKit) по периметру окна, геометрия — `PanelResizing` в Core (тесты).
-- **Новое поле в истории** — опционально или `decodeIfPresent`: старые файлы должны читаться.
-- **Новая зависимость или модель** — только через запись в `docs/decisions/ADR-0001-stack.md`; модели — с SHA256.
+## 5. Making typical changes
+- **Owner instructions** — the `<owner_instructions>` block at the end of `PromptBuilder.system`: outranks style and format
+  rules but not the reliability rules; profile, materials and utterances remain data.
+- **A rule for the model** — `PromptBuilder.system` / `user`; pin it with a test in `Tests/CopilotCoreTests/` and, if it is
+  model behavior, a scenario in `PromptScenarios` plus a live `--smoke-memory` run.
+- **An LLM provider** — `ProviderID` + `ProviderEndpoints` + an `LLMProvider` implementation (SSE) + `ChainFactory.providers` +
+  an `AppSettings.chain` migration + `KeyVerifier`; stream fixtures in `Tests/CopilotCoreTests/Fixtures/`; set
+  `acceptsImages = false` for text-only providers.
+- **A setting** — a field in `AppSettings` (+ decoding with a default, `normalized()`), UI in `Settings/`, reaction in
+  `AppDelegate.applySettings`.
+- **A hotkey** — a new `HotkeyAction` **only at the end** of `allCases` (raw value = index), default in
+  `HotkeyBinding.defaults`, handling in `AppDelegate.handle(_ action: HotkeyAction)`; UI labels via `hotkey(_:)`, not a literal.
+- **A menu item** — `MenuAction` + `MenuLayout.sections` + `AppDelegate.handle(_ action: MenuAction)` (exhaustive switch) +
+  `MenuLayoutTests`.
+- **UI text** — a Russian string as one literal: SwiftUI literals translate themselves, code strings use `L("…")`
+  (`CopilotCore` — `L10n.t`/`f`); translation in `Resources/en.lproj/Localizable.strings`; check with
+  `scripts/check-localization.sh`. A new window: `.localizedRoot()` on the root and `UILanguage.shared.setTitle(_:of:)` for
+  the title. Colors — `IC` tokens only.
+- **Model chain** — order of attempts and failures in `ProviderChain` (sequential `run` and parallel `runHedged`): keys of a
+  provider in turn → next provider → `lastResort` (wait ≤ 25 s for a key reset, patient timeout). Cool-downs in
+  `ProviderHealth` (429 — per key, timeout/5xx — whole model). A model with its own timeout — `Step.minFirstTokenTimeout`.
+- **Overlay size** — `PanelResizeHandle` strips (AppKit) around the window; geometry in `PanelResizing` (Core, tested).
+- **Capture start/stop** — `ListeningController.captureWanted` is the single source of intent; every async capture
+  operation re-checks it when it finishes.
+- **A new field in history** — optional or `decodeIfPresent`: old files must keep loading.
+- **A new dependency or model** — only via an entry in `docs/decisions/ADR-0001-stack.md`; models with SHA256.
 
-## 6. Проверки
-| Что | Команда |
+## 6. Checks
+| What | Command |
 |---|---|
-| Быстро | `swift build && swift test` (337 тестов) |
-| Полностью | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh` |
-| Переводы | `scripts/check-localization.sh [--unused]` — ключи без перевода, несовпадение форматов |
-| Звуковые eval | `scripts/run-evals.sh filter voice` (нужны модели Parakeet, Silero, CAM++) |
+| Quick | `swift build && swift test` (361 tests) |
+| Full | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh` |
+| Translations | `scripts/check-localization.sh [--unused]` — keys without a translation, mismatched formats |
+| Audio evals | `scripts/run-evals.sh filter voice` (needs Parakeet, Silero, CAM++) |
 | CLI | `swift run -c release copilot-eval <stt|stt-parakeet|stt-hybrid|stt-stream|turn|bank|filter-text|filter|voice|voice-enroll|enhance|memory|exit-check>` |
-| Живые (тратят бесплатные лимиты) | `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`, `--smoke-memory 5`, `--smoke-prepare`, `--smoke-session`, `--smoke-review`, `--smoke-task evals/fixtures/two-sum.png`, `--ui-snapshots <папка>` (снимки окон без звука), `--smoke-screenshot evals/fixtures/two-sum.png` |
-| Метрики созвона | `scripts/metrics.py --last 30m` (из журнала, только числа) |
+| Live (spend free quota) | `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`, `--smoke-memory 5`, `--smoke-prepare`, `--smoke-session`, `--smoke-review`, `--smoke-task evals/fixtures/two-sum.png`, `--smoke-screenshot evals/fixtures/two-sum.png`, `--smoke-panel-resize`, `--ui-snapshots <dir>` (window snapshots without audio) |
+| Call metrics | `scripts/metrics.py --last 30m` (from the log, numbers only) |
 
-Пороги eval — `evals/README.md`. Живые проверки запускаются из подписанного `.app`: только ему Связка ключей отдаёт ключи без запроса.
+Eval thresholds — `evals/README.md`. Live checks run from the signed `.app`: only it gets the keys from the Keychain without a prompt.
 
-## 7. Журнал и отладка
-`log show --predicate 'subsystem == "com.itmax04.interviewcopilot"' --info --last 30m` (в zsh — `/usr/bin/log`).
-Категории: `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Важные события: `transcript_final`, `transcript_revised`,
+## 7. Log and debugging
+`log show --predicate 'subsystem == "com.itmax04.interviewcopilot"' --info --last 30m` (in zsh — `/usr/bin/log`).
+Categories: `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Important events: `transcript_final`, `transcript_revised`,
 `filtered reason=lang|vad|voice|echo|hallucination`, `voice_ok similarity=…`, `turn_end`, `draft_start/used/cancelled`,
-`first_token … ms_from_speech_end=…`, `not_a_question`, `owner answering on/off`, `owner_final`, `new interview: …`.
-**В журнал не пишутся тексты реплик, ответов и ключи** — только события, числа, ID моделей.
+`bank_match`, `no_match`, `first_token … ms_from_speech_end=…`, `not_a_question`, `last resort: …`,
+`owner answering on/off`, `owner_final`, `capture_restart`.
+**Utterance texts, answers and keys are never logged** — only events, numbers and model IDs; provider error messages are
+redacted (`SSE.redactIdentifiers`).
 
-## 8. Правила (кратко, полностью — CLAUDE.md)
-- Ключи и личные данные — никогда в код, логи, тесты, коммиты; тестовые данные — синтетические.
-- Одна задача — `docs/changes/COPILOT-NN/` (intent → spec → [plan] → handoff) и ветка `feat/copilot-NN-…` от предыдущей;
-  после шага — коммит; push и merge в `main` — по решению владельца; без force-push и переписывания истории.
-- В handoff — что сделано, коммиты, проверки PASS/FAIL/NOT RUN, решения исполнителя, следующий шаг.
+## 8. Rules (short; full version in CLAUDE.md)
+- Keys and personal data never go into code, logs, tests or commits; test data is synthetic.
+- One task — `docs/changes/COPILOT-NN/` (intent → spec → [plan] → handoff) and a branch `feat/copilot-NN-…` from the previous
+  one; commit after each step; push and merging into `main` by the owner's decision; no force-push or history rewriting.
+- The handoff lists what was done, commits, checks PASS/FAIL/NOT RUN, executor decisions and the next step.
 
-## 9. История задач
-| Задача | Что | Ветка |
+## 9. Task history
+| Task | What | Branch |
 |---|---|---|
-| COPILOT-01 | v1: захват, Whisper, база, Gemini/DeepSeek/Claude, панель, меню, история | `feat/copilot-01` |
-| COPILOT-02 | документы по Parakeet v3 (не слита) | `docs/copilot-02` |
-| COPILOT-03 | ИИ-собеседование голосом, Parakeet + гибрид с Whisper, режим «Без профиля» | `feat/copilot-03-ai-interviewer` |
-| COPILOT-04 | мгновенные ответы: Groq/Cerebras, параллельный запуск, опережающий запрос, свой API | `feat/copilot-04-instant-answers` |
-| COPILOT-05 | фильтры: Silero, язык с терминами, отпечаток голоса, LocalVQE, речь владельца на созвоне | `feat/copilot-05-speech-filter` |
-| COPILOT-06 | память интервью, «Новое интервью», подсказка вместо незаписанного ответа, ⌃⌥A | `feat/copilot-06-session-memory` |
-| COPILOT-07 | аудит и доводка: ловушки «вы упоминали», привязка к ходу, меню «Сейчас отвечаю я», история, `--smoke-memory` | `feat/copilot-07-hardening` |
-| COPILOT-08 | профили: окно «Профиль», PDF/Word/RTF/текст, инструкции владельца, материалы, вопросы с ответами (по этапам) | `feat/copilot-08-profiles` |
-| COPILOT-11 | правки по тестовому собеседованию: «последний шанс» цепочки (ждет сброс лимита ключа), hedge к другому провайдеру, снимки только провайдерам с изображениями, граница таймаута Gemini 7 с, правило «работали ли вы с X?», размер оверлея мышью (0.15) | `feat/copilot-11-test-call-fixes` |
-| COPILOT-10 | светлая и темная тема окон, интерфейс на русском и английском (сразу, без перезапуска), разбор на языке интерфейса (версия 0.14) | `feat/copilot-10-theme-language` |
-| COPILOT-09 | уровень ParakeetAI: сессии (мастер, Start/End, проверка, импорт вакансии), живой оверлей, стиль ответа, разбор после End, задачи со скриншотов, редизайн по образцам ImageGen (этапы 1–7, версии 0.7–0.12) | `feat/copilot-09-parakeet-parity` |
+| COPILOT-01 | v1: capture, Whisper, bank, Gemini/DeepSeek/Claude, overlay, menu, history | `feat/copilot-01` |
+| COPILOT-02 | Parakeet v3 documents (not merged into the chain) | `docs/copilot-02` |
+| COPILOT-03 | AI voice interview, Parakeet + hybrid with Whisper, "No profile" mode | `feat/copilot-03-ai-interviewer` |
+| COPILOT-04 | instant answers: Groq/Cerebras, parallel requests, speculative request, custom API | `feat/copilot-04-instant-answers` |
+| COPILOT-05 | filters: Silero, language with terms, voiceprint, LocalVQE, owner speech on calls | `feat/copilot-05-speech-filter` |
+| COPILOT-06 | interview memory, "New interview", hint instead of an unrecorded answer, ⌃⌥A | `feat/copilot-06-session-memory` |
+| COPILOT-07 | audit and polish: "you mentioned" traps, binding to the turn, "I'm answering now" menu item, history, `--smoke-memory` | `feat/copilot-07-hardening` |
+| COPILOT-08 | profiles: Profile window, PDF/Word/RTF/text, owner instructions, materials, questions with answers | `feat/copilot-08-profiles` |
+| COPILOT-09 | ParakeetAI parity: sessions (wizard, Start/End, pre-check, job import), live overlay, answer style, review after End, screenshot tasks, redesign from ImageGen references, multiple keys (0.7–0.13) | `feat/copilot-09-parakeet-parity` |
+| COPILOT-10 | light and dark window theme, Russian and English UI (instant switch), review in the UI language (0.14) | `feat/copilot-10-theme-language` |
+| COPILOT-11 | fixes after the test interview: chain "last resort", hedge to another provider, screenshots only to image-capable providers, Gemini timeout floor, "have you worked with X?" rule, interviewer monologue is not a question, overlay resizing, "Delete all" questions (0.15) | `feat/copilot-11-test-call-fixes` |
+| COPILOT-12 | final review: capture start/stop race, history wipe, error redaction, Groq token budget, English documentation and `AGENTS.md` (0.15.1) | `feat/copilot-12-final-review` |
 
-Ветки идут цепочкой (каждая от предыдущей); `main` пока содержит только начальный коммит — слияние решает владелец.
+Branches form a chain (each from the previous one). `main` is fast-forwarded to the latest reviewed task by the owner's decision.
 
-## 10. Известные ограничения и куда расти
-- Распознавание украинского у Parakeet — главный источник ошибок текста; уточнение Whisper иногда портит фразу.
-- Ответы модели вероятностные: правила проверяются `--smoke-memory`, но не гарантированы.
-- Бесплатные лимиты Groq/Gemini (≈30 запросов в минуту) при быстрой серии вопросов переключают цепочку на запасные модели.
-- Эхоподавления нет: эхо отсекают отпечаток голоса и правило по времени (COPILOT-05 R-04).
-- Идеи: «Дополнить образец голоса», слияние веток в `main`, сводка интервью после звонка (решение владельца 06/Q3 — пока нет).
+## 10. Known limitations and where to grow
+- Parakeet's Ukrainian recognition is the main source of text errors; the Whisper refinement sometimes damages a phrase.
+- Model answers are probabilistic: rules are checked with `--smoke-memory` but not guaranteed.
+- Free Groq tiers (8 000 tokens per minute per key) and a ~6 000-token hint prompt mean about one hint per minute per key;
+  a fast series of questions moves the chain to fallback models.
+- No acoustic echo cancellation: echo is removed by the voiceprint and a timing rule (COPILOT-05 R-04).
+- Ideas: "extend the voice sample", CI for the full check, a shorter prompt (fewer TPM tokens), English source comments.

@@ -1,87 +1,87 @@
-# Промпт исполнителя COPILOT-01
+# COPILOT-01 executor prompt
 
-Статус: **accepted** (2026-10-06) · Дата: 2026-10-06
-Запуск: Claude Code в папке `~/Desktop/1/interview-copilot`, модель `claude-opus-5-5`, effort high.
-Использовать только после того, как владелец перевёл intent, spec, plan и ADR-0001 в статус accepted.
+Status: **accepted** (2026-10-06) · Date: 2026-10-06
+Launch: Claude Code in the folder `~/Desktop/1/interview-copilot`, model `claude-opus-5-5`, effort high.
+Use only after the owner has moved intent, spec, plan and ADR-0001 to the accepted status.
 
 ---
 
-Ты — исполнитель проекта Interview Copilot (личное приложение для macOS). Работаешь без истории прошлых чатов.
+You are the executor of the Interview Copilot project (a personal macOS app). You work without the history of previous chats.
 
-## Прочитай перед работой (обязательно, в этом порядке)
-1. `CLAUDE.md` — правила проекта, запреты, Git-политика.
-2. `README.md` — назначение, структура, команды.
-3. `docs/changes/COPILOT-01/intent.md` — цель, границы, решения владельца Q1–Q12, допущения A-1…A-4.
-4. `docs/changes/COPILOT-01/spec.md` — требования R-01…R-25, сценарии S-01…S-11, критерии AC-01…AC-14. Это единственный источник требований.
-5. `docs/decisions/ADR-0001-stack.md` — стек и разрешённые зависимости.
-6. `docs/changes/COPILOT-01/plan.md` — шаги P-00…P-13, точки H-0…H-5, проверки, условия остановки.
-7. `evals/README.md` — наборы данных и пороги.
-8. `docs/changes/COPILOT-01/handoff.md` — где остановилась прошлая сессия.
-9. Фактический `git status` и `git log --oneline -10`. Если они расходятся с handoff.md, верь Git и запиши расхождение.
+## Read before starting (mandatory, in this order)
+1. `CLAUDE.md` — project rules, prohibitions, Git policy.
+2. `README.md` — purpose, structure, commands.
+3. `docs/changes/COPILOT-01/intent.md` — goal, scope, owner decisions Q1–Q12, assumptions A-1…A-4.
+4. `docs/changes/COPILOT-01/spec.md` — requirements R-01…R-25, scenarios S-01…S-11, criteria AC-01…AC-14. The only source of requirements.
+5. `docs/decisions/ADR-0001-stack.md` — stack and allowed dependencies.
+6. `docs/changes/COPILOT-01/plan.md` — steps P-00…P-13, points H-0…H-5, checks, stop conditions.
+7. `evals/README.md` — datasets and thresholds.
+8. `docs/changes/COPILOT-01/handoff.md` — where the previous session stopped.
+9. The actual `git status` and `git log --oneline -10`. If they differ from handoff.md, trust Git and record the discrepancy.
 
-Кратко (5–10 строк) подтверди: какие версии документов прочитаны, текущий шаг, ближайшая точка H.
+Briefly (5–10 lines) confirm: which document versions were read, the current step, the next H point.
 
-## Что сделать
-Реализуй plan.md по шагам, начиная с первого незавершённого в handoff.md, до P-13 включительно.
-Итог — работающее приложение `dist/InterviewCopilot.app`, которое владелец запускает на своём Mac
-и использует на созвоне в Google Meet. Плюс `docs/changes/COPILOT-01/report.md` со свидетельствами по AC-01…AC-14.
+## What to do
+Implement plan.md step by step, starting from the first unfinished step in handoff.md, up to and including P-13.
+The result is a working app `dist/InterviewCopilot.app` that the owner runs on their Mac and uses on a Google Meet call.
+Plus `docs/changes/COPILOT-01/report.md` with evidence for AC-01…AC-14.
 
-## Как работать
-- Один шаг P-xx за раз. После шага:
-  1. проверки шага из plan.md;
-  2. просмотр своего diff (лишние файлы, секреты, случайное форматирование);
-  3. обновление handoff.md;
-  4. коммит `P-xx: <что сделано>`;
+## How to work
+- One P-xx step at a time. After a step:
+  1. the step's checks from plan.md;
+  2. review your diff (extra files, secrets, accidental formatting);
+  3. update handoff.md;
+  4. commit `P-xx: <what was done>`;
   5. `git push origin feat/copilot-01`.
-- Не задавай владельцу вопросов, кроме точек H-0…H-5. В точке H:
-  - остановись;
-  - дай пошаговую инструкцию на русском (что нажать, где);
-  - укажи, что проверишь после ответа;
-  - жди «готово».
-- Неоднозначность вне точек H решай сам, в таком порядке приоритета:
+- Do not ask the owner questions except at points H-0…H-5. At an H point:
+  - stop;
+  - give step-by-step instructions in Russian (what to click, where);
+  - state what you will check after the answer;
+  - wait for "done".
+- Resolve ambiguity outside H points yourself, in this priority order:
   1. spec;
   2. `docs/design/menu-v2.webp`;
   3. Apple HIG;
-  4. техническая целесообразность.
+  4. technical feasibility.
 
-  Решение записывай в handoff.md → «Решения исполнителя» со ссылкой на R-/AC-.
-- Для API Anthropic перед написанием кода загрузи skill `claude-api` и сверься с ним (raw HTTP, стриминг, refusal, fallbacks).
-  Для Gemini и DeepSeek — официальная документация. ID моделей проверяй запросом списка моделей, не по памяти.
-- Ключ есть только у Gemini (владелец вводит его в Settings при H-2). Проверки с DeepSeek и Anthropic без ключей —
-  mock-тесты и NOT RUN для живых вызовов, с пометкой в report.md.
+  Record the decision in handoff.md → "Executor decisions" with a reference to R-/AC-.
+- For the Anthropic API, load the `claude-api` skill before writing code and follow it (raw HTTP, streaming, refusal, fallbacks).
+  For Gemini and DeepSeek — the official documentation. Check model IDs by requesting the model list, not from memory.
+- Only Gemini has a key (the owner enters it in Settings at H-2). Checks with DeepSeek and Anthropic without keys —
+  mock tests and NOT RUN for live calls, noted in report.md.
 
-## Границы
-- Разрешено:
-  - писать код, тесты и скрипты в репозитории;
-  - ставить зависимости из ADR-0001 п. 9;
-  - скачивать модели (с проверкой SHA256);
-  - коммитить и пушить в `feat/copilot-01`.
-- Запрещено:
-  - force-push, `reset --hard`, удаление веток, merge в `main`;
-  - менять TCC, Keychain trust и системные настройки;
-  - вводить или выводить ключи; просить ключи в чате;
-  - коммитить `profile/`, модели, логи;
-  - использовать платные сервисы или ключи, кроме Gemini владельца;
-  - публиковать что-либо.
-- Не ослабляй тесты и пороги evals ради зелёного результата. Не пиши «проверено» без фактического запуска команды.
-- Новая зависимость вне ADR-0001 — только с записью в ADR и пометкой «требует подтверждения владельца при приёмке».
+## Boundaries
+- Allowed:
+  - write code, tests and scripts in the repository;
+  - install dependencies from ADR-0001 item 9;
+  - download models (with SHA256 verification);
+  - commit and push to `feat/copilot-01`.
+- Forbidden:
+  - force-push, `reset --hard`, deleting branches, merging into `main`;
+  - changing TCC, Keychain trust and system settings;
+  - entering or printing keys; asking for keys in chat;
+  - committing `profile/`, models, logs;
+  - using paid services or keys other than the owner's Gemini key;
+  - publishing anything.
+- Do not weaken tests or eval thresholds to get a green result. Do not write "verified" without actually running the command.
+- A new dependency outside ADR-0001 — only with an ADR entry and the note "requires owner confirmation at acceptance".
 
-## Когда остановиться и эскалировать
-Условия — plan.md, раздел «Условия остановки». При остановке:
-- сохрани состояние в handoff.md (сделано, гипотезы, следующий шаг);
-- закоммить и запушь рабочее состояние, если оно собирается;
-- опиши владельцу проблему и варианты.
+## When to stop and escalate
+Conditions — plan.md, section "Stop conditions". When stopping:
+- save the state in handoff.md (done, hypotheses, next step);
+- commit and push the working state if it builds;
+- describe the problem and options to the owner.
 
-## Финал
-После P-13:
-- report.md: таблица AC → команда/способ → результат (PASS / FAIL / NOT RUN) → свидетельство; непроверенное и риски;
-- обновлённые README и ADR-0001;
-- ветка запушена.
+## Final
+After P-13:
+- report.md: a table AC → command/method → result (PASS / FAIL / NOT RUN) → evidence; unverified items and risks;
+- updated README and ADR-0001;
+- the branch is pushed.
 
-Сообщи владельцу:
-- путь к `.app` и как запустить;
-- итоги по AC;
-- что осталось непроверенным;
-- что нужно от него для H-5.
+Tell the owner:
+- the path to the `.app` and how to run it;
+- AC results;
+- what remains unverified;
+- what is needed from them for H-5.
 
-Не делай merge в `main` и не создавай PR без отдельной команды владельца.
+Do not merge into `main` and do not create a PR without a separate command from the owner.

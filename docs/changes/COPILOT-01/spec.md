@@ -1,225 +1,225 @@
-# COPILOT-01: Спецификация v1
+# COPILOT-01: Specification v1
 
-ID: COPILOT-01-spec · Статус: **accepted** (2026-10-06) · Версия: 1 · Дата: 2026-10-06 · Владелец: itmax04
-Связи: [intent.md](intent.md) (цель, границы, решения Q1–Q12) · [ADR-0001](../../decisions/ADR-0001-stack.md) (стек) ·
-[plan.md](plan.md) (реализация) · [evals/README.md](../../../evals/README.md) (наборы и пороги)
-Единственный источник требований — этот файл. В plan.md и handoff.md — только ссылки на R-/AC-номера.
+ID: COPILOT-01-spec · Status: **accepted** (2026-10-06) · Version: 1 · Date: 2026-10-06 · Owner: itmax04
+Links: [intent.md](intent.md) (goal, scope, decisions Q1–Q12) · [ADR-0001](../../decisions/ADR-0001-stack.md) (stack) ·
+[plan.md](plan.md) (implementation) · [evals/README.md](../../../evals/README.md) (datasets and thresholds)
+This file is the only source of requirements. plan.md and handoff.md only reference R-/AC- numbers.
 
-## 1. Термины
-- **Сессия** — период от «начать слушать» до «остановить» или выхода из приложения.
-- **Реплика** — непрерывная речь собеседника между паузами.
-- **Ход (turn)** — реплика, признанная законченным вопросом или репликой, на которую нужен ответ (R-05).
-- **Карточка** — запись базы: варианты формулировки вопроса и ответ владельца (R-06).
-- **Провайдер** — Gemini, DeepSeek или Anthropic. **Цепочка** — порядок перехода между ними (R-09).
-- **Сильная модель** — провайдер для «сложных вопросов» и скриншотов (по умолчанию Claude Sonnet 5.5).
+## 1. Terms
+- **Session** — the period from "start listening" to "stop" or quitting the app.
+- **Utterance** — continuous speech of the other person between pauses.
+- **Turn** — an utterance recognized as a finished question or a line that needs an answer (R-05).
+- **Card** — a bank entry: question phrasings and the owner's answer (R-06).
+- **Provider** — Gemini, DeepSeek or Anthropic. **Chain** — the order of fallback between them (R-09).
+- **Strong model** — the provider for "hard questions" and screenshots (Claude Sonnet 5.5 by default).
 
-## 2. Сценарии
-- **S-01. Вопрос из базы.** Дано: идёт созвон в Meet, режим «Только база», в базе есть «Расскажите о себе».
-  Когда: собеседник спрашивает «Пару слов о вашем опыте?» и замолкает. Тогда: не позже чем через 0,5 с
-  в панели появляется карточка `about-me` с пометкой «База · 92%».
-- **S-02. Нет в базе, режим «Только база».** Когда: звучит вопрос, которого нет в базе.
-  Тогда: «Нет в базе» и три ближайшие карточки с процентом совпадения; к модели запрос не отправляется.
-- **S-03. Нет в базе, режим «База + подсказка».** Тогда: ответ генерирует Gemini, текст появляется по мере генерации,
-  метка «Gemini · сгенерировано», первые слова — не позже 2,5 с.
-- **S-04. Gemini недоступен.** Когда: Gemini вернул 429, 5xx, ошибку сети или не начал отвечать за 4 с.
-  Тогда: тот же запрос уходит к следующему провайдеру, у которого есть ключ; метка показывает фактическую модель.
-  Если ключей больше нет — сообщение «Модели недоступны: <причина>», и действует S-02.
-- **S-05. Сильная модель вручную.** Когда: владелец нажимает ⌃⌥C или «↑ Claude» на карточке.
-  Тогда: последний вопрос отправляется сильной модели. Если её ключа нет — кнопка неактивна с подсказкой «Нет ключа Anthropic».
-- **S-06. Скриншот задачи.** Когда: ⌃⌥S. Тогда: снимок экрана с курсором, без панели помощника, отправляется сильной модели
-  (без ключа — в Gemini), в панели появляется решение: подход, код, сложность.
-- **S-07. Владелец говорит сам.** Когда: собеседник замолчал, но владелец уже говорит в микрофон.
-  Тогда: автоматический ответ не запускается; ⌃⌥↩ работает всегда.
-- **S-08. Пауза.** Когда: ⌃⌥P или «Pause listening». Тогда: захват и расшифровка остановлены, статус «Paused»,
-  ничего не отправляется. Повторное нажатие возобновляет работу.
-- **S-09. Первый запуск.** Тогда: мастер из трёх шагов — разрешения (запись экрана и системного звука, микрофон),
-  ключ Gemini, загрузка моделей с прогрессом. Без разрешения на запись экрана слушать нельзя, и это явно показано.
-- **S-10. Правка базы.** Когда: владелец сохраняет `questions.yaml`. Тогда: база перечитывается и эмбеддинги пересчитываются
-  в фоне. Ошибки разбора показываются в меню («Question bank: ошибка в строке N»), при этом остаётся прежняя рабочая версия.
-- **S-11. Язык.** Когда: вопрос звучит по-украински. Тогда: расшифровка на украинском, совпадение ищется по всем языкам карточек,
-  сгенерированный ответ — по-украински.
+## 2. Scenarios
+- **S-01. A question from the bank.** Given: a Meet call is running, mode "Bank only", the bank has "Расскажите о себе".
+  When: the other person asks "Пару слов о вашем опыте?" and stops. Then: no later than 0.5 s later
+  the panel shows the `about-me` card marked "Bank · 92%".
+- **S-02. Not in the bank, mode "Bank only".** When: a question not in the bank is asked.
+  Then: "Not in the bank" and the three closest cards with a match percentage; no request is sent to a model.
+- **S-03. Not in the bank, mode "Bank + hint".** Then: Gemini generates the answer, the text appears as it is generated,
+  label "Gemini · generated", first words no later than 2.5 s.
+- **S-04. Gemini unavailable.** When: Gemini returned 429, 5xx, a network error or did not start answering within 4 s.
+  Then: the same request goes to the next provider that has a key; the label shows the actual model.
+  If there are no more keys — the message "Models unavailable: <reason>", and S-02 applies.
+- **S-05. Strong model manually.** When: the owner presses ⌃⌥C or "↑ Claude" on the card.
+  Then: the last question is sent to the strong model. If its key is missing — the button is disabled with the hint "No Anthropic key".
+- **S-06. Task screenshot.** When: ⌃⌥S. Then: a screenshot of the display with the cursor, without the assistant panel, is sent
+  to the strong model (without a key — to Gemini); the panel shows the solution: approach, code, complexity.
+- **S-07. The owner speaks.** When: the other person stopped, but the owner is already speaking into the microphone.
+  Then: the automatic answer does not start; ⌃⌥↩ always works.
+- **S-08. Pause.** When: ⌃⌥P or "Pause listening". Then: capture and transcription stop, status "Paused",
+  nothing is sent. Pressing again resumes.
+- **S-09. First launch.** Then: a three-step wizard — permissions (screen and system audio recording, microphone),
+  the Gemini key, model download with progress. Without the screen-recording permission listening is impossible, and this is shown explicitly.
+- **S-10. Editing the bank.** When: the owner saves `questions.yaml`. Then: the bank is re-read and embeddings are recomputed
+  in the background. Parse errors are shown in the menu ("Question bank: error on line N") while the previous working version stays active.
+- **S-11. Language.** When: the question is in Ukrainian. Then: the transcript is in Ukrainian, matching works across all card
+  languages, the generated answer is in Ukrainian.
 
-## 3. Требования
+## 3. Requirements
 
-### Звук и распознавание
-- **R-01. Источник звука.** Подменю «Listening — <app> ›»:
-  - Auto (по умолчанию): первое запущенное из zoom.us → Google Chrome → Telegram;
-  - конкретное запущенное приложение;
-  - «Весь системный звук».
+### Audio and recognition
+- **R-01. Audio source.** Submenu "Listening — <app> ›":
+  - Auto (default): the first running of zoom.us → Google Chrome → Telegram;
+  - a specific running app;
+  - "All system audio".
 
-  Звук самого помощника всегда исключается. Смена источника — без перезапуска.
-- **R-02. Микрофон.** Используется только для определения речи владельца (VAD).
-  Не расшифровывается, не отправляется, не сохраняется.
-- **R-03. Распознавание.** whisper.cpp по ADR-0001, локально.
-  - Язык: Auto (uk/ru/en) / Українська / Русский / English — подменю «Language».
-  - Промежуточный текст обновляется в панели, итоговый текст реплики фиксируется после паузы.
-- **R-04. Аудио на диск не пишется.** Кольцевой буфер в памяти ≤ 30 с. По приоритету точности владельца от 2026-10-08 закрытые фразы дополнительно сохраняются в памяти очереди до окончания распознавания.
+  The assistant's own audio is always excluded. Switching the source needs no restart.
+- **R-02. Microphone.** Used only to detect the owner's speech (VAD).
+  Not transcribed, not sent, not stored.
+- **R-03. Recognition.** whisper.cpp per ADR-0001, local.
+  - Language: Auto (uk/ru/en) / Українська / Русский / English — "Language" submenu.
+  - Interim text updates in the panel; the final utterance text is fixed after a pause.
+- **R-04. No audio is written to disk.** A ring buffer in memory ≤ 30 s. Following the owner's accuracy priority of 2026-10-08, closed phrases are additionally kept in queue memory until recognition finishes.
 
-### Определение хода
-- **R-05.** Ход завершён, если одновременно:
-  - собеседник молчит ≥ T мс (по умолчанию 700, в настройках 400–1500);
-  - в реплике ≥ 3 слов;
-  - владелец не говорит (R-02).
+### Turn detection
+- **R-05.** A turn is complete when all of the following hold:
+  - the other person is silent ≥ T ms (700 by default, 400–1500 in settings);
+  - the utterance has ≥ 3 words;
+  - the owner is not speaking (R-02).
 
-  ⌃⌥↩ («Answer now») завершает ход немедленно по последней реплике, даже если не все условия выполнены.
-  Порог T подбирается по eval `turn` (evals/README.md).
+  ⌃⌥↩ ("Answer now") completes the turn immediately using the last utterance, even if not all conditions hold.
+  The threshold T is tuned by the `turn` eval (evals/README.md).
 
-### База вопросов
-- **R-06. Формат** `profile/questions.yaml`:
+### Question bank
+- **R-06. Format** `profile/questions.yaml`:
   ```yaml
-  - id: about-me            # уникальный, [a-z0-9-]
+  - id: about-me            # unique, [a-z0-9-]
     questions: [ "Расскажите о себе", "Tell me about yourself", "Розкажіть про себе" ]
-    answer: |               # текст как есть, Markdown: списки, **жирный**
+    answer: |               # text as is, Markdown: lists, **bold**
       • ...
-    tags: [STAR]            # необязательно; STAR → отображать чипы S/T/A/R
+    tags: [STAR]            # optional; STAR → show S/T/A/R chips
   ```
-  Валидация: уникальный id, ≥ 1 вопрос, непустой ответ. Пример — `profile.example/questions.yaml` (≥ 15 карточек на трёх языках).
-- **R-07. Поиск.**
-  - Сходство ход ↔ каждая формулировка каждой карточки, берётся максимум по карточке.
-  - Совпадение, если score ≥ порог (по умолчанию 0,85, уточняется eval `bank`; настраивается).
-  - Иначе — топ-3 карточки. Поиск локальный, без сети.
-- **R-08. Режимы** (подменю «Mode», по умолчанию «Bank + hint»):
-  - «Question bank only» — S-01/S-02;
-  - «Bank + hint» — S-01/S-03;
-  - «Generate every answer» — генерация на каждый ход; найденная карточка передаётся модели как основа ответа.
+  Validation: unique id, ≥ 1 question, non-empty answer. Example — `profile.example/questions.yaml` (≥ 15 cards in three languages).
+- **R-07. Search.**
+  - Similarity of the turn ↔ every phrasing of every card; the maximum per card is taken.
+  - A match if score ≥ threshold (0.85 by default, refined by the `bank` eval; configurable).
+  - Otherwise — the top 3 cards. Search is local, no network.
+- **R-08. Modes** ("Mode" submenu, "Bank + hint" by default):
+  - "Question bank only" — S-01/S-02;
+  - "Bank + hint" — S-01/S-03;
+  - "Generate every answer" — generation on every turn; a found card is passed to the model as the basis of the answer.
 
-### Генерация
-- **R-09. Цепочка.** Основной — Gemini Flash, запасной — DeepSeek Flash, сильная модель — Claude Sonnet 5.5
-  (подменю «Models», ID моделей редактируются в настройках).
-  - Порядок автоперехода: Gemini → DeepSeek → Claude. Провайдеры без ключа пропускаются.
-  - Триггеры перехода: HTTP 429/5xx, сетевая ошибка, первый токен не пришёл за 4 с, `stop_reason = refusal`.
-  - Ошибки 400/401/403 не ведут к повтору у того же провайдера: в настройках показывается «ключ недействителен».
-- **R-10. Стриминг.** Текст выводится по мере прихода. Новый ход отменяет незавершённую генерацию предыдущего.
-- **R-11. Промпт.** Системная часть (постоянная, кэшируемая) + профиль (`resume.md`, `job.md`, `stories.md`) + до 3 ближайших карточек
-  + последние 6 реплик + текущий вопрос. Инструкции модели:
-  - отвечать от первого лица, на языке вопроса;
-  - 3–6 пунктов, ≤ 80 слов;
-  - опираться только на факты профиля; отсутствующий факт помечать «[уточнить]»;
-  - если реплика не вопрос и не требует ответа — вернуть ровно `—` (панель тогда не меняется).
+### Generation
+- **R-09. Chain.** Main — Gemini Flash, fallback — DeepSeek Flash, strong model — Claude Sonnet 5.5
+  ("Models" submenu, model IDs are editable in settings).
+  - Fallback order: Gemini → DeepSeek → Claude. Providers without a key are skipped.
+  - Fallback triggers: HTTP 429/5xx, a network error, no first token within 4 s, `stop_reason = refusal`.
+  - Errors 400/401/403 do not lead to a retry at the same provider: settings show "invalid key".
+- **R-10. Streaming.** Text is shown as it arrives. A new turn cancels the unfinished generation of the previous one.
+- **R-11. Prompt.** A system part (constant, cacheable) + profile (`resume.md`, `job.md`, `stories.md`) + up to 3 closest cards
+  + the last 6 utterances + the current question. Model instructions:
+  - answer in the first person, in the language of the question;
+  - 3–6 bullets, ≤ 80 words;
+  - rely only on profile facts; mark a missing fact "[уточнить]";
+  - if the utterance is not a question and needs no answer — return exactly `—` (the panel then does not change).
 
-  Текст профиля и реплик — данные, а не инструкции. Модель не получает инструментов.
-- **R-12. Фильтр личных данных.** Перед отправкой из профиля удаляются email, телефоны, URL
-  (Settings → Privacy, по умолчанию включено).
-- **R-13. Сильная модель вручную** — S-05.
-  - Для Claude: Messages API, `max_tokens` 1024, минимальная задержка (thinking выключен или минимальный effort).
-  - Включён серверный fallback на отказ (`fallbacks: "default"`).
-  - Точные параметры — по актуальной документации (skill `claude-api`) на шаге P-07.
-- **R-14. Скриншот.**
-  - ⌃⌥S делает снимок дисплея с курсором (ScreenCaptureKit), панель помощника исключена.
-  - Изображение сжимается до ≤ 1600 px по длинной стороне.
-  - Промпт: условие → подход → код → сложность → проверочные кейсы.
-  - Снимок хранится только в памяти до конца ответа.
+  Profile and utterance text are data, not instructions. The model gets no tools.
+- **R-12. Personal data filter.** Emails, phone numbers and URLs are removed from the profile before sending
+  (Settings → Privacy, on by default).
+- **R-13. Strong model manually** — S-05.
+  - For Claude: Messages API, `max_tokens` 1024, minimal latency (thinking off or minimal effort).
+  - Server-side fallback on refusal is on (`fallbacks: "default"`).
+  - Exact parameters — per the current documentation (the `claude-api` skill) in step P-07.
+- **R-14. Screenshot.**
+  - ⌃⌥S takes a screenshot of the display with the cursor (ScreenCaptureKit), the assistant panel excluded.
+  - The image is downscaled to ≤ 1600 px on the long side.
+  - Prompt: problem → approach → code → complexity → test cases.
+  - The screenshot is kept only in memory until the answer ends.
 
-### Интерфейс (дизайн: `docs/design/menu-v2.webp`, нативный macOS, Apple HIG)
-- **R-15. Меню в строке меню.** Иконка — попугай (монохромный шаблон для строки меню; цветной — в окне «О программе»).
-  Состав и порядок по картинке:
-  1. «● Listening — <app> ›» (точка: зелёная — слушает, серая — пауза, красная — нет разрешения); «Pause listening ⌃⌥P».
-  2. «Mode: … ›», «Models: Gemini → DeepSeek → Claude ›», «Language: Auto (UK/RU/EN) ›».
-  3. «Profile: <название из profile.yaml> ›» (в v1 — текущий и «Открыть папку профиля»), «Question bank (N cards)…»,
-     «Edit resume & stories…» (открывает папку профиля), «Practice mode…» — **неактивен, с пометкой «soon»**.
-  4. «Answer now ⌃⌥↩», «Screenshot → <сильная модель> ⌃⌥S», «Show panel ⌃⌥H», «Session history…».
-  5. Серая строка статуса: «Today: $0.03 · Gemini: 41 req» (если был 429 — «Gemini: limit»).
-  6. «Settings… ⌘,», «Quit ⌘Q».
+### Interface (design: `docs/design/menu-v2.webp`, native macOS, Apple HIG)
+- **R-15. Menu-bar menu.** Icon — a parrot (a monochrome template for the menu bar; a color one in the About window).
+  Content and order as in the picture:
+  1. "● Listening — <app> ›" (dot: green — listening, gray — paused, red — no permission); "Pause listening ⌃⌥P".
+  2. "Mode: … ›", "Models: Gemini → DeepSeek → Claude ›", "Language: Auto (UK/RU/EN) ›".
+  3. "Profile: <name from profile.yaml> ›" (in v1 — the current one and "Open profile folder"), "Question bank (N cards)…",
+     "Edit resume & stories…" (opens the profile folder), "Practice mode…" — **disabled, marked "soon"**.
+  4. "Answer now ⌃⌥↩", "Screenshot → <strong model> ⌃⌥S", "Show panel ⌃⌥H", "Session history…".
+  5. A gray status line: "Today: $0.03 · Gemini: 41 req" (after a 429 — "Gemini: limit").
+  6. "Settings… ⌘,", "Quit ⌘Q".
 
-  **Отклонения от картинки (решения A-3, A-4):** сочетания ⌃⌥ вместо ⌘; счётчик запросов вместо «quota 92%»;
-  «Practice mode» неактивен; подпись «Language: Auto (RU/EN)» → «(UK/RU/EN)».
-- **R-16. Панель** (`NSPanel`, nonactivating, floating, на всех рабочих столах). Картинки панели нет — источник этот раздел.
-  - Внешний вид: материал `.hudWindow` / тёмное стекло, скругление 16 pt; ширина 380 pt (меняется 300–520);
-    непрозрачность 70–100%; размер шрифта S/M/L; позиция и размер запоминаются.
-  - Фокус: не забирает фокус у Chrome, Zoom или Telegram.
-  - Структура сверху вниз:
-    1. Шапка: иконка, статус-пилюля («● Listening — Chrome» / «Paused» / «Thinking…»), бейдж модели или «Bank»,
-       задержка последнего ответа («1.2s»).
-    2. «Interviewer»: последние 3 реплики, текущая — с курсором.
-    3. Карточка ответа: источник («Bank · about-me · 92%» или «Gemini · generated»); текст в Markdown;
-       чипы S/T/A/R для карточек с тегом STAR; кнопки «Copy», «↑ Claude».
-    4. Подвал: подсказки ⌃⌥↩ / ⌃⌥S / ⌃⌥H.
-  - Состояния панели:
+  **Deviations from the picture (decisions A-3, A-4):** ⌃⌥ shortcuts instead of ⌘; a request counter instead of "quota 92%";
+  "Practice mode" disabled; the label "Language: Auto (RU/EN)" → "(UK/RU/EN)".
+- **R-16. Panel** (`NSPanel`, non-activating, floating, on all desktops). There is no picture of the panel — this section is the source.
+  - Appearance: `.hudWindow` material / dark glass, 16 pt corner radius; width 380 pt (adjustable 300–520);
+    opacity 70–100%; font size S/M/L; position and size are remembered.
+  - Focus: does not take focus from Chrome, Zoom or Telegram.
+  - Structure from top to bottom:
+    1. Header: icon, a status pill ("● Listening — Chrome" / "Paused" / "Thinking…"), a model badge or "Bank",
+       the latency of the last answer ("1.2s").
+    2. "Interviewer": the last 3 utterances, the current one with a cursor.
+    3. Answer card: source ("Bank · about-me · 92%" or "Gemini · generated"); text in Markdown;
+       S/T/A/R chips for cards tagged STAR; buttons "Copy", "↑ Claude".
+    4. Footer: hints ⌃⌥↩ / ⌃⌥S / ⌃⌥H.
+  - Panel states:
 
-    | Состояние | Что видно |
+    | State | What is visible |
     |---|---|
-    | idle | «Выберите источник» |
-    | listening | Расшифровка |
-    | paused | Статус «Paused» |
-    | thinking | Индикатор генерации |
-    | answer | Карточка ответа |
-    | no-match | «Нет в базе» + топ-3 |
-    | error | Причина + действие: «Открыть настройки» / «Повторить» |
-    | no-permission | Кнопка «Открыть Системные настройки» |
-    | downloading | Прогресс загрузки моделей |
+    | idle | "Choose a source" |
+    | listening | Transcript |
+    | paused | Status "Paused" |
+    | thinking | Generation indicator |
+    | answer | Answer card |
+    | no-match | "Not in the bank" + top 3 |
+    | error | Reason + action: "Open settings" / "Retry" |
+    | no-permission | Button "Open System Settings" |
+    | downloading | Model download progress |
 
-  - Доступность: VoiceOver-подписи у кнопок, контраст текста ≥ 4.5:1, «Уменьшить движение» отключает анимации.
-- **R-17. Горячие клавиши** (глобальные, переназначаемые):
-  - ⌃⌥↩ — ответить сейчас;
-  - ⌃⌥S — скриншот;
-  - ⌃⌥H — показать/скрыть панель;
-  - ⌃⌥P — пауза;
-  - ⌃⌥C — сильная модель.
+  - Accessibility: VoiceOver labels on buttons, text contrast ≥ 4.5:1, "Reduce Motion" disables animations.
+- **R-17. Hotkeys** (global, remappable):
+  - ⌃⌥↩ — answer now;
+  - ⌃⌥S — screenshot;
+  - ⌃⌥H — show/hide the panel;
+  - ⌃⌥P — pause;
+  - ⌃⌥C — strong model.
 
-  Если сочетание занято (регистрация не удалась) — предупреждение в настройках.
-- **R-18. Настройки** (окно, вкладки):
-  - Keys — Gemini, DeepSeek, Anthropic: поле ввода, кнопки «Проверить» и «Удалить»; значение после сохранения не показывается;
-  - Models — ID моделей, порядок цепочки, таймаут первого токена;
-  - Audio — источник, язык, порог паузы T;
-  - Bank — порог совпадения;
-  - Privacy — фильтр R-12, срок хранения истории (по умолчанию 30 дней);
-  - Panel — непрозрачность, шрифт;
+  If a shortcut is taken (registration failed) — a warning in settings.
+- **R-18. Settings** (a window with tabs):
+  - Keys — Gemini, DeepSeek, Anthropic: an input field, buttons "Check" and "Delete"; the value is not shown after saving;
+  - Models — model IDs, chain order, first-token timeout;
+  - Audio — source, language, pause threshold T;
+  - Bank — match threshold;
+  - Privacy — the R-12 filter, history retention (30 days by default);
+  - Panel — opacity, font;
   - Hotkeys;
-  - Budget — месячный лимит на платных провайдеров (по умолчанию $5). При достижении лимита платные провайдеры
-    выключаются до подтверждения владельцем; Gemini Free продолжает работать.
+  - Budget — a monthly limit for paid providers ($5 by default). When the limit is reached, paid providers are switched off
+    until the owner confirms; Gemini Free keeps working.
 
-### Данные и учёт
-- **R-19. История.** Каждая сессия — JSON в `…/InterviewCopilot/sessions/<дата-время>.json`.
-  - Содержимое: реплики, ходы, ответ, источник (bank/провайдер), модель, задержки, токены.
-  - Окно «Session history…»: список, просмотр, удаление одной или всех сессий.
-  - Автоудаление старше срока из R-18.
-- **R-20. Учёт расхода.**
-  - Токены из ответов провайдеров × цены из `pricing.json`. Цены на 2026-10-06: Gemini 3.8 Flash $0,75/$3,75,
-    DeepSeek Flash $0,30/$1,20 в пиковые часы (вне пика вдвое ниже), Claude Sonnet 5.5 $2/$10, Haiku 4.5 $1/$5 за 1 млн токенов.
-  - Пока ключ Gemini бесплатный, его стоимость $0 (флажок «Free tier» в Keys).
-  - Счётчики: день и месяц.
-- **R-21. Профиль.** Папка `…/InterviewCopilot/profile/`: `profile.yaml` (название, язык по умолчанию), `resume.md`, `job.md`,
-  `stories.md`, `questions.yaml`. При первом запуске копируется из `profile.example/`.
-- **R-22. Модели.** `scripts/fetch-models.sh` и мастер первого запуска скачивают модели в `…/InterviewCopilot/models/`
-  с проверкой SHA256 (суммы зафиксированы в репозитории). При несовпадении файл удаляется и показывается ошибка.
+### Data and accounting
+- **R-19. History.** Each session — a JSON file `…/InterviewCopilot/sessions/<date-time>.json`.
+  - Content: utterances, turns, answer, source (bank/provider), model, latencies, tokens.
+  - "Session history…" window: list, view, delete one or all sessions.
+  - Automatic deletion of sessions older than the R-18 retention.
+- **R-20. Spending.**
+  - Tokens from provider responses × prices from `pricing.json`. Prices as of 2026-10-06: Gemini 3.8 Flash $0.75/$3.75,
+    DeepSeek Flash $0.30/$1.20 at peak hours (half off-peak), Claude Sonnet 5.5 $2/$10, Haiku 4.5 $1/$5 per 1M tokens.
+  - While the Gemini key is free, its cost is $0 (the "Free tier" checkbox in Keys).
+  - Counters: day and month.
+- **R-21. Profile.** Folder `…/InterviewCopilot/profile/`: `profile.yaml` (name, default language), `resume.md`, `job.md`,
+  `stories.md`, `questions.yaml`. Copied from `profile.example/` on first launch.
+- **R-22. Models.** `scripts/fetch-models.sh` and the first-run wizard download models into `…/InterviewCopilot/models/`
+  with SHA256 verification (checksums are committed to the repository). On mismatch the file is deleted and an error is shown.
 
-### Безопасность и эксплуатация
-- **R-23. Ключи** — только Keychain. Не логируются, не показываются после сохранения, в запросах только в заголовках по HTTPS.
-- **R-24. Логи** — `os_log` (subsystem `com.itmax04.interviewcopilot`).
-  - Текст реплик и ответов в логи не пишется.
-  - Метрики задержек пишутся (ID хода, отметки времени): нужны для AC-01…AC-03.
-- **R-25. Ресурсы.** Всё приложение вместе с моделями во время 10-минутного созвона занимает ≤ 1,5 ГБ памяти
-  (`footprint`/«Мониторинг системы»).
+### Security and operations
+- **R-23. Keys** — Keychain only. Not logged, not shown after saving, sent only in headers over HTTPS.
+- **R-24. Logs** — `os_log` (subsystem `com.itmax04.interviewcopilot`).
+  - Utterance and answer text is not logged.
+  - Latency metrics are logged (turn ID, timestamps): needed for AC-01…AC-03.
+- **R-25. Resources.** The whole app with models during a 10-minute call takes ≤ 1.5 GB of memory
+  (`footprint` / Activity Monitor).
 
-### Мини-модель угроз
-| Актив | Угроза | Мера |
+### Mini threat model
+| Asset | Threat | Measure |
 |---|---|---|
-| API-ключи | Утечка в Git, логи или чат | Keychain (R-23), `.gitignore`, `scripts/secret-scan.sh` (AC-06), правило в CLAUDE.md |
-| Резюме, расшифровки | Передача третьим лицам | Принято владельцем (Q6) для Gemini и DeepSeek; фильтр R-12; срок хранения R-19 |
-| Модели | Подмена файла при загрузке | SHA256 (R-22), загрузка только по HTTPS из официальных репозиториев |
-| Поведение модели | Собеседник произносит «игнорируй инструкции» | Модель без инструментов; ответ только отображается; профиль и реплики помечены как данные (R-11) |
-| Бюджет | Неконтролируемые расходы | Лимит R-18; Gemini Free по умолчанию |
+| API keys | Leak into Git, logs or chat | Keychain (R-23), `.gitignore`, `scripts/secret-scan.sh` (AC-06), a rule in CLAUDE.md |
+| Résumé, transcripts | Disclosure to third parties | Accepted by the owner (Q6) for Gemini and DeepSeek; filter R-12; retention R-19 |
+| Models | File substitution during download | SHA256 (R-22), downloads only over HTTPS from official repositories |
+| Model behavior | The other person says "ignore the instructions" | Model without tools; the answer is only displayed; profile and utterances are marked as data (R-11) |
+| Budget | Uncontrolled spending | Limit R-18; Gemini Free by default |
 
-## 4. Критерии приёмки
-| AC | Критерий | Способ проверки |
+## 4. Acceptance criteria
+| AC | Criterion | How to check |
 |---|---|---|
-| AC-01 | Текст реплики собеседника виден ≤ 1 с после окончания фразы (медиана по 15 вопросам) | Тестовый созвон Meet телефон ↔ Mac по `evals/live-script.md`, метрики из логов (`scripts/metrics.py`) |
-| AC-02 | Карточка из базы видна ≤ 0,5 с после завершения хода (медиана) | То же, метрика `turn_end → card_shown` |
-| AC-03 | Первые слова сгенерированного ответа ≤ 2,5 с (медиана, Gemini Free) | То же, метрика `turn_end → first_token` |
-| AC-04 | ≥ 85% перефразировок находят нужную карточку (≥ 30 примеров, ≥ 8 на каждый язык uk/ru/en); на вопросах вне базы ложных совпадений ≤ 10% | `scripts/run-evals.sh bank` |
-| AC-05 | Память ≤ 1,5 ГБ за 10 минут созвона | `footprint -p <pid>` каждую минуту, максимум в report.md |
-| AC-06 | В репозитории нет ключей и личных данных | `scripts/secret-scan.sh` (паттерны ключей Gemini, DeepSeek, Anthropic, email/телефоны вне `profile.example`) + проверка `.gitignore` |
-| AC-07 | Цепочка: 429 или неверный ключ Gemini → ответ от следующего провайдера с меткой; без запасных ключей — понятная ошибка | Юнит-тесты с mock-провайдером + ручная проверка с заведомо неверным ключом |
-| AC-08 | Три режима ведут себя по S-01…S-03 | Юнит-тесты маршрутизатора |
-| AC-09 | Горячие клавиши работают, когда активен Chrome; панель не забирает фокус | Ручная проверка исполнителем + запись в report.md |
-| AC-10 | Расшифровка uk/ru/en: на тестовом созвоне понятны ≥ 4 из 5 фраз на каждом языке; язык определён верно | `evals/live-script.md`, оценка владельца при H-4 |
-| AC-11 | Меню соответствует `menu-v2.webp` с отклонениями из R-15 | Скриншот меню рядом с картинкой в report.md, оценка владельца |
-| AC-12 | История сохраняется, удаляется и чистится по сроку | Юнит-тесты хранилища |
-| AC-13 | Без разрешения на запись экрана — состояние `no-permission` с инструкцией, без падения | Проверка владельцем при H-3 (до выдачи разрешения) |
-| AC-14 | Сборка воспроизводима: `swift build`, `swift test`, `scripts/build-app.sh` проходят на чистом клоне | Команды в report.md с выводом |
+| AC-01 | The other person's utterance text is visible ≤ 1 s after the phrase ends (median over 15 questions) | Test Meet call phone ↔ Mac per `evals/live-script.md`, metrics from logs (`scripts/metrics.py`) |
+| AC-02 | A bank card is visible ≤ 0.5 s after the turn completes (median) | Same, metric `turn_end → card_shown` |
+| AC-03 | First words of a generated answer ≤ 2.5 s (median, Gemini Free) | Same, metric `turn_end → first_token` |
+| AC-04 | ≥ 85% of paraphrases find the right card (≥ 30 examples, ≥ 8 per language uk/ru/en); false matches on out-of-bank questions ≤ 10% | `scripts/run-evals.sh bank` |
+| AC-05 | Memory ≤ 1.5 GB over a 10-minute call | `footprint -p <pid>` every minute, maximum in report.md |
+| AC-06 | No keys or personal data in the repository | `scripts/secret-scan.sh` (Gemini, DeepSeek, Anthropic key patterns, emails/phones outside `profile.example`) + `.gitignore` check |
+| AC-07 | Chain: 429 or an invalid Gemini key → an answer from the next provider with a label; without fallback keys — a clear error | Unit tests with a mock provider + a manual check with a deliberately invalid key |
+| AC-08 | The three modes behave per S-01…S-03 | Router unit tests |
+| AC-09 | Hotkeys work while Chrome is active; the panel does not take focus | Manual check by the executor + note in report.md |
+| AC-10 | uk/ru/en transcription: on a test call ≥ 4 of 5 phrases per language are understandable; the language is detected correctly | `evals/live-script.md`, owner assessment at H-4 |
+| AC-11 | The menu matches `menu-v2.webp` with the deviations from R-15 | A menu screenshot next to the picture in report.md, owner assessment |
+| AC-12 | History is saved, deleted and purged by retention | Storage unit tests |
+| AC-13 | Without the screen-recording permission — the `no-permission` state with instructions, no crash | Owner check at H-3 (before granting the permission) |
+| AC-14 | The build is reproducible: `swift build`, `swift test`, `scripts/build-app.sh` pass on a clean clone | Commands with output in report.md |
 
-## 5. Решения и допущения
-- Факты: среда (M1 8 ГБ, macOS 15.7.2, Swift 6.0 CLT, без Xcode, без Zoom, есть Chrome и Telegram) проверена 2026-10-06.
-  Цены — с официальных страниц Gemini, DeepSeek и Anthropic на 2026-10-06.
-- Решения владельца: Q1–Q12 (intent.md).
-- Допущения: A-1…A-4 (intent.md). Решения исполнителя по ходу работы записываются в handoff.md.
+## 5. Decisions and assumptions
+- Facts: the environment (M1 8 GB, macOS 15.7.2, Swift 6.0 CLT, no Xcode, no Zoom, Chrome and Telegram present) was checked on 2026-10-06.
+  Prices — from the official Gemini, DeepSeek and Anthropic pages as of 2026-10-06.
+- Owner decisions: Q1–Q12 (intent.md).
+- Assumptions: A-1…A-4 (intent.md). The executor's decisions during the work are recorded in handoff.md.

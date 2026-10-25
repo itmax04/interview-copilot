@@ -1,169 +1,169 @@
-# COPILOT-01: Отчёт о выполнении
+# COPILOT-01: Completion report
 
-Статус: **готово к приёмке (H-5)** · Дата: 2026-10-07 · Ветка: `feat/copilot-01` · Исполнитель: Claude Code
-Связи: [spec.md](spec.md) (AC-01…AC-14), [plan.md](plan.md), [handoff.md](handoff.md) (полный журнал проверок и решений),
-[test-plan.md](test-plan.md) (что и как тестировать дальше), [ADR-0001](../../decisions/ADR-0001-stack.md).
+Status: **ready for acceptance (H-5)** · Date: 2026-10-07 · Branch: `feat/copilot-01` · Executor: Claude Code
+Links: [spec.md](spec.md) (AC-01…AC-14), [plan.md](plan.md), [handoff.md](handoff.md) (full log of checks and decisions),
+[test-plan.md](test-plan.md) (what and how to test next), [ADR-0001](../../decisions/ADR-0001-stack.md).
 
-## Итог в двух словах
-`dist/InterviewCopilot.app` собирается, подписывается и работает на MacBook Air M1 8 ГБ: слушает Meet в Chrome,
-расшифровывает uk/ru/en, находит ответ в базе или генерирует подсказку через Gemini, делает скриншот задачи.
-Скорость (AC-01…AC-03) и память (AC-05) в норме на живом созвоне. **Главное ограничение — точность расшифровки
-на сжатом звуке Meet с телефона** (AC-10: оценка владельца «лучше, но неточно»), подробности ниже.
+## Summary
+`dist/InterviewCopilot.app` builds, signs and runs on a MacBook Air M1 8 GB: it listens to Meet in Chrome,
+transcribes uk/ru/en, finds the answer in the bank or generates a hint through Gemini, and takes a screenshot of a task.
+Speed (AC-01…AC-03) and memory (AC-05) are within limits on a live call. **The main limitation is transcription accuracy
+on compressed Meet audio from a phone** (AC-10: the owner's assessment "better, but inaccurate"), details below.
 
-## Запуск
+## Launch
 ```bash
 open ~/Desktop/1/interview-copilot/dist/InterviewCopilot.app
 ```
-Попугай в строке меню → меню; плавающая панель — ⌃⌥H. Первый запуск — мастер (разрешения → ключ Gemini → модели).
-Пересборка: `scripts/build-app.sh` (нужен сертификат подписи «InterviewCopilot» / «InterviewCopilot Dev»).
+Parrot in the menu bar → menu; floating panel — ⌃⌥H. First launch — a wizard (permissions → Gemini key → models).
+Rebuild: `scripts/build-app.sh` (needs the "InterviewCopilot" / "InterviewCopilot Dev" signing certificate).
 
-## Критерии приёмки
-Метрики созвона — `scripts/metrics.py --start "2026-10-07 11:00:00"` (H-4, попытка 3, модель whisper medium, вопросы на русском).
+## Acceptance criteria
+Call metrics — `scripts/metrics.py --start "2026-10-07 11:00:00"` (H-4, attempt 3, whisper medium, questions in Russian).
 
-| AC | Критерий | Как проверено | Результат | Свидетельство |
+| AC | Criterion | How checked | Result | Evidence |
 |---|---|---|---|---|
-| AC-01 | Текст реплики ≤ 1 с после конца фразы (медиана) | Созвон Meet телефон → Mac, `scripts/metrics.py` | **PASS** (ru/uk) | Медиана 684 мс, p90 956 мс, n=24 (попытка 3); попытка 1 — 511 мс. Синтетика medium: ru 846 мс, uk 1140 мс (сессия на одном языке) |
-| AC-02 | Карточка ≤ 0,5 с после завершения хода (медиана) | То же | **PASS** | 84 мс, p90 86 мс, n=4; на прогоне через динамики — 0,09–0,13 с (n=5) |
-| AC-03 | Первые слова ≤ 2,5 с (медиана, Gemini Free) | То же | **PASS** | 978 мс, p90 1592 мс, n=11 (Gemini Flash-Lite после пропуска медленной 3.8 Flash). До исправления — 4850 мс (FAIL, попытка 1) |
-| AC-04 | ≥ 85% перефразировок, ≤ 10% ложных | `scripts/run-evals.sh bank` | **PASS** | bge-m3, порог 0,74: top-1 94,9% (uk 13/13, ru 12/13, en 12/13), ложные 0/12, top-3 100%; отложенный набор 91,7% / 0% |
-| AC-05 | Память ≤ 1,5 ГБ за 10 минут | `scripts/footprint-monitor.sh 10` | **PASS** (с оговоркой) | 10 минут подряд: максимум 1119 МБ (приложение запущено, слушает Chrome, без речи); на созвоне — 1166 МБ, пик 1172 МБ (не 10 минут речи подряд) |
-| AC-06 | Нет ключей и личных данных в репозитории | `scripts/secret-scan.sh` (дерево, индекс, вся история) + `.gitignore` | **PASS** | «0 findings»; самопроверка на подложенных ключах/email/телефоне — 5/5 найдено |
-| AC-07 | 429/неверный ключ Gemini → следующий провайдер с меткой; без ключей — понятная ошибка | Юнит-тесты (mock, фикстуры SSE) + живые сбои | **PASS** (mock) / ручная проверка с неверным ключом **NOT RUN** | 22 теста ProviderChain/провайдеров; вживую: 503 «high demand», 429 квоты, таймаут 4 с у gemini-3.8-flash → переход на Flash-Lite с меткой «Gemini (gemini-flash-lite-latest)». DeepSeek/Anthropic вживую — NOT RUN (нет ключей) |
-| AC-08 | Три режима по S-01…S-03 | Юнит-тесты AnswerRouter + созвон | **PASS** | `AnswerRouterTests` (3 теста); вживую: карточка из базы (S-01), «Нет в базе» в Question bank only, генерация в Bank + hint (S-03) |
-| AC-09 | Горячие клавиши при активном Chrome; панель не забирает фокус | Ручная проверка | **Частично** | Фокус: `lsappinfo front` до/после показа панели — без изменений (PASS). Нажатия при активном Chrome — исполнитель не может слать синтетические нажатия; по логам владелец пользовался ⌃⌥S. Подтверждение владельца — H-5 |
-| AC-10 | uk/ru/en: понятны ≥ 4 из 5 фраз на язык, язык верный | Оценка владельца на созвоне | **FAIL / требует решения** | Владелец: «уже лучше, но всё равно неточно». Причина — сжатый звук Meet с телефона в той же комнате (субтитры Chrome на нём ошибались сильнее). Сделано: whisper medium вместо small, усиление тихого звука, язык разговора. Английский вживую — NOT RUN (решение владельца). См. «Ограничения» |
-| AC-11 | Меню соответствует menu-v2.webp с отклонениями R-15 | Скриншот владельца | **PASS** (ждёт подтверждения) | [evidence/menu-2026-10-06-owner.png](evidence/menu-2026-10-06-owner.png); порядок и отклонения (⌃⌥, «soon», UK/RU/EN, счётчик запросов) — `MenuLayoutTests` |
-| AC-12 | История сохраняется, удаляется, чистится по сроку | `SessionStoreTests` | **PASS** | 5 тестов: сохранение/чтение, уникальные ID, удаление одной и всех, срок 30 дней, нет полей аудио; вживую — `sessions/*.json` |
-| AC-13 | Без разрешения — состояние no-permission, без падения | Лог + код; визуально — владелец | **Частично** | Лог `no screen capture permission`, процесс жив, окно разрешений открылось само (2026-10-06 22:17). Визуально до выдачи разрешений владелец не подтвердил — проверить при H-5 (см. test-plan.md) |
-| AC-14 | `swift build`, `swift test`, `scripts/build-app.sh` на чистом клоне | Клон из GitHub в пустую папку | **PASS** | См. раздел «Чистый клон» ниже |
+| AC-01 | Utterance text ≤ 1 s after the phrase ends (median) | Meet call phone → Mac, `scripts/metrics.py` | **PASS** (ru/uk) | Median 684 ms, p90 956 ms, n=24 (attempt 3); attempt 1 — 511 ms. Synthetic medium: ru 846 ms, uk 1140 ms (single-language session) |
+| AC-02 | A card ≤ 0.5 s after the turn completes (median) | Same | **PASS** | 84 ms, p90 86 ms, n=4; through speakers — 0.09–0.13 s (n=5) |
+| AC-03 | First words ≤ 2.5 s (median, Gemini Free) | Same | **PASS** | 978 ms, p90 1592 ms, n=11 (Gemini Flash-Lite after skipping the slow 3.8 Flash). Before the fix — 4850 ms (FAIL, attempt 1) |
+| AC-04 | ≥ 85% of paraphrases, ≤ 10% false | `scripts/run-evals.sh bank` | **PASS** | bge-m3, threshold 0.74: top-1 94.9% (uk 13/13, ru 12/13, en 12/13), false 0/12, top-3 100%; holdout set 91.7% / 0% |
+| AC-05 | Memory ≤ 1.5 GB over 10 minutes | `scripts/footprint-monitor.sh 10` | **PASS** (with a caveat) | 10 minutes in a row: maximum 1119 MB (app running, listening to Chrome, no speech); on the call — 1166 MB, peak 1172 MB (not 10 minutes of continuous speech) |
+| AC-06 | No keys or personal data in the repository | `scripts/secret-scan.sh` (tree, index, full history) + `.gitignore` | **PASS** | "0 findings"; self-test on planted keys/email/phone — 5/5 found |
+| AC-07 | 429/invalid Gemini key → the next provider with a label; without keys — a clear error | Unit tests (mock, SSE fixtures) + live failures | **PASS** (mock) / manual check with an invalid key **NOT RUN** | 22 ProviderChain/provider tests; live: 503 "high demand", 429 quota, a 4 s timeout on gemini-3.8-flash → fallback to Flash-Lite with the label "Gemini (gemini-flash-lite-latest)". DeepSeek/Anthropic live — NOT RUN (no keys) |
+| AC-08 | Three modes per S-01…S-03 | AnswerRouter unit tests + call | **PASS** | `AnswerRouterTests` (3 tests); live: a bank card (S-01), "Not in the bank" in Question bank only, generation in Bank + hint (S-03) |
+| AC-09 | Hotkeys while Chrome is active; the panel does not take focus | Manual check | **Partial** | Focus: `lsappinfo front` before/after showing the panel — unchanged (PASS). Key presses while Chrome is active — the executor cannot send synthetic key presses; logs show the owner used ⌃⌥S. Owner confirmation — H-5 |
+| AC-10 | uk/ru/en: ≥ 4 of 5 phrases understandable per language, correct language | Owner assessment on a call | **FAIL / needs a decision** | Owner: "already better, but still inaccurate". Cause — compressed Meet audio from a phone in the same room (Chrome captions were even worse on it). Done: whisper medium instead of small, gain for quiet audio, conversation language. English live — NOT RUN (owner's decision). See "Limitations" |
+| AC-11 | The menu matches menu-v2.webp with the R-15 deviations | Owner's screenshot | **PASS** (awaiting confirmation) | [evidence/menu-2026-10-06-owner.png](evidence/menu-2026-10-06-owner.png); order and deviations (⌃⌥, "soon", UK/RU/EN, request counter) — `MenuLayoutTests` |
+| AC-12 | History is saved, deleted and purged by retention | `SessionStoreTests` | **PASS** | 5 tests: save/load, unique IDs, delete one and all, 30-day retention, no audio fields; live — `sessions/*.json` |
+| AC-13 | Without permission — the no-permission state, no crash | Log + code; visually — owner | **Partial** | Log `no screen capture permission`, process alive, the permissions window opened by itself (2026-10-06 22:17). Not visually confirmed by the owner before granting permissions — check at H-5 (see test-plan.md) |
+| AC-14 | `swift build`, `swift test`, `scripts/build-app.sh` on a clean clone | Clone from GitHub into an empty folder | **PASS** | See "Clean clone" below |
 
-## Чистый клон (AC-14)
-Первая попытка (коммит `d046738`) **упала**: `.gitignore` с шаблоном `models/` (macOS, регистр не учитывается) скрыл
-`Sources/CopilotCore/Models/ModelDownloader.swift`. Найдено ревью P-13, исправлено (`/models/`), файл добавлен в `cc1c06e`.
-Повторный прогон на коммите `cc1c06e` (клон из GitHub в пустую папку scratchpad):
-`swift build` — Build complete (35 с); `swift test` — 143 теста в 21 наборе PASS; `scripts/build-app.sh` — OK,
+## Clean clone (AC-14)
+The first attempt (commit `d046738`) **failed**: `.gitignore` with the pattern `models/` (macOS, case-insensitive) hid
+`Sources/CopilotCore/Models/ModelDownloader.swift`. Found by the P-13 review, fixed (`/models/`), the file added in `cc1c06e`.
+Rerun on commit `cc1c06e` (clone from GitHub into an empty scratchpad folder):
+`swift build` — Build complete (35 s); `swift test` — 143 tests in 21 suites PASS; `scripts/build-app.sh` — OK,
 `codesign -dvv` → `Identifier=com.itmax04.interviewcopilot`, `Authority=InterviewCopilot`; `scripts/secret-scan.sh` — 0 findings.
 
-## Независимое ревью (P-13)
-`/code-review high` по ветке против spec.md и CLAUDE.md — 10 находок, **все исправлены** в `cc1c06e`, на каждую — регрессионный тест:
-1. P0 — `ModelDownloader.swift` не в Git (AC-14) → шаблоны `.gitignore` с якорем `/`.
-2. P1 — новая реплика прерывала итог предыдущей (текст терялся) → прерывается только частичный прогон.
-3. P1 — «Включить снова» в Budget тут же отменялось → лимит срабатывает только при переходе через порог.
-4. P1 — пауза не отменяла генерацию и пропускала итог из очереди (S-08) → отмена генерации, «эпоха» паузы.
-5. P1 — после паузы детектор хода сохранял «владелец говорит»/ожидание старой фразы → полный сброс.
-6. P1 — фильтр ПД резал годы («2019-2022»), числа и названия технологий → точные шаблоны телефонов и ссылок.
-7. P1 — карточки базы уходили в модель без фильтра ПД (R-12) → фильтр и для карточек.
-8. P2 — 404 (опечатка в ID модели) обрывал цепочку → любая HTTP-ошибка ведёт к следующему провайдеру.
-9. P2 — метрика AC-03 смешивала подсказки со скриншотами и сильной моделью → `kind=hint`.
-10. P2 — двойной учёт кэшированных токенов Gemini → вычет кэша для Gemini и DeepSeek.
+## Independent review (P-13)
+`/code-review high` on the branch against spec.md and CLAUDE.md — 10 findings, **all fixed** in `cc1c06e`, each with a regression test:
+1. P0 — `ModelDownloader.swift` not in Git (AC-14) → `.gitignore` patterns anchored with `/`.
+2. P1 — a new utterance interrupted the final of the previous one (text was lost) → only the partial pass is interrupted.
+3. P1 — "Turn back on" in Budget was immediately undone → the limit fires only when crossing the threshold.
+4. P1 — pause did not cancel generation and let a queued final through (S-08) → generation is cancelled, a pause "epoch".
+5. P1 — after a pause the turn detector kept "owner speaking"/waiting for an old phrase → full reset.
+6. P1 — the PII filter cut years ("2019-2022"), numbers and technology names → precise phone and link patterns.
+7. P1 — bank cards went to the model without the PII filter (R-12) → the filter applies to cards too.
+8. P2 — a 404 (typo in a model ID) broke the chain → any HTTP error moves to the next provider.
+9. P2 — the AC-03 metric mixed hints with screenshots and the strong model → `kind=hint`.
+10. P2 — Gemini cached tokens were counted twice → the cache is subtracted for Gemini and DeepSeek.
 
-## Проверки (финальный прогон)
-| Команда | Результат |
+## Checks (final run)
+| Command | Result |
 |---|---|
 | `swift build` | PASS |
-| `swift test` | PASS — 143 теста в 21 наборе (Swift Testing) |
-| `scripts/run-evals.sh` | turn: 36 случаев, преждевременные 0%, пропущенные 0%; bank: 94,9% / 0% |
+| `swift test` | PASS — 143 tests in 21 suites (Swift Testing) |
+| `scripts/run-evals.sh` | turn: 36 cases, premature 0%, missed 0%; bank: 94.9% / 0% |
 | `scripts/secret-scan.sh` | 0 findings |
 | `scripts/build-app.sh` | `dist/InterviewCopilot.app`, `Authority=InterviewCopilot` |
-| `scripts/fetch-models.sh` | SHA256 совпадает для всех моделей |
+| `scripts/fetch-models.sh` | SHA256 matches for all models |
 
-## Добавлено по запросу владельца (2026-10-07)
-**Режим самопроверки «Microphone (practice, no call)»** — меню Listening или Settings → Audio: владелец говорит в микрофон Mac
-без Meet, приложение расшифровывает вопрос и отвечает (карточка или подсказка). Разрешение «Запись экрана» не нужно,
-только микрофон. Это расширение R-01; R-02 действует для созвонов. Проверено через динамики → микрофон: карточки за 74–102 мс
-после хода, подсказка 0,83 с.
+## Added at the owner's request (2026-10-07)
+**The self-check mode "Microphone (practice, no call)"** — the Listening menu or Settings → Audio: the owner speaks into the Mac
+microphone without Meet, the app transcribes the question and answers (a card or a hint). The Screen Recording permission is not needed,
+only the microphone. This extends R-01; R-02 applies to calls. Checked via speakers → microphone: cards 74–102 ms after the turn,
+a hint in 0.83 s.
 
-## Ограничения и риски
-1. **Точность расшифровки на сжатом звуке (AC-10).** Медиум — самая крупная модель, укладывающаяся в 1 с и 1,5 ГБ на M1 8 ГБ.
-   Владелец выбрал её (вариант 1) вместо large-v3-turbo (2–2,5 с, ~1,8 ГБ). Что помогает: выбрать язык в меню Language;
-   собеседник с ноутбука/гарнитуры; телефон не в одной комнате с Mac. Частые переходы ru ↔ uk внутри созвона — слабое место.
-2. **Квота бесплатного Gemini.** Основная `gemini-3.8-flash` на бесплатном ключе отвечала 503/429/медленно; цепочка уходит
-   на `gemini-flash-lite-latest` (отдельная квота). Исполнитель израсходовал дневную квоту 3.8 Flash замерами 2026-10-06.
-3. **Связка ключей и самоподписанный сертификат.** После каждой пересборки macOS спрашивает доступ к ключу один раз
-   («Разрешать всегда»). Уберётся, если владелец сам отметит сертификат доверенным для подписи кода (исполнитель доверие не менял).
-4. **Память 1,1–1,2 ГБ** из 1,5: запас ~300 МБ. Если Mac начнёт тормозить — Settings: модель `ggml-small-q5_1.bin` (0,5 ГБ, менее точно).
-5. **Не проверено вживую:** DeepSeek и Anthropic (нет ключей), английские вопросы на созвоне, ⌃⌥C, AC-13 визуально,
-   ⌃⌥H/⌃⌥↩ при активном Chrome. Всё перечислено в [test-plan.md](test-plan.md).
-6. **Зависимости вне ADR-0001: нет.** Модели (whisper medium/small, bge-m3) — из официальных репозиториев с SHA256.
+## Limitations and risks
+1. **Transcription accuracy on compressed audio (AC-10).** Medium is the largest model that fits 1 s and 1.5 GB on an M1 8 GB.
+   The owner chose it (option 1) over large-v3-turbo (2–2.5 s, ~1.8 GB). What helps: choosing the language in the Language menu;
+   the other person on a laptop/headset; the phone not in the same room as the Mac. Frequent ru ↔ uk switches within a call are a weak spot.
+2. **Free Gemini quota.** The main `gemini-3.8-flash` on a free key answered 503/429/slowly; the chain moves to
+   `gemini-flash-lite-latest` (a separate quota). The executor used up the daily 3.8 Flash quota with measurements on 2026-10-06.
+3. **Keychain and a self-signed certificate.** After every rebuild macOS asks once for access to the key
+   ("Always Allow"). This goes away if the owner marks the certificate as trusted for code signing (the executor did not change trust).
+4. **Memory 1.1–1.2 GB** of 1.5: ~300 MB of headroom. If the Mac slows down — Settings: model `ggml-small-q5_1.bin` (0.5 GB, less accurate).
+5. **Not checked live:** DeepSeek and Anthropic (no keys), English questions on a call, ⌃⌥C, AC-13 visually,
+   ⌃⌥H/⌃⌥↩ while Chrome is active. All listed in [test-plan.md](test-plan.md).
+6. **Dependencies outside ADR-0001: none.** Models (whisper medium/small, bge-m3) — from official repositories with SHA256.
 
-## Что нужно от владельца для H-5
-1. Пройти чек-лист приёмки из [test-plan.md](test-plan.md), раздел «Приёмка владельцем» (≈ 15 минут).
-2. Решить по AC-10: принять текущую точность с рекомендациями или запросить следующую итерацию (большая модель / облачное распознавание — отдельный intent).
-3. Принять NOT RUN: живые DeepSeek/Anthropic до появления ключей.
-4. Merge в `main` и PR — только по отдельной команде владельца.
+## What the owner needs to do for H-5
+1. Go through the acceptance checklist in [test-plan.md](test-plan.md), section "Owner acceptance" (≈ 15 minutes).
+2. Decide on AC-10: accept the current accuracy with the recommendations or request another iteration (a larger model / cloud recognition — a separate intent).
+3. Accept the NOT RUN items: live DeepSeek/Anthropic until keys are available.
+4. Merging into `main` and a PR — only on a separate command from the owner.
 
-## Локальное распознавание — обновление 2026-10-08, v0.1.1
+## Local recognition — update 2026-10-08, v0.1.1
 
-Приоритет владельца: точность RU/UK/EN на M1 8 ГБ, сначала бесплатный локальный вариант.
-Основной движок теперь Parakeet v3 через FluidAudio 0.17.7; альтернатива — Whisper large-v3-turbo
-с полным контекстом итогового текста. Выбор в Audio, без перезапуска. Облачное распознавание не используется.
+Owner priority: RU/UK/EN accuracy on an M1 8 GB, a free local option first.
+The main engine is now Parakeet v3 via FluidAudio 0.17.7; the alternative is Whisper large-v3-turbo
+with full context for the final text. Selected in Audio, no restart. Cloud recognition is not used.
 
-На первых 10 test-записях Google FLEURS каждого языка (30 файлов, 575 слов, CC BY 4.0):
+On the first 10 test recordings of Google FLEURS per language (30 files, 575 words, CC BY 4.0):
 
-| Режим | Ошибки | WER | UK | RU | EN |
+| Mode | Errors | WER | UK | RU | EN |
 |---|---:|---:|---:|---:|---:|
-| Старый medium, reduced | 54 | 9,39% | 15,29% | 9,28% | 4,74% |
-| Medium, full | 46 | 8,00% | 15,88% | 5,67% | 3,79% |
-| Turbo, full | 27 | 4,70% | 7,65% | 2,58% | 4,27% |
-| Parakeet v3, встроенный адаптер, Auto | 26 | 4,52% | 4,71% | 4,12% | 4,74% |
+| Old medium, reduced | 54 | 9.39% | 15.29% | 9.28% | 4.74% |
+| Medium, full | 46 | 8.00% | 15.88% | 5.67% | 3.79% |
+| Turbo, full | 27 | 4.70% | 7.65% | 2.58% | 4.27% |
+| Parakeet v3, built-in adapter, Auto | 26 | 4.52% | 4.71% | 4.12% | 4.74% |
 
-Источник: https://huggingface.co/datasets/google/fleurs, configs uk_ua/ru_ru/en_us,
-parquet revision 168de341b3db6859a9bac1c50a2ef5e3b47647e0. WER не учитывает регистр и пунктуацию;
-числа словами и цифрами не приравниваются. Человеческие записи хранятся вне Git.
-Разница Parakeet/Turbo — одна ошибка; превосходство на любых звонках не доказано.
-Синтетический набор: 24 файла, 511 слов (тишe, AAC 8 кГц, шум, длинные вопросы и отрицания):
-старый medium — 3 ошибки, medium full — 2, Turbo и Parakeet — 0.
+Source: https://huggingface.co/datasets/google/fleurs, configs uk_ua/ru_ru/en_us,
+parquet revision 168de341b3db6859a9bac1c50a2ef5e3b47647e0. WER ignores case and punctuation;
+numbers in words and digits are not equated. The human recordings are kept outside Git.
+The Parakeet/Turbo difference is one error; superiority on arbitrary calls is not proven.
+Synthetic set: 24 files, 511 words (quieter, AAC 8 kHz, noise, long questions and negations):
+old medium — 3 errors, medium full — 2, Turbo and Parakeet — 0.
 
-Встроенный адаптер проверен на всех 54 файлах. После снятия token cap итоговый Turbo повторно
-проверен на 30 человеческих файлах: те же 27 ошибок. Поток EN → RU → UK через StreamingTranscriber:
-3/3 текста и языка верны, 14 partial, задержка до final 461/486/519 мс (медиана 486 мс).
-Это подача файлов в реальном времени; захват реального звонка не проверен.
+The built-in adapter was checked on all 54 files. After removing the token cap, the final Turbo was rechecked
+on the 30 human files: the same 27 errors. An EN → RU → UK stream through StreamingTranscriber:
+3/3 texts and languages correct, 14 partials, latency to final 461/486/519 ms (median 486 ms).
+This is real-time file feeding; capturing a real call was not checked.
 
-Исправлены снимок звука/языка закрытой фразы до постановки в очередь, позиции VAD внутри блока,
-сохранение нескольких фраз из одного блока, полный контекст Whisper для final и предел токенов final.
-Предварительный Whisper остаётся быстрым. Parakeet не использует конкурирующие uk/ru-прогоны
-и не ограничивает алфавит — английские термины могут сохраняться в кириллической фразе.
-Результаты старой модели после переключения не выдаются; загрузка не возобновляется при выходе.
-Закреплённая модель Parakeet: 23 файла, 460 МиБ, SHA256 проверены установщиком.
-Оригинальные ключи, профиль и история не менялись.
+Fixed: snapshotting the audio/language of a closed phrase before queueing, VAD positions inside a block,
+keeping several phrases from one block, full Whisper context for the final and the token limit for the final.
+The interim Whisper stays fast. Parakeet does not use competing uk/ru passes
+and does not restrict the alphabet — English terms may stay inside a Cyrillic phrase.
+Results of the old model are not delivered after switching; downloading does not resume on quit.
+Pinned Parakeet model: 23 files, 460 MiB, SHA256 verified by the installer.
+The original keys, profile and history were not changed.
 
-PASS: 151 тест; eval turn 36 случаев; eval bank top1 94,9%, top3 100%, false 0/12;
-secret scan 0 findings; сборка приложения 0.1.1 (build 2) и codesign --verify --strict.
-NOT RUN: живой микрофон/созвон владельца, смешение языков внутри фразы через захват,
-общая память приложения на звонке, визуальная приёмка Audio и одинаковый звук в parakeet-ai.com.
-AC-10 остаётся на H-4; AC-01 для точного Whisper может превышать 1 с, что соответствует
-новому приоритету владельца «точность важнее задержки».
+PASS: 151 tests; turn eval 36 cases; bank eval top1 94.9%, top3 100%, false 0/12;
+secret scan 0 findings; app build 0.1.1 (build 2) and codesign --verify --strict.
+NOT RUN: the owner's live microphone/call, language mixing inside a phrase through capture,
+the app's total memory on a call, visual acceptance of Audio and identical audio on parakeet-ai.com.
+AC-10 stays at H-4; AC-01 for the accurate Whisper may exceed 1 s, which matches
+the owner's new priority "accuracy over latency".
 
-Повторяемый тест: `scripts/eval-local-stt.py /path/manifest.json /path/results.json`.
-Manifest: массив объектов id/language/condition/path/expected. Данные владельца хранить вне Git.
-Установка закреплённых моделей: `scripts/fetch-parakeet.py`; зависимости и решения — ADR-0001.
+Repeatable test: `scripts/eval-local-stt.py /path/manifest.json /path/results.json`.
+Manifest: an array of objects id/language/condition/path/expected. Keep the owner's data outside Git.
+Installing the pinned models: `scripts/fetch-parakeet.py`; dependencies and decisions — ADR-0001.
 
 
-## Тестовый звонок — 2026-10-08, v0.1.2
+## Test call — 2026-10-08, v0.1.2
 
-Бесплатный локальный режим, фиксированные голоса в браузере; проверяет настоящий захват звука,
-а не подачу файла напрямую в STT. 15 синтетических фраз, 5 на язык; звук mono16k PCM,
-800 мс тишины до фразы и 700 мс после. Условия: нормальный вопрос, отрицание, тихая речь,
-сжатие звонка, названия технологий и число. Браузер Chrome, движок Parakeet v3.
-WER: расстояние редактирования слов, без регистра/пунктуации, ё=е, апострофы нормализованы;
-числа остаются в исходном написании. Например, «two point four» → «2.4» увеличивает raw WER
-даже при сохранении смысла. Синтетическое произношение названий также влияет на результат.
+A free local mode with fixed voices in the browser; it checks real audio capture,
+not feeding a file directly into STT. 15 synthetic phrases, 5 per language; audio mono16k PCM,
+800 ms of silence before the phrase and 700 ms after. Conditions: a normal question, a negation, quiet speech,
+call compression, technology names and a number. Chrome browser, Parakeet v3 engine.
+WER: word edit distance, case/punctuation ignored, ё=е, apostrophes normalized;
+numbers keep their original spelling. For example, "two point four" → "2.4" increases the raw WER
+even when the meaning is preserved. The synthetic pronunciation of names also affects the result.
 
-| Язык | Фразы | Слова | Ошибки | Raw WER | Медиана STT после речи |
+| Language | Phrases | Words | Errors | Raw WER | Median STT after speech |
 |---|---:|---:|---:|---:|---:|
-| RU | 5 | 96 | 7 | 7,29% | 517 мс |
-| UK | 5 | 97 | 9 | 9,28% | 501 мс |
-| EN | 5 | 123 | 4 | 3,25% | 495 мс |
-| Все | 15 | 316 | 20 | 6,33% | 501 мс |
+| RU | 5 | 96 | 7 | 7.29% | 517 ms |
+| UK | 5 | 97 | 9 | 9.28% | 501 ms |
+| EN | 5 | 123 | 4 | 3.25% | 495 ms |
+| All | 15 | 316 | 20 | 6.33% | 501 ms |
 
-Системных проблем 0/15. Без технических фраз: RU 0/77, UK 2/78, EN 0/101.
-JSON сохранён через кнопку браузера и проверен: все 15 результатов. Результаты синтетики
-не доказывают такую же точность на живом собеседовании и не являются сравнением с Parakeet AI.
-Человеческая невнятная речь и шум ещё не измерены; следующий шаг — одинаковые записи с эталоном
-для Parakeet и Whisper, особенно отрицания, имена, числа и технические термины.
+System problems 0/15. Without technical phrases: RU 0/77, UK 2/78, EN 0/101.
+The JSON was saved with the browser button and checked: all 15 results. Synthetic results
+do not prove the same accuracy in a live interview and are not a comparison with Parakeet AI.
+Unclear human speech and noise are not measured yet; the next step is identical recordings with a reference
+for Parakeet and Whisper, especially negations, names, numbers and technical terms.
 
-PASS: 157 unit tests; bank/turn eval; secret scan 0; app signing strict; локальные маршруты,
-байтовые диапазоны WAV и неизменность звуковых ресурсов; отклонение неверного Origin/Host/token,
-переходов к произвольным файлам, повторного begin и устаревшего ended; cancel и close;
-сохранённые пользовательские настройки совпали до/после финального теста управления.
-Подробности границы полного аудиопрогона и финальных изменений — handoff.md.
+PASS: 157 unit tests; bank/turn eval; secret scan 0; strict app signing; local routes,
+WAV byte ranges and unchanged audio resources; rejection of a wrong Origin/Host/token,
+paths to arbitrary files, a repeated begin and a stale ended; cancel and close;
+saved user settings matched before/after the final control test.
+Details of the full audio run boundary and the final changes — handoff.md.

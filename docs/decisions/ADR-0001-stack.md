@@ -1,178 +1,178 @@
-# ADR-0001: Стек и архитектура Interview Copilot v1
+# ADR-0001: Interview Copilot v1 stack and architecture
 
-Статус: **accepted** (2026-10-06), итоговые решения дописаны 2026-10-07 (P-04, P-06, P-12, P-13) · Дата: 2026-10-06 · Владелец: itmax04 · Связи: [intent](../changes/COPILOT-01/intent.md), [spec](../changes/COPILOT-01/spec.md)
+Status: **accepted** (2026-10-06); final decisions added 2026-10-07 (P-04, P-06, P-12, P-13) · Date: 2026-10-06 · Owner: itmax04 · Links: [intent](../changes/COPILOT-01/intent.md), [spec](../changes/COPILOT-01/spec.md)
 
-## Контекст
-- Личное приложение для macOS, один пользователь, MacBook Air M1 с 8 ГБ памяти, macOS 15.7.2.
-- Нужны: системный звук конкретного приложения, окно поверх всех окон без перехвата фокуса,
-  глобальные горячие клавиши, Связка ключей, локальное распознавание речи uk/ru/en.
-- Рядом работают браузер и созвон, поэтому приложение должно быть лёгким (AC-05: ≤ 1,5 ГБ).
-- Установлен Swift 6.0 (Command Line Tools), Xcode нет; владелец разрешил поставить Xcode при необходимости.
+## Context
+- A personal macOS app, one user, MacBook Air M1 with 8 GB of memory, macOS 15.7.2.
+- Required: system audio of a specific app, a window above all windows that does not steal focus, global hotkeys,
+  the Keychain, local uk/ru/en speech recognition.
+- A browser and a call run alongside, so the app must be light (AC-05: ≤ 1.5 GB).
+- Swift 6.0 (Command Line Tools) was installed, no Xcode; the owner allowed installing Xcode if needed.
 
-## Варианты оболочки
-| Вариант | Плюсы | Минусы |
+## Shell options
+| Option | Pros | Cons |
 |---|---|---|
-| **Swift (SwiftUI + AppKit)** | Нативные ScreenCaptureKit, NSPanel, Keychain; ~100 МБ своей памяти | Только macOS (это и требуется) |
-| Electron | Знакомый веб-стек | 400–600 МБ памяти, системный звук через обходные пути |
-| Tauri | Лёгкий | Захват звука и панель всё равно пишутся на Swift или Rust |
-| Python + браузер | Быстрый прототип | Нет нативной панели без фокуса, тяжелее по памяти |
+| **Swift (SwiftUI + AppKit)** | Native ScreenCaptureKit, NSPanel, Keychain; ~100 MB of own memory | macOS only (which is what is required) |
+| Electron | Familiar web stack | 400–600 MB of memory, system audio through workarounds |
+| Tauri | Light | Audio capture and the panel still have to be written in Swift or Rust |
+| Python + browser | Fast prototype | No native non-activating panel, heavier on memory |
 
-## Решение
-1. **Язык и UI:** Swift 6, SwiftUI для содержимого, AppKit для `NSStatusItem`, `NSMenu`, `NSPanel`.
-   Приложение работает как агент (`LSUIElement = true`): без иконки в Dock.
-2. **Сборка:** SwiftPM (`Package.swift`) без `.xcodeproj`. Скрипт `scripts/build-app.sh` собирает `.app`
-   (Info.plist, иконка, подпись). Цели: `InterviewCopilot` (приложение), `CopilotCore` (логика, тестируется),
-   `copilot-eval` (CLI для evals), тесты `CopilotCoreTests`.
-3. **Подпись:** постоянный локальный сертификат подписи кода «InterviewCopilot Dev»
-   (создаёт владелец, H-1). Тогда разрешения macOS не сбрасываются при пересборке.
-   При ad-hoc подписи разрешения слетают после каждой сборки. Bundle ID: `com.itmax04.interviewcopilot`.
-4. **Звук:** ScreenCaptureKit (`SCStream`, только аудио, фильтр по выбранному приложению,
-   `excludesCurrentProcessAudio = true`). Микрофон через AVAudioEngine используется только для определения,
-   говорит ли владелец (VAD): не расшифровывается и не сохраняется.
-5. **Распознавание речи:** whisper.cpp на Metal.
-   - Основная модель: `large-v3-turbo` в квантовании q5_0 (~0,6 ГБ на диске).
-   - Запасная: `small` q5_1, если не выполняются AC-01 или AC-05 (решается в P-04 по замерам).
-   - Языки: автоопределение среди {uk, ru, en} или явный выбор в меню.
-   - Подключение: готовый XCFramework из релизов whisper.cpp как `binaryTarget` SwiftPM.
-     Если это невозможно — сборка из исходников через Xcode (Q10: обходные пути не искать).
-6. **Поиск по базе:** локальные мультиязычные эмбеддинги.
-   - Кандидат №1: `multilingual-e5-small` в GGUF через llama.cpp (тот же ggml, что у whisper).
-   - Кандидат №2: `bge-m3`, если №1 не даёт ≥ 85% (AC-04) и укладывается в память.
-   - Эмбеддинги карточек кэшируются на диске и пересчитываются при изменении `questions.yaml`.
-   - Выбор фиксируется по результатам eval в P-06 и дописывается в этот ADR.
-7. **Языковые модели:** собственный HTTP-клиент с SSE-стримингом, без SDK: официального Swift SDK у Anthropic нет,
-   а единый протокол `LLMProvider` проще тестировать с mock-провайдером.
-   - Gemini: `streamGenerateContent?alt=sse`, модель по умолчанию `gemini-3.8-flash`.
-   - DeepSeek: OpenAI-совместимый `chat/completions`, модель `deepseek-flash`.
-   - Anthropic: Messages API, модель `claude-sonnet-5-5` (сильная), `claude-haiku-4-5` (опционально).
-   - ID моделей хранятся в настройках и проверяются по `models`-эндпоинтам провайдеров на P-07.
-8. **Данные:** JSON и YAML в `~/Library/Application Support/InterviewCopilot/` (profile/, sessions/, models/, cache/).
-   Ключи — Keychain (`kSecClassGenericPassword`, service `com.itmax04.interviewcopilot`).
-9. **Зависимости (полный список разрешённых):**
+## Decision
+1. **Language and UI:** Swift 6, SwiftUI for content, AppKit for `NSStatusItem`, `NSMenu`, `NSPanel`.
+   The app runs as an agent (`LSUIElement = true`): no Dock icon.
+2. **Build:** SwiftPM (`Package.swift`) without `.xcodeproj`. `scripts/build-app.sh` assembles the `.app`
+   (Info.plist, icon, signature). Targets: `InterviewCopilot` (app), `CopilotCore` (logic, tested),
+   `copilot-eval` (eval CLI), tests `CopilotCoreTests`.
+3. **Signing:** a persistent local code-signing certificate "InterviewCopilot Dev" (created by the owner, H-1), so macOS
+   permissions survive rebuilds. With ad-hoc signing the permissions are lost after every build.
+   Bundle ID: `com.itmax04.interviewcopilot`.
+4. **Audio:** ScreenCaptureKit (`SCStream`, audio only, filtered by the selected app, `excludesCurrentProcessAudio = true`).
+   The microphone via AVAudioEngine is used only to detect whether the owner is speaking (VAD): it is not transcribed or stored.
+5. **Speech recognition:** whisper.cpp on Metal.
+   - Main model: `large-v3-turbo` quantized q5_0 (~0.6 GB on disk).
+   - Fallback: `small` q5_1 if AC-01 or AC-05 is not met (decided in P-04 by measurement).
+   - Languages: auto-detection among {uk, ru, en} or an explicit choice in the menu.
+   - Integration: a prebuilt XCFramework from whisper.cpp releases as a SwiftPM `binaryTarget`.
+     If impossible — build from source with Xcode (Q10: do not look for workarounds).
+6. **Bank search:** local multilingual embeddings.
+   - Candidate 1: `multilingual-e5-small` in GGUF via llama.cpp (the same ggml as whisper).
+   - Candidate 2: `bge-m3` if candidate 1 does not reach ≥ 85% (AC-04) and fits in memory.
+   - Card embeddings are cached on disk and recomputed when `questions.yaml` changes.
+   - The choice is fixed by the eval results in P-06 and recorded in this ADR.
+7. **Language models:** an own HTTP client with SSE streaming, no SDKs: Anthropic has no official Swift SDK, and a single
+   `LLMProvider` protocol is easier to test with a mock provider.
+   - Gemini: `streamGenerateContent?alt=sse`, default model `gemini-3.8-flash`.
+   - DeepSeek: OpenAI-compatible `chat/completions`, model `deepseek-flash`.
+   - Anthropic: Messages API, model `claude-sonnet-5-5` (strong), `claude-haiku-4-5` (optional).
+   - Model IDs are stored in settings and checked against the providers' `models` endpoints in P-07.
+8. **Data:** JSON and YAML in `~/Library/Application Support/InterviewCopilot/` (profile/, sessions/, models/, cache/).
+   Keys — Keychain (`kSecClassGenericPassword`, service `com.itmax04.interviewcopilot`).
+9. **Dependencies (complete allowed list):**
    - whisper.cpp (XCFramework);
-   - llama.cpp (XCFramework) — для эмбеддингов;
-   - Yams — разбор YAML;
-   - глобальные горячие клавиши — через Carbon `RegisterEventHotKey` (системный API, без сторонних пакетов).
+   - llama.cpp (XCFramework) — for embeddings;
+   - Yams — YAML parsing;
+   - global hotkeys — via Carbon `RegisterEventHotKey` (system API, no third-party packages).
 
-## Итоговые решения по замерам
+## Final decisions from measurements
 
-### П. 5 — модель whisper (P-04, 2026-10-06): **`small` q5_1**, а не `large-v3-turbo` q5_0
-Замер на MacBook Air M1 8 ГБ, whisper.cpp `b5454` (Metal), 6 синтетических фраз uk/ru/en по 3–6 с (`evals/audio`),
+### Item 5 — Whisper model (P-04, 2026-10-06): **`small` q5_1**, not `large-v3-turbo` q5_0
+Measured on a MacBook Air M1 8 GB, whisper.cpp `b5454` (Metal), 6 synthetic uk/ru/en phrases of 3–6 s (`evals/audio`),
 `copilot-eval stt` / `stt-stream`:
 
-| Модель | Контекст энкодера | Язык | Время на фразу | Качество | Память процесса |
+| Model | Encoder context | Language | Time per phrase | Quality | Process memory |
 |---|---|---|---|---|---|
-| large-v3-turbo q5_0 | полный (30 с) | auto | 4,2–4,7 с | все 6 фраз верно | ~680 МБ |
-| large-v3-turbo q5_0 | полный | задан | 2,1 с | верно | ~680 МБ |
-| large-v3-turbo q5_0 | урезанный под длину | — | 0,7–2,3 с | **непригодно**: зацикливания («it's to, it's to…»), неверный язык | ~680 МБ |
-| small q5_1 | полный | auto | 0,9–1,6 с | верно, uk с ошибками | ~340 МБ |
-| small q5_1 | урезанный | задан | **0,16–0,27 с** | верно (uk даже лучше, чем с полным) | ~340 МБ |
+| large-v3-turbo q5_0 | full (30 s) | auto | 4.2–4.7 s | all 6 phrases correct | ~680 MB |
+| large-v3-turbo q5_0 | full | given | 2.1 s | correct | ~680 MB |
+| large-v3-turbo q5_0 | trimmed to length | — | 0.7–2.3 s | **unusable**: loops ("it's to, it's to…"), wrong language | ~680 MB |
+| small q5_1 | full | auto | 0.9–1.6 s | correct, uk with errors | ~340 MB |
+| small q5_1 | trimmed | given | **0.16–0.27 s** | correct (uk even better than with full) | ~340 MB |
 
-- AC-01 (≤ 1 с от конца фразы до текста) на turbo недостижим даже с заданным языком (2,1 с + 0,3 с паузы VAD).
-- Выбран small с урезанным контекстом и языком, известным к концу фразы. Потоковый прогон в реальном времени
-  (`copilot-eval stt-stream`): медиана «конец фразы → итоговый текст» **524 мс**, максимум 583 мс, языки 6/6 верно.
-  В собранном приложении (захват всего системного звука, воспроизведение фикстур `afplay`): медиана ~590 мс, 6/6 языков верно,
-  `footprint` процесса 453 МБ.
-- Детектор языка small путает украинский с русским (uk-фраза → ru 0,70–0,83). Решение: при выборе между uk и ru
-  фрагмент распознаётся на обоих языках, берётся вариант с большей средней вероятностью токенов (разница 0,07–0,24
-  в пользу верного языка на фикстурах). Определение языка идёт в отдельном состоянии whisper (полный контекст).
-- Защита от галлюцинаций на тишине: фрагменты тише −55 dBFS не распознаются, длина вывода ограничена, повторы фраз сворачиваются.
-- turbo остаётся доступен как файл модели (настройка `whisperModel`), но по умолчанию не используется.
+- AC-01 (≤ 1 s from end of phrase to text) is unreachable on turbo even with a given language (2.1 s + 0.3 s VAD pause).
+- Chosen: small with trimmed context and the language known by the end of the phrase. Real-time streaming run
+  (`copilot-eval stt-stream`): median "end of phrase → final text" **524 ms**, max 583 ms, languages 6/6 correct.
+  In the built app (capturing all system audio, playing fixtures with `afplay`): median ~590 ms, 6/6 languages correct,
+  process `footprint` 453 MB.
+- small's language detector confuses Ukrainian with Russian (uk phrase → ru 0.70–0.83). Solution: when choosing between uk
+  and ru, the fragment is recognized in both languages and the variant with the higher mean token probability wins
+  (a 0.07–0.24 margin for the correct language on fixtures). Language detection runs in a separate whisper state (full context).
+- Hallucination protection on silence: fragments quieter than −55 dBFS are not recognized, output length is capped,
+  repeated phrases are collapsed.
+- turbo remains available as a model file (setting `whisperModel`) but is not used by default.
 
-### П. 5, пересмотр (H-4, 2026-10-07): **`medium` q5_0** вместо `small`
-- На живом созвоне Meet (телефон → Mac) звук сильно сжат: даже Live Caption в Chrome выдавал бессмыслицу; small ошибался
-  во многих фразах («Почему решимся не керпотом» вместо «Почему решили сменить работу»).
-- Замер на фикстурах, пережатых в AAC 8 кГц 12 кбит/с (имитация телефонного звука), язык задан, урезанный контекст:
-  small — 4/4 с ошибками («Просскажите», «бо зласька», «Описіть»), 0,19–0,28 с; **medium — 4/4 верно, 0,44–0,68 с**.
-- Потоковый прогон medium на пережатом звуке: языки и тексты 8/8 верно; «конец фразы → текст» 0,84–1,06 с (медиана ~0,9 с).
-  Чтобы итог не ждал детектор языка (~1,5 с на medium), язык разговора запоминается после двух уверенных реплик
-  и детектор пропускается, пока уверенность распознавания не упадёт ниже 0,55.
-- Память: `footprint` приложения 1121 МБ в простое (small — 542 МБ); порог AC-05 1536 МБ — запас меньше, проверяется на созвоне.
-- small остаётся в `models.sha256` и выбирается настройкой `whisperModel`, если важнее задержка и память.
+### Item 5, revision (H-4, 2026-10-07): **`medium` q5_0** instead of `small`
+- On a live Meet call (phone → Mac) the audio is heavily compressed: even Chrome Live Caption produced nonsense; small erred
+  in many phrases ("Почему решимся не керпотом" instead of "Почему решили сменить работу").
+- Measured on fixtures re-encoded as AAC 8 kHz 12 kbit/s (simulated phone audio), language given, trimmed context:
+  small — 4/4 with errors ("Просскажите", "бо зласька", "Описіть"), 0.19–0.28 s; **medium — 4/4 correct, 0.44–0.68 s**.
+- Streaming run of medium on compressed audio: languages and texts 8/8 correct; "end of phrase → text" 0.84–1.06 s
+  (median ~0.9 s). So that the final text does not wait for the language detector (~1.5 s on medium), the conversation
+  language is remembered after two confident utterances and the detector is skipped until recognition confidence drops below 0.55.
+- Memory: app `footprint` 1121 MB idle (small — 542 MB); the AC-05 threshold is 1536 MB — less headroom, checked on a call.
+- small stays in `models.sha256` and can be selected with `whisperModel` when latency and memory matter more.
 
-### П. 6 — модель эмбеддингов (P-06, 2026-10-06): **bge-m3 Q8_0** (кандидат №2), порог **0,74**
-- Кандидат №1 `multilingual-e5-small` в GGUF есть только в сторонних конвертациях (не официальный репозиторий) —
-  по модели угроз (загрузка только из официальных источников) не используется. Взяты GGUF из организации `ggml-org`
-  на Hugging Face (официальные конвертации llama.cpp), суммы — в `models.sha256`.
-- `embeddinggemma-2` (ggml-org) не загружается в llama.cpp `b11446`: архитектура `gemma-embedding2` ещё не входит
-  ни в один релизный XCFramework (`b11446`…`b11451`); собирать llama.cpp из исходников ради неё не стал.
-- eval `bank` (51 случай: 39 перефразировок, по 13 на uk/ru/en, и 12 вне базы), `copilot-eval bank`:
+### Item 6 — embedding model (P-06, 2026-10-06): **bge-m3 Q8_0** (candidate 2), threshold **0.74**
+- Candidate 1 `multilingual-e5-small` in GGUF exists only in third-party conversions (not an official repository) — under the
+  threat model (downloads only from official sources) it is not used. GGUF files are taken from the `ggml-org` organization
+  on Hugging Face (official llama.cpp conversions); checksums are in `models.sha256`.
+- `embeddinggemma-2` (ggml-org) does not load in llama.cpp `b11446`: the `gemma-embedding2` architecture is not yet in any
+  release XCFramework (`b11446`…`b11451`); building llama.cpp from source just for it was not done.
+- The `bank` eval (51 cases: 39 paraphrases, 13 per uk/ru/en, and 12 out of the bank), `copilot-eval bank`:
 
-| Модель | Порог | top-1 | uk / ru / en | Ложные | top-3 | Запрос |
+| Model | Threshold | top-1 | uk / ru / en | False | top-3 | Query |
 |---|---|---|---|---|---|---|
-| embeddinggemma-300M Q8_0 | 0,74 | 89,7% | 10 / 12 / 13 из 13 | 0% | 100% | 12 мс |
-| **bge-m3 Q8_0** | **0,74** | **94,9%** | 13 / 12 / 12 из 13 | **0%** | 100% | 22 мс |
+| embeddinggemma-300M Q8_0 | 0.74 | 89.7% | 10 / 12 / 13 of 13 | 0% | 100% | 12 ms |
+| **bge-m3 Q8_0** | **0.74** | **94.9%** | 13 / 12 / 12 of 13 | **0%** | 100% | 22 ms |
 
-- Отложенный набор (`evals/bank/holdout.jsonl`, 16 случаев, не использовался при подборе): bge-m3 91,7% / 0% ложных,
-  embeddinggemma-300M 91,7% / 25% ложных.
-- Первый прогон на исходной базе (по 3 формулировки на карточку) давал bge-m3 84,6% — ниже AC-04. В пример базы добавлено
-  по 3 формулировки на карточку (по одной на язык), дословных совпадений с eval нет (проверено скриптом). Риск подгонки
-  под набор снижен отложенным набором, но остаётся: на базе владельца стоит держать 2+ формулировки на язык.
-- Память: `footprint` приложения с whisper small и bge-m3 — 542 МБ (AC-05 ≤ 1,5 ГБ).
-- whisper.cpp и llama.cpp — отдельные динамические фреймворки со своими копиями ggml; конфликта символов нет.
-  Чтобы заголовки ggml двух версий не встречались в одном модуле Swift, эмбеддинги вынесены в цель `CopilotEmbeddings`.
-- Перед выходом модели освобождаются явно (`applicationWillTerminate`): иначе ggml-metal падает в статических деструкторах
-  (`copilot-eval exit-check`).
+- Holdout set (`evals/bank/holdout.jsonl`, 16 cases, not used for tuning): bge-m3 91.7% / 0% false,
+  embeddinggemma-300M 91.7% / 25% false.
+- The first run on the original bank (3 phrasings per card) gave bge-m3 84.6% — below AC-04. Three phrasings per card (one per
+  language) were added to the example bank; there are no verbatim matches with the eval (checked by a script). The risk of
+  fitting to the set is reduced by the holdout set but remains: the owner's bank should keep 2+ phrasings per language.
+- Memory: app `footprint` with whisper small and bge-m3 — 542 MB (AC-05 ≤ 1.5 GB).
+- whisper.cpp and llama.cpp are separate dynamic frameworks with their own ggml copies; there is no symbol conflict.
+  So that ggml headers of two versions never meet in one Swift module, embeddings live in the `CopilotEmbeddings` target.
+- Models are released explicitly before exit (`applicationWillTerminate`): otherwise ggml-metal crashes in static
+  destructors (`copilot-eval exit-check`).
 
-### П. 7 — языковые модели (P-07…P-12)
-- Raw HTTP + SSE без SDK, как и решено. Anthropic — по skill `claude-api`: `thinking: between_tools` + `effort: low`
-  для подсказок и ручного вызова (R-13), адаптивное рассуждение для скриншотов, `fallbacks: "default"`
-  (`server-side-fallback-2026-07-01`), `cache_control` на системной части.
-- Gemini: заголовок `x-goog-api-key`, `thinkingLevel: low` (повтор без него, если модель уровень не знает).
-  Запасная модель того же провайдера — `gemini-flash-lite-latest` (основная `gemini-3.8-flash` на бесплатном ключе
-  отвечала 503/429/медленнее 4 с). `ProviderHealth`: модель с таймаутом/429/5xx на 5 минут в конец очереди.
-- Любая HTTP-ошибка — переход к следующему провайдеру; 400/401/403 у этого провайдера больше не пробуются.
+### Item 7 — language models (P-07…P-12)
+- Raw HTTP + SSE without SDKs, as decided. Anthropic follows the `claude-api` skill: `thinking: between_tools` +
+  `effort: low` for hints and the manual call (R-13), adaptive thinking for screenshots, `fallbacks: "default"`
+  (`server-side-fallback-2026-07-01`), `cache_control` on the system part.
+- Gemini: the `x-goog-api-key` header, `thinkingLevel: low` (retried without it if the model does not know the level).
+  The fallback model of the same provider is `gemini-flash-lite-latest` (the main `gemini-3.8-flash` on a free key answered
+  503/429/slower than 4 s). `ProviderHealth`: a model with a timeout/429/5xx goes to the end of the queue for 5 minutes.
+- Any HTTP error moves to the next provider; 400/401/403 are not retried at that provider.
 
-### Итог по зависимостям
-Только разрешённые: whisper.cpp XCFramework (`b5454`), llama.cpp XCFramework (`b11446`), Yams 6.2.2, Carbon.
-Модели: whisper medium q5_0 (по умолчанию), small q5_1, large-v3-turbo q5_0 (не используется по умолчанию),
-bge-m3 Q8_0 (по умолчанию), embeddinggemma-300M / -2 Q8_0 (кандидаты, не используются) — из ggerganov/whisper.cpp и ggml-org,
-SHA256 в `models.sha256`. Новых зависимостей вне списка нет.
+### Dependency summary
+Only allowed ones: whisper.cpp XCFramework (`b5454`), llama.cpp XCFramework (`b11446`), Yams 6.2.2, Carbon.
+Models: whisper medium q5_0 (default), small q5_1, large-v3-turbo q5_0 (not used by default), bge-m3 Q8_0 (default),
+embeddinggemma-300M / -2 Q8_0 (candidates, not used) — from ggerganov/whisper.cpp and ggml-org, SHA256 in `models.sha256`.
+No new dependencies outside the list.
 
-## Последствия
-- (+) Минимальная память, нативное поведение, доступ ко всем нужным системным API.
-- (+) Логика (`CopilotCore`) отделена от UI и покрывается `swift test` и evals.
-- (−) Нужны ручные шаги владельца: сертификат подписи и разрешения macOS, возможно Xcode.
-- (−) Две нативные библиотеки ggml (whisper + llama) увеличивают размер приложения. При конфликте символов
-  допустимо заменить llama.cpp вторым кандидатом из п. 6 или CoreML-эмбеддингами — с записью в ADR.
+## Consequences
+- (+) Minimal memory, native behavior, access to every required system API.
+- (+) Logic (`CopilotCore`) is separated from the UI and covered by `swift test` and evals.
+- (−) Manual owner steps are needed: a signing certificate and macOS permissions, possibly Xcode.
+- (−) Two native ggml libraries (whisper + llama) increase the app size. On a symbol conflict, llama.cpp may be replaced
+  by the second candidate from item 6 or by Core ML embeddings — with an ADR entry.
 
-## Проверка и пересмотр
-Пересмотреть, если:
-- AC-05 (память) или AC-01 (задержка) не выполняются даже на запасной модели;
-- AC-04 < 85% на всех кандидатах эмбеддингов;
-- владелец решит выпускать приложение для других пользователей (понадобятся нотаризация и автообновление).
+## Review triggers
+Revisit if:
+- AC-05 (memory) or AC-01 (latency) are not met even on the fallback model;
+- AC-04 < 85% on all embedding candidates;
+- the owner decides to release the app to other users (notarization and auto-update would be needed).
 
-### Уточнение 2026-10-08: приоритет точности локального STT
+### Amendment 2026-10-08: priority of local STT accuracy
 
-По запросу владельца сначала бесплатное локальное распознавание RU/UK/EN на M1 8 ГБ.
-Добавлена FluidAudio 0.17.7 (MIT), точная версия, Swift 6.2; default traits выключены:
-используется только Parakeet v3, без нормализации текста Nemo и облачных API.
-Core ML-модели загружаются установщиком и проверяются по опубликованным SHA256 Hugging Face LFS.
-Во время работы ModelHub.offlineMode=true. Эталонные записи FLEURS используются только вне Git.
-На 30 первых записях test (10 на язык, 575 слов): medium reduced 9,39% WER,
-turbo full 4,70%, Parakeet v3 4,52%. Выборка мала, равенство с parakeet-ai.com не подтверждено.
-Оба движка доступны в Audio, одновременно загружается один. Parakeet — новый основной вариант,
-Whisper turbo с полным контекстом — альтернатива, medium — резерв при отсутствии новых моделей.
-Итоговые фразы сохраняются в памяти очереди до обработки, отдельно от кольцевого буфера 30 с;
-на диск пользовательское аудио не записывается. Это уточнение R-04 ради сохранности звука.
-AC-01 для точного режима требует отдельного живого замера; владелец поставил точность выше задержки.
+At the owner's request, free local RU/UK/EN recognition on an M1 8 GB comes first.
+Added FluidAudio 0.17.7 (MIT), exact version, Swift 6.2; default traits are disabled:
+only Parakeet v3 is used, without Nemo text normalization and without cloud APIs.
+Core ML models are downloaded by the installer and verified against the published Hugging Face LFS SHA256.
+At runtime `ModelHub.offlineMode = true`. Reference FLEURS recordings are used only outside Git.
+On the first 30 test recordings (10 per language, 575 words): medium reduced 9.39% WER,
+turbo full 4.70%, Parakeet v3 4.52%. The sample is small; parity with parakeet-ai.com is not confirmed.
+Both engines are available in Audio settings, one is loaded at a time. Parakeet is the new main option,
+Whisper turbo with full context is the alternative, medium is the reserve when the new models are missing.
+Final phrases are kept in the queue memory until processed, separately from the 30-second ring buffer;
+user audio is never written to disk. This refines R-04 for audio retention.
+AC-01 for the accurate mode requires a separate live measurement; the owner ranked accuracy above latency.
 
-### Уточнение 2026-10-23: модель Silero VAD (COPILOT-05 R-02, R-08)
-Новая модель без новых пакетов: `FluidInference/silero-vad-coreml` (MIT), ревизия `b419383c55c1`, файл
-`silero-vad-unified-256ms-v6.2.1.mlmodelc` (~1 МБ), SHA256 в `filter-models.json`, установка `scripts/fetch-filter-models.py`.
-Загружается напрямую (`VadManager(config:vadModel:)`), без загрузок во время работы. Проверяет закрытую реплику перед
-распознаванием (сегментацию оставляет энергетический детектор — конец фразы не запаздывает); ~5 мс на реплику.
-Фильтр языка — Apple NaturalLanguage (системный фреймворк) + доля кириллицы/латиницы.
+### Amendment 2026-10-23: Silero VAD model (COPILOT-05 R-02, R-08)
+A new model without new packages: `FluidInference/silero-vad-coreml` (MIT), revision `b419383c55c1`, file
+`silero-vad-unified-256ms-v6.2.1.mlmodelc` (~1 MB), SHA256 in `filter-models.json`, installed by `scripts/fetch-filter-models.py`.
+Loaded directly (`VadManager(config:vadModel:)`), no downloads at runtime. It checks a closed utterance before recognition
+(segmentation stays with the energy detector — the end of a phrase is not delayed); ~5 ms per utterance.
+The language filter uses Apple NaturalLanguage (a system framework) + the share of Cyrillic/Latin letters.
 
-### Уточнение 2026-10-23: модель CAM++ (COPILOT-05 R-03, R-08)
-`FluidInference/campplus-coreml`, ревизия `321b18e270a4`, ~16 МБ: эмбеддинг голоса 192 числа (CPU/GPU, ~0,2 с на реплику).
-Конвертация модели FunASR / ModelScope `iic/speech_campplus_sv_zh-cn_16k-common` (обучена на китайской речи; лицензия —
-upstream FunASR). Проверено на синтетических голосах uk/ru/en/de/fr: свой голос на другом языке узнаётся так же (0,88–0,95).
-Альтернатива — WeSpeaker из диаризации FluidAudio (VoxCeleb) — отложена: фиксированные окна 10 с с масками диаризации.
-SHA256 — `filter-models.json`. Отпечаток владельца — только `…/InterviewCopilot/voice/owner.json`, звук образца не хранится.
+### Amendment 2026-10-23: CAM++ model (COPILOT-05 R-03, R-08)
+`FluidInference/campplus-coreml`, revision `321b18e270a4`, ~16 MB: a 192-number voice embedding (CPU/GPU, ~0.2 s per utterance).
+A conversion of the FunASR / ModelScope model `iic/speech_campplus_sv_zh-cn_16k-common` (trained on Chinese speech; license —
+upstream FunASR). Checked on synthetic uk/ru/en/de/fr voices: the owner's voice in another language is recognized equally well (0.88–0.95).
+The alternative — WeSpeaker from FluidAudio diarization (VoxCeleb) — is postponed: fixed 10-second windows with diarization masks.
+SHA256 — `filter-models.json`. The owner's voiceprint lives only in `…/InterviewCopilot/voice/owner.json`; sample audio is not stored.
 
-### Уточнение 2026-10-23: LocalVQE (COPILOT-05 R-04)
-`FluidInference/localvqe-coreml` (Apache-2.0), ревизия `4205430781c2`, v1.3 4,8 млн параметров, варианты 256 мс и 16 мс
-(~19 МБ каждый), SHA256 — `filter-models.json`. Замер `copilot-eval enhance`: с шумоподавлением Parakeet ошибается чаще
-(3,9% → 6,3% слов) — **по умолчанию выключено**, настройка «экспериментально». Вариант 16 мс оставлен для потокового
-эхоподавления по звуку звонка (этап 4), где нужен опорный сигнал; решение о нём — по отдельному замеру.
+### Amendment 2026-10-23: LocalVQE (COPILOT-05 R-04)
+`FluidInference/localvqe-coreml` (Apache-2.0), revision `4205430781c2`, v1.3 with 4.8 M parameters, 256 ms and 16 ms variants
+(~19 MB each), SHA256 — `filter-models.json`. Measured with `copilot-eval enhance`: with noise suppression Parakeet errs more often
+(3.9% → 6.3% of words) — **off by default**, the setting is "experimental". The 16 ms variant is kept for streaming echo
+cancellation on call audio (stage 4), which needs a reference signal; that decision depends on a separate measurement.

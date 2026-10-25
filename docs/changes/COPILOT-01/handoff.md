@@ -1,347 +1,347 @@
-# Передача COPILOT-01
+# COPILOT-01 handoff
 
-Статус: **готово к приёмке (H-5)** · Обновлено: 2026-10-07 · Ветка: `feat/copilot-01` · Commit: см. `git log -1`
-Цель и границы: [intent.md](intent.md), требования: [spec.md](spec.md), шаги: [plan.md](plan.md).
+Status: **ready for acceptance (H-5)** · Updated: 2026-10-07 · Branch: `feat/copilot-01` · Commit: see `git log -1`
+Goal and scope: [intent.md](intent.md), requirements: [spec.md](spec.md), steps: [plan.md](plan.md).
 
-## Сделано
-- Созданы документы SDLC (intent, spec, plan, ADR-0001, evals/README, CLAUDE.md, README, executor-prompt). Код не писался.
+## Done
+- SDLC documents created (intent, spec, plan, ADR-0001, evals/README, CLAUDE.md, README, executor-prompt). No code was written.
 
-- 2026-10-06: владелец принял комплект v1 (статусы → accepted, запись в intent.md).
+- 2026-10-06: the owner accepted the v1 set (statuses → accepted, recorded in intent.md).
 
-- 2026-10-06, P-00: обследование среды и baseline (ниже). Вывод: нужен Xcode → точка H-0.
+- 2026-10-06, P-00: environment survey and baseline (below). Conclusion: Xcode is needed → point H-0.
 
-### Baseline P-00
-- Git до шага: ветка `feat/copilot-01`, рабочее дерево чистое, HEAD `a0a566f`, совпадает с `origin/feat/copilot-01`.
-  Ветки: `main`, `feat/copilot-01`. Расхождений с handoff нет.
+### P-00 baseline
+- Git before the step: branch `feat/copilot-01`, clean working tree, HEAD `a0a566f`, same as `origin/feat/copilot-01`.
+  Branches: `main`, `feat/copilot-01`. No discrepancies with the handoff.
 - `swift --version`: Apple Swift 6.0 (swiftlang-6.0.0.9.10), target arm64-apple-macosx15.0.
-- `xcode-select -p`: `/Library/Developer/CommandLineTools`; Xcode в `/Applications` не установлен.
-- Среда: macOS 15.7.2 (24G325), Apple M1, 8 ГБ; свободно 46 ГБ на томе данных. Есть Homebrew, gh, cmake, python3.
-- Минимальный пакет (scratchpad), `swift test` на CLT:
+- `xcode-select -p`: `/Library/Developer/CommandLineTools`; Xcode is not installed in `/Applications`.
+- Environment: macOS 15.7.2 (24G325), Apple M1, 8 GB; 46 GB free on the data volume. Homebrew, gh, cmake, python3 present.
+- Minimal package (scratchpad), `swift test` on the CLT:
   - XCTest: FAIL — `error: no such module 'XCTest'`;
-  - Swift Testing: FAIL — `error: no such module 'Testing'`. Запускается только с ручными флагами
-    `-F …/CommandLineTools/Library/Developer/Frameworks` + rpath, после чего падает на
-    `XCTest not available … unable to lookup item 'PlatformPath'`. Это обходной путь, по Q10 не используется.
-- XCFramework (GitHub Releases, проверено `gh api` 2026-10-06):
-  - whisper.cpp: `whisper-b5454-xcframework.zip` (тег `b5454`, 65 816 082 байт,
-    sha256 `e57f8c48933000acabc13bb913fbe82805d483a2deff692cc6738836bd92393b`). В последнем стабильном теге `v1.9.5` ассетов нет,
-    XCFramework публикуется в сборочных тегах `bNNNN`.
-  - llama.cpp: `llama-b11446-xcframework.zip` (тег `b11446`, 61 978 829 байт,
+  - Swift Testing: FAIL — `error: no such module 'Testing'`. It runs only with manual flags
+    `-F …/CommandLineTools/Library/Developer/Frameworks` + rpath, after which it fails with
+    `XCTest not available … unable to lookup item 'PlatformPath'`. That is a workaround, not used per Q10.
+- XCFrameworks (GitHub Releases, checked with `gh api` 2026-10-06):
+  - whisper.cpp: `whisper-b5454-xcframework.zip` (tag `b5454`, 65 816 082 bytes,
+    sha256 `e57f8c48933000acabc13bb913fbe82805d483a2deff692cc6738836bd92393b`). The latest stable tag `v1.9.5` has no assets;
+    XCFrameworks are published in build tags `bNNNN`.
+  - llama.cpp: `llama-b11446-xcframework.zip` (tag `b11446`, 61 978 829 bytes,
     sha256 `da7edb84bd4990680cd6bb475468cc3f78b28cc0062fabebeae40218d228966b`).
-  - Оба подходят для `binaryTarget`; checksum SwiftPM будет посчитан `swift package compute-checksum` на P-04/P-06.
-- Решение: Xcode нужен (тесты не работают на CLT) → H-0.
+  - Both work as a `binaryTarget`; the SwiftPM checksum will be computed with `swift package compute-checksum` at P-04/P-06.
+- Decision: Xcode is needed (tests do not run on the CLT) → H-0.
 
-- 2026-10-06, H-0 пройдена: `xcode-select -p` → `/Applications/Xcode.app/Contents/Developer`, Xcode 26.3 (17C529),
-  Swift 6.2.4. Минимальный пакет: `swift test` — XCTest 1/1 и Swift Testing 1/1 PASS.
-- 2026-10-06, P-01 (код): `Package.swift` (цели InterviewCopilot, CopilotCore, copilot-eval, CopilotCoreTests; Yams 6.2.2),
-  меню по R-15 (модель `CopilotCore/Menu/MenuLayout.swift` + `MenuBarController`), пустое окно настроек с вкладками R-18,
-  иконка-попугай (рисуется кодом: шаблон для строки меню, цветная для .app), `Resources/Info.plist`,
-  `scripts/build-app.sh`, `scripts/secret-scan.sh`, заглушка `copilot-eval`.
+- 2026-10-06, H-0 passed: `xcode-select -p` → `/Applications/Xcode.app/Contents/Developer`, Xcode 26.3 (17C529),
+  Swift 6.2.4. Minimal package: `swift test` — XCTest 1/1 and Swift Testing 1/1 PASS.
+- 2026-10-06, P-01 (code): `Package.swift` (targets InterviewCopilot, CopilotCore, copilot-eval, CopilotCoreTests; Yams 6.2.2),
+  the R-15 menu (model `CopilotCore/Menu/MenuLayout.swift` + `MenuBarController`), an empty settings window with the R-18 tabs,
+  a parrot icon (drawn in code: a template for the menu bar, a color one for the .app), `Resources/Info.plist`,
+  `scripts/build-app.sh`, `scripts/secret-scan.sh`, a `copilot-eval` stub.
 
-- 2026-10-06, H-1 пройдена: сертификат подписи создан (имя в Связке ключей — «InterviewCopilot», без « Dev»;
-  `security find-identity -p codesigning` → 1 identity, CSSMERR_TP_NOT_TRUSTED — нормально для самоподписанного, trust не трогаю).
-  `scripts/build-app.sh` собирает и подписывает `dist/InterviewCopilot.app`, приложение запускается.
+- 2026-10-06, H-1 passed: the signing certificate was created (its Keychain name is "InterviewCopilot", without " Dev";
+  `security find-identity -p codesigning` → 1 identity, CSSMERR_TP_NOT_TRUSTED — normal for a self-signed one, trust left untouched).
+  `scripts/build-app.sh` builds and signs `dist/InterviewCopilot.app`, the app launches.
 
-- 2026-10-06, P-02 (код): `AppSettings`/`SettingsStore` (JSON в UserDefaults, значения по умолчанию из spec, ограничение диапазонов),
+- 2026-10-06, P-02 (code): `AppSettings`/`SettingsStore` (JSON in UserDefaults, defaults from the spec, range clamping),
   `KeychainStore` (generic password, service `com.itmax04.interviewcopilot`), `ProviderEndpoints` + `KeyVerifier`
-  («Проверить» = запрос списка моделей), `HTTPTransport` с mock для тестов, `AppModel`, вкладки настроек
-  Keys/Models/Audio/Bank/Privacy/Panel/Hotkeys/Budget. Перед кодом Anthropic прочитан skill `claude-api` (curl/examples.md);
-  эндпоинты Gemini и DeepSeek сверены с ai.google.dev/api/models и api-docs.deepseek.com/api/list-models.
+  ("Check" = a request for the model list), `HTTPTransport` with a mock for tests, `AppModel`, settings tabs
+  Keys/Models/Audio/Bank/Privacy/Panel/Hotkeys/Budget. Before the Anthropic code the `claude-api` skill was read (curl/examples.md);
+  the Gemini and DeepSeek endpoints were checked against ai.google.dev/api/models and api-docs.deepseek.com/api/list-models.
 
-- 2026-10-06, H-2 пройдена: владелец сохранил ключ Gemini и нажал «Проверить» → «OK · моделей: 62» (скриншот владельца).
-  `security find-generic-password -s com.itmax04.interviewcopilot -a gemini` (без `-w`) — запись есть; значение не читалось.
-- 2026-10-06, P-03 (код): `AudioSourceResolver` (Auto: Zoom → Chrome → Telegram, помощники приложения по префиксу bundle ID),
-  `SystemAudioCapture` (SCStream только аудио, 16 кГц моно, `excludesCurrentProcessAudio`, смена источника через
-  `updateContentFilter`), `PCMConverter`, `AudioRingBuffer` (≤ 30 с), `EnergyVAD`, `MicActivityDetector` (AVAudioEngine),
-  `Permissions`, `Log` (os_log), `ListeningController`, окно разрешений с индикатором уровня, подменю «Listening» со списком
-  запущенных приложений, пауза из меню.
+- 2026-10-06, H-2 passed: the owner saved the Gemini key and pressed "Check" → "OK · models: 62" (owner's screenshot).
+  `security find-generic-password -s com.itmax04.interviewcopilot -a gemini` (without `-w`) — the entry exists; the value was not read.
+- 2026-10-06, P-03 (code): `AudioSourceResolver` (Auto: Zoom → Chrome → Telegram, app helpers by bundle ID prefix),
+  `SystemAudioCapture` (SCStream audio only, 16 kHz mono, `excludesCurrentProcessAudio`, source switching via
+  `updateContentFilter`), `PCMConverter`, `AudioRingBuffer` (≤ 30 s), `EnergyVAD`, `MicActivityDetector` (AVAudioEngine),
+  `Permissions`, `Log` (os_log), `ListeningController`, a permissions window with a level indicator, a "Listening" submenu listing
+  running apps, pause from the menu.
 
-- 2026-10-06, H-3 пройдена: владелец выдал «Запись экрана и системного звука» и «Микрофон». Скриншоты владельца:
-  окно разрешений с двумя зелёными галочками, «Слушаю: Chrome»; меню с зелёной точкой «Listening — Chrome»
-  (вырезка — `evidence/menu-2026-10-06-owner.png`, для AC-11). Видео YouTube в Chrome: в логе `capture stats … rate=16000 ch=1`
-  (~16 000 сэмплов/с) и `level_db` −31…−14 dB во время воспроизведения, −120 dB в тишине.
-  AC-13 (вид без разрешения): по логу `no screen capture permission`, процесс не упал, окно разрешений открылось само;
-  визуальное подтверждение владельца до выдачи разрешений не получено — повторная проверка при H-5.
-- Известная проблема (P-03 → P-05): без наушников микрофон слышит динамики, и `owner_speaking=true` во время речи собеседника.
-  Это заблокирует автоответ (R-05, S-07). План: включить голосовую обработку AVAudioEngine (`setVoiceProcessingEnabled`,
-  эхоподавление) и/или считать владельца говорящим, только когда микрофон громче эха системного звука. Делается на P-05.
+- 2026-10-06, H-3 passed: the owner granted "Screen & System Audio Recording" and "Microphone". Owner screenshots:
+  the permissions window with two green checkmarks, "Listening: Chrome"; the menu with a green dot "Listening — Chrome"
+  (crop — `evidence/menu-2026-10-06-owner.png`, for AC-11). A YouTube video in Chrome: the log shows `capture stats … rate=16000 ch=1`
+  (~16 000 samples/s) and `level_db` −31…−14 dB during playback, −120 dB in silence.
+  AC-13 (the view without permission): the log shows `no screen capture permission`, the process did not crash, the permissions window opened by itself;
+  no visual confirmation from the owner before granting permissions — recheck at H-5.
+- Known issue (P-03 → P-05): without headphones the microphone hears the speakers, and `owner_speaking=true` while the other person speaks.
+  This would block auto-answer (R-05, S-07). Plan: enable AVAudioEngine voice processing (`setVoiceProcessingEnabled`,
+  echo cancellation) and/or treat the owner as speaking only when the microphone is louder than the system-audio echo. Done at P-05.
 
-- 2026-10-06, P-04: whisper.cpp `b5454` как `binaryTarget` (URL + checksum), `scripts/fetch-models.sh` + `models.sha256`
-  (turbo q5_0 и small q5_1, SHA256 из Hugging Face LFS), `scripts/make-audio-fixtures.sh` → `evals/audio/*.wav`
-  (Lesya, Milena, Samantha — все голоса есть), `WhisperEngine`, `StreamingTranscriber` (VAD-сегментация, частичный
-  и итоговый текст, язык), `AppPaths`, `copilot-eval stt` / `stt-stream`, подключение к приложению.
-  Решение turbo/small — small (таблица замеров в ADR-0001 «Итоговые решения»).
+- 2026-10-06, P-04: whisper.cpp `b5454` as a `binaryTarget` (URL + checksum), `scripts/fetch-models.sh` + `models.sha256`
+  (turbo q5_0 and small q5_1, SHA256 from Hugging Face LFS), `scripts/make-audio-fixtures.sh` → `evals/audio/*.wav`
+  (Lesya, Milena, Samantha — all voices present), `WhisperEngine`, `StreamingTranscriber` (VAD segmentation, partial
+  and final text, language), `AppPaths`, `copilot-eval stt` / `stt-stream`, wiring into the app.
+  The turbo/small decision — small (measurement table in ADR-0001 "Final decisions").
 
-- 2026-10-06, P-05: `TurnDetector` (R-05: T, ≥ 3 слов, владелец не говорит; ожидание продолжения после запятой/служебного
-  слова; ⌃⌥↩ с ожиданием итогового текста; эхо динамиков игнорируется), eval `turn` (`evals/turn/cases.jsonl`, 34 случая,
-  `TurnEval`, `copilot-eval turn`, `scripts/run-evals.sh`), `HotkeyCenter` (Carbon, ⌃⌥↩/S/H/P/C, переназначение во вкладке
-  Hotkeys, предупреждение о занятом сочетании), панель (`NSPanel` nonactivating, `.hudWindow`, скругление 16, ширина/
-  непрозрачность/шрифт из настроек, позиция запоминается; шапка, Interviewer, состояния idle/listening/paused/thinking/
-  error/no-permission/downloading, подвал), `TurnController`, метрика `turn_end` в логе.
-  Язык uk/ru: сравнение повторяется по мере роста реплики, решает самое длинное (живой замер: на 2 с ошибается).
-- Известная проблема P-03 (эхо) закрыта логикой: начало «речи владельца» во время речи собеседника и 150 мс после — эхо (R-05, S-07).
+- 2026-10-06, P-05: `TurnDetector` (R-05: T, ≥ 3 words, the owner is not speaking; waiting for a continuation after a comma/function
+  word; ⌃⌥↩ waits for the final text; speaker echo is ignored), the `turn` eval (`evals/turn/cases.jsonl`, 34 cases,
+  `TurnEval`, `copilot-eval turn`, `scripts/run-evals.sh`), `HotkeyCenter` (Carbon, ⌃⌥↩/S/H/P/C, remapping in the
+  Hotkeys tab, a warning for a taken shortcut), the panel (non-activating `NSPanel`, `.hudWindow`, 16 radius, width/
+  opacity/font from settings, position remembered; header, Interviewer, states idle/listening/paused/thinking/
+  error/no-permission/downloading, footer), `TurnController`, the `turn_end` metric in the log.
+  uk/ru language: the comparison repeats as the utterance grows, the longest decides (live measurement: wrong at 2 s).
+- The P-03 known issue (echo) is closed by logic: the start of "owner speech" during the other person's speech and 150 ms after it is echo (R-05, S-07).
 
-- 2026-10-06, P-06: `profile.example/` (вымышленный кандидат: profile.yaml, resume.md, job.md, stories.md, questions.yaml —
-  20 карточек, 6 формулировок на карточку, 7 со STAR), `QuestionBankParser` (Yams, валидация, строки ошибок), `ProfileStore`
-  (копирование примера при первом запуске, R-21), `FileWatcher`, `BankIndex`/`BankIndexBuilder` (кэш эмбеддингов на диске),
-  цель `CopilotEmbeddings` (`LlamaEmbedder`, llama.cpp `b11446` XCFramework), eval `bank` (+ отложенный набор),
-  `BankController` в приложении (меню: число карточек, ошибка разбора, открытие базы и папки профиля), поиск по ходу
-  с метрикой `bank_match`. Выбор модели и порога — ADR-0001 «Итоговые решения», п. 6.
+- 2026-10-06, P-06: `profile.example/` (a fictional candidate: profile.yaml, resume.md, job.md, stories.md, questions.yaml —
+  20 cards, 6 phrasings per card, 7 with STAR), `QuestionBankParser` (Yams, validation, error lines), `ProfileStore`
+  (copying the example on first launch, R-21), `FileWatcher`, `BankIndex`/`BankIndexBuilder` (embedding cache on disk),
+  the `CopilotEmbeddings` target (`LlamaEmbedder`, llama.cpp `b11446` XCFramework), the `bank` eval (+ a holdout set),
+  `BankController` in the app (menu: card count, parse error, opening the bank and the profile folder), search per turn
+  with the `bank_match` metric. Model and threshold choice — ADR-0001 "Final decisions", item 6.
 
-- 2026-10-06, P-07: перед кодом Anthropic прочитан skill `claude-api` (curl/examples.md, model-migration.md § Sonnet 5.5,
-  § refusal, § fallbacks «default»); Gemini — ai.google.dev (generate-content, thinking), DeepSeek — api-docs (chat completion).
-  Код: `LLMProvider`, `SSEClient`/`SSEParser`, `GeminiProvider`, `DeepSeekProvider`, `AnthropicProvider`, `MockProvider`,
-  `ProviderChain` (триггеры R-09, таймаут первого токена, отмена, рестарт текста), `ChainFactory` (бюджет, сильная модель),
-  `PromptBuilder` (R-11), `PIIFilter` (R-12), `AnswerRouter` (R-08), живая проверка `--smoke-llm`, проверка ID моделей при старте.
-  Фикстуры потоков — `Tests/CopilotCoreTests/Fixtures/`.
+- 2026-10-06, P-07: before the Anthropic code the `claude-api` skill was read (curl/examples.md, model-migration.md § Sonnet 5.5,
+  § refusal, § fallbacks "default"); Gemini — ai.google.dev (generate-content, thinking), DeepSeek — api-docs (chat completion).
+  Code: `LLMProvider`, `SSEClient`/`SSEParser`, `GeminiProvider`, `DeepSeekProvider`, `AnthropicProvider`, `MockProvider`,
+  `ProviderChain` (R-09 triggers, first-token timeout, cancellation, text restart), `ChainFactory` (budget, strong model),
+  `PromptBuilder` (R-11), `PIIFilter` (R-12), `AnswerRouter` (R-08), a live check `--smoke-llm`, model ID check at launch.
+  Stream fixtures — `Tests/CopilotCoreTests/Fixtures/`.
 
-- 2026-10-07, P-08…P-10 (одним коммитом: шаги переплелись из-за общей проблемы со Связкой ключей, см. ниже):
-  - P-08: `AnswerController` (база → режим → генерация со стримингом, «—» не меняет панель, отмена при новом ходе,
-    «Модели недоступны: …» + топ-3, сильная модель вручную ⌃⌥C / «↑ Claude»), `AnswerCardView` (источник, Markdown,
-    чипы S/T/A/R, Copy), `NoMatchView`, подменю Mode / Models (сильная модель) / Language подключены к настройкам,
-    метрики `card_shown` и `first_token` с отсчётом от конца речи и от конца хода.
-  - P-09: `ScreenshotService` (дисплей под курсором, с курсором, без окон помощника, ≤ 1600 px, JPEG в памяти), ⌃⌥S и пункт
-    меню, сильная модель или Gemini без ключа Anthropic, фикстура `evals/fixtures/two-sum.png` (`scripts/make-screenshot-fixture.swift`),
-    `--smoke-screenshot`.
-  - P-10: `SessionStore` (JSON на сессию, удаление одной/всех, срок хранения), `SessionController`, окно «Session history…»,
-    `UsageMeter` + `Resources/pricing.json` (день/месяц, пиковые часы DeepSeek, Gemini Free = $0, лимит месяца → платные
-    провайдеры выключаются), строка статуса меню «Today: $… · Gemini: N req / limit».
-  - Миграция настроек: порог 0,85 → 0,74, запасная модель Gemini → `gemini-flash-lite-latest`.
+- 2026-10-07, P-08…P-10 (one commit: the steps intertwined because of a shared Keychain problem, see below):
+  - P-08: `AnswerController` (bank → mode → streamed generation, "—" does not change the panel, cancellation on a new turn,
+    "Models unavailable: …" + top 3, the strong model manually ⌃⌥C / "↑ Claude"), `AnswerCardView` (source, Markdown,
+    S/T/A/R chips, Copy), `NoMatchView`, the Mode / Models (strong model) / Language submenus wired to settings,
+    the `card_shown` and `first_token` metrics measured from the end of speech and from the end of the turn.
+  - P-09: `ScreenshotService` (the display under the cursor, with the cursor, without the assistant's windows, ≤ 1600 px, JPEG in memory),
+    ⌃⌥S and a menu item, the strong model or Gemini without an Anthropic key, the fixture `evals/fixtures/two-sum.png`
+    (`scripts/make-screenshot-fixture.swift`), `--smoke-screenshot`.
+  - P-10: `SessionStore` (a JSON file per session, delete one/all, retention), `SessionController`, the "Session history…" window,
+    `UsageMeter` + `Resources/pricing.json` (day/month, DeepSeek peak hours, Gemini Free = $0, monthly limit → paid
+    providers switched off), the menu status line "Today: $… · Gemini: N req / limit".
+  - Settings migration: threshold 0.85 → 0.74, the Gemini fallback model → `gemini-flash-lite-latest`.
 
-- 2026-10-07, P-11: мастер первого запуска (`OnboardingWindow`: разрешения → ключ Gemini → модели с прогрессом и проверкой
-  SHA256, `ModelDownloader`, `models.sha256` в бандле; прогресс и в панели — состояние downloading), `scripts/metrics.py`
-  (медианы и p90 AC-01…AC-03 из `log show`), `scripts/footprint-monitor.sh` (AC-05), метрики в лог уровнем notice,
-  `evals/live-script.md` (15 вопросов + проверки AC-09 по ходу созвона).
+- 2026-10-07, P-11: the first-run wizard (`OnboardingWindow`: permissions → Gemini key → models with progress and
+  SHA256 check, `ModelDownloader`, `models.sha256` in the bundle; progress also in the panel — the downloading state), `scripts/metrics.py`
+  (medians and p90 of AC-01…AC-03 from `log show`), `scripts/footprint-monitor.sh` (AC-05), metrics logged at the notice level,
+  `evals/live-script.md` (15 questions + AC-09 checks during the call).
 
-- 2026-10-07, H-4 попытка 1 (только uk/ru, по решению владельца): `scripts/metrics.py --start "2026-10-07 10:00:00"`:
-  AC-01 медиана 511 мс (n=20) PASS; AC-03 медиана 4850 мс (n=10) FAIL; AC-02 — 0 карточек. Причины по логам:
-  (1) звук собеседника из Meet очень тихий — речь −47…−53 dBFS при фоне −85…−90 (YouTube вчера −14 dB); VAD с порогом
-  −50 dBFS резал речь на обрывки 0,6–1 с, whisper на них выдавал бессмыслицу, совпадений с базой не было (0,45–0,59);
-  (2) `gemini-3.8-flash` каждый ход не отвечала за 4 с → переход на Flash-Lite → первые слова через 4,8 с.
-  Исправления: VAD собеседника −62 dBFS (основной порог — шум + 10 дБ), удержание 350 мс; тихий звук поднимается
-  до пика 0,5 (не больше ×40) перед whisper, порог тишины −68 dBFS; `ProviderHealth` — модель, не ответившая вовремя
-  или вернувшая 429/5xx, на 5 минут уходит в конец очереди. Проверка: поток на −30 дБ — 4/4 фразы и языки верно, медиана 602 мс.
+- 2026-10-07, H-4 attempt 1 (uk/ru only, by the owner's decision): `scripts/metrics.py --start "2026-10-07 10:00:00"`:
+  AC-01 median 511 ms (n=20) PASS; AC-03 median 4850 ms (n=10) FAIL; AC-02 — 0 cards. Causes from the logs:
+  (1) the other person's audio from Meet was very quiet — speech −47…−53 dBFS over a −85…−90 background (YouTube the day before −14 dB); the VAD with a
+  −50 dBFS threshold cut speech into 0.6–1 s fragments, whisper produced nonsense on them, no bank matches (0.45–0.59);
+  (2) `gemini-3.8-flash` did not answer within 4 s on every turn → fallback to Flash-Lite → first words after 4.8 s.
+  Fixes: the other person's VAD at −62 dBFS (the main threshold — noise + 10 dB), a 350 ms hold; quiet audio is raised
+  to a 0.5 peak (at most ×40) before whisper, silence threshold −68 dBFS; `ProviderHealth` — a model that did not answer in time
+  or returned 429/5xx goes to the end of the queue for 5 minutes. Check: a stream at −30 dB — 4/4 phrases and languages correct, median 602 ms.
 
-- 2026-10-07, H-4 попытка 2: громкость нормальная (−13 dB), но точность низкая; Live Caption Chrome на том же звуке тоже
-  ошибался — звук Meet с телефона сильно сжат. Переход на whisper medium + «язык разговора» (ADR-0001, пересмотр п. 5).
-  Подсказки: первые слова через 0,9–1,1 с после конца хода (ProviderHealth сработал).
+- 2026-10-07, H-4 attempt 2: normal volume (−13 dB), but low accuracy; Chrome Live Caption on the same audio also
+  erred — Meet audio from a phone is heavily compressed. Switched to whisper medium + "conversation language" (ADR-0001, item 5 revision).
+  Hints: first words 0.9–1.1 s after the end of the turn (ProviderHealth worked).
 
-- 2026-10-07, H-4 попытка 3 (medium, ru): `scripts/metrics.py --start "2026-10-07 11:00:00"` — AC-01 медиана 684 мс (n=24)
-  PASS; AC-02 84 мс (n=4) PASS; AC-03 978 мс (n=11) PASS; `footprint` 1166 МБ (пик 1172). Карточка about-me найдена
-  по неточному тексту. Владелец: «уже лучше, но не точно». Выбор владельца: вариант 1 — оставить medium + улучшения.
-- 2026-10-07, P-12 улучшения точности (замеры на фикстурах, пережатых AAC 8 кГц 12 кбит/с, и с шумом SNR 8 дБ):
-  - подсказка распознаванию из базы (initial prompt) — результат смешанный (одни фразы точнее, другие переводятся
-    на другой язык или повторяются) → опция Audio «Подсказывать формулировки из базы», по умолчанию выключена;
-  - предыдущие реплики в подсказке — whisper начинал их повторять → убрано;
-  - отдельная модель small для определения языка — память ~1,4 ГБ без эмбеддингов (> AC-05) → отказ;
-  - выбор языка сравнением ru/uk/en по вероятностям и «уверенный детектор» на первых 1,2 с — больше ошибок языка → откат;
-  - итог: детектор + сравнение uk/ru + язык разговора после двух уверенных реплик. Сессия на одном языке: ru 4/4,
-    медиана 846 мс; uk 4/4, медиана 1140 мс. Если язык известен — выбрать его в меню Language (точнее и быстрее).
+- 2026-10-07, H-4 attempt 3 (medium, ru): `scripts/metrics.py --start "2026-10-07 11:00:00"` — AC-01 median 684 ms (n=24)
+  PASS; AC-02 84 ms (n=4) PASS; AC-03 978 ms (n=11) PASS; `footprint` 1166 MB (peak 1172). The about-me card was found
+  from an inaccurate text. Owner: "already better, but not accurate". The owner's choice: option 1 — keep medium + improvements.
+- 2026-10-07, P-12 accuracy improvements (measured on fixtures re-encoded as AAC 8 kHz 12 kbit/s and with noise at SNR 8 dB):
+  - prompting recognition from the bank (initial prompt) — a mixed result (some phrases more accurate, others get translated
+    into another language or repeated) → the Audio option "Prompt recognition with phrasings from the bank", off by default;
+  - previous lines in the prompt — whisper started repeating them → removed;
+  - a separate small model for language detection — memory ~1.4 GB without embeddings (> AC-05) → rejected;
+  - choosing the language by comparing ru/uk/en probabilities and a "confident detector" on the first 1.2 s — more language errors → reverted;
+  - result: detector + uk/ru comparison + conversation language after two confident lines. A single-language session: ru 4/4,
+    median 846 ms; uk 4/4, median 1140 ms. If the language is known — choose it in the Language menu (more accurate and faster).
 
-- 2026-10-07, P-13: независимое ревью (`/code-review high` по ветке против spec и CLAUDE.md) — 10 находок (1 P0, 6 P1, 3 P2),
-  все исправлены с регрессионными тестами (коммит `cc1c06e`; список — report.md «Независимое ревью»). P0: `.gitignore`
-  с `models/` скрывал `Sources/CopilotCore/Models/` — чистый клон не собирался (AC-14 FAIL на `d046738`), исправлено.
-  AC-05: `scripts/footprint-monitor.sh 10` — максимум 1119 МБ. AC-14: чистый клон `cc1c06e` — build/test/package/sign/scan PASS.
-  Документы: report.md (AC-01…AC-14), test-plan.md (для следующего исполнителя и приёмки), README, ADR-0001 (итоговые решения).
+- 2026-10-07, P-13: an independent review (`/code-review high` on the branch against the spec and CLAUDE.md) — 10 findings (1 P0, 6 P1, 3 P2),
+  all fixed with regression tests (commit `cc1c06e`; the list — report.md "Independent review"). P0: `.gitignore`
+  with `models/` hid `Sources/CopilotCore/Models/` — a clean clone did not build (AC-14 FAIL on `d046738`), fixed.
+  AC-05: `scripts/footprint-monitor.sh 10` — maximum 1119 MB. AC-14: a clean clone of `cc1c06e` — build/test/package/sign/scan PASS.
+  Documents: report.md (AC-01…AC-14), test-plan.md (for the next executor and acceptance), README, ADR-0001 (final decisions).
 
-- 2026-10-07, по запросу владельца (после P-13): источник звука «Microphone (practice, no call)» — владелец сам задаёт
-  вопросы голосом в микрофон Mac, без Meet; приложение расшифровывает и отвечает. `MicrophoneCapture` (AVAudioEngine → 16 кГц,
-  только память), в этом режиме определение речи владельца (R-02) выключено и разрешение «Запись экрана» не требуется.
-  Проверено: звук фикстур через динамики → микрофон → `transcript_final`, `card_shown` (about-me, conflict, 74–102 мс после хода),
-  `first_token` 0,83 с. 144 теста PASS.
+- 2026-10-07, at the owner's request (after P-13): the audio source "Microphone (practice, no call)" — the owner asks
+  questions by voice into the Mac microphone, without Meet; the app transcribes and answers. `MicrophoneCapture` (AVAudioEngine → 16 kHz,
+  memory only); in this mode owner-speech detection (R-02) is off and the Screen Recording permission is not required.
+  Checked: fixture audio through the speakers → microphone → `transcript_final`, `card_shown` (about-me, conflict, 74–102 ms after the turn),
+  `first_token` 0.83 s. 144 tests PASS.
 
-## Следующий шаг
-H-5: приёмка владельцем по report.md и test-plan.md §7. Открыто: решение по AC-10 (точность на сжатом звуке),
-NOT RUN — DeepSeek/Anthropic вживую, английские вопросы на созвоне, AC-13 визуально, AC-09 нажатия при активном Chrome.
+## Next step
+H-5: owner acceptance per report.md and test-plan.md §7. Open: the AC-10 decision (accuracy on compressed audio),
+NOT RUN — DeepSeek/Anthropic live, English questions on a call, AC-13 visually, AC-09 key presses while Chrome is active.
 
-## Проверки
-| Шаг | Команда | Commit | Результат |
+## Checks
+| Step | Command | Commit | Result |
 |---|---|---|---|
-| P-00 | `swift test` (минимальный пакет, CLT) | — | FAIL: нет модулей XCTest/Testing без Xcode → H-0 |
-| P-00 | `swift build` / `scripts/secret-scan.sh` | — | NOT RUN (кода и скрипта ещё нет) |
-| H-0 | `swift test` (минимальный пакет, Xcode 26.3) | — | PASS: XCTest 1/1, Swift Testing 1/1 |
+| P-00 | `swift test` (minimal package, CLT) | — | FAIL: no XCTest/Testing modules without Xcode → H-0 |
+| P-00 | `swift build` / `scripts/secret-scan.sh` | — | NOT RUN (no code or script yet) |
+| H-0 | `swift test` (minimal package, Xcode 26.3) | — | PASS: XCTest 1/1, Swift Testing 1/1 |
 | P-01 | `swift build` | P-01 | PASS |
-| P-01 | `swift test` | P-01 | PASS: 4 теста (MenuLayoutTests) |
-| P-01 | `scripts/secret-scan.sh` (дерево + индекс + история) | P-01 | PASS: «0 findings»; самопроверка на фейковых ключах/email/телефоне — 5 находок из 5 |
-| P-01 | `scripts/build-app.sh` | P-01 | FAIL ожидаемо: нет сертификата → понятная ошибка; повтор после H-1 |
+| P-01 | `swift test` | P-01 | PASS: 4 tests (MenuLayoutTests) |
+| P-01 | `scripts/secret-scan.sh` (tree + index + history) | P-01 | PASS: "0 findings"; self-test on fake keys/email/phone — 5 of 5 found |
+| P-01 | `scripts/build-app.sh` | P-01 | FAIL as expected: no certificate → a clear error; rerun after H-1 |
 | H-1 | `scripts/build-app.sh` | P-01 fix | PASS: `dist/InterviewCopilot.app`, `codesign -dvv` → `Identifier=com.itmax04.interviewcopilot`, `Authority=InterviewCopilot`; `codesign --verify` → valid on disk, satisfies DR |
-| H-1 | `open dist/InterviewCopilot.app` | P-01 fix | PASS: процесс запущен (pgrep); видимость иконки — подтверждение владельца |
+| H-1 | `open dist/InterviewCopilot.app` | P-01 fix | PASS: the process runs (pgrep); icon visibility — owner confirmation |
 | P-02 | `swift build` | P-02 | PASS |
-| P-02 | `swift test` | P-02 | PASS: 22 теста в 4 наборах (MenuLayout, SettingsStore, KeychainStore — настоящая Связка ключей, тестовый service, KeyVerifier — mock) |
+| P-02 | `swift test` | P-02 | PASS: 22 tests in 4 suites (MenuLayout, SettingsStore, KeychainStore — the real Keychain, a test service, KeyVerifier — mock) |
 | P-02 | `scripts/build-app.sh` | P-02 | PASS, `Authority=InterviewCopilot` |
-| P-02 | `scripts/secret-scan.sh` | P-02 | PASS: «0 findings» |
-| P-03 | `swift test` | P-03 | PASS: 36 тестов в 7 наборах (+AudioSourceResolver, AudioRingBuffer, EnergyVAD) |
+| P-02 | `scripts/secret-scan.sh` | P-02 | PASS: "0 findings" |
+| P-03 | `swift test` | P-03 | PASS: 36 tests in 7 suites (+AudioSourceResolver, AudioRingBuffer, EnergyVAD) |
 | P-03 | `scripts/build-app.sh` | P-03 | PASS |
-| P-03 | Запуск без разрешения | P-03 | PASS (лог): `no screen capture permission`, процесс жив, открыто окно разрешений; визуально — не подтверждено владельцем (AC-13 → H-5) |
-| H-3 | Захват звука Chrome (YouTube) | P-03 | PASS: `level_db` −31…−14 dB при воспроизведении, ~16 000 сэмплов/с, 16 кГц моно |
-| H-3 | Микрофон (VAD) | P-03 | PASS частично: речь владельца детектируется; без наушников ложные срабатывания от динамиков → P-05 |
-| P-04 | `scripts/fetch-models.sh` | P-04 | PASS: оба файла скачаны, «SHA256 совпадает» |
-| P-04 | `copilot-eval stt` (замеры turbo/small) | P-04 | см. ADR-0001: small 0,16–0,27 с на фразу, turbo 2,1–4,7 с |
-| P-04 | `copilot-eval stt-stream` small, 6 фраз | P-04 | PASS: медиана конец фразы → текст 524 мс, макс. 583 мс, языки 6/6 |
-| P-04 | Приложение, весь системный звук + `afplay` фикстур | P-04 | PASS: `transcript_final` 503–759 мс (медиана ~590), языки 6/6; `footprint` 453 МБ |
-| P-04 | `swift test` | P-04 | PASS: 49 тестов в 9 наборах (+StreamingTranscriber с фейковым распознавателем, WhisperEngine на реальной модели) |
-| P-05 | `scripts/run-evals.sh turn` | P-05 | PASS: 34 случая, преждевременные 0%, пропущенные 0%, задержка = T (700 мс) |
-| P-05 | `swift test` | P-05 | PASS: 61 тест в 10 наборах (+TurnDetector) |
-| P-05 | `copilot-eval stt-stream` (7 фраз, чистый звук) | P-05 | PASS: языки 7/7, медиана 518 мс, макс. 630 мс |
-| P-05 | Приложение: «All system audio» + `afplay` | P-05 | `turn_end` через 700–750 мс после конца речи; итог 375–707 мс. Замер загрязнён фоновым звуком другого приложения (WebKit) — дробление фраз и 1 ошибка языка; в рабочем режиме захват идёт по приложению |
-| P-05 | Горячие клавиши, фокус (AC-09) | P-05 | Регистрация без ошибок (лог). Нажатия с активным Chrome — NOT RUN: у процесса исполнителя нет прав на синтетические нажатия; проверка владельцем при H-4 |
-| P-06 | `scripts/fetch-models.sh` (эмбеддинги) | P-06 | PASS: embeddinggemma-2, embeddinggemma-300M, bge-m3 — SHA256 совпадает |
-| P-06 | `scripts/run-evals.sh` (bank + turn) | P-06 | PASS: bank bge-m3 top-1 94,9%, ложные 0%, top-3 100%; turn 0% / 0% |
-| P-06 | `copilot-eval bank evals/bank/holdout.jsonl` | P-06 | PASS: top-1 91,7%, ложные 0% |
-| P-06 | `swift test` | P-06 | PASS: 74 теста в 12 наборах (+QuestionBank, BankMatcher со стаб-эмбеддером, ProfileStore, FileWatcher) |
-| P-07 | `swift test` | P-07 | PASS: 112 тестов в 16 наборах (+SSEClient/провайдеры на фикстурах, ProviderChain, AnswerRouter, PromptBuilder, PIIFilter) |
-| P-07 | `InterviewCopilot --smoke-llm` (Gemini, живой ключ) | P-07 | Список моделей: 62, `gemini-3.8-flash` есть. Стрим: формат запроса принят; `gemini-3.8-flash` — 503 «high demand» / 429 / первый токен 13–17 с; `gemini-flash-latest` — 2,1 с и 13 с; `gemini-flash-lite-latest` — 0,7 с; цепочка 3.8 → flash-latest отработала переход по 503 |
-| P-07 | DeepSeek, Anthropic (живые вызовы) | P-07 | NOT RUN — нет ключей; покрыто тестами на фикстурах и mock-провайдерах (AC-07) |
-| P-08 | Приложение, режим «Question bank only», 5 фраз через динамики | P-08 | PASS: 5/5 карточек найдены; `card_shown` через 0,09–0,13 с после конца хода (0,81–0,85 с после конца речи; первая — 4,4 с, пока висел запрос Связки ключей, исправлено) |
-| P-08 | Приложение, «Bank + hint», вопрос вне базы | P-08 | PASS: «Нет в базе» по базе (0,615), Gemini 3.8 → 429 → Flash-Lite, первый токен через 1,73 с после конца хода (2,45 с после конца речи) |
-| P-09 | `--smoke-screenshot evals/fixtures/two-sum.png` | P-09 | PASS: JPEG 1600×1000 (144 КБ), 3.8 → 429 → Flash-Lite, первый токен 1,9 с, ответ с блоком кода и O(...) |
-| P-09 | ⌃⌥S в приложении (живой снимок) | P-09 | NOT RUN исполнителем (нет синтетических нажатий) — проверка владельцем при H-4 |
-| P-10 | `swift test` | P-10 | PASS: 127 тестов в 19 наборах (+SessionStore: сохранение, удаление, срок — AC-12; UsageMeter: цены, пик DeepSeek, лимит; Screenshot) |
-| P-10 | Приложение: сессии и расход | P-10 | PASS: `sessions/2026-10-07T00-08-11.json` с ходом и задержкой, `usage.json` — запрос Gemini, отметка 429 |
-| P-11 | `swift test` | P-11 | PASS: 130 тестов в 20 наборах (+ModelDownloader: список, SHA256, живая загрузка маленького файла) |
-| P-11 | `scripts/run-evals.sh` | P-11 | PASS: turn 36 случаев 0%/0%; bank 94,9% / 0% |
-| P-11 | Фокус при показе панели (AC-09, частично) | P-11 | PASS: `lsappinfo front` до и после запуска с показом панели — «Claude», фокус не перехвачен. Горячие клавиши с Chrome — при H-4 |
-| P-11 | Память (AC-05, предварительно) | P-11 | `footprint` 453–542 МБ в простое со всеми моделями; 10-минутный замер — при H-4 |
-| H-4 (1) | `scripts/metrics.py` (созвон Meet, uk/ru) | P-11 | AC-01 PASS 511 мс; AC-02 NOT RUN (0 карточек); AC-03 FAIL 4850 мс — исправлено, повтор |
-| P-12 | `swift test` | P-12 | PASS: 134 теста (+тихая речь −30 дБ, нормализация, ProviderHealth) |
-| P-12 | `copilot-eval stt-stream … --gain 0.03` | P-12 | PASS: 4/4 фразы uk/ru при −30 дБ, медиана 602 мс |
-| H-4 (2) | Созвон: первые слова подсказки | d2f0b45 | 1,06 и 0,91 с после конца хода (было 4,8 с) |
-| P-12 | whisper small vs medium на пережатом звуке (AAC 8 кГц 12 кбит/с) | P-12 | small 4/4 с ошибками; medium 4/4 верно, 0,44–0,68 с на фразу |
-| P-12 | `copilot-eval stt-stream` medium, пережатый звук | P-12 | 8/8 верно; 0,84–1,06 с (медиана ~0,9 с) при свободном GPU |
-| P-12 | `footprint` приложения с medium + bge-m3 (простой) | P-12 | 1121 МБ |
-| H-4 (3) | `scripts/metrics.py` (созвон Meet, ru, medium) | e4f923c | AC-01 684 мс PASS; AC-02 84 мс PASS; AC-03 978 мс PASS; память 1166 МБ |
-| P-12 | `copilot-eval stt-stream` medium, пережатый звук, сессия ru / uk | P-12 | ru 4/4, медиана 846 мс; uk 4/4, медиана 1140 мс |
-| P-12 | `swift test` | P-12 | PASS: 137 тестов в 21 наборе |
-| P-13 | `/code-review high` | cc1c06e | 10 находок — все исправлены |
-| P-13 | `swift test` | cc1c06e | PASS: 143 теста в 21 наборе |
-| P-13 | `scripts/run-evals.sh` | cc1c06e | turn 36 — 0%/0%; bank 94,9% / 0% |
-| P-13 | `scripts/footprint-monitor.sh 10` (AC-05) | cc1c06e | 1119 МБ максимум за 10 минут — PASS |
-| P-13 | Чистый клон (AC-14) | d046738 | FAIL: нет ModelDownloader.swift в Git |
-| P-13 | Чистый клон (AC-14) | cc1c06e | PASS: build, 143 теста, build-app (Authority=InterviewCopilot), secret-scan 0 |
-| P-06 | Приложение: профиль, база, S-10 | P-06 | PASS: профиль скопирован, индекс 20 карточек; ошибка в questions.yaml → `parse error line=275`, прежняя база работает; новая карточка → 21, пересчёт только новой формулировки (137 мс); `footprint` 542 МБ |
-| P-01 | Запуск, иконка и меню видны (скриншот) | P-01 | Запуск debug-бинаря: процесс стартует без ошибок. Скриншот NOT RUN: у процесса исполнителя нет разрешения «Запись экрана» (`screencapture` даёт только обои), TCC не трогаю. Скриншот меню — на H-3/P-11 |
+| P-03 | Launch without permission | P-03 | PASS (log): `no screen capture permission`, the process is alive, the permissions window opened; visually — not confirmed by the owner (AC-13 → H-5) |
+| H-3 | Chrome audio capture (YouTube) | P-03 | PASS: `level_db` −31…−14 dB during playback, ~16 000 samples/s, 16 kHz mono |
+| H-3 | Microphone (VAD) | P-03 | PASS partially: the owner's speech is detected; without headphones false triggers from the speakers → P-05 |
+| P-04 | `scripts/fetch-models.sh` | P-04 | PASS: both files downloaded, "SHA256 matches" |
+| P-04 | `copilot-eval stt` (turbo/small measurements) | P-04 | see ADR-0001: small 0.16–0.27 s per phrase, turbo 2.1–4.7 s |
+| P-04 | `copilot-eval stt-stream` small, 6 phrases | P-04 | PASS: median end of phrase → text 524 ms, max 583 ms, languages 6/6 |
+| P-04 | The app, all system audio + `afplay` of fixtures | P-04 | PASS: `transcript_final` 503–759 ms (median ~590), languages 6/6; `footprint` 453 MB |
+| P-04 | `swift test` | P-04 | PASS: 49 tests in 9 suites (+StreamingTranscriber with a fake recognizer, WhisperEngine on the real model) |
+| P-05 | `scripts/run-evals.sh turn` | P-05 | PASS: 34 cases, premature 0%, missed 0%, latency = T (700 ms) |
+| P-05 | `swift test` | P-05 | PASS: 61 tests in 10 suites (+TurnDetector) |
+| P-05 | `copilot-eval stt-stream` (7 phrases, clean audio) | P-05 | PASS: languages 7/7, median 518 ms, max 630 ms |
+| P-05 | The app: "All system audio" + `afplay` | P-05 | `turn_end` 700–750 ms after the end of speech; final 375–707 ms. The measurement was polluted by background audio of another app (WebKit) — split phrases and 1 language error; in normal operation capture is per app |
+| P-05 | Hotkeys, focus (AC-09) | P-05 | Registration without errors (log). Key presses with Chrome active — NOT RUN: the executor process has no rights for synthetic key presses; owner check at H-4 |
+| P-06 | `scripts/fetch-models.sh` (embeddings) | P-06 | PASS: embeddinggemma-2, embeddinggemma-300M, bge-m3 — SHA256 matches |
+| P-06 | `scripts/run-evals.sh` (bank + turn) | P-06 | PASS: bank bge-m3 top-1 94.9%, false 0%, top-3 100%; turn 0% / 0% |
+| P-06 | `copilot-eval bank evals/bank/holdout.jsonl` | P-06 | PASS: top-1 91.7%, false 0% |
+| P-06 | `swift test` | P-06 | PASS: 74 tests in 12 suites (+QuestionBank, BankMatcher with a stub embedder, ProfileStore, FileWatcher) |
+| P-07 | `swift test` | P-07 | PASS: 112 tests in 16 suites (+SSEClient/providers on fixtures, ProviderChain, AnswerRouter, PromptBuilder, PIIFilter) |
+| P-07 | `InterviewCopilot --smoke-llm` (Gemini, live key) | P-07 | Model list: 62, `gemini-3.8-flash` present. Stream: the request format is accepted; `gemini-3.8-flash` — 503 "high demand" / 429 / first token 13–17 s; `gemini-flash-latest` — 2.1 s and 13 s; `gemini-flash-lite-latest` — 0.7 s; the chain 3.8 → flash-latest fell back on 503 |
+| P-07 | DeepSeek, Anthropic (live calls) | P-07 | NOT RUN — no keys; covered by fixture tests and mock providers (AC-07) |
+| P-08 | The app, mode "Question bank only", 5 phrases through the speakers | P-08 | PASS: 5/5 cards found; `card_shown` 0.09–0.13 s after the end of the turn (0.81–0.85 s after the end of speech; the first — 4.4 s while a Keychain prompt was pending, fixed) |
+| P-08 | The app, "Bank + hint", an out-of-bank question | P-08 | PASS: "Not in the bank" by the bank (0.615), Gemini 3.8 → 429 → Flash-Lite, first token 1.73 s after the end of the turn (2.45 s after the end of speech) |
+| P-09 | `--smoke-screenshot evals/fixtures/two-sum.png` | P-09 | PASS: JPEG 1600×1000 (144 KB), 3.8 → 429 → Flash-Lite, first token 1.9 s, an answer with a code block and O(...) |
+| P-09 | ⌃⌥S in the app (a live screenshot) | P-09 | NOT RUN by the executor (no synthetic key presses) — owner check at H-4 |
+| P-10 | `swift test` | P-10 | PASS: 127 tests in 19 suites (+SessionStore: save, delete, retention — AC-12; UsageMeter: prices, DeepSeek peak, limit; Screenshot) |
+| P-10 | The app: sessions and spending | P-10 | PASS: `sessions/2026-10-07T00-08-11.json` with a turn and latency, `usage.json` — a Gemini request, a 429 mark |
+| P-11 | `swift test` | P-11 | PASS: 130 tests in 20 suites (+ModelDownloader: list, SHA256, a live download of a small file) |
+| P-11 | `scripts/run-evals.sh` | P-11 | PASS: turn 36 cases 0%/0%; bank 94.9% / 0% |
+| P-11 | Focus when showing the panel (AC-09, partially) | P-11 | PASS: `lsappinfo front` before and after launching with the panel shown — "Claude", focus not taken. Hotkeys with Chrome — at H-4 |
+| P-11 | Memory (AC-05, preliminary) | P-11 | `footprint` 453–542 MB idle with all models; the 10-minute measurement — at H-4 |
+| H-4 (1) | `scripts/metrics.py` (Meet call, uk/ru) | P-11 | AC-01 PASS 511 ms; AC-02 NOT RUN (0 cards); AC-03 FAIL 4850 ms — fixed, rerun |
+| P-12 | `swift test` | P-12 | PASS: 134 tests (+quiet speech −30 dB, normalization, ProviderHealth) |
+| P-12 | `copilot-eval stt-stream … --gain 0.03` | P-12 | PASS: 4/4 uk/ru phrases at −30 dB, median 602 ms |
+| H-4 (2) | Call: first words of a hint | d2f0b45 | 1.06 and 0.91 s after the end of the turn (was 4.8 s) |
+| P-12 | whisper small vs medium on compressed audio (AAC 8 kHz 12 kbit/s) | P-12 | small 4/4 with errors; medium 4/4 correct, 0.44–0.68 s per phrase |
+| P-12 | `copilot-eval stt-stream` medium, compressed audio | P-12 | 8/8 correct; 0.84–1.06 s (median ~0.9 s) with a free GPU |
+| P-12 | App `footprint` with medium + bge-m3 (idle) | P-12 | 1121 MB |
+| H-4 (3) | `scripts/metrics.py` (Meet call, ru, medium) | e4f923c | AC-01 684 ms PASS; AC-02 84 ms PASS; AC-03 978 ms PASS; memory 1166 MB |
+| P-12 | `copilot-eval stt-stream` medium, compressed audio, ru / uk session | P-12 | ru 4/4, median 846 ms; uk 4/4, median 1140 ms |
+| P-12 | `swift test` | P-12 | PASS: 137 tests in 21 suites |
+| P-13 | `/code-review high` | cc1c06e | 10 findings — all fixed |
+| P-13 | `swift test` | cc1c06e | PASS: 143 tests in 21 suites |
+| P-13 | `scripts/run-evals.sh` | cc1c06e | turn 36 — 0%/0%; bank 94.9% / 0% |
+| P-13 | `scripts/footprint-monitor.sh 10` (AC-05) | cc1c06e | 1119 MB maximum over 10 minutes — PASS |
+| P-13 | Clean clone (AC-14) | d046738 | FAIL: ModelDownloader.swift is not in Git |
+| P-13 | Clean clone (AC-14) | cc1c06e | PASS: build, 143 tests, build-app (Authority=InterviewCopilot), secret-scan 0 |
+| P-06 | The app: profile, bank, S-10 | P-06 | PASS: the profile was copied, index of 20 cards; an error in questions.yaml → `parse error line=275`, the previous bank keeps working; a new card → 21, only the new phrasing recomputed (137 ms); `footprint` 542 MB |
+| P-01 | Launch, the icon and menu are visible (screenshot) | P-01 | Launching the debug binary: the process starts without errors. Screenshot NOT RUN: the executor process has no Screen Recording permission (`screencapture` gives only the wallpaper), TCC left untouched. The menu screenshot — at H-3/P-11 |
 
-## Решения исполнителя
-_(исполнитель дописывает: дата, шаг, решение, причина, ссылка на R-/AC-)_
+## Executor decisions
+_(the executor adds: date, step, decision, reason, reference to R-/AC-)_
 
-- 2026-10-06, P-00: тесты пишутся на XCTest и/или Swift Testing после установки Xcode; флаги-обходы для CLT не используются (Q10, AC-14).
-- 2026-10-06, P-01: структура меню вынесена в `CopilotCore` (`MenuLayout`) и покрыта тестами — проверяемая часть AC-11; AppKit только отрисовывает. Иконки пунктов — SF Symbols, близкие к картинке (HIG).
-- 2026-10-06, P-01: иконка-попугай рисуется кодом (`ParrotIcon`), .icns собирается `iconutil` в build-app.sh — без бинарных ассетов в Git (R-15).
-- 2026-10-06, P-01: в меню первой строкой для паузы — «Paused — <app>» и пункт «Resume listening» (R-15 говорит только о цвете точки; так понятнее, HIG).
-- 2026-10-06, P-01: `secret-scan.sh` не проверяет email/телефоны в `profile.example/` и `evals/` (синтетика, AC-06); разрешены адреса `example.*`, `users.noreply.github.com`, `anthropic.com`.
-- 2026-10-06, H-1: `build-app.sh` принимает сертификат «InterviewCopilot Dev» (ADR-0001 п. 3) или «InterviewCopilot» (фактическое имя после H-1); переопределение — `CODESIGN_IDENTITY`. Пересоздавать сертификат не просил: на поведение TCC имя не влияет.
-- 2026-10-06, H-1: репозиторий лежит на «Рабочем столе» в iCloud Drive; File Provider вешает `com.apple.FinderInfo`, и `codesign` падает. Бандл собирается и подписывается во временной папке вне iCloud, затем `ditto --noextattr` в `dist/`; финальная проверка `codesign --verify` без `--strict` (AC-14).
-- 2026-10-06, P-02: тексты окна настроек — по-русски (spec называет кнопки «Проверить», «Удалить», «ключ недействителен»), названия вкладок и меню — по-английски, как в R-15/R-18 и на картинке.
-- 2026-10-06, P-02: Gemini авторизуется заголовком `x-goog-api-key`, а не параметром `?key=` из примера документации — R-23 требует ключ только в заголовках.
-- 2026-10-06, P-02: «Проверить» при 429 — «лимит запросов», а не «ключ недействителен»; 400/401/403 — «ключ недействителен» (R-09). Текст ошибки провайдера очищается от значения ключа.
-- 2026-10-06, P-02: Keychain — классическая (файловая) связка, не data protection keychain: для неё нужен entitlement keychain-access-groups и профиль подписи, которых у локальной подписи нет.
-- 2026-10-06, H-2: у приложения-агента нет главного меню, поэтому ⌘V не вставлял ключ в поле. Добавлено невидимое главное меню с пунктами Edit (`MainMenu.swift`).
-- 2026-10-06, P-02: вкладка Hotkeys пока показывает сочетания; регистрация, проверка занятости и переназначение — P-05 (R-17).
-- 2026-10-06, P-03: Auto учитывает оба клиента Telegram (`ru.keepcoder.Telegram`, `org.telegram.desktop`); звук приложения берётся вместе с его помощниками (`com.google.Chrome.helper…`), иначе вкладки Chrome не слышно (R-01).
-- 2026-10-06, P-03: уровень шума в VAD — минимум энергии за 3 с, а не экспоненциальное сглаживание: постоянный фон с первой секунды иначе считался речью (тест `steadyNoiseIsNotSpeech`) (R-02).
-- 2026-10-06, P-03: слушание стартует само при запуске, если есть разрешение и найден источник; при отсутствии разрешения сразу открывается окно разрешений, системный запрос — только по кнопке «Запросить» (AC-13, S-09).
-- 2026-10-06, P-03: без разрешения пункт «Listening» без подменю — клик открывает окно разрешений (R-15, AC-13).
-- 2026-10-06, P-03: в zsh `log` — встроенная команда; для логов приложения использовать `/usr/bin/log show --predicate 'subsystem == "com.itmax04.interviewcopilot"' --info`.
-- 2026-10-06, P-04: модель whisper по умолчанию — small q5_1 (AC-01, AC-05), а не turbo; подробности и цифры — ADR-0001 (R-03).
-- 2026-10-06, P-04: язык uk/ru выбирается сравнением уверенности распознавания на обоих языках — детектор small ошибается на украинском (S-11, AC-10).
-- 2026-10-06, P-04: тишина (< −55 dBFS) в модель не подаётся, длина вывода ограничена, повторы сворачиваются — whisper на тишине выдавал «you», «Повтори!» и зацикленный текст (R-03).
-- 2026-10-06, P-04: первый запуск модели в новом бандле занимает ~18 с (компиляция Metal-шейдеров), дальше ~0,5 с. Мастер первого запуска (P-11) должен прогревать модель после загрузки.
-- 2026-10-06, P-04: самопроверка конвейера без владельца — источник «All system audio» записывается в настройки приложения (`defaults write com.itmax04.interviewcopilot settings.v1`), фикстуры играются `afplay`; после проверки настройка возвращается (Auto).
-- 2026-10-06, P-05: после фразы, оборванной на запятой или служебном слове, ждём T + 1,3 с — иначе «Расскажите о проекте, который…» уходит как вопрос (R-05, eval `turn`).
-- 2026-10-06, P-05: ⌃⌥↩ во время речи или до прихода итогового текста — ход сразу по приходе текста (R-05: «по последней реплике»).
-- 2026-10-06, P-05: голосовую обработку AVAudioEngine (эхоподавление) не включаю — она приглушает звук других приложений, в том числе созвона; вместо неё — правило эха в `TurnDetector` (R-02, S-07).
-- 2026-10-06, P-05: панель показывается при запуске (`orderFrontRegardless`, без активации приложения); пункт меню меняется на «Hide panel», когда панель видна (R-15, R-16).
-- 2026-10-06, P-05: язык uk/ru — решает сравнение на самом длинном звуке реплики, при разнице < 0,02 — язык прошлой реплики; уточнение прерывается в конце фразы (AC-01, AC-10).
-- 2026-10-06, P-06: модель эмбеддингов — bge-m3 (кандидат №2), порог 0,74 по eval; multilingual-e5-small есть только в неофициальных конвертациях, embeddinggemma-2 не поддерживается релизным llama.cpp (ADR-0001, AC-04, R-07).
-- 2026-10-06, P-06: в пример базы добавлены формулировки (по 6 на карточку), чтобы пройти AC-04; добавлен отложенный набор для проверки подгонки (AC-04).
-- 2026-10-06, P-06: пример профиля копируется чтением/записью, а не `copyItem`: клонирование файла из .app в iCloud Drive вешало главный поток (R-21).
-- 2026-10-06, P-06: «Edit resume & stories…» и «Open profile folder» открывают папку профиля в Finder, «Question bank…» — questions.yaml в редакторе по умолчанию (R-15).
-- 2026-10-06, P-07: Anthropic — `thinking: between_tools` + `effort: low` для подсказок и «сильной модели вручную» (минимальная задержка; `disabled` у Sonnet 5.5 — 400), адаптивное рассуждение + `effort: medium` для скриншотов; `fallbacks: "default"` с заголовком `server-side-fallback-2026-07-01`; температура не передаётся (R-13, skill `claude-api`).
-- 2026-10-06, P-07: неверный ключ (400/401/403) — переход к следующему провайдеру без повтора у этого же, в том числе без запасной модели того же провайдера (R-09, AC-07).
-- 2026-10-06, P-07: добавлена запасная модель Gemini (`gemini-flash-latest`, редактируется в Models) сразу после основной: основная `gemini-3.8-flash` на бесплатном ключе отвечала 503 «high demand». Цепочка остаётся Gemini → DeepSeek → Claude (R-09).
-- 2026-10-06, P-07: если Gemini не принимает `thinkingLevel` (400 про thinking), запрос повторяется без него — у разных Flash свой набор уровней (R-09).
-- 2026-10-06, P-07: частичный текст при отказе посреди ответа отбрасывается (`restart`), следующий провайдер отвечает заново (R-09, R-10).
-- 2026-10-06, P-07: ошибки провайдера чистятся от значения ключа, если ключ длиннее 8 символов (короткие тестовые значения не трогаются) (R-23).
-- 2026-10-07, P-08: ключи читаются только в фоне, решение «карточка или генерация» — по наличию ключа без чтения значения: пока висит системный запрос Связки ключей, любой вызов к ней ждёт, и карточка базы появлялась через 4,4 с (AC-02).
-- 2026-10-07, P-08: при каждой пересборке с «Разрешить» (не «Разрешать всегда») macOS снова спрашивает доступ к ключу; после «Разрешать всегда» владельцем пересборки проходят без запроса (R-23).
-- 2026-10-07, P-08: бесплатная квота `gemini-3.8-flash` и `gemini-flash-latest` на сегодня исчерпана замерами задержки (≈ 40 запросов) — «You exceeded your current quota». Запасная модель переведена на `gemini-flash-lite-latest` (отдельная квота, первый токен 0,7–1,9 с). Квота сбрасывается раз в сутки — H-4 лучше проводить после сброса. Живые запросы исполнителя сведены к минимуму.
-- 2026-10-07, P-08: порог микрофона −36 dBFS (эхо динамиков у микрофона ≈ −40…−44 dBFS), «речь владельца», начавшаяся ≤ 500 мс до речи собеседника, — эхо (R-02, S-07, eval `turn` +2 случая).
-- 2026-10-07, P-09: фикстура скриншота нарисована офскрин, а не снята в Chrome: у процесса исполнителя нет разрешения «Запись экрана» (R-14).
-- 2026-10-07, P-10: тексты сессий сохраняются как есть (R-19 требует реплики и ответ); файлы — с `completeFileProtection`, папка вне Git.
-- 2026-10-07, P-11: с самоподписанным сертификатом «Разрешать всегда» в Связке ключей действует только для конкретной сборки: после каждого изменения кода macOS снова спрашивает. Финальная сборка спросит один раз. Доверие сертификату не менял (CLAUDE.md); вариант для владельца — отметить сертификат доверенным для подписи кода (в отчёте).
-- 2026-10-07, P-11: мастер первого запуска показывается, пока не пройден, или если не хватает моделей; у владельца он появится один раз и покажет всё зелёным (S-09).
-- 2026-10-07, P-11: метрики пишутся уровнем notice — info живёт только в памяти, и замер прошедшего созвона пропадал (R-24).
-- 2026-10-07, P-12: «язык разговора» (после двух уверенных реплик детектор пропускается) включён: собеседования обычно на одном языке; при смешанной речи ru/uk/en рекомендация — выбрать язык в меню. Подсказка из базы — выключенная опция (смешанный эффект на замерах). Отдельная модель для детектора языка отклонена (память ~1,4 ГБ без эмбеддингов) (R-03, AC-01, AC-05, AC-10).
-- 2026-10-07, P-13: `.gitignore` — шаблоны каталогов данных с якорем `/` (`/models/`, `/profile/`, `/sessions/`, `/logs/`): на macOS без учёта регистра `models/` скрывал `Sources/CopilotCore/Models/` (AC-14).
-- 2026-10-07, запрос владельца: новый источник «Microphone» расширяет R-01 (режим самопроверки); R-02 («микрофон не расшифровывается») действует для источников-созвонов, в режиме «Microphone» микрофон и есть собеседник. Требует подтверждения владельца при приёмке как изменение spec.
-- 2026-10-06, P-00: whisper.cpp и llama.cpp берутся из сборочных тегов `bNNNN` (там лежат XCFramework), версия фиксируется URL + checksum (ADR-0001 п. 5, 9).
+- 2026-10-06, P-00: tests are written with XCTest and/or Swift Testing after Xcode is installed; CLT workaround flags are not used (Q10, AC-14).
+- 2026-10-06, P-01: the menu structure lives in `CopilotCore` (`MenuLayout`) and is covered by tests — the testable part of AC-11; AppKit only draws. Item icons are SF Symbols close to the picture (HIG).
+- 2026-10-06, P-01: the parrot icon is drawn in code (`ParrotIcon`), the .icns is built with `iconutil` in build-app.sh — no binary assets in Git (R-15).
+- 2026-10-06, P-01: when paused, the first menu line shows "Paused — <app>" and the item "Resume listening" (R-15 only mentions the dot color; this is clearer, HIG).
+- 2026-10-06, P-01: `secret-scan.sh` does not check emails/phones in `profile.example/` and `evals/` (synthetic, AC-06); the addresses `example.*`, `users.noreply.github.com`, `anthropic.com` are allowed.
+- 2026-10-06, H-1: `build-app.sh` accepts the certificate "InterviewCopilot Dev" (ADR-0001 item 3) or "InterviewCopilot" (the actual name after H-1); override with `CODESIGN_IDENTITY`. Recreating the certificate was not requested: the name does not affect TCC behavior.
+- 2026-10-06, H-1: the repository lives on the Desktop in iCloud Drive; File Provider adds `com.apple.FinderInfo`, and `codesign` fails. The bundle is built and signed in a temporary folder outside iCloud, then copied with `ditto --noextattr` into `dist/`; the final check is `codesign --verify` without `--strict` (AC-14).
+- 2026-10-06, P-02: settings window texts are in Russian (the spec names buttons "Проверить", "Удалить", "ключ недействителен"), tab and menu names in English, as in R-15/R-18 and the picture.
+- 2026-10-06, P-02: Gemini authenticates with the `x-goog-api-key` header, not the `?key=` parameter from the documentation example — R-23 requires keys only in headers.
+- 2026-10-06, P-02: "Check" on a 429 shows "rate limit", not "invalid key"; 400/401/403 — "invalid key" (R-09). The provider's error text is cleaned of the key value.
+- 2026-10-06, P-02: Keychain — the classic (file-based) keychain, not the data-protection keychain: the latter needs a keychain-access-groups entitlement and a provisioning profile that local signing does not have.
+- 2026-10-06, H-2: an agent app has no main menu, so ⌘V did not paste the key into the field. An invisible main menu with Edit items was added (`MainMenu.swift`).
+- 2026-10-06, P-02: the Hotkeys tab only shows the shortcuts for now; registration, conflict checks and remapping — P-05 (R-17).
+- 2026-10-06, P-03: Auto considers both Telegram clients (`ru.keepcoder.Telegram`, `org.telegram.desktop`); an app's audio is taken together with its helpers (`com.google.Chrome.helper…`), otherwise Chrome tabs are not heard (R-01).
+- 2026-10-06, P-03: the VAD noise level is the minimum energy over 3 s, not exponential smoothing: otherwise a constant background was treated as speech from the first second (test `steadyNoiseIsNotSpeech`) (R-02).
+- 2026-10-06, P-03: listening starts by itself at launch if the permission is granted and a source is found; without permission the permissions window opens immediately, the system prompt — only via the "Request" button (AC-13, S-09).
+- 2026-10-06, P-03: without permission the "Listening" item has no submenu — a click opens the permissions window (R-15, AC-13).
+- 2026-10-06, P-03: in zsh `log` is a builtin; for app logs use `/usr/bin/log show --predicate 'subsystem == "com.itmax04.interviewcopilot"' --info`.
+- 2026-10-06, P-04: the default whisper model is small q5_1 (AC-01, AC-05), not turbo; details and numbers — ADR-0001 (R-03).
+- 2026-10-06, P-04: the uk/ru language is chosen by comparing recognition confidence in both languages — small's detector errs on Ukrainian (S-11, AC-10).
+- 2026-10-06, P-04: silence (< −55 dBFS) is not fed to the model, the output length is capped, repeats are collapsed — whisper produced "you", "Повтори!" and looping text on silence (R-03).
+- 2026-10-06, P-04: the first model run in a new bundle takes ~18 s (Metal shader compilation), then ~0.5 s. The first-run wizard (P-11) should warm up the model after the download.
+- 2026-10-06, P-04: a pipeline self-check without the owner — the source "All system audio" is written into the app settings (`defaults write com.itmax04.interviewcopilot settings.v1`), fixtures are played with `afplay`; after the check the setting is restored (Auto).
+- 2026-10-06, P-05: after a phrase cut at a comma or a function word, wait T + 1.3 s — otherwise "Расскажите о проекте, который…" goes out as a question (R-05, the `turn` eval).
+- 2026-10-06, P-05: ⌃⌥↩ during speech or before the final text arrives — the turn fires as soon as the text arrives (R-05: "using the last utterance").
+- 2026-10-06, P-05: AVAudioEngine voice processing (echo cancellation) is not enabled — it ducks the audio of other apps, including the call; instead — an echo rule in `TurnDetector` (R-02, S-07).
+- 2026-10-06, P-05: the panel is shown at launch (`orderFrontRegardless`, without activating the app); the menu item changes to "Hide panel" when the panel is visible (R-15, R-16).
+- 2026-10-06, P-05: the uk/ru language — the comparison on the longest audio of the utterance decides; with a difference < 0.02 — the previous utterance's language; refinement is interrupted at the end of the phrase (AC-01, AC-10).
+- 2026-10-06, P-06: the embedding model is bge-m3 (candidate 2), threshold 0.74 by eval; multilingual-e5-small exists only in unofficial conversions, embeddinggemma-2 is not supported by the release llama.cpp (ADR-0001, AC-04, R-07).
+- 2026-10-06, P-06: phrasings were added to the example bank (6 per card) to pass AC-04; a holdout set was added to check overfitting (AC-04).
+- 2026-10-06, P-06: the example profile is copied by reading/writing, not `copyItem`: cloning a file from the .app in iCloud Drive hung the main thread (R-21).
+- 2026-10-06, P-06: "Edit resume & stories…" and "Open profile folder" open the profile folder in Finder, "Question bank…" opens questions.yaml in the default editor (R-15).
+- 2026-10-06, P-07: Anthropic — `thinking: between_tools` + `effort: low` for hints and the "strong model manually" (minimal latency; `disabled` on Sonnet 5.5 returns 400), adaptive thinking + `effort: medium` for screenshots; `fallbacks: "default"` with the header `server-side-fallback-2026-07-01`; temperature is not sent (R-13, the `claude-api` skill).
+- 2026-10-06, P-07: an invalid key (400/401/403) — move to the next provider without retrying this one, including without the same provider's fallback model (R-09, AC-07).
+- 2026-10-06, P-07: a Gemini fallback model was added (`gemini-flash-latest`, editable in Models) right after the main one: the main `gemini-3.8-flash` on a free key answered 503 "high demand". The chain stays Gemini → DeepSeek → Claude (R-09).
+- 2026-10-06, P-07: if Gemini does not accept `thinkingLevel` (a 400 about thinking), the request is retried without it — different Flash models have different level sets (R-09).
+- 2026-10-06, P-07: partial text on a failure mid-answer is discarded (`restart`), the next provider answers from scratch (R-09, R-10).
+- 2026-10-06, P-07: provider errors are cleaned of the key value if the key is longer than 8 characters (short test values are left alone) (R-23).
+- 2026-10-07, P-08: keys are read only in the background; the decision "card or generation" uses key presence without reading the value: while a system Keychain prompt is pending, any call to it waits, and the bank card appeared after 4.4 s (AC-02).
+- 2026-10-07, P-08: after every rebuild with "Allow" (not "Always Allow") macOS asks for key access again; after the owner's "Always Allow" rebuilds pass without a prompt (R-23).
+- 2026-10-07, P-08: the free quota of `gemini-3.8-flash` and `gemini-flash-latest` for the day was used up by latency measurements (≈ 40 requests) — "You exceeded your current quota". The fallback model was switched to `gemini-flash-lite-latest` (a separate quota, first token 0.7–1.9 s). The quota resets daily — H-4 is better after the reset. The executor's live requests are kept to a minimum.
+- 2026-10-07, P-08: microphone threshold −36 dBFS (speaker echo at the microphone ≈ −40…−44 dBFS); "owner speech" that starts ≤ 500 ms before the other person's speech is echo (R-02, S-07, `turn` eval +2 cases).
+- 2026-10-07, P-09: the screenshot fixture is drawn off screen rather than captured in Chrome: the executor process has no Screen Recording permission (R-14).
+- 2026-10-07, P-10: session texts are saved as is (R-19 requires utterances and the answer); files use `completeFileProtection`, the folder is outside Git.
+- 2026-10-07, P-11: with a self-signed certificate "Always Allow" in the Keychain applies only to a specific build: after every code change macOS asks again. The final build asks once. Certificate trust was not changed (CLAUDE.md); an option for the owner — mark the certificate as trusted for code signing (in the report).
+- 2026-10-07, P-11: the first-run wizard is shown until completed or if models are missing; the owner will see it once, all green (S-09).
+- 2026-10-07, P-11: metrics are logged at the notice level — info lives only in memory, and the measurement of a past call was lost (R-24).
+- 2026-10-07, P-12: "conversation language" (the detector is skipped after two confident lines) is on: interviews are usually in one language; with mixed ru/uk/en speech the recommendation is to choose the language in the menu. Bank prompting — an off-by-default option (mixed effect in measurements). A separate model for the language detector was rejected (memory ~1.4 GB without embeddings) (R-03, AC-01, AC-05, AC-10).
+- 2026-10-07, P-13: `.gitignore` — data-directory patterns anchored with `/` (`/models/`, `/profile/`, `/sessions/`, `/logs/`): on case-insensitive macOS `models/` hid `Sources/CopilotCore/Models/` (AC-14).
+- 2026-10-07, owner request: the new "Microphone" source extends R-01 (self-check mode); R-02 ("the microphone is not transcribed") applies to call sources, in the "Microphone" mode the microphone is the other person. Requires owner confirmation at acceptance as a spec change.
+- 2026-10-06, P-00: whisper.cpp and llama.cpp come from build tags `bNNNN` (where the XCFrameworks are), the version is pinned by URL + checksum (ADR-0001 items 5, 9).
 
-## Открытые вопросы
-Блокеров нет. Неблокирующие вопросы — intent.md, раздел «Открытые вопросы».
+## Open questions
+No blockers. Non-blocking questions — intent.md, section "Open questions".
 
-## Права
-- Разрешено:
-  - код, тесты и скрипты в репозитории;
-  - коммиты и `git push` в `feat/copilot-01`;
-  - загрузка моделей и зависимостей из ADR-0001;
-  - живые запросы к Gemini с ключом владельца.
-- Не разрешено:
-  - force-push, `reset --hard`, удаление веток, merge в `main`;
-  - изменение TCC и Keychain trust;
-  - платные сервисы и зависимости вне ADR-0001;
-  - публикация.
+## Permissions
+- Allowed:
+  - code, tests and scripts in the repository;
+  - commits and `git push` to `feat/copilot-01`;
+  - downloading models and dependencies from ADR-0001;
+  - live requests to Gemini with the owner's key.
+- Not allowed:
+  - force-push, `reset --hard`, deleting branches, merging into `main`;
+  - changing TCC and Keychain trust;
+  - paid services and dependencies outside ADR-0001;
+  - publishing.
 
-## Риски и откат
-Точка возврата: начальный коммит `main`. Откат шага — `git revert` его коммита.
+## Risks and rollback
+Rollback point: the initial commit of `main`. Rolling back a step — `git revert` of its commit.
 
-## Продолжение 2026-10-08 — локальная точность STT
+## Continuation 2026-10-08 — local STT accuracy
 
-Авторизация владельца: выполнить план, сначала бесплатное локальное распознавание; главный приоритет — точность.
-Решения исполнителя: FluidAudio 0.17.7 и Parakeet v3, запись зависимости в ADR-0001;
-Whisper full для итогов, быстрые частичные результаты; снимок звука/языка каждой закрытой фразы;
-позиции VAD внутри блока и сохранение всех переходов. Выбор движка/модели в Audio.
-Проверки первого этапа: PASS 149 тестов, включая перезапись буфера, несколько фраз в блоке,
-сохранение языка и непрерывное преобразование stereo48k → mono16k. После интеграции повторить.
-Живой созвон и прямое сравнение с parakeet-ai.com: NOT RUN, потребуются при H-4.
+Owner authorization: execute the plan, free local recognition first; the top priority is accuracy.
+Executor decisions: FluidAudio 0.17.7 and Parakeet v3, the dependency recorded in ADR-0001;
+full Whisper for finals, fast partial results; a snapshot of the audio/language of each closed phrase;
+VAD positions inside a block and keeping all transitions. Engine/model selection in Audio.
+First-stage checks: PASS 149 tests, including buffer overwrite, several phrases in a block,
+keeping the language and continuous stereo48k → mono16k conversion. Repeat after integration.
+A live call and a direct comparison with parakeet-ai.com: NOT RUN, needed at H-4.
 
-### Итог локального этапа 2026-10-08
+### Result of the local stage 2026-10-08
 
-Готова v0.1.1 (build 2), Parakeet v3 основной, Whisper turbo/full альтернативный.
-PASS: 151 тест, bank/turn evals, проверка SHA256 (23 файла Parakeet и два Whisper),
-54 файла через адаптер, поток EN/RU/UK (final 461–519 мс), secret scan 0 findings,
-сборка и строгая проверка локальной подписи. В report.md добавлены результаты и ограничения.
-Скрипт подписи исправлен: переменная перед типографской кавычкой требует `${IDENTITY}`.
-Звуки FLEURS и рабочие результаты не добавлены в Git. API генерации не вызывались.
-Следующий шаг: H-4 — живой тест владельцем, пять фраз на язык, отдельно отрицания/имена/числа/термины;
-проверить источник звука, переходы языков и память. Без него AC-10 не помечать PASS.
+v0.1.1 (build 2) is ready, Parakeet v3 is the main engine, Whisper turbo/full the alternative.
+PASS: 151 tests, bank/turn evals, SHA256 checks (23 Parakeet files and two Whisper),
+54 files through the adapter, an EN/RU/UK stream (final 461–519 ms), secret scan 0 findings,
+build and strict local signature check. Results and limitations were added to report.md.
+The signing script was fixed: a variable before a typographic quote requires `${IDENTITY}`.
+FLEURS audio and working results were not added to Git. Generation APIs were not called.
+Next step: H-4 — a live test by the owner, five phrases per language, separately negations/names/numbers/terms;
+check the audio source, language switches and memory. Do not mark AC-10 PASS without it.
 
 
-### Локальный тестовый звонок 2026-10-08 — v0.1.2 (build 3)
+### Local test call 2026-10-08 — v0.1.2 (build 3)
 
-Запрос владельца: собеседник читает фразы, приложение сравнивает распознавание с оригиналом.
-Реализовано: пункт «Тестовый звонок…», локальная браузерная страница, 15 синтетических фраз
-RU/UK/EN (обычная, отрицание, тихая, сжатая, техническая), сравнение слов/подсветка различий,
-задержка, повтор/остановка, итоги по языкам, JSON-отчёт. Сервер только 127.0.0.1, случайный
-токен, проверки Host/Origin, whitelist ресурсов, поддержка Range для WAV.
-Решения исполнителя: отдельный Chrome, чтобы звук проходил реальный захват; Safari при отсутствии
-Chrome использует весь системный звук. В тесте язык Auto, словарь личной базы не применяется,
-микрофон и генерация ответов выключены, история фраз не пополняется. Источник не сохраняется
-в настройки; прежние текст/язык/источник/пауза восстанавливаются. Пропущенный звук и незаконченная
-очередь через 20 с показывают проблему. Закрытие вкладки завершает тест; резервный таймер 90 с
-без запросов. --test-call пропускает запуск облачных проверок и базы; нужен закрытый старый экземпляр.
-Аудиофикстуры только синтетические, в разрешённом evals/audio/test-call/, модели в Git не входят.
-Новых внешних зависимостей нет (Network/AppKit встроенные).
-PASS: 157 тестов; turn 36; bank top1 94,9%, top3 100%, false 0/12; secret scan 0;
-сборка/строгая подпись; 15 фраз через звук Chrome → SystemAudioCapture → Parakeet;
-проверка выгрузки JSON из браузера; проверки HTTP/Range/Host/Origin/token/traversal;
-финальная сборка: готовность модели, запрет перекрывающихся тестов и старого end, сброс/закрытие
-сервера и неизменность сохранённых настроек.
-Замер 15 синтетических фраз: 316 слов, 20 ошибок (6,33% raw WER), медиана задержки 501 мс.
-RU 7/96 (7,29%), UK 9/97 (9,28%), EN 4/123 (3,25%). Большинство ошибок — термины и запись чисел.
-Полный прогон выполнен перед добавлением подсветки/итогов по языкам и защитой закрытия при запуске;
-финальная версия повторно прошла тесты/сборку и проверки управления, отрисовала страницу и
-распознала первую фразу через браузер. Подсветка проверена отдельно на пропусках/заменах/вставках.
-NOT RUN: весь набор в Safari, человеческая невнятная речь/шум, смешение языков внутри фразы,
-прямое сравнение с parakeet-ai.com. Следующий шаг: записи настоящего голоса с эталоном,
-сравнить Parakeet и Whisper по одинаковому звуку. Нормализация тихой речи уже есть;
-автоматический выбор движка при невнятной речи ещё не реализован.
-Коммит: добавление локального тестового звонка в feat/copilot-01 (хеш в истории Git).
+Owner request: the other person reads phrases, the app compares the recognition with the original.
+Implemented: the "Test call…" item, a local browser page, 15 synthetic phrases
+RU/UK/EN (normal, negation, quiet, compressed, technical), word comparison/difference highlighting,
+latency, repeat/stop, per-language results, a JSON report. The server listens only on 127.0.0.1, a random
+token, Host/Origin checks, a resource whitelist, Range support for WAV.
+Executor decisions: a separate Chrome so that audio goes through real capture; without Chrome, Safari
+uses all system audio. In the test the language is Auto, the personal bank dictionary is not applied,
+the microphone and answer generation are off, the phrase history is not appended. The source is not saved
+to settings; the previous text/language/source/pause are restored. Missing audio and an unfinished
+queue after 20 s show a problem. Closing the tab ends the test; a 90 s fallback timer
+without requests. --test-call skips the cloud checks and the bank; the old instance must be closed.
+Audio fixtures are synthetic only, in the allowed evals/audio/test-call/; models are not in Git.
+No new external dependencies (Network/AppKit are built in).
+PASS: 157 tests; turn 36; bank top1 94.9%, top3 100%, false 0/12; secret scan 0;
+build/strict signature; 15 phrases through Chrome audio → SystemAudioCapture → Parakeet;
+checking the JSON export from the browser; HTTP/Range/Host/Origin/token/traversal checks;
+the final build: model readiness, rejection of overlapping tests and a stale end, server reset/close
+and unchanged saved settings.
+Measurement of 15 synthetic phrases: 316 words, 20 errors (6.33% raw WER), median latency 501 ms.
+RU 7/96 (7.29%), UK 9/97 (9.28%), EN 4/123 (3.25%). Most errors are terms and number spelling.
+The full run was done before adding highlighting/per-language results and the close-on-launch guard;
+the final version passed tests/build and control checks again, rendered the page and
+recognized the first phrase through the browser. Highlighting was checked separately on omissions/substitutions/insertions.
+NOT RUN: the whole set in Safari, unclear human speech/noise, language mixing inside a phrase,
+a direct comparison with parakeet-ai.com. Next step: recordings of a real voice with a reference,
+compare Parakeet and Whisper on identical audio. Quiet-speech normalization already exists;
+automatic engine selection for unclear speech is not implemented yet.
+Commit: adding the local test call to feat/copilot-01 (hash in the Git history).

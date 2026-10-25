@@ -1,121 +1,111 @@
 # Interview Copilot
 
-## Назначение
-Личное приложение для macOS (строка меню + плавающая панель), которое слушает собеседника
-в Google Meet / Zoom / Telegram, локально расшифровывает речь (украинский, русский, английский),
-находит вопрос в заранее подготовленной базе ответов владельца и показывает ответ.
-Если вопроса нет в базе (или режим «Без профиля»), генерирует подсказку цепочкой Groq → Cerebras → Gemini → DeepSeek →
-Claude → свой API; первые слова — около 1 с после вопроса. Отсеивает шум, чужой язык и чужие голоса, помнит всё интервью.
-По горячей клавише отправляет скриншот задачи в сильную модель. Пользователь один — владелец; распространение не планируется.
+A personal macOS app (menu bar + floating overlay) that listens to the other person in Google Meet, Zoom or Telegram,
+transcribes speech locally (Ukrainian, Russian, English), finds the question in the owner's prepared answer bank and
+shows the answer. If the question is not in the bank (or in "No profile" mode), it generates a hint through the chain
+Groq → Cerebras → Gemini → DeepSeek → Claude → custom API; the first words appear about one second after the question.
+It filters out noise, foreign-language chatter and other voices, remembers the whole interview, sends a screenshot of
+a coding task to a strong model on a hotkey, and reviews the call afterwards. There is one user — the owner; the app is
+not distributed.
 
-Статус: **0.15.0** (COPILOT-11: правки по тестовому собеседованию — цепочка не сдается при лимитах, ответ на «работали ли вы с X?», размер оверлея мышью; COPILOT-10: тема и язык) — [docs/changes/COPILOT-11/handoff.md](docs/changes/COPILOT-11/handoff.md).
-**Новому разработчику или агенту — начать с [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: поток данных, модули,
-где что лежит, как вносить типичные изменения и как проверять.
+Status: **0.15.1** (COPILOT-12: final review, fixes, English documentation) — see
+[docs/changes/COPILOT-12/handoff.md](docs/changes/COPILOT-12/handoff.md).
 
-## Требования к среде
-- Mac на Apple Silicon, macOS 15+ (проверено на M1 8 ГБ, macOS 15.7.2).
-- Xcode 26+ (без Xcode не работают тесты — решение P-00): `sudo xcode-select -s /Applications/Xcode.app`.
-- Сертификат подписи кода «InterviewCopilot» или «InterviewCopilot Dev» в Связке ключей (самоподписанный, «Подписание кода»).
-- Свободно ≥ 3 ГБ на модели.
-- Ключ Groq или Gemini API (бесплатные тарифы). Cerebras, DeepSeek, Anthropic, свой OpenAI-совместимый API — по желанию.
-- Память во время созвона: приложение ≈ 1,1–1,2 ГБ.
+**New developer or AI agent? Start with [AGENTS.md](AGENTS.md)**, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Быстрый запуск
+## Requirements
+- Apple Silicon Mac, macOS 15+ (tested on an M1 with 8 GB, macOS 15.7).
+- Xcode 26+ (tests do not run with the Command Line Tools alone): `sudo xcode-select -s /Applications/Xcode.app`.
+- A code-signing certificate named "InterviewCopilot" or "InterviewCopilot Dev" in the Keychain (self-signed, "Code Signing").
+- ≥ 3 GB of free disk space for models.
+- A Groq or Gemini API key (free tiers). Cerebras, DeepSeek, Anthropic and a custom OpenAI-compatible API are optional.
+- Memory during a call: about 1.1–1.2 GB.
+
+## Quick start
 ```bash
-scripts/fetch-parakeet.py      # локальный Parakeet v3, фиксированная версия и SHA256
-scripts/fetch-models.sh        # модели whisper и эмбеддингов, проверка SHA256 (или мастер первого запуска)
-scripts/fetch-filter-models.py # Silero, CAM++ (отпечаток голоса), LocalVQE — фильтры COPILOT-05
-scripts/build-app.sh           # сборка и подпись dist/InterviewCopilot.app
-open dist/InterviewCopilot.app # попугай в строке меню; панель — ⌃⌥H
+scripts/fetch-parakeet.py      # local Parakeet v3, pinned version and SHA256
+scripts/fetch-models.sh        # Whisper and embedding models, SHA256 check (or use the first-run wizard)
+scripts/fetch-filter-models.py # Silero, CAM++ (voiceprint), LocalVQE — speech filters
+scripts/build-app.sh           # build and sign dist/InterviewCopilot.app
+open dist/InterviewCopilot.app # parrot in the menu bar; overlay — ⌃⌥H
 ```
-Первый запуск: мастер «Разрешения → ключ Gemini → модели». Разрешения «Запись экрана и системного звука»
-и «Микрофон» выдаются в Системных настройках вручную. После пересборки macOS один раз спрашивает доступ к ключу
-в Связке ключей — «Разрешать всегда».
+First launch: the wizard walks through permissions → a free Groq key → models. "Screen & System Audio Recording" and
+"Microphone" are granted manually in System Settings. After a rebuild macOS asks once for Keychain access to the key —
+choose "Always Allow".
 
-## Как пользоваться
-- **Размер оверлея** — тяните за любую сторону или угол (значок в правом нижнем углу); ширина 280–1000 pt запоминается,
-  слайдер в «Настройки → Оверлей» остается. Свернутая панель по высоте не растягивается.
-- **Лимиты ключей:** все ключи провайдера → следующий провайдер → «последний шанс»: приложение ждет сброс ближайшего лимита
-  (не дольше 25 с) и пробует медленную модель терпеливо, а не показывает «Модели недоступны».
-- **Тема и язык** — «Настройки → Основное» (и внизу онбординга): тема «Как в системе / Светлая / Темная», язык
-  «Как в системе / Русский / English». Меняются сразу; оверлей на звонке всегда темный. Разбор и «Спросить ИИ» — на языке
-  интерфейса, подсказки на звонке — на языке собеседника.
-- **Без сессии приложение не слушает.** «Создать сессию…» (⌃⌥N, меню или панель): тип (Собеседование / Обычный звонок /
-  ИИ-собеседование), профиль, вакансия (текст или ссылка), источник, язык, модель, указания на сессию, автоответ,
-  сохранение, план → проверка микрофона, звука звонка, распознавания и ключей → «Начать сессию». «Завершить» — в панели
-  и меню. Если начался звонок, панель предложит начать сессию.
-- **Слушаю — <приложение>**: источник звука (Авто: Zoom → Chrome → Telegram, конкретное приложение, весь системный звук
-  или **Микрофон Mac (самопроверка)** — говорите сами в микрофон Mac, без созвона, для тренировки и проверки).
-- **Тестовый звонок…**: локальная вкладка браузера с 15 фразами RU/UK/EN, сравнением текста, подсветкой ошибок, задержкой и JSON-отчётом. Используется настоящий захват звука браузера. Генерация ответов и запись фраз в историю выключены; прежний источник и пауза восстанавливаются после завершения.
-- Запуск только бесплатного теста: `open -n dist/InterviewCopilot.app --args --test-call`. Перед запуском закройте предыдущий экземпляр. Этот режим не запускает проверку облачных моделей, базу вопросов и генерацию.
-- **Режим**: Только база вопросов / База + подсказка / Генерировать каждый ответ.
-- **Настройки → Звук и распознавание**: Parakeet v3 (основной локальный движок) или Whisper; для Whisper — large-v3-turbo и «Точный итоговый текст». Смена движка не требует перезапуска.
-- **Язык звонка**: Авто (UK/RU/EN) или конкретный язык — для Whisper известный язык точнее и быстрее. Parakeet сохраняет мультиязычный текст; настройка задаёт метку языка.
-- **Профиль: резюме, инструкции…** (или запуск с `--args --profile`) — окно «Профиль»: профили под вакансии, резюме,
-  факты о себе, вакансия (загрузка PDF, Word, RTF, TXT, Markdown или текст вручную), инструкции профиля и общие.
-  Вкладка «Материалы» — конспекты и документация (десятки–сотни страниц): в запрос идут 3–4 фрагмента, похожие на вопрос.
-  Вкладка «Вопросы» — примерные вопросы и ваши ответы: импорт файла в любой форме (⌘I), таблица, «Подготовить» —
-  формулировки на uk/ru/en и черновики там, где ответа нет. На интервью модель подстраивает ваш ответ под реальный вопрос.
-  Переключение профиля — меню **Profile**. **Question bank…** — `questions.yaml` активного профиля (формат — spec R-06).
-- Горячие клавиши (переназначаются в Settings → Hotkeys): ⌃⌥↩ ответить сейчас (и на серую строку), ⌃⌥S скриншот,
-  ⌃⌥H панель, ⌃⌥P пауза, ⌃⌥C сильная модель, ⌃⌥A «сейчас отвечаю я» в самопроверке (есть и в меню), ⌃⌥N сессия,
-  ⌃⌥Space чат, ⌃⌥⌫ очистить расшифровку, ⌃⌥← / ⌃⌥→ предыдущий / следующий ответ. **Только во время сессии** — схема
-  ParakeetAI: ⌘↩ ответ, ⇧⌘↩ скриншот, ⇧⌘Space чат, ⇧⌘⌫ очистить, ⌘← / ⌘→ история (на время сессии эти сочетания
-  перехватываются у всех приложений).
-- **Стиль ответа**: формат (суть + пункты / только пункты / сплошной текст), длина (до 40 / 80 / 150 слов), тон — с живым
-  предпросмотром на вашем профиле. По умолчанию — Settings → Models; на один звонок — мастер сессии → «Стиль ответа».
-  Ваши инструкции важнее.
-- **Оверлей сессии**: уровни микрофона и звонка, «Не слышу звонок N с», статус «Проверяю / Вопрос найден / Не вопрос»,
-  карточка «Вопрос: …» с историей ← 3 / 7 →, версиями ответа и кнопками «Короче / Подробнее / Пример»; чат — вопрос
-  текстом, уточнение ответа или указание на всю сессию (значки, снимаются ✕). Меню ⋯: автоответ, язык, масштаб,
-  следующий экран, «Скрыть от захвата экрана» и честная проверка «Проверить видимость».
-- **Задача со скриншота** (⇧⌘↩ в сессии, ⌃⌥S): решение сильной моделью; снимок в течение 30 с — к той же задаче (до 3);
-  плашка «Задача · N снимка» с ✕. Пока задача активна, голосовые уточнения («А сложность?», «А если массив отсортирован?»,
-  «Почему так?») отвечают про нее; другие вопросы — как обычно. Clear закрывает задачу.
-- **Разбор после «Завершить»** (можно выключить в мастере): в фоне — комментарий к каждому вашему ответу (что получилось,
-  чего не хватило, как сказать лучше), сводка (для звонка — договоренности), «Спросить ИИ» о звонке. **Session history…** —
-  окно сессий: «Сводка», «Расшифровка» (Интервьюер / Вы / подсказки, время), «Спросить ИИ», удаление вместе с разбором.
-- **Настройки → Звук и распознавание → Ваш голос** — образец голоса (25 с): в режиме микрофона чужие голоса и ТВ — серым.
-- **Несколько ключей одного провайдера** (Настройки → Ключи моделей → «Еще ключ — другого аккаунта», без ограничения):
-  сначала по очереди пробуются все ключи провайдера — кончился лимит у одного (429), ответ сразу идет со следующего;
-  только когда лимит у всех — следующий провайдер. Ключ с лимитом ждет сброса по подсказке провайдера (`retry-after`,
-  «try again in 6s», дневной лимит — часы; без подсказки — минута) и не пробуется первым. Недействительный ключ
-  помечается отдельно и полчаса не пробуется первым; изменение ключей в настройках сбрасывает ожидание.
-- **Settings… (⌘,)**: ключи, ID моделей и запасная модель Gemini, порог паузы, порог базы, фильтр личных данных,
-  срок истории, вид панели, бюджет на платных провайдеров.
+## Using the app
+- **No session — no listening.** "New session…" (⌃⌥N, menu, main window or overlay): call type (Interview / Regular call /
+  AI interview), profile, job posting (text or link), audio source, language, model, session instructions, auto-answer,
+  transcript saving, planned duration → a pre-start check of the microphone, call audio, recognition and keys →
+  "Start session". "End" is in the overlay and the menu. When a call starts, the overlay offers to start a session.
+- **Audio source**: Auto (Zoom → Chrome → Telegram), a specific app, all system audio, or **Mac microphone (self-check)** —
+  you speak into the Mac microphone yourself, without a call, to practise and test.
+- **Test call…**: a local browser tab with 15 RU/UK/EN phrases, text comparison, highlighted errors, latency and a JSON
+  report. Real browser audio capture is used; answer generation and history are off. Run only the free test with
+  `open -n dist/InterviewCopilot.app --args --test-call` (quit the running instance first).
+- **AI interview**: the model asks questions by voice in the browser, you answer into the microphone, hints work as on a
+  real call, and a review follows.
+- **Mode**: Question bank only / Bank + hint / Generate every answer.
+- **Settings → Audio & recognition**: Parakeet v3 (main local engine) or Whisper (large-v3-turbo, "Accurate final text");
+  switching needs no restart. **Call language**: Auto (UK/RU/EN) or a fixed language.
+- **Profiles** (main window → Profiles, or launch with `--args --profile`): one profile per job search with résumé,
+  facts about you, job posting (PDF, Word, RTF, TXT, Markdown or pasted text), profile and general instructions,
+  **Materials** (notes and documentation; 3–4 matching chunks go into each request) and **Questions** (sample questions
+  and your answers: import a file in any form with ⌘I, edit in a table, "Prepare" adds uk/ru/en phrasings and draft
+  answers, "Delete all…" clears the list). During the interview the model adapts your answer to the actual wording.
+- **Answer style**: format (gist + bullets / bullets only / plain text), length (up to 40 / 80 / 150 words) and tone, with
+  a live preview on your profile. Default in Settings → Models & answers; per call in the session wizard. Your
+  instructions take priority.
+- **Overlay**: microphone and call levels, "Can't hear the call for N s", status "Checking / Question detected / Not a
+  question", the answer card with history ← 3 / 7 →, answer versions and "Shorter / More detail / Example"; chat for a
+  typed question, a refinement or an instruction for the whole session. The ⋯ menu has auto-answer, language, zoom,
+  next screen, "Hide during screen sharing" and an honest "Check visibility". **Resize** by dragging any edge or corner
+  (grip in the bottom-right corner); width 280–1000 pt is remembered.
+- **Screenshot task** (⇧⌘↩ during a session, ⌃⌥S): a strong model solves the task; screenshots within 30 s join the same
+  task (up to 3). While the task is active, short voice follow-ups ("And the complexity?") are answered about it.
+- **Review after "End"** (can be turned off in the wizard): a comment on each of your answers (what worked, what was
+  missing, how to say it better), a summary (agreements for a regular call) and "Ask AI" about the call. Session history
+  is in the main window → Sessions.
+- **Your voice** (Settings → Audio & recognition): a 25-second voice sample; in microphone mode other voices and TV are grayed out.
+- **Multiple keys per provider** (Settings → Model keys → "Another key — from another account", unlimited): all keys of a
+  provider are tried in turn; a rate-limited key waits for its reset (`retry-after`, "try again in…", daily limits —
+  hours); only when all keys are limited does the next provider answer. If everything fails, the "last resort" waits up
+  to 25 s for the nearest key reset and gives slow models more time instead of showing "Models unavailable".
+- **Theme and language** (Settings → General, onboarding, bottom of the main window sidebar): System / Light / Dark and
+  System / Русский / English, applied instantly. The call overlay is always dark. Review and "Ask AI" use the UI
+  language; live hints use the interviewer's language.
+- **Hotkeys** (Settings → Hotkeys): ⌃⌥↩ answer now (also for a gray line), ⌃⌥S screenshot, ⌃⌥H overlay, ⌃⌥P pause,
+  ⌃⌥C strong model, ⌃⌥A "I'm answering now" (self-check), ⌃⌥N session, ⌃⌥Space chat, ⌃⌥⌫ clear transcript,
+  ⌃⌥← / ⌃⌥→ previous / next answer. **During a session only** (ParakeetAI scheme): ⌘↩ answer, ⇧⌘↩ screenshot,
+  ⇧⌘Space chat, ⇧⌘⌫ clear, ⌘← / ⌘→ history.
 
-## Проверка
-- Быстрая: `swift build && swift test` (337 тестов).
-- Полная: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`.
-- Переводы интерфейса: `scripts/check-localization.sh` — у каждой строки есть английский перевод, форматы совпадают.
-- Evals: `scripts/run-evals.sh [bank|turn|filter-text|memory|materials|filter|voice]` — пороги и baseline в [evals/README.md](evals/README.md).
-- Метрики созвона: `scripts/metrics.py --last 30m` (AC-01…AC-03), память: `scripts/footprint-monitor.sh 10` (AC-05).
-- Живые проверки из приложения: `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm`
-  и `--smoke-screenshot evals/fixtures/two-sum.png` (тратят квоту Gemini).
-- `--smoke-memory [N]` — синтетические сценарии памяти и правил промпта (ловушка «вы упоминали», возврат к ответу,
-  зарплата, обрывок) через цепочку из настроек, каждый N раз (COPILOT-07; ~6·N запросов к бесплатным провайдерам).
+## Verification
+- Quick: `swift build && swift test`.
+- Full: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`.
+- UI translations: `scripts/check-localization.sh` — every UI string has an English translation with matching formats.
+- Evals: `scripts/run-evals.sh [bank|turn|filter-text|memory|materials|filter|voice]` — thresholds and baselines in [evals/README.md](evals/README.md).
+- Call metrics: `scripts/metrics.py --last 30m`; memory: `scripts/footprint-monitor.sh 10`.
+- Live checks from the signed app (spend free quota): `--smoke-llm`, `--smoke-memory [N]`, `--smoke-screenshot evals/fixtures/two-sum.png`,
+  `--smoke-task`, `--smoke-session`, `--smoke-review`, `--smoke-prepare`; UI without audio: `--ui-snapshots <dir>`.
 - CLI: `swift run -c release copilot-eval <stt|stt-parakeet|stt-hybrid|stt-stream|turn|bank|filter-text|filter|voice|voice-enroll|enhance|memory|exit-check>`.
-- Что и как тестировать дальше — [docs/changes/COPILOT-01/test-plan.md](docs/changes/COPILOT-01/test-plan.md).
 
-## Структура
-- `Sources/CopilotCore/` — логика: `Audio/` (захват ScreenCaptureKit, VAD, буфер), `STT/` (Parakeet v3 / Whisper), `Filter/`
-  (Silero, язык, голос, шумоподавление), `Turns/` (конец вопроса), `Bank/` (база, поиск, профиль), `LLM/` (провайдеры, цепочка,
-  промпт), `Memory/` (память интервью), `Answer/`, `Interviewer/` и `TestCall/` (тренировки), `Privacy/`, `Capture/` (скриншот),
-  `Storage/` (история), `Usage/` (расход), `Hotkeys/`, `Menu/`, `Models/` (загрузка моделей), `Settings/`, `Secrets/`, `Logging/`.
-  Подробно — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-- `Sources/CopilotEmbeddings/` — эмбеддинги на llama.cpp (отдельно от whisper из-за заголовков ggml).
-- `Sources/InterviewCopilot/` — приложение: меню, панель, настройки, мастер, история.
-- `Sources/copilot-eval/` — CLI для evals и замеров.
-- `Tests/CopilotCoreTests/` — тесты и фикстуры потоков провайдеров.
-- `scripts/` — сборка, модели, evals, секреты, метрики, память, фикстуры.
-- `profile.example/` — пример профиля вымышленного кандидата (копируется при первом запуске).
-- `evals/` — наборы bank/turn, аудио- и скриншот-фикстуры, сценарий созвона.
-- `docs/` — [ARCHITECTURE.md](docs/ARCHITECTURE.md), дизайн, ADR, задачи `changes/COPILOT-01…07` (intent, spec, plan, handoff).
+## Repository layout
+- `Sources/CopilotCore/` — logic: `Audio/`, `STT/`, `Filter/`, `Turns/`, `Bank/`, `Profiles/`, `LLM/`, `Memory/`, `Answer/`,
+  `Review/`, `Session/`, `Interviewer/`, `TestCall/`, `Localization/`, `Privacy/`, `Capture/`, `Storage/`, `Usage/`,
+  `Hotkeys/`, `Menu/`, `Models/`, `Settings/`, `Secrets/`, `Logging/`.
+- `Sources/CopilotEmbeddings/` — embeddings via llama.cpp (separate from whisper because of ggml headers).
+- `Sources/InterviewCopilot/` — the app: menu bar, overlay, main window, settings, wizard, history.
+- `Sources/copilot-eval/` — CLI for evals and measurements.
+- `Tests/CopilotCoreTests/` — tests and recorded provider streams.
+- `scripts/` — build, models, evals, secret scan, localization check, metrics, fixtures.
+- `profile.example/` — a fictional candidate profile (synthetic; Russian/Ukrainian content used by tests and evals).
+- `evals/` — bank/turn/filter/memory/materials datasets, audio and screenshot fixtures, the live-call script.
+- `docs/` — [ARCHITECTURE.md](docs/ARCHITECTURE.md), design, ADRs, tasks `changes/COPILOT-01…12` (intent, spec, plan, handoff).
 
-## Ограничения и безопасность
-- API-ключи — только в Связке ключей macOS. Не в коде, не в логах, не в чате, не в Git (`scripts/secret-scan.sh`).
-- Личный профиль и история сессий — в `~/Library/Application Support/InterviewCopilot/`, в Git не попадают.
-- Аудио на диск не записывается (кольцевой буфер ≤ 30 с в памяти; закрытые фразы дополнительно сохраняются в памяти очереди до обработки); сохраняется только текст сессий (срок хранения настраивается).
-- В логах только события и задержки, без текста реплик и ответов.
-- Точность расшифровки зависит от звука: сжатый звук Meet с телефона распознаётся хуже (см. report.md, AC-10).
-- Репозиторий приватный: `itmax04/interview-copilot`.
+## Limitations and security
+- API keys live only in the macOS Keychain — never in code, logs, chat or Git (`scripts/secret-scan.sh`).
+- Personal profiles and session history live in `~/Library/Application Support/InterviewCopilot/` and never enter Git.
+- No audio is written to disk (≤ 30 s ring buffer in memory); only session text is saved, with configurable retention.
+- Logs contain events and latencies only, never utterance or answer text.
+- Transcription accuracy depends on audio quality: compressed Meet audio from a phone is recognized worse.
+- Private repository: `itmax04/interview-copilot`. No license file — all rights reserved by the owner.
