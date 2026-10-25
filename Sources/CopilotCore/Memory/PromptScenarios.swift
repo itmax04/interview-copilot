@@ -123,6 +123,18 @@ public enum PromptScenarios {
         Scenario(name: "обрывок — не вопрос", question: "Є таке питання.", language: "uk", memory: MemoryContext(),
                  check: { text in PromptBuilder.isNoAnswer(text) ? nil : "ответ вместо «—»: «\(firstLine(text))»" }),
         // COPILOT-08: инструкции владельца и факты резюме.
+        Scenario(name: "интервьюер рассказывает о себе — не вопрос", question: "Мене звати Олена, я керую командою креативів. Працюю в компанії вже п'ять років, до цього була маркетологом у мобільних іграх.",
+                 language: "uk", memory: MemoryContext(), profile: sampleProfile,
+                 check: { text in PromptBuilder.isNoAnswer(text) ? nil : "ответ на рассказ интервьюера вместо «—»: «\(firstLine(text))»" }),
+        Scenario(name: "интервьюер описывает компанию и роль — не вопрос", question: "Ми продуктова компанія, робимо мобільні застосунки для американського ринку. Команда невелика, працюємо повністю віддалено, а реклама йде в Meta і TikTok.",
+                 language: "uk", memory: MemoryContext(), profile: sampleProfile,
+                 check: { text in PromptBuilder.isNoAnswer(text) ? nil : "ответ на описание компании вместо «—»: «\(firstLine(text))»" }),
+        Scenario(name: "рассказ интервьюера с вопросом в конце — отвечает на вопрос", question: "Я керую командою вже п'ять років, ми щойно запустили новий продукт. А ви розкажіть, чому вас зацікавила ця вакансія?",
+                 language: "uk", memory: MemoryContext(), profile: sampleProfile,
+                 check: { text in
+                     if PromptBuilder.isNoAnswer(text) { return "промолчал на вопрос в конце рассказа" }
+                     return text.count >= 60 ? nil : "слишком коротко: «\(firstLine(text))»"
+                 }),
         Scenario(name: "инструкция: без списков, 2 предложения", question: "Розкажіть про себе.", language: "uk", memory: MemoryContext(),
                  profile: { var p = sampleProfile; p.instructions = "Відповідай двома реченнями, без списків і без жирного шрифту."; return p }(),
                  check: { text in

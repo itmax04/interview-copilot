@@ -266,6 +266,11 @@ final class BankController {
         reload()
     }
 
+    /// Удалить все вопросы профиля сразу (COPILOT-11). Резюме, инструкции и материалы остаются.
+    func deleteAllCards() {
+        saveCards([])
+    }
+
     /// Фрагменты материалов для вопроса (черновик ответа при подготовке).
     func materials(for question: String) async -> [MaterialHit] {
         await lookup(question, threshold: 1).materials

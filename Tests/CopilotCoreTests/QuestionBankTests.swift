@@ -191,3 +191,16 @@ struct RecognitionVocabularyTests {
         #expect(RecognitionVocabulary.prompt(cards: cards, language: "ru", limit: 20) == "Расскажите о себе")
     }
 }
+
+@Suite("Пустая база вопросов — COPILOT-11")
+struct EmptyQuestionBankTests {
+    @Test func deletingAllQuestionsWritesAFileThatReadsBackAsEmpty() throws {
+        let cards = [BankCard(id: "q-1", questions: ["Что такое хук?"], answer: "Первые секунды."),
+                     BankCard(id: "q-2", questions: ["Как тестировать?"], answer: "")]
+        #expect(try QuestionBankParser.parse(QuestionBankWriter.yaml(cards)).count == 2)
+        // «Удалить все…»: пустой список → файл с комментарием и [] — читается без ошибки.
+        let empty = QuestionBankWriter.yaml([])
+        #expect(empty.contains("[]"))
+        #expect(try QuestionBankParser.parse(empty).isEmpty)
+    }
+}

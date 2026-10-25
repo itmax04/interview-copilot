@@ -9,6 +9,7 @@ struct QuestionsView: View {
     let preparer: QuestionPreparer
     @State private var selection: String?
     @State private var confirmDelete = false
+    @State private var confirmDeleteAll = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -63,6 +64,14 @@ struct QuestionsView: View {
         .sheet(isPresented: Binding { preparer.pendingImport != nil } set: { if !$0 { preparer.pendingImport = nil } }) {
             ImportReview(items: preparer.pendingImport ?? []) { preparer.acceptImport($0) } cancel: { preparer.pendingImport = nil }
         }
+        .confirmationDialog(L("Удалить все вопросы (%lld)?", bank.cards.count), isPresented: $confirmDeleteAll) {
+            Button("Удалить всё", role: .destructive) {
+                bank.deleteAllCards()
+                selection = nil
+            }
+        } message: {
+            Text("Все вопросы и ответы профиля удаляются с этого Mac без возможности восстановления. Резюме, инструкции и материалы остаются.")
+        }
         .confirmationDialog("Удалить вопрос?", isPresented: $confirmDelete) {
             Button("Удалить", role: .destructive) {
                 bank.saveCards(bank.cards.filter { $0.id != selection })
@@ -95,6 +104,11 @@ struct QuestionsView: View {
                 }
             }
             Spacer()
+            if !bank.cards.isEmpty {
+                Button("Удалить все…") { confirmDeleteAll = true }
+                    .disabled(preparer.running)
+                    .help("Удалить все вопросы профиля сразу")
+            }
             Text("\(bank.cards.count) вопросов").font(.footnote).foregroundStyle(.secondary)
         }
     }

@@ -598,12 +598,15 @@
 "Других формулировок: %lld" = "Other phrasings: %lld";
 "Вопросов пока нет: «Импорт файла…» или «Добавить вопрос»" = "No questions yet: “Import file…” or “Add question”";
 "Выберите вопрос" = "Select a question";
+"Все вопросы и ответы профиля удаляются с этого Mac без возможности восстановления. Резюме, инструкции и материалы остаются." = "All of the profile's questions and answers are deleted from this Mac permanently. The résumé, instructions and materials stay.";
 "%lld вопросов" = "%lld questions";
 "Импорт файла…" = "Import file…";
 "Добавить вопрос" = "Add question";
 "Остановить" = "Stop";
 "Формулировки uk/ru/en и черновики ответов — моделями из цепочки (бесплатно, частями)" = "uk/ru/en phrasings and draft answers — by the chain's models (free, in parts)";
 "Подтвердить черновики (%lld)" = "Approve drafts (%lld)";
+"Удалить все…" = "Delete all…";
+"Удалить все вопросы профиля сразу" = "Delete all of the profile's questions at once";
 "Другие формулировки — по одной в строке" = "Other phrasings — one per line";
 "Ответ" = "Answer";
 "Другие формулировки" = "Other phrasings";
@@ -612,6 +615,7 @@
 "Найдено вопросов: %lld" = "Questions found: %lld";
 "Снимите отметку с лишнего. Ответы из файла станут вашими; без ответа — «Подготовить» сделает черновик." = "Uncheck what you don't need. Answers from the file become yours; for questions without one, “Prepare” makes a draft.";
 "Добавить (%lld)" = "Add (%lld)";
+"Удалить все вопросы (%lld)?" = "Delete all questions (%lld)?";
 "Новый вопрос" = "New question";
 "Файл с вопросами (и ответами) — в любой форме" = "A file with questions (and answers) — in any form";
 "без ответа" = "no answer";
