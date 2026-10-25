@@ -108,4 +108,4 @@ choose "Always Allow".
 - No audio is written to disk (≤ 30 s ring buffer in memory); only session text is saved, with configurable retention.
 - Logs contain events and latencies only, never utterance or answer text.
 - Transcription accuracy depends on audio quality: compressed Meet audio from a phone is recognized worse.
-- Private repository: `itmax04/interview-copilot`. No license file — all rights reserved by the owner.
+- Private repository: `itmax04/interview-copilot`. Licensed under the [MIT License](LICENSE).

@@ -85,6 +85,7 @@ the owner in System Settings), a free Groq key and the models. Launch flags: `--
 AGENTS.md                 ← you are here
 README.md                 user-facing overview, usage, checks
 CLAUDE.md                 binding project rules for Claude Code (short; points here)
+LICENSE                   MIT license
 Package.swift             SwiftPM manifest (targets below); Package.resolved is committed
 Resources/                Info.plist (version), en.lproj/ru.lproj (UI strings), Interviewer/ and TestCall/ (local web
                           pages + en.json), pricing.json

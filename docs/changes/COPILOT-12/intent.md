@@ -35,8 +35,8 @@ After COPILOT-11 the app is feature-complete for the owner's use, but:
   of every document lives in `main`.
 - The COPILOT-02 documents existed only on the separate `docs/copilot-02` branch; their English translation is added to
   `docs/changes/COPILOT-02/` so the task history in `main` is complete.
-- No LICENSE file (the license is the owner's choice) and no CI (the full check needs Xcode 26, local model files and a
-  signing identity); both are listed as limitations.
+- No CI (the full check needs Xcode 26, local model files and a signing identity); listed as a limitation.
+- License: MIT (`LICENSE`), added at the owner's request on 2026-10-25.
 
 ## Scope
 In: the audit, fixes with tests, repository hygiene, English documentation, `AGENTS.md`, the version bump, the full check,

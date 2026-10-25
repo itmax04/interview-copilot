@@ -19,7 +19,7 @@ session, storage, localization), the app target, `copilot-eval`, scripts, tests,
 | Low | `scripts/__pycache__/*.pyc` were committed by mistake in `f8b1d15` | Fixed — R-07 (untracked, ignored) |
 | Repository | `main` held only the initial commit; README, architecture and task history were in Russian; COPILOT-02 existed only on a side branch; there was no onboarding document | Fixed — R-08…R-10 |
 | Info | No compiler warnings in a clean build; no TODO/FIXME left in code; no secrets in the tree (`secret-scan.sh`) | — |
-| Info | No LICENSE and no CI | Not changed: the license is the owner's choice; the full check needs Xcode 26, local models and a signing identity. Listed in `AGENTS.md` §12 |
+| Info | No LICENSE and no CI | LICENSE: MIT added at the owner's request (2026-10-25). CI not added: the full check needs Xcode 26, local models and a signing identity. Listed in `AGENTS.md` §12 |
 
 ## Done
 - P-02, commit `f8b1d15` — fixes:
