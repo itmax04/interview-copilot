@@ -65,7 +65,7 @@ session, storage, localization), the app target, `copilot-eval`, scripts, tests,
 | `scripts/build-app.sh` | PASS — `dist/InterviewCopilot.app` 0.15.1 (37), `codesign --verify --strict --deep` OK |
 | Cyrillic scan of tracked documents | PASS — 57 Markdown/HTML documents; the only Cyrillic left is quoted interview phrases, UI labels, language names (Українська / Русский), alphabet letters and the phrases of `evals/live-script.md` that are read aloud in a live test |
 | Relative links in all Markdown files | PASS — 62 files, 0 broken |
-| `git ls-remote` after the push | see "Repository state" below |
+| `git ls-remote` after the push | PASS — see "Repository state" |
 
 ## Acceptance
 | AC | Evidence | Status |
@@ -77,11 +77,21 @@ session, storage, localization), the app target, `copilot-eval`, scripts, tests,
 | AC-05 | `git ls-files` has no generated files | PASS |
 | AC-06 | the Cyrillic scan and the link check | PASS |
 | AC-07 | the full check | PASS |
-| AC-08 | `git ls-remote` | see "Repository state" below |
+| AC-08 | `git ls-remote` | PASS |
 
 ## Repository state
-After the commit: every local branch is pushed, `main` is fast-forwarded to `feat/copilot-12-final-review` with
-`git merge --ff-only` and pushed. The remote heads are recorded in the commit that follows this one.
+Every local branch is on GitHub (`git ls-remote --heads origin`, 2026-10-25, after commit `9f05fcf`):
+
+| Branch | Head |
+|---|---|
+| `main` | `9f05fcf` — fast-forwarded from `f82f8c2` (the initial commit) with an ff-only update, no merge commit, no force-push |
+| `feat/copilot-12-final-review` | `9f05fcf` (new) |
+| `feat/copilot-11-test-call-fixes` | `ea56b47` (new) |
+| `feat/copilot-10-theme-language` … `feat/copilot-01` | unchanged (`9dcf965`, `e1b0bad`, `1f88465`, `ab4b53f`, `f76c8ca`, `ff1b27b`, `f7e3f94`, `b32fdec`, `3b690fc`) |
+| `docs/copilot-02` | unchanged (`9576cdf`) |
+
+This commit only adds the table above; `main` is fast-forwarded to it the same way, so `main` and
+`feat/copilot-12-final-review` end on the same commit.
 
 ## Not verified
 - A live call with 0.15.1 (session start/stop timing, the Groq budget under real limits, the localized answer label): there is
