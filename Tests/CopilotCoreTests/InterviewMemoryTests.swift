@@ -225,7 +225,7 @@ struct PromptScenarioCheckTests {
     }
 
     @Test func scenariosUseNoProfileAndBackReference() {
-        #expect(PromptScenarios.all.count == 24)
+        #expect(PromptScenarios.all.count == 25)
         // Сценарии уточнения (COPILOT-09 R-10) — поверх обычного запроса, прежний ответ — данными.
         let refine = PromptScenarios.all.filter { $0.refine != nil }
         #expect(refine.count == 5)

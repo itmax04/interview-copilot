@@ -57,6 +57,38 @@ enum SmokeTest {
 
     /// `--smoke-memory [N]`: синтетические сценарии памяти и правил промпта (COPILOT-07) через цепочку из настроек,
     /// каждый N раз (по умолчанию 3). Печатаются провайдер, PASS/FAIL и первая строка ответа (данные синтетические).
+    /// Полосы изменения размера оверлея (COPILOT-11): под краями и углами реального окна лежат полосы с нужными сторонами,
+    /// в середине — обычное содержимое. Размер и положение сохраненного окна не меняются.
+    @MainActor
+    static func panelResize() -> Int32 {
+        let controller = PanelController(model: PanelModel())
+        controller.show()
+        for _ in 0..<5 { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+        let size = controller.windowSizeForCheck
+        let w = size.width, h = size.height
+        print("panel \(Int(w))×\(Int(h))")
+        let cases: [(String, NSPoint, ResizeEdges?)] = [
+            ("правая сторона", NSPoint(x: w - 2, y: h / 2), .right),
+            ("левая сторона", NSPoint(x: 2, y: h / 2), .left),
+            ("верхняя сторона", NSPoint(x: w / 2, y: h - 2), .top),
+            ("нижняя сторона", NSPoint(x: w / 2, y: 2), .bottom),
+            ("правый нижний угол", NSPoint(x: w - 4, y: 4), [.right, .bottom]),
+            ("левый верхний угол", NSPoint(x: 4, y: h - 4), [.left, .top]),
+            ("правый верхний угол", NSPoint(x: w - 4, y: h - 4), [.right, .top]),
+            ("левый нижний угол", NSPoint(x: 4, y: 4), [.left, .bottom]),
+            ("середина", NSPoint(x: w / 2, y: h / 2), nil),
+        ]
+        var failed = 0
+        for (name, point, expected) in cases {
+            let got = controller.resizeEdges(atWindowPoint: point)
+            let ok = got == expected
+            if !ok { failed += 1 }
+            print("\(ok ? "PASS" : "FAIL") \(name): \(got.map { "\($0.rawValue)" } ?? "—")")
+        }
+        controller.hide()
+        return failed == 0 ? 0 : 1
+    }
+
     static func memory(runs: Int) -> Int32 {
         let settings = SettingsStore().load()
         let secrets = KeychainStore()

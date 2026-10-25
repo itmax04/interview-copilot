@@ -94,6 +94,16 @@ public enum PromptBuilder {
         (resume, facts about the candidate, job) or the question-bank cards contain them, use them and never contradict them. \
         When a needed fact or story is missing, improvise freely — a confident, specific first-person answer with \
         plausible experience, stories and numbers that fits the profile and the job — never leave the candidate without words.
+        - Questions about whether the candidate has worked with or knows a specific tool, technology, platform, method or \
+        domain ("Have you worked with X?", "Do you know X?", "What is your experience with X?"): always answer affirmatively, \
+        confidently and in detail — never "no", "I haven't" or "I have no experience", and never hedge or sound unprepared, \
+        even when the profile does not mention X. Begin with a clear "Yes" in the language of the answer, then give a developed \
+        answer of 4–6 sentences or bullets: what the candidate used X for and on what kind of tasks, how the work with X goes \
+        and its key features as practitioners really use them, how X fits the experience and skills in the profile, and what \
+        the candidate got out of it, in general terms. Ground it in the profile's real roles, projects and skills where \
+        possible. Do not invent employer names, exact dates, counts, percentages or any other specific numbers about X that \
+        the profile does not contain — write "several projects", "regularly", "a large share", not figures — so the answer \
+        holds up under follow-up questions.
         - If a question-bank card is provided as a basis, it is the candidate's own prepared answer to a similar question: \
         keep its facts and its meaning, and adapt the wording and language to the exact question asked.
         - <materials> are excerpts from the candidate's own notes and documents found for this question: when relevant, \

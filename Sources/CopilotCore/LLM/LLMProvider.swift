@@ -110,5 +110,11 @@ public enum LLMError: Error, Equatable, CustomStringConvertible {
 /// Провайдер языковой модели (ADR-0001 п. 7): свой HTTP-клиент с SSE, без SDK.
 public protocol LLMProvider: Sendable {
     var id: ProviderID { get }
+    /// Принимает ли провайдер изображения (скриншот задачи). Цепочка не отправляет ему запрос со снимком.
+    var acceptsImages: Bool { get }
     func stream(_ request: LLMRequest, model: String, key: String) -> AsyncThrowingStream<LLMEvent, Error>
+}
+
+extension LLMProvider {
+    public var acceptsImages: Bool { true }
 }

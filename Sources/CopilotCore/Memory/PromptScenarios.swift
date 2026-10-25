@@ -263,6 +263,18 @@ public enum PromptScenarios {
                      // Сумма цифрами или словами («двенадцать тысяч») — обе верны.
                      return text.contains("12") || text.lowercased().contains("двенадцат") ? nil : "нет суммы из материалов: «\(firstLine(text))»"
                  }),
+        Scenario(name: "опыт с инструментом: утвердительно и подробно, без «нет»", question: "Ви працювали з Kubernetes?", language: "uk",
+                 memory: MemoryContext(), profile: sampleProfile,
+                 check: { text in
+                     let t = text.lowercased()
+                     let negatives = ["не працював", "не маю досвіду", "не використовував", "досвіду немає", "немає досвіду", "не доводилось", "не доводилося"]
+                     if let n = negatives.first(where: { t.contains($0) }) { return "прямой отказ («\(n)»): «\(firstLine(text))»" }
+                     if text.count < 220 { return "короткий ответ (\(text.count) знаков): «\(firstLine(text))»" }
+                     if !t.prefix(80).contains("так") && !t.prefix(80).contains("yes") { return "нет утвердительного начала: «\(firstLine(text))»" }
+                     // Без выдуманных чисел: в резюме — 7, 6, 1,2 и годы; мелкие номера пунктов не в счет.
+                     let invented = numbers(text).subtracting(numbers(sampleProfile.resume)).filter { (Int($0) ?? 99) > 6 }
+                     return invented.isEmpty ? nil : "выдуманные числа \(invented.sorted()): «\(firstLine(text))»"
+                 }),
         Scenario(name: "материалы: чужой фрагмент игнорируется", question: "Яке у вас хобі?", language: "uk", memory: MemoryContext(),
                  profile: sampleProfile,
                  materials: [MaterialHit(source: "system-design.md", text: "Rate limiting на API: алгоритм token bucket в Redis, лимит на пользователя и на IP.", score: 0.48)],

@@ -10,6 +10,9 @@ final class PanelController {
     let model: PanelModel
 
     var isVisible: Bool { panel.isVisible }
+    /// Размер изменен мышью — приложение запоминает ширину в настройках (иначе `apply` вернул бы старую).
+    var onResizedByUser: ((Double) -> Void)?
+    private var resizeObserver: NSObjectProtocol?
 
     init(model: PanelModel) {
         self.model = model
@@ -34,7 +37,7 @@ final class PanelController {
             panel.standardWindowButton(button)?.isHidden = true
         }
         panel.minSize = NSSize(width: AppSettings.panelWidthRange.lowerBound, height: 220)
-        panel.maxSize = NSSize(width: AppSettings.panelWidthRange.upperBound, height: 1200)
+        panel.maxSize = NSSize(width: AppSettings.panelWidthRange.upperBound, height: 4000)
         panel.setAccessibilityTitle("Interview Copilot")
 
         let effect = NSVisualEffectView()
@@ -54,6 +57,13 @@ final class PanelController {
             hosting.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
         ])
         panel.contentView = effect
+        // Размер мышью (COPILOT-11): полосы по периметру и углам; по высоте — только пока панель не свернута.
+        PanelResizeHandle.install(in: effect, enabledVertical: { [weak self] in !(self?.model.collapsed ?? false) },
+                                  onFinish: { [weak self] in self?.reportResize() })
+        resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification, object: panel,
+                                                                queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reportResize() }
+        }
 
         // Позиция и размер запоминаются (R-16).
         if !panel.setFrameUsingName(Self.autosaveName) {
@@ -75,11 +85,30 @@ final class PanelController {
         // R-17: исключить окно из захвата экрана. На macOS 15+ захват через ScreenCaptureKit может это игнорировать —
         // поэтому есть «Проверить видимость», а не обещание.
         panel.sharingType = settings.panelHiddenFromCapture ? .none : .readOnly
-        var frame = panel.frame
-        if abs(frame.width - settings.panelWidth) > 1 {
-            frame.size.width = settings.panelWidth
-            panel.setFrame(frame, display: true)
+        // Ширина из настроек (слайдер) — только когда она изменилась: размер, выбранный мышью, не сбрасывается.
+        if abs(settings.panelWidth - lastAppliedWidth) > 1 {
+            lastAppliedWidth = settings.panelWidth
+            var frame = panel.frame
+            if abs(frame.width - settings.panelWidth) > 1 {
+                frame.size.width = settings.panelWidth
+                panel.setFrame(frame, display: true)
+            }
         }
+    }
+
+    private var lastAppliedWidth = 0.0
+
+    /// Какая полоса изменения размера лежит под точкой окна (проверка `--smoke-panel-resize`); nil — обычное содержимое.
+    func resizeEdges(atWindowPoint point: NSPoint) -> ResizeEdges? {
+        (panel.contentView?.hitTest(point) as? PanelResizeHandle)?.edges
+    }
+
+    var windowSizeForCheck: NSSize { panel.frame.size }
+
+    private func reportResize() {
+        let width = min(max(Double(panel.frame.width), AppSettings.panelWidthRange.lowerBound), AppSettings.panelWidthRange.upperBound)
+        lastAppliedWidth = width
+        onResizedByUser?(width)
     }
 
     /// Ширина, выбранная мышью, — для сохранения в настройки.

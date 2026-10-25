@@ -64,6 +64,12 @@ public final class ProviderHealth: @unchecked Sendable {
         }
     }
 
+    /// Через сколько секунд лимит ключа (429) сбросится; 0 — ключ можно пробовать. Остывание модели целиком
+    /// (таймаут, 5xx) не в счет: такая модель медленная или упала, но ждать ее сброса нечего.
+    public func keyReadyIn(_ p: ProviderID, _ model: String, slot: Int = 1, now: Date = Date()) -> TimeInterval {
+        lock.withLock { max(0, (until[Self.key(p, model, slot: slot)] ?? .distantPast).timeIntervalSince(now)) }
+    }
+
     public func reportSuccess(_ p: ProviderID, _ model: String, slot: Int = 1) {
         lock.withLock {
             until[Self.key(p, model)] = nil
@@ -84,12 +90,16 @@ public struct ProviderChain: Sendable {
         public var key: String?
         /// Номер ключа у провайдера (1 — основной): лимит 429 и «ключ недействителен» — у ключа, а не у провайдера.
         public var keySlot: Int
+        /// Нижняя граница таймаута первого токена для этой модели. Gemini с промптом профиля отвечает за 2,4–3,8 с (замер
+        /// живого теста COPILOT-11): таймаут 4 с отрезал ее на каждом втором запросе и «остужал» на 5 минут.
+        public var minFirstTokenTimeout: Double = 0
 
-        public init(provider: LLMProvider, model: String, key: String?, keySlot: Int = 1) {
+        public init(provider: LLMProvider, model: String, key: String?, keySlot: Int = 1, minFirstTokenTimeout: Double = 0) {
             self.provider = provider
             self.model = model
             self.key = key
             self.keySlot = keySlot
+            self.minFirstTokenTimeout = minFirstTokenTimeout
         }
 
         /// Ключ шага для «недействителен — больше не пробуем»: тот же ключ и с запасной моделью.
@@ -102,6 +112,10 @@ public struct ProviderChain: Sendable {
     /// Параллельный запуск (R-36): если текущая попытка молчит `hedgeAfter` с, следующая стартует, не дожидаясь таймаута;
     /// показывается та, что первой прислала текст. nil или 0 — строго по очереди.
     public var hedgeAfter: Double?
+    /// Последний шанс (COPILOT-11): когда все попытки отказали, цепочка не сдается, а ждет сброс ближайшего лимита ключа
+    /// не дольше `lastResortMaxWait` с и пробует еще раз с терпеливым таймаутом `lastResortTimeout`. Нужна `health`.
+    public var lastResortMaxWait: Double = 25
+    public var lastResortTimeout: Double { max(firstTokenTimeout * 3, 12) }
 
     public init(steps: [Step], firstTokenTimeout: Double = 4, health: ProviderHealth? = nil, hedgeAfter: Double? = nil) {
         self.steps = steps
@@ -111,8 +125,13 @@ public struct ProviderChain: Sendable {
     }
 
     /// Шаги с ключом; недавно отказавшие модели — в конец очереди (не выкидываем: вдруг остальные тоже не отвечают).
-    func orderedUsableSteps() -> [Step] {
+    func orderedUsableSteps(for request: LLMRequest? = nil) -> [Step] {
         var usable = steps.filter { $0.key?.isEmpty == false }
+        // Запрос со снимком не отправляем провайдеру, который изображения не принимает (Groq): это лишняя попытка и отказ.
+        if let request, request.messages.contains(where: { !$0.images.isEmpty }) {
+            let capable = usable.filter { $0.provider.acceptsImages }
+            if !capable.isEmpty { usable = capable }
+        }
         if let health {
             let fresh = usable.filter { !health.isCoolingDown($0.provider.id, $0.model, slot: $0.keySlot) }
             let cooling = usable.filter { health.isCoolingDown($0.provider.id, $0.model, slot: $0.keySlot) }
@@ -128,7 +147,7 @@ public struct ProviderChain: Sendable {
             let task = Task {
                 let start = DispatchTime.now().uptimeNanoseconds
                 var reasons: [String] = []
-                let usable = orderedUsableSteps()
+                let usable = orderedUsableSteps(for: request)
                 if usable.isEmpty {
                     continuation.yield(.exhausted(reason: L10n.t("нет ключей")))
                     continuation.finish()
@@ -136,6 +155,7 @@ public struct ProviderChain: Sendable {
                 }
                 var attemptIndex = 0
                 var invalidKey = Set<String>()
+                var cancelledByCaller = false
                 for step in usable {
                     if Task.isCancelled { break }
                     let pid = step.provider.id
@@ -145,12 +165,13 @@ public struct ProviderChain: Sendable {
                     if attemptIndex > 0 { continuation.yield(.restart(pid)) }
                     attemptIndex += 1
                     do {
-                        try await Self.runStep(step, request: request, timeout: firstTokenTimeout, start: start, continuation: continuation)
+                        try await Self.runStep(step, request: request, timeout: max(firstTokenTimeout, step.minFirstTokenTimeout),
+                                               start: start, continuation: continuation)
                         health?.reportSuccess(pid, step.model, slot: step.keySlot)
                         continuation.finish()
                         return
                     } catch let error as LLMError {
-                        if error == .cancelled || Task.isCancelled { break }
+                        if error == .cancelled || Task.isCancelled { cancelledByCaller = true; break }
                         var detail = ""
                         if case .http(_, let m) = error { detail = m }
                         Log.llm.error("provider \(pid.rawValue, privacy: .public) model=\(step.model, privacy: .public) key=\(step.keySlot) failed: \(error.description, privacy: .public) \(String(detail.prefix(200)), privacy: .public)")
@@ -159,12 +180,18 @@ public struct ProviderChain: Sendable {
                         health?.reportFailure(pid, step.model, slot: step.keySlot, error)
                         reasons.append("\(pid.displayName)\(step.keySlot > 1 ? L10n.f(" (ключ %lld)", step.keySlot) : "") \(step.model): \(error.description)")
                         if error.isInvalidKey { invalidKey.insert(step.keyID) }
-                        guard error.triggersFallback else { break }
+                        guard error.triggersFallback else { cancelledByCaller = true; break }
                     } catch {
                         if Task.isCancelled { break }
                         let e = LLMError.network(error.localizedDescription)
                         continuation.yield(.providerFailed(pid, e))
                         reasons.append("\(pid.displayName) \(step.model): \(e.description)")
+                    }
+                }
+                if !Task.isCancelled, !cancelledByCaller {
+                    if await lastResort(request, usable: usable, invalidKey: invalidKey, start: start, continuation: continuation) {
+                        continuation.finish()
+                        return
                     }
                 }
                 if !Task.isCancelled {
@@ -174,6 +201,45 @@ public struct ProviderChain: Sendable {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    /// Последний шанс (COPILOT-11). Живой тест: лимиты минутных токенов (TPM) всех ключей Groq исчерпаны на 1–40 с,
+    /// обе модели Gemini не уложились в 4 с — цепочка сдавалась, и владельцу приходилось переключать модель вручную.
+    /// Теперь: шаги, у которых лимит ключа сбросится не позже чем через `lastResortMaxWait` с, ждут сброса; медленные
+    /// модели (таймаут, 5xx) пробуются сразу, но терпеливо. Первым идет тот, кто готов раньше. Один проход, общий потолок.
+    /// `true` — ответ получен и цепочка завершена.
+    func lastResort(_ request: LLMRequest, usable: [Step], invalidKey: Set<String>, start: UInt64,
+                    continuation: AsyncStream<ChainEvent>.Continuation) async -> Bool {
+        guard let health, lastResortMaxWait > 0 else { return false }
+        // Ждать меньше трех секунд — все равно что готов сейчас: порядок цепочки (Groq раньше Gemini) важнее.
+        let candidates = usable.filter { !invalidKey.contains($0.keyID) }.enumerated().compactMap { index, step -> (Int, Double, Step)? in
+            let wait = health.keyReadyIn(step.provider.id, step.model, slot: step.keySlot)
+            return wait > lastResortMaxWait ? nil : (index, wait <= 3 ? 0 : wait, step)
+        }.sorted { ($0.1, $0.0) < ($1.1, $1.0) }
+        guard !candidates.isEmpty else { return false }
+        let deadline = DispatchTime.now().uptimeNanoseconds + UInt64((lastResortMaxWait + lastResortTimeout * 2) * 1e9)
+        Log.llm.notice("last resort: \(candidates.count) steps, first wait=\(candidates[0].1, format: .fixed(precision: 1))s")
+        for (_, _, step) in candidates {
+            if Task.isCancelled || DispatchTime.now().uptimeNanoseconds > deadline { return false }
+            let pid = step.provider.id
+            let wait = health.keyReadyIn(pid, step.model, slot: step.keySlot)
+            if wait > 0 { try? await Task.sleep(for: .seconds(wait + 0.3)) }
+            if Task.isCancelled { return false }
+            continuation.yield(.attempt(pid, model: step.model))
+            continuation.yield(.restart(pid))
+            do {
+                try await Self.runStep(step, request: request, timeout: lastResortTimeout, start: start, continuation: continuation)
+                health.reportSuccess(pid, step.model, slot: step.keySlot)
+                return true
+            } catch let error as LLMError {
+                if error == .cancelled || Task.isCancelled { return false }
+                Log.llm.error("last resort \(pid.rawValue, privacy: .public) model=\(step.model, privacy: .public) key=\(step.keySlot) failed: \(error.description, privacy: .public)")
+                health.reportFailure(pid, step.model, slot: step.keySlot, error)
+            } catch {
+                if Task.isCancelled { return false }
+            }
+        }
+        return false
     }
 
     /// Один провайдер; бросает ошибку, если нужен переход. Таймаут первого токена — гонка с часами.
@@ -270,6 +336,9 @@ public enum ChainFactory {
         }
     }
 
+    /// Gemini отвечает первым токеном за 2,4–3,8 с (замер COPILOT-11), поэтому таймаут 4 с для нее слишком тугой.
+    public static let geminiMinFirstTokenTimeout = 7.0
+
     public static func chain(settings: AppSettings, secrets: SecretStore,
                              providers: [ProviderID: LLMProvider]) -> ProviderChain {
         var steps: [ProviderChain.Step] = []
@@ -285,13 +354,18 @@ public enum ChainFactory {
             // Без ключа — шаг с пустым ключом, как раньше: цепочка пропустит его при запуске.
             let found = secrets.keys(p, in: accounts)
             let keys: [(slot: Int, key: String?)] = found.isEmpty ? [(1, nil)] : found.map { ($0.slot, $0.key) }
+            let floor = p == .gemini ? geminiMinFirstTokenTimeout : 0
             for k in keys {
-                steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: k.key, keySlot: k.slot))
+                steps.append(ProviderChain.Step(provider: provider, model: settings.modelIDs.effective(p), key: k.key, keySlot: k.slot,
+                                                minFirstTokenTimeout: floor))
             }
             // Запасная модель Gemini сразу после основной: при перегрузке основной ответ всё равно бесплатный.
             let backup = settings.modelIDs.geminiBackup.trimmingCharacters(in: .whitespaces)
             if p == .gemini, !backup.isEmpty, backup != settings.modelIDs.effective(.gemini) {
-                for k in keys { steps.append(ProviderChain.Step(provider: provider, model: backup, key: k.key, keySlot: k.slot)) }
+                for k in keys {
+                    steps.append(ProviderChain.Step(provider: provider, model: backup, key: k.key, keySlot: k.slot,
+                                                    minFirstTokenTimeout: floor))
+                }
             }
         }
         return ProviderChain(steps: steps, firstTokenTimeout: settings.firstTokenTimeout, health: .shared,
@@ -347,7 +421,7 @@ extension ProviderChain {
         AsyncStream { continuation in
             let task = Task {
                 let start = DispatchTime.now().uptimeNanoseconds
-                let usable = orderedUsableSteps()
+                let usable = orderedUsableSteps(for: request)
                 if usable.isEmpty {
                     continuation.yield(.exhausted(reason: L10n.t("нет ключей")))
                     continuation.finish()
@@ -357,20 +431,24 @@ extension ProviderChain {
                 var tasks: [Int: Task<Void, Never>] = [:]
                 var models: [Int: String] = [:]
                 var usages: [Int: TokenUsage] = [:]
-                var next = 0
+                var started = Set<Int>()
                 var winner: Int?
                 var hadWinner = false
                 var reasons: [String] = []
                 var invalidKey = Set<String>()
 
-                func launch() {
-                    while next < usable.count, invalidKey.contains(usable[next].keyID) { next += 1 }
-                    guard next < usable.count else { return }
-                    let i = next
-                    next += 1
+                /// Следующая не начатая попытка по порядку цепочки. `avoiding` — параллельный запуск (hedge): только другой
+                /// провайдер. Второй ключ того же провайдера не быстрее первого, зато тратит и его минутный лимит токенов
+                /// (живой тест: параллельные запросы быстро выбирали TPM у всех ключей Groq).
+                func launch(avoiding provider: ProviderID? = nil) {
+                    guard let i = usable.indices.first(where: {
+                        !started.contains($0) && !invalidKey.contains(usable[$0].keyID)
+                            && (provider == nil || usable[$0].provider.id != provider)
+                    }) else { return }
+                    started.insert(i)
                     let step = usable[i]
                     models[i] = step.model
-                    let timeout = firstTokenTimeout
+                    let timeout = max(firstTokenTimeout, step.minFirstTokenTimeout)
                     tasks[i] = Task {
                         let timers = Task {
                             try? await Task.sleep(for: .seconds(hedgeAfter))
@@ -465,7 +543,7 @@ extension ProviderChain {
                         if winner == nil, tasks.count == 1 { launch() }
                     case .hedge(let i):
                         // Текущая попытка молчит — запускаем следующую параллельно (не больше двух сразу).
-                        if winner == nil, tasks[i] != nil, tasks.count < 2 { launch() }
+                        if winner == nil, tasks[i] != nil, tasks.count < 2 { launch(avoiding: usable[i].provider.id) }
                     case .timeout(let i):
                         if winner == nil, tasks[i] != nil {
                             fail(i, .firstTokenTimeout)
@@ -475,7 +553,13 @@ extension ProviderChain {
                     if winner == nil, tasks.isEmpty {
                         launch()
                         if tasks.isEmpty {
-                            continuation.yield(.exhausted(reason: reasons.joined(separator: "; ")))
+                            // Все попытки отказали: последний шанс — подождать сброс лимита ключа и попробовать терпеливо.
+                            if !Task.isCancelled,
+                               await lastResort(request, usable: usable, invalidKey: invalidKey, start: start, continuation: continuation) {
+                                continuation.finish()
+                                return
+                            }
+                            if !Task.isCancelled { continuation.yield(.exhausted(reason: reasons.joined(separator: "; "))) }
                             continuation.finish()
                             return
                         }

@@ -22,7 +22,8 @@ struct PanelView: View {
         .padding(.bottom, 14)
         .foregroundStyle(.white)
         .font(.system(size: model.fontSize))
-        .frame(minWidth: 300, maxWidth: .infinity, minHeight: model.collapsed ? 0 : 220, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(alignment: .bottomTrailing) { if !model.collapsed { ResizeGripMark().padding(5) } }
+        .frame(minWidth: 280, maxWidth: .infinity, minHeight: model.collapsed ? 0 : 220, maxHeight: .infinity, alignment: .topLeading)
         // P00: темное стекло #16181D 82% поверх размытия окна.
         .background(ICDark.glass)
         .overlay {

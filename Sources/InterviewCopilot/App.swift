@@ -46,6 +46,11 @@ enum InterviewCopilotMain {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.prepare())
         }
+        if args.contains("--smoke-panel-resize") {
+            setvbuf(stdout, nil, _IOLBF, 0)
+            NSApplication.shared.setActivationPolicy(.accessory)
+            exit(SmokeTest.panelResize())
+        }
         if args.contains("--smoke-llm") {
             setvbuf(stdout, nil, _IOLBF, 0)
             exit(SmokeTest.run())
@@ -402,6 +407,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if !s.speculativeAnswers { answers.cancelDraft() }
         if !force && s.embeddingModel != old.embeddingModel { bank.embeddingModelChanged(s.embeddingModel) }
         if force || s.recognitionPromptFromBank != old.recognitionPromptFromBank { updateRecognitionPrompt() }
+        panel.onResizedByUser = { [weak self] width in
+            guard let self, abs(self.model.settings.panelWidth - width) > 1 else { return }
+            self.model.settings.panelWidth = width
+        }
         panel.apply(s)
         answers.refreshStrongModelAvailability()
         lastSettings = s

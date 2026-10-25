@@ -252,7 +252,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public static let hedgeAfterRange = 0.0...10.0
     public static let retentionRange = 1...365
     public static let panelOpacityRange = 0.7...1.0
-    public static let panelWidthRange = 300.0...520.0
+    /// Ширина оверлея: слайдер в настройках и размер, выбранный мышью (COPILOT-11 — окно тянется свободно).
+    public static let panelWidthRange = 280.0...1000.0
     public static let panelZoomRange = 0.8...1.6
     public static let budgetRange = 0.0...1000.0
 

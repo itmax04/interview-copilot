@@ -54,14 +54,14 @@ struct SettingsStoreTests {
         var s = AppSettings()
         s.pauseThresholdMs = 50
         s.panelOpacity = 0.1
-        s.panelWidth = 900
+        s.panelWidth = 2400
         s.bankThreshold = 1.5
         s.chain = [.anthropic, .anthropic]
         s.modelIDs.deepseek = "   "
         let saved = store.save(s)
         #expect(saved.pauseThresholdMs == 400)
         #expect(saved.panelOpacity == 0.7)
-        #expect(saved.panelWidth == 520)
+        #expect(saved.panelWidth == 1000)
         #expect(saved.bankThreshold == 0.99)
         #expect(saved.chain == [.anthropic, .gemini, .deepseek, .groq, .cerebras, .custom])
         // Пустое поле не подменяется при вводе, но для запроса берётся ID по умолчанию.

@@ -350,6 +350,9 @@ public struct OpenAICompatibleProvider: LLMProvider {
         self.transport = transport
     }
 
+    /// Groq, Cerebras и «свой API» в приложении — только текст.
+    public var acceptsImages: Bool { false }
+
     static func isReasoning(_ model: String) -> Bool { model.contains("gpt-oss") }
 
     public func makeRequest(_ request: LLMRequest, model: String, key: String) throws -> URLRequest {

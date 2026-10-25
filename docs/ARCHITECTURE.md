@@ -97,6 +97,10 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 - **Текст интерфейса** — русская строка одной строкой: литерал SwiftUI переводится сам, строка из кода — `L("…")`
   (`CopilotCore` — `L10n.t`/`f`); перевод — в `Resources/en.lproj/Localizable.strings`, проверка — `scripts/check-localization.sh`.
   Новое окно — `.localizedRoot()` на корне и `UILanguage.shared.setTitle(_:of:)` для заголовка. Цвета — только токены `IC`.
+- **Цепочка моделей** — порядок попыток и отказов в `ProviderChain` (последовательный `run` и параллельный `runHedged`): ключи
+  провайдера по очереди → следующий провайдер → `lastResort` (ожидание сброса ключа ≤ 25 с, терпеливый таймаут). Остывание — в
+  `ProviderHealth` (429 — ключ, таймаут/5xx — модель целиком). Новая модель с особым таймаутом — `Step.minFirstTokenTimeout`.
+- **Размер оверлея** — полосы `PanelResizeHandle` (AppKit) по периметру окна, геометрия — `PanelResizing` в Core (тесты).
 - **Новое поле в истории** — опционально или `decodeIfPresent`: старые файлы должны читаться.
 - **Новая зависимость или модель** — только через запись в `docs/decisions/ADR-0001-stack.md`; модели — с SHA256.
 
@@ -137,6 +141,7 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 | COPILOT-06 | память интервью, «Новое интервью», подсказка вместо незаписанного ответа, ⌃⌥A | `feat/copilot-06-session-memory` |
 | COPILOT-07 | аудит и доводка: ловушки «вы упоминали», привязка к ходу, меню «Сейчас отвечаю я», история, `--smoke-memory` | `feat/copilot-07-hardening` |
 | COPILOT-08 | профили: окно «Профиль», PDF/Word/RTF/текст, инструкции владельца, материалы, вопросы с ответами (по этапам) | `feat/copilot-08-profiles` |
+| COPILOT-11 | правки по тестовому собеседованию: «последний шанс» цепочки (ждет сброс лимита ключа), hedge к другому провайдеру, снимки только провайдерам с изображениями, граница таймаута Gemini 7 с, правило «работали ли вы с X?», размер оверлея мышью (0.15) | `feat/copilot-11-test-call-fixes` |
 | COPILOT-10 | светлая и темная тема окон, интерфейс на русском и английском (сразу, без перезапуска), разбор на языке интерфейса (версия 0.14) | `feat/copilot-10-theme-language` |
 | COPILOT-09 | уровень ParakeetAI: сессии (мастер, Start/End, проверка, импорт вакансии), живой оверлей, стиль ответа, разбор после End, задачи со скриншотов, редизайн по образцам ImageGen (этапы 1–7, версии 0.7–0.12) | `feat/copilot-09-parakeet-parity` |
 

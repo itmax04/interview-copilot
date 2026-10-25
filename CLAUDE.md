@@ -4,7 +4,7 @@
 Нативное приложение macOS на Swift 6 (SwiftUI + AppKit), сборка через SwiftPM без .xcodeproj.
 Сначала прочитать `docs/ARCHITECTURE.md` (поток данных, модули, типичные изменения, проверки, журнал).
 Карта, команды и ограничения — `README.md`. Стек и причины — `docs/decisions/ADR-0001-stack.md`.
-Задачи — `docs/changes/COPILOT-NN/` (intent → spec → plan → handoff); последняя — с наибольшим номером (сейчас COPILOT-10).
+Задачи — `docs/changes/COPILOT-NN/` (intent → spec → plan → handoff); последняя — с наибольшим номером (сейчас COPILOT-11).
 
 ## Проверки
 - Быстрая: `swift build && swift test`
