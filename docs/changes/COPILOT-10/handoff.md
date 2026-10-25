@@ -1,80 +1,80 @@
-# Передача COPILOT-10
+# COPILOT-10 handoff
 
-ID: COPILOT-10-handoff · Статус: **этапы 1–2 готовы (0.14.0, build 35) — H-1: живая проверка владельцем** · Обновлено: 2026-10-25
-Ветка: `feat/copilot-10-theme-language` (от `feat/copilot-09-parakeet-parity` @ `e1b0bad`)
-Связи: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md)
+ID: COPILOT-10-handoff · Status: **stages 1–2 done (0.14.0, build 35) — H-1: the owner's live check** · Updated: 2026-10-25
+Branch: `feat/copilot-10-theme-language` (from `feat/copilot-09-parakeet-parity` @ `e1b0bad`)
+Links: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md)
 
-## Сделано
-- 2026-10-25: мозговой штурм (Q1–Q4 в intent.md), владелец выбрал рекомендованные варианты.
-- Этап 1 (P-01), коммит `42a7f10` — тема:
-  - `AppSettings.theme` / `interfaceLanguage` (по умолчанию «как в системе», старые настройки читаются).
-  - Токены `IC` — динамические (`Color.dynamic(light:dark:)`); белые фоны и hex-цвета в окнах заменены токенами.
-  - «Настройки → Основное» (первая вкладка): тема и язык. `NSApp.appearance` — сразу; оверлей закреплен `.darkAqua`.
-  - Снимки `dark-*`.
-- Этап 2 (P-02), коммит `a62efcd` — язык:
-  - `CopilotCore/Localization/L10n`: ключ — русская строка, английский — `Resources/en.lproj/Localizable.strings`
-    (786 строк); `L10n.t` / `L10n.f`; `Scope` (`@TaskLocal`) — язык в пределах задачи для параллельных тестов.
-  - Приложение: `UILanguage` (смена сразу, перевод заголовков открытых окон), `.localizedRoot()` на корне каждого окна
-    (`\.locale` + перерисовка), `L(…)`, перегрузки `Text(String)`, `Button`, `Label`, `Toggle`, `Picker`, `Section`,
-    `.help`, `.accessibilityLabel/Hint` — строки из переменных переводятся там же.
-  - Меню в строке состояния: все пункты — по-русски (было частично по-английски) и по-английски в английском интерфейсе;
-    подменю источника, моделей, профиля; строка расхода.
-  - Ядро: ошибки провайдеров, ключей, захвата, загрузки моделей, файлов, базы вопросов, проверка перед стартом,
-    названия типов и режимов; даты и числительные (1 question / 5 questions) — по языку интерфейса.
-  - Разбор после звонка и «Спросить ИИ» — на языке интерфейса (`L10n.aiLanguageName`, заглушки `[number]`…);
-    подсказки на звонке не менялись.
-  - Онбординг: выбор темы и языка внизу экрана, на всех шагах.
-  - Страницы ИИ-собеседования и тестового звонка: строки скрипта — через `T('…')`, разметка — целыми фрагментами;
-    сервер приложения отдает английскую страницу по `en.json` рядом с ней (`PageLocalization`).
-  - `scripts/check-localization.sh` (+ `scripts/l10n-keys.py`, `scripts/l10n-ignore.txt`): ключи — от компилятора
-    (`-emit-localized-strings`), из `L(…)`/`L10n`, из строк окон; отчет о ключах без перевода и несовпадении форматов.
-    Добавлен в полную проверку (CLAUDE.md, README, ARCHITECTURE).
-  - Тесты `LocalizationTests` (6): таблица и форматы, меню и строка расхода, названия типов ядра, язык разбора,
-    страницы без русского в английском интерфейсе.
-  - Снимки `en-*` (18) из бинарника `.app`; отобранные — `docs/design/copilot-10/`.
-  - Версия 0.14.0 (build 35).
-- Последний штрих (по образцу владельца 2026-10-25): внизу боковой панели главного окна — меню языка (глобус, название,
-  стрелка) и переключатель темы «Светлая / Темная / Авто» с иконками; компоненты `ICLanguageMenu`, `ICThemeSwitch`
-  (`DesignSystem.swift`), та же настройка, что в «Настройки → Основное». Названия языков в меню — на своем языке.
+## Done
+- 2026-10-25: a brainstorm (Q1–Q4 in intent.md), the owner chose the recommended options.
+- Stage 1 (P-01), commit `42a7f10` — theme:
+  - `AppSettings.theme` / `interfaceLanguage` (the default is "as in the system", old settings are readable).
+  - The `IC` tokens are dynamic (`Color.dynamic(light:dark:)`); white backgrounds and hex colors in windows were replaced with tokens.
+  - "Settings → General" (the first tab): theme and language. `NSApp.appearance` — right away; the overlay is pinned to `.darkAqua`.
+  - `dark-*` snapshots.
+- Stage 2 (P-02), commit `a62efcd` — language:
+  - `CopilotCore/Localization/L10n`: the key is the Russian string, English — `Resources/en.lproj/Localizable.strings`
+    (786 strings); `L10n.t` / `L10n.f`; `Scope` (`@TaskLocal`) — the language within a task for parallel tests.
+  - The app: `UILanguage` (an immediate change, retranslating the titles of open windows), `.localizedRoot()` on the root of each window
+    (`\.locale` + a redraw), `L(…)`, overloads of `Text(String)`, `Button`, `Label`, `Toggle`, `Picker`, `Section`,
+    `.help`, `.accessibilityLabel/Hint` — strings from variables are translated in the same place.
+  - The status bar menu: all items — in Russian (it was partly in English) and in English in the English interface;
+    the source, models, profile submenus; the usage line.
+  - The core: provider, key, capture, model download, file and question bank errors, the pre-start check,
+    type and mode names; dates and plural forms (1 question / 5 questions) — in the interface language.
+  - The review after a call and "Ask AI" — in the interface language (`L10n.aiLanguageName`, the `[number]`… placeholders);
+    hints on a call did not change.
+  - Onboarding: the theme and language choice at the bottom of the screen, on all steps.
+  - The AI interview and test call pages: script strings — through `T('…')`, markup — as whole fragments;
+    the app's server serves the English page from the `en.json` next to it (`PageLocalization`).
+  - `scripts/check-localization.sh` (+ `scripts/l10n-keys.py`, `scripts/l10n-ignore.txt`): keys — from the compiler
+    (`-emit-localized-strings`), from `L(…)`/`L10n`, from window strings; a report on keys without a translation and format mismatches.
+    Added to the full check (CLAUDE.md, README, ARCHITECTURE).
+  - `LocalizationTests` (6): the table and formats, the menu and the usage line, core type names, the review language,
+    pages without Russian in the English interface.
+  - `en-*` snapshots (18) from the `.app` binary; selected ones — `docs/design/copilot-10/`.
+  - Version 0.14.0 (build 35).
+- A final touch (after the owner's sample of 2026-10-25): at the bottom of the main window's sidebar — a language menu (a globe, the name,
+  an arrow) and a "Light / Dark / Auto" theme switch with icons; the `ICLanguageMenu`, `ICThemeSwitch` components
+  (`DesignSystem.swift`), the same setting as in "Settings → General". Language names in the menu — in their own language.
 
-## Решения исполнителя
-- Ключ — русская строка, не идентификатор: код читается как раньше, русский интерфейс не требует таблицы, нет перевода —
-  виден русский текст, а не ключ. Пустой `ru.lproj` нужен, чтобы при английской системе литералы SwiftUI в русском
-  интерфейсе не брались из `en.lproj`.
-- Мгновенная смена — перерисовкой корня окна (`.id(language)`): состояние экранов живет в моделях; локальное состояние
-  представлений (поле поиска, раскрытые блоки) при смене языка сбрасывается. Вкладка настроек запоминается (`lastTab`).
-- Склеенные строки (`"…" + "…"`) в подсказках настроек и профиля объединены в одну: иначе их нельзя перевести.
-- «Готово» в проверке перед стартом заменено на «В порядке» (англ. «OK»): одно и то же «Готово» значит и кнопку
-  «Done», и статус.
-- Подсказка оверлея ссылалась на меню «Listening» — теперь «меню Interview Copilot в строке меню».
-- Метки источника ответа (`generated`, `strong`, `screenshot`) — как были, служебные, не переводились.
-- Невидимое главное меню (Edit: Undo/Copy/…) не переводилось: приложение-агент его не показывает.
-- Числа в русском интерфейсе — с запятой (`$0,03`, порог `0,62`): формат по локали интерфейса.
+## Executor decisions
+- The key is the Russian string, not an identifier: the code reads as before, the Russian interface needs no table, a missing translation
+  shows Russian text rather than a key. An empty `ru.lproj` is needed so that with an English system SwiftUI literals in the Russian
+  interface are not taken from `en.lproj`.
+- An immediate change — by redrawing the window root (`.id(language)`): screen state lives in models; the local state of
+  views (a search field, expanded blocks) is reset on a language change. The settings tab is remembered (`lastTab`).
+- Glued strings (`"…" + "…"`) in the settings and profile hints were merged into one: otherwise they cannot be translated.
+- "Готово" in the pre-start check was replaced with "В порядке" (English "OK"): the same "Готово" meant both the
+  "Done" button and the status.
+- The overlay hint referred to the "Listening" menu — now "the Interview Copilot menu in the menu bar".
+- The answer source labels (`generated`, `strong`, `screenshot`) — as they were, internal, not translated.
+- The invisible main menu (Edit: Undo/Copy/…) was not translated: an agent app does not show it.
+- Numbers in the Russian interface use a comma (`$0,03`, the threshold `0,62`): the format follows the interface locale.
 
-## Проверки (2026-10-25)
-| Команда | Результат |
+## Checks (2026-10-25)
+| Command | Result |
 |---|---|
-| `swift test` | PASS — 337 тестов в 51 наборе |
+| `swift test` | PASS — 337 tests in 51 suites |
 | `scripts/run-evals.sh` | PASS — bank, filter-text, memory, materials (5 PASS, 0 FAIL) |
 | `scripts/secret-scan.sh` | PASS — 0 findings |
-| `scripts/check-localization.sh` | PASS — 789 ключей, 789 переводов, 0 без перевода, 0 несовпадений форматов |
-| `scripts/build-app.sh` | PASS — `dist/InterviewCopilot.app` подписан |
-| `--ui-snapshots` из `.app` | 93 PNG; русские и английские экраны просмотрены |
+| `scripts/check-localization.sh` | PASS — 789 keys, 789 translations, 0 without a translation, 0 format mismatches |
+| `scripts/build-app.sh` | PASS — `dist/InterviewCopilot.app` is signed |
+| `--ui-snapshots` from the `.app` | 93 PNGs; Russian and English screens reviewed |
 
-## Приемка
-| AC | Свидетельство | Статус |
+## Acceptance
+| AC | Evidence | Status |
 |---|---|---|
-| AC-01 | снимки `dark-*`, оверлей `.darkAqua` в `PanelController` | снимки PASS; живая смена — H-1 |
-| AC-02 | `UILanguage.apply` из `settingsChanged`, `localizedRoot` на всех окнах | NOT RUN вживую — H-1 |
-| AC-03 | `check-localization.sh`, тест страниц, снимки `en-*` | PASS (кроме пользовательских данных и названий языков) |
-| AC-04 | тесты меню на русских строках, снимки `workspace-today`, `panel-answer` | PASS |
-| AC-05 | тест `reviewForTheOwnerIsWrittenInTheInterfaceLanguage` | PASS; живой разбор на английском — H-1 |
-| AC-06 | полная проверка выше | PASS |
+| AC-01 | `dark-*` snapshots, the `.darkAqua` overlay in `PanelController` | snapshots PASS; a live change — H-1 |
+| AC-02 | `UILanguage.apply` from `settingsChanged`, `localizedRoot` on all windows | NOT RUN live — H-1 |
+| AC-03 | `check-localization.sh`, the pages test, `en-*` snapshots | PASS (except user data and language names) |
+| AC-04 | menu tests on Russian strings, the `workspace-today`, `panel-answer` snapshots | PASS |
+| AC-05 | the `reviewForTheOwnerIsWrittenInTheInterfaceLanguage` test | PASS; a live review in English — H-1 |
+| AC-06 | the full check above | PASS |
 
-## Не проверено
-- Живая смена темы и языка в запущенном приложении (H-1), разбор и «Спросить ИИ» на английском с настоящей моделью.
-- VoiceOver-подписи на английском — только по коду.
+## Not verified
+- A live change of the theme and language in the running app (H-1), the review and "Ask AI" in English with a real model.
+- VoiceOver labels in English — only from the code.
 
-## Следующий шаг
-H-1: владелец запускает 0.14.0, переключает «Настройки → Основное» (тема, язык) при открытых окнах и оверлее,
-открывает тестовый звонок на английском. Затем — решение о merge COPILOT-09/10 в `main`.
+## Next step
+H-1: the owner launches 0.14.0, switches "Settings → General" (theme, language) with the windows and the overlay open,
+opens the test call in English. Then — the decision on merging COPILOT-09/10 into `main`.

@@ -1,49 +1,49 @@
-# COPILOT-08: Спецификация — профили, инструкции, материалы, вопросы
+# COPILOT-08: Specification — profiles, instructions, materials, questions
 
-ID: COPILOT-08-spec · Статус: **accepted** (2026-10-24) · Версия: 1 · Дата: 2026-10-24 · Владелец: itmax04
-Связи: [intent.md](intent.md) · [plan.md](plan.md)
+ID: COPILOT-08-spec · Status: **accepted** (2026-10-24) · Version: 1 · Date: 2026-10-24 · Owner: itmax04
+Links: [intent.md](intent.md) · [plan.md](plan.md)
 
-## Требования
-- **R-01. Профили.** `…/InterviewCopilot/profiles/<id>/`: `profile.yaml` (имя, язык, инструкции профиля), `resume.md`, `job.md`,
-  `materials/` (исходные файлы + извлечённый текст), `questions.yaml`. Создать, переименовать, удалить (с подтверждением),
-  активный — в меню Profile (и «Без профиля», R-40). Старая папка `profile/`: совпадает с примером — удаляется (Q12),
-  иначе переносится в профиль с её именем. Пример `profile.example/` больше не копируется.
-- **R-02. Извлечение текста** (Q1): PDF — PDFKit; .docx, .rtf — `NSAttributedString` (AppKit); .txt, .md — как есть. Пустой
-  текст (скан) — понятная ошибка «нет текстового слоя». Извлечённый текст виден и редактируется; правка сохраняется
-  в `.md`, исходник остаётся рядом. Всё локально.
-- **R-03. Окно «Профиль»** (Q2): выбор/создание профиля; разделы «Резюме», «Вакансия», «Инструкции профиля»,
-  «Материалы» (список, добавить, удалить, просмотр текста), «Вопросы» (R-07); общие инструкции — там же отдельным полем.
-  Перетаскивание файлов и кнопка «Загрузить…»; всё доступно с клавиатуры (Tab, Enter, ⌘O).
-- **R-04. Инструкции** (Q4, Q11, Q15). Общие (`instructions.md` в корне) + профиля; в промпте — отдельным блоком
-  **инструкций**, не данных: модель следует им в стиле, длине, формате, акцентах, языке; инструкции профиля важнее общих.
-  Не отменяют только правила надёжности: не подтверждать несказанное (07/R-01), «—» на не-вопрос, данные — не инструкции
-  (текст резюме, материалов, реплик по-прежнему не может командовать моделью).
-- **R-05. Логика ответа** (Q8, Q9): есть в резюме/материалах/ответах — опираться и адаптировать; нет — импровизировать
-  свободно (опыт, истории, цифры), не противореча материалам; технические — своими знаниями. Встроенное правило
-  «предпочитать общие формулировки выдуманным компаниям и цифрам» снимается.
-- **R-06. Материалы** (Q10): текст режется на фрагменты ~800 символов, индекс bge-m3 (кэш по хэшу файла), на вопрос —
-  до 4 фрагментов со сходством ≥ порога в блок `<materials>` (данные). Резюме, вакансия и инструкции — целиком в системной
-  части (кэшируется). Лимит размера резюме и инструкций в запросе — с предупреждением в окне.
-- **R-07. Вопросы** (Q5, Q13). Импорт файла: правила (строка с «?», нумерация, `Q:`/`A:`, «Вопрос:»/«Ответ:», «Питання»),
-  иначе — разбор моделью; результат — таблица на проверку перед сохранением. Таблица: вопрос, ответ, формулировки,
-  состояние ответа (свой / черновик / подтверждён). `questions.yaml` совместим с прежним форматом.
-- **R-08. Подготовка** (Q7, Q14, Q16): «Подготовить» — для каждого вопроса 3–5 формулировок uk/ru/en и черновик ответа по
-  резюме, материалам и инструкциям (если ответа нет). Цепочка из настроек, порциями, с паузой при 429, прогресс и отмена;
-  ответ владельца никогда не перезаписывается.
-- **R-09. Подстройка** (Q6): похожий вопрос (bge-m3, порог базы) → генерация с ответом карточки как основой: факты ответа
-  сохраняются, формулировка и язык — под реальный вопрос. Без моделей — карточка дословно. Режим «Question bank only» —
-  дословно, как раньше.
-- **R-10. Данные.** Всё в профилях — локально, права 600/700; в облачную модель уходит то, что нужно для ответа (как
-  сейчас), фильтр ПД (01/R-12) — и для материалов и инструкций. В журнал текст не пишется.
+## Requirements
+- **R-01. Profiles.** `…/InterviewCopilot/profiles/<id>/`: `profile.yaml` (name, language, profile instructions), `resume.md`, `job.md`,
+  `materials/` (source files + extracted text), `questions.yaml`. Create, rename, delete (with confirmation);
+  the active one — in the Profile menu (and "No profile", R-40). The old `profile/` folder: if it matches the example it is deleted (Q12),
+  otherwise it is moved into a profile with its name. The `profile.example/` example is no longer copied.
+- **R-02. Text extraction** (Q1): PDF — PDFKit; .docx, .rtf — `NSAttributedString` (AppKit); .txt, .md — as is. Empty
+  text (a scan) — a clear error "no text layer". The extracted text is visible and editable; an edit is saved
+  in `.md`, the source stays next to it. Everything is local.
+- **R-03. The "Profile" window** (Q2): choosing/creating a profile; the sections "Résumé", "Vacancy", "Profile instructions",
+  "Materials" (list, add, delete, view text), "Questions" (R-07); the general instructions — in the same place as a separate field.
+  Dragging files and an "Upload…" button; everything is keyboard-accessible (Tab, Enter, ⌘O).
+- **R-04. Instructions** (Q4, Q11, Q15). General (`instructions.md` at the root) + per profile; in the prompt — a separate block of
+  **instructions**, not data: the model follows them in style, length, format, emphasis, language; profile instructions take precedence over general ones.
+  They do not override only the reliability rules: do not confirm what was not said (07/R-01), "—" for a non-question, data is not instructions
+  (the text of the résumé, materials and lines still cannot command the model).
+- **R-05. Answer logic** (Q8, Q9): if it is in the résumé/materials/answers — rely on it and adapt; if not — improvise
+  freely (experience, stories, numbers), without contradicting the materials; technical questions — with own knowledge. The built-in rule
+  "prefer general wording over invented companies and numbers" is removed.
+- **R-06. Materials** (Q10): the text is cut into ~800-character fragments, a bge-m3 index (cached by file hash); for a question —
+  up to 4 fragments with similarity ≥ the threshold in a `<materials>` block (data). The résumé, vacancy and instructions — in full in the system
+  part (cached). A size limit for the résumé and instructions in the request — with a warning in the window.
+- **R-07. Questions** (Q5, Q13). File import: rules (a line with "?", numbering, `Q:`/`A:`, "Вопрос:"/"Ответ:", "Питання"),
+  otherwise — parsing with the model; the result is a table for review before saving. The table: question, answer, wordings,
+  answer state (own / draft / confirmed). `questions.yaml` is compatible with the previous format.
+- **R-08. Preparation** (Q7, Q14, Q16): "Prepare" — for each question 3–5 uk/ru/en wordings and a draft answer based on
+  the résumé, materials and instructions (if there is no answer). The chain from the settings, in batches, with a pause on 429, progress and cancellation;
+  the owner's answer is never overwritten.
+- **R-09. Adaptation** (Q6): a similar question (bge-m3, the bank threshold) → generation with the card's answer as the basis: the answer's facts
+  are kept, the wording and language — fit the real question. Without models — the card verbatim. The "Question bank only" mode —
+  verbatim, as before.
+- **R-10. Data.** Everything in profiles is local, permissions 600/700; the cloud model gets what is needed for the answer (as
+  now), the PII filter (01/R-12) — for materials and instructions too. No text is written to the log.
 
-## Критерии приёмки
-| AC | Критерий | Проверка |
+## Acceptance criteria
+| AC | Criterion | Check |
 |---|---|---|
-| AC-01 | PDF, .docx, .rtf, .txt, .md → текст; скан — понятная ошибка | `swift test` (фикстуры) |
-| AC-02 | Профили: создание, переключение, удаление; перенос/удаление старого `profile/` | `swift test` |
-| AC-03 | Импорт вопросов: 4 формата правилами без модели; таблица сохраняется в `questions.yaml` | `swift test` |
-| AC-04 | Перефразированный вопрос (другая формулировка, другой язык) находит карточку владельца | eval `bank` на новом наборе |
-| AC-05 | Фрагменты материалов: нужный фрагмент в топ-4 | eval `materials` |
-| AC-06 | Инструкция («отвечай одним предложением», «акцент на лидерстве») выполняется; ответ карточки подстроен, факты сохранены; без факта — импровизация | `--smoke-memory` (новые сценарии) |
-| AC-07 | Регрессий нет: тесты, eval, secret-scan, сборка | полная проверка |
-| AC-08 | Владелец: свой PDF-резюме, инструкции, 10 вопросов → живая самопроверка | владелец |
+| AC-01 | PDF, .docx, .rtf, .txt, .md → text; a scan — a clear error | `swift test` (fixtures) |
+| AC-02 | Profiles: creating, switching, deleting; moving/deleting the old `profile/` | `swift test` |
+| AC-03 | Question import: 4 formats by rules without a model; the table is saved to `questions.yaml` | `swift test` |
+| AC-04 | A paraphrased question (another wording, another language) finds the owner's card | the `bank` eval on a new set |
+| AC-05 | Material fragments: the right fragment is in the top 4 | the `materials` eval |
+| AC-06 | An instruction ("answer in one sentence", "emphasis on leadership") is followed; the card answer is adapted with its facts kept; without a fact — improvisation | `--smoke-memory` (new scenarios) |
+| AC-07 | No regressions: tests, evals, secret-scan, build | full check |
+| AC-08 | Owner: their own PDF résumé, instructions, 10 questions → a live self-check | owner |

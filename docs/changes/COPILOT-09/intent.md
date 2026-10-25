@@ -1,44 +1,44 @@
-# COPILOT-09: Intent — живой помощник уровня ParakeetAI
+# COPILOT-09: Intent — a live assistant on the ParakeetAI level
 
-ID: COPILOT-09-intent · Статус: **accepted** (H-0 2026-10-24: «начинай этап 1») · Версия: 1 · Дата: 2026-10-24 · Владелец: itmax04
-Связи: [spec.md](spec.md), [plan.md](plan.md); источник — исследование владельца «ParakeetAI Technical Research» (24.10.2026,
-77 стр., публичные данные; в репозиторий не кладётся)
+ID: COPILOT-09-intent · Status: **accepted** (H-0 2026-10-24: "start stage 1") · Version: 1 · Date: 2026-10-24 · Owner: itmax04
+Links: [spec.md](spec.md), [plan.md](plan.md); source — the owner's research "ParakeetAI Technical Research" (2026-10-24,
+77 pages, public data; not stored in the repository)
 
-## Проблема
-По исследованию ParakeetAI его ценность — короткий цикл «услышать → сохранить контекст → вопрос (вручную или авто) →
-ответ рядом со звонком» с понятными состояниями, плюс подготовка сессии и разбор после звонка. У нас уже есть
-распознавание, авто- и ручной ответ, скриншот, память, профили, материалы, вопросы, ИИ-собеседование. Не хватает:
-оверлея с панелью действий и историей ответов, видимых состояний распознавания вопроса, ввода текстом, сессии как объекта
-(мастер, Start/End, таймер, проверка перед стартом), настроек формата ответа с предпросмотром, разбора с комментариями ИИ,
-скриншота-задачи как контекста, управления видимостью при демонстрации экрана.
+## Problem
+According to the ParakeetAI research, its value is a short loop "hear → keep the context → a question (manual or automatic) →
+an answer next to the call" with clear states, plus session preparation and a review after the call. We already have
+recognition, automatic and manual answers, screenshots, memory, profiles, materials, questions, the AI interview. Missing:
+an overlay with an action bar and an answer history, visible question-detection states, text input, the session as an object
+(a wizard, Start/End, a timer, a pre-start check), answer format settings with a preview, a review with AI comments,
+a screenshot task as context, visibility control during screen sharing.
 
-## Желаемый результат
-Поведение и устройство живого помощника близки к ParakeetAI (раскладка, действия, состояния, сессии, разбор), при этом
-сохраняются наши сильные стороны (локальное распознавание, uk/ru/en сразу, отпечаток голоса, бесплатная цепочка моделей,
-первые слова ~1–1,5 с) и не копируются слабые места, отмеченные исследованием: старый ответ под новым запросом,
-неясные состояния, «невидимость» без проверки.
+## Desired outcome
+The behavior and structure of the live assistant are close to ParakeetAI (layout, actions, states, sessions, review), while
+our strengths are kept (local recognition, uk/ru/en at once, the voiceprint, the free model chain,
+first words in ~1–1.5 s) and the weak spots noted by the research are not copied: an old answer under a new request,
+unclear states, "invisibility" without a check.
 
-## Решения владельца (мозговой штурм 2026-10-24)
-| № | Вопрос | Решение |
+## Owner decisions (brainstorm 2026-10-24)
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Приоритеты | Всё: живой оверлей, Chat и настройки ответа, сессии и разбор, скриншоты и проверка перед звонком. Плюс 7 механизмов: персонализация по фактам; контекст разговора (уточнения, скриншот → голосовые вопросы, смена темы, очистка); надёжный звук и состояния подключения/восстановления; ручной и авто-ответ без повторов и смешивания; постепенный ответ и ясные состояния, старый ответ не выглядит новым; управление оверлеем (перемещение, размер, сворачивание, масштаб, прокрутка, клавиши без перехвата фокуса); приватность (хранение, удаление, проверка видимости при демонстрации экрана). Mock, банк вопросов, резюме, headshots — обсудить после основного |
-| Q2 | Внешний вид | Близко к ParakeetAI: сверху панель кнопок с подсказками клавиш, под ней строка расшифровки, ниже полупрозрачная карточка ответа; свой стиль, без их логотипа и графики |
-| Q3 | Сессия | Как в ParakeetAI: «Создать сессию» → Start → таймер → End → разбор. Без сессии приложение не слушает |
-| Q4 | Авто-ответ | Переключатель Auto Generate (в мастере и меню оверлея) + видимый статус Checking / Question detected / No question; ручной Answer всегда доступен |
-| Q5 | Типы сессии | Interview, Regular call, Mock |
-| Q6 | Настройки ответа | Формат, длина, тон с живым предпросмотром (ответ модели на пример выбранного типа вопроса по профилю); «Сохранить» — для сессии, «По умолчанию» — для всех |
-| Q7 | Chat | Новый вопрос текстом; уточнить текущий ответ (новая версия, старая — в истории); быстрые кнопки «Короче / Подробнее / Пример»; указание на всю сессию (видно в оверлее) |
-| Q8 | Разбор | Комментарий ИИ к каждому вашему ответу, общая сводка, «Спросить ИИ» о сессии, расшифровка по говорящим с временем |
-| Q9 | Скриншот | Весь экран под курсором; снимок в течение 30 с — добавляется к той же задаче, позже — новая задача; голосовые уточнения относятся к активной задаче |
-| Q10 | Клавиши | Схема ParakeetAI (⌘↩ ответ, ⌘⇧↩ скриншот, ⌘⇧Space чат, ⌘⇧⌫ очистить, ⌘←/→ ответы) — только во время сессии; вне сессии не перехватываются |
-| Q11 | Private | Добавить переключатель и честную встроенную проверку видимости (снимок экрана через ScreenCaptureKit), без обещаний «невидимо» |
-| Q12 | Запуск | Проверка перед стартом; автоопределение начала звонка (предложение «Начать сессию?»); импорт вакансии по ссылке; таймер с планом и предупреждением |
-| Q13 | Clear | Очищает строку расшифровки и «последние реплики» для следующего ответа; память интервью и сохранённая расшифровка остаются |
-| Q14 | Regular call | «Что сказать» от первого лица по теме, инструкциям и материалам профиля, без резюме и карточек; после звонка — сводка и договорённости |
-| Q15 | Разбор — когда | Сразу после End в фоне (можно выключить в мастере); расшифровка видна сразу |
-| Q16 | Порядок | 1) сессии; 2) живой оверлей; 3) настройки ответа; 4) разбор; 5) скриншоты-задачи и контекст |
+| Q1 | Priorities | Everything: the live overlay, Chat and answer settings, sessions and review, screenshots and a pre-call check. Plus 7 mechanisms: personalization by facts; conversation context (follow-ups, screenshot → voice questions, topic change, clearing); reliable audio and connection/recovery states; manual and automatic answers without repeats and mixing; a gradual answer and clear states, an old answer does not look new; overlay control (moving, size, collapsing, scale, scrolling, keys without stealing focus); privacy (storage, deletion, a visibility check during screen sharing). Mock, the question bank, the résumé, headshots — discuss after the main part |
+| Q2 | Appearance | Close to ParakeetAI: a button bar with key hints at the top, a transcript line below it, a semi-transparent answer card below that; our own style, without their logo and graphics |
+| Q3 | Session | As in ParakeetAI: "Create a session" → Start → timer → End → review. Without a session the app does not listen |
+| Q4 | Automatic answer | An Auto Generate toggle (in the wizard and the overlay menu) + a visible status Checking / Question detected / No question; the manual Answer is always available |
+| Q5 | Session types | Interview, Regular call, Mock |
+| Q6 | Answer settings | Format, length, tone with a live preview (the model's answer to a sample of the selected question type based on the profile); "Save" — for the session, "Default" — for all |
+| Q7 | Chat | A new question as text; refine the current answer (a new version, the old one stays in the history); quick buttons "Shorter / More detail / Example"; an instruction for the whole session (visible in the overlay) |
+| Q8 | Review | An AI comment on each of your answers, an overall summary, "Ask AI" about the session, a transcript by speaker with time |
+| Q9 | Screenshot | The whole screen under the cursor; a shot within 30 s is added to the same task, later — a new task; voice follow-ups refer to the active task |
+| Q10 | Keys | The ParakeetAI scheme (⌘↩ answer, ⌘⇧↩ screenshot, ⌘⇧Space chat, ⌘⇧⌫ clear, ⌘←/→ answers) — only during a session; outside a session they are not intercepted |
+| Q11 | Private | Add a toggle and an honest built-in visibility check (a screen capture via ScreenCaptureKit), without promising "invisible" |
+| Q12 | Launch | A pre-start check; automatic detection of a call start (the offer "Start a session?"); importing a vacancy from a link; a timer with a plan and a warning |
+| Q13 | Clear | Clears the transcript line and the "last lines" for the next answer; the interview memory and the saved transcript stay |
+| Q14 | Regular call | "What to say" in the first person on the topic, instructions and materials of the profile, without the résumé and cards; after the call — a summary and agreements |
+| Q15 | Review — when | Right after End in the background (can be turned off in the wizard); the transcript is visible right away |
+| Q16 | Order | 1) sessions; 2) the live overlay; 3) answer settings; 4) review; 5) screenshot tasks and context |
 
-## Границы
-Входит: всё из таблицы. Не входит в эту задачу (решение владельца — после основного): банк вопросов компаний, конструктор
-резюме, AI-фото, изменения ИИ-собеседования кроме запуска из мастера. Не делается: аккаунты, оплата, облачное хранение.
-Новые зависимости — нет (ScreenCaptureKit, AppKit, SwiftUI — системные).
+## Scope
+In: everything from the table. Not in this task (the owner's decision — after the main part): a company question bank, a résumé
+builder, AI photos, changes to the AI interview other than launching it from the wizard. Not done: accounts, payment, cloud storage.
+New dependencies — none (ScreenCaptureKit, AppKit, SwiftUI are system frameworks).

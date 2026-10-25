@@ -1,5 +1,5 @@
 {
-  "_comment": "Цены за 1 млн токенов, USD (R-20). Источники: страницы цен Gemini, DeepSeek (api-docs.deepseek.com/quick_start/pricing, 2026-10-06), skill claude-api (Anthropic, 2026-09-25). Модель ищется по префиксу ID.",
+  "_comment": "Prices per 1M tokens, USD (R-20). Sources: the Gemini and DeepSeek pricing pages (api-docs.deepseek.com/quick_start/pricing, 2026-10-06), the claude-api skill (Anthropic, 2026-09-25). A model is matched by its ID prefix.",
   "models": [
     { "prefix": "gemini-3.8-flash", "provider": "gemini", "input": 0.75, "output": 3.75, "cachedInput": 0.75 },
     { "prefix": "gemini", "provider": "gemini", "input": 0.75, "output": 3.75, "cachedInput": 0.75 },

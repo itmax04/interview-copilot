@@ -1,62 +1,62 @@
-# Передача COPILOT-07
+# COPILOT-07 handoff
 
-ID: COPILOT-07-handoff · Статус: **готово (0.4.0, build 23) — ждёт повторный живой тест владельца (AC-06)** · Обновлено: 2026-10-24
-Ветка: `feat/copilot-07-hardening` (от `feat/copilot-06-session-memory` @ `f76c8ca`)
-Связи: [intent.md](intent.md), [spec.md](spec.md)
+ID: COPILOT-07-handoff · Status: **done (0.4.0, build 23) — awaiting the owner's repeated live test (AC-06)** · Updated: 2026-10-24
+Branch: `feat/copilot-07-hardening` (from `feat/copilot-06-session-memory` @ `f76c8ca`)
+Links: [intent.md](intent.md), [spec.md](spec.md)
 
-## Шаги и коммиты
-| Шаг | Что | Коммит |
+## Steps and commits
+| Step | What | Commit |
 |---|---|---|
-| 1 | Память по номеру хода (R-02), «показанное — не сказанное» (R-01), отсылки по основам (R-03), «не вопрос» (R-04), зарплата (R-05), `exhausted` в параллельной цепочке (R-09), удалён `<candidate_said>` (R-10) | `8622cae` |
-| 2 | «Сейчас отвечаю я» в меню и панели (R-06), история: начало, источник, «Ваши ответы», склонение, права 600/700 (R-08), `turn_stall` (R-09) | `39b9805` |
-| 3 | `--smoke-memory` (R-11), указание после вопроса (R-01), ответы ИИ-собеседования (R-07) и уточнённые ответы владельца в памяти, версия 0.4.0 | `c8e5ad0` |
+| 1 | Memory by turn number (R-02), "shown is not said" (R-01), references by stems (R-03), "not a question" (R-04), salary (R-05), `exhausted` in the parallel chain (R-09), `<candidate_said>` removed (R-10) | `8622cae` |
+| 2 | "I'm answering now" in the menu and panel (R-06), history: start, source, "Your answers", plural forms, permissions 600/700 (R-08), `turn_stall` (R-09) | `39b9805` |
+| 3 | `--smoke-memory` (R-11), the instruction after the question (R-01), AI interview answers (R-07) and the owner's refined answers in the memory, version 0.4.0 | `c8e5ad0` |
 
-## Найдено аудитом (кроме живого теста)
-- Подсказка искала свой обмен по тексту вопроса: уточнение Whisper (~3 с) менялось раньше, чем медленный провайдер
-  заканчивал ответ, — подсказка терялась, а с ней и замена незаписанного ответа (06/R-07). Повтор того же вопроса писал
-  подсказку не в тот обмен; ⌃⌥C по уточнённому вопросу видел текущий вопрос в собственной истории.
-- Параллельная цепочка (R-36) при ошибке без перехода (`.cancelled` от URLSession) завершалась без `exhausted` — панель
-  оставалась в «Готовлю подсказку…».
-- Блок `<candidate_said>` и его правило оставались в каждом системном промпте, хотя с COPILOT-06 данные туда не шли.
-- Сессия начиналась при запуске приложения: интервью в 08:10 записано как сессия «23:56–08:13» без источника.
-- Окно истории не показывало ответы владельца, хотя они сохраняются (решение 06/Q1); «1 вопросов».
-- Файлы истории (расшифровки, ответы) создавались с правами 644; отпечаток голоса — уже 600.
-- Ответ владельца в самопроверке оставался черновиком Parakeet: уточнение Whisper приходило в обычную ветку и терялось.
-- Ответы на ИИ-собеседовании не попадали в память интервью — у отрепетированного интервью не было истории ответов.
-- Подписи «⌃⌥A», «⌃⌥↩», «⌃⌥C» в панели и настройках не учитывали переназначенные клавиши; серый текст — контраст ниже 4,5:1.
-- Счётчик `turn_stall` не сбрасывался на ручном ходе (ложная диагностика).
+## Found by the audit (besides the live test)
+- A hint looked up its exchange by the question text: the Whisper refinement (~3 s) changed it before a slow provider
+  finished the answer — the hint was lost, and with it the replacement of an unrecorded answer (06/R-07). A repeat of the same question wrote
+  the hint into the wrong exchange; ⌃⌥C on a refined question saw the current question in its own history.
+- The parallel chain (R-36) on an error without a fallback (`.cancelled` from URLSession) finished without `exhausted` — the panel
+  stayed in "Preparing a hint…".
+- The `<candidate_said>` block and its rule stayed in every system prompt, although no data had gone there since COPILOT-06.
+- A session started at app launch: the 08:10 interview was recorded as the session "23:56–08:13" with no source.
+- The history window did not show the owner's answers, although they are saved (decision 06/Q1); "1 вопросов".
+- History files (transcripts, answers) were created with permissions 644; the voiceprint — already 600.
+- The owner's answer in the self-check stayed a Parakeet draft: the Whisper refinement went to the normal branch and was lost.
+- AI interview answers did not get into the interview memory — a rehearsed interview had no answer history.
+- The "⌃⌥A", "⌃⌥↩", "⌃⌥C" labels in the panel and settings ignored reassigned keys; gray text — contrast below 4.5:1.
+- The `turn_stall` counter was not reset on a manual turn (false diagnostics).
 
-## Решения исполнителя
-- Объём — Interview Copilot; боты в `telegram-bots/` не трогались. Правила фронтенда владельца не применяются (CLAUDE.md, «Дизайн»).
-- «Мобильные и планшеты» — неприменимо (macOS); адаптивность — ширина панели 300–…, шрифт, прокрутка ответа.
-- Указание «не соглашаться» — в задании после вопроса: перед историей gpt-oss-120b его терял (живой прогон 16/18 → 29/30).
-- Проверка ответа в `--smoke-memory` — по тексту (`PromptScenarios.confirmsPremise`), без второй модели-судьи: дёшево и
-  повторяемо; «Так як…» (= «так как») не считается согласием.
-- Пост-обработку ответа (вырезать «Так,» из начала) не делал: правило промпта прошло 5/5, а правка текста модели могла бы
-  ломать законные «Так», когда кандидат действительно это говорил.
-- Новых зависимостей нет.
+## Executor decisions
+- Scope — Interview Copilot; the bots in `telegram-bots/` were not touched. The owner's frontend rules do not apply (CLAUDE.md, "Design").
+- "Mobile and tablets" — not applicable (macOS); adaptivity — the panel width 300–…, the font, answer scrolling.
+- The "do not agree" instruction is in the task after the question: placed before the history, gpt-oss-120b lost it (live run 16/18 → 29/30).
+- The answer check in `--smoke-memory` is textual (`PromptScenarios.confirmsPremise`), without a second judge model: cheap and
+  repeatable; "Так як…" (= "так как", "since") does not count as agreement.
+- No post-processing of the answer (cutting "Так," from the start): the prompt rule passed 5/5, and editing the model's text could
+  break legitimate "Так" when the candidate really said it.
+- No new dependencies.
 
-## Проверки (2026-10-24)
-| Проверка | Команда | Результат |
+## Checks (2026-10-24)
+| Check | Command | Result |
 |---|---|---|
-| До изменений | `swift build && swift test` | 236 тестов PASS |
-| Тесты | `swift test` | **245 тестов PASS** (+9: память по ходу, ловушка, обрывок, зарплата, меню, права файлов, цепочка, проверка ответов) |
-| eval | `scripts/run-evals.sh` | turn 0%/0% (596 мс) · bank 94,9% / 0% ложных · filter-text 214/214 · memory 8/8, 0/2 — PASS |
-| eval звука | `scripts/run-evals.sh filter voice` | filter 16/16, потеряно 1/20, термины 8/8, шум 0/20 — PASS; voice 18/18, 89/96 — PASS |
-| Секреты | `scripts/secret-scan.sh` | 0 findings |
-| Сборка | `scripts/build-app.sh` | OK, подпись «InterviewCopilot» |
-| Живой промпт до правки | `--smoke-memory 3` | 16/18: ловушка с показанной подсказкой 1/3 |
-| Живой промпт после | `--smoke-memory 5` | **29/30**: ловушки 15/15, возврат к ответу 5/5, зарплата 5/5 (USD/мес), обрывок 4/5 — 1 FAIL: Groq 429 + Gemini 503/429 (лимиты при 30 запросах подряд, не поведение модели) |
-| Окно и меню вживую | — | NOT RUN: запуск приложения включает микрофон владельца без него; проверено тестами MenuLayout |
-| Живой тест памяти с ⌃⌥A | — | NOT RUN — AC-06, владелец |
+| Before changes | `swift build && swift test` | 236 tests PASS |
+| Tests | `swift test` | **245 tests PASS** (+9: memory by turn, the trap, a fragment, salary, menu, file permissions, chain, answer checks) |
+| Evals | `scripts/run-evals.sh` | turn 0%/0% (596 ms) · bank 94.9% / 0% false · filter-text 214/214 · memory 8/8, 0/2 — PASS |
+| Audio evals | `scripts/run-evals.sh filter voice` | filter 16/16, lost 1/20, terms 8/8, noise 0/20 — PASS; voice 18/18, 89/96 — PASS |
+| Secrets | `scripts/secret-scan.sh` | 0 findings |
+| Build | `scripts/build-app.sh` | OK, signature "InterviewCopilot" |
+| Live prompt before the fix | `--smoke-memory 3` | 16/18: the trap with a shown hint 1/3 |
+| Live prompt after | `--smoke-memory 5` | **29/30**: traps 15/15, return to an answer 5/5, salary 5/5 (USD/month), fragment 4/5 — 1 FAIL: Groq 429 + Gemini 503/429 (limits with 30 requests in a row, not model behavior) |
+| Window and menu live | — | NOT RUN: launching the app turns on the owner's microphone without them; checked by the MenuLayout tests |
+| Live memory test with ⌃⌥A | — | NOT RUN — AC-06, owner |
 
-## Ограничения
-- Ответ модели вероятностный: 15/15 на ловушках не гарантирует 100% на живых вопросах; `--smoke-memory` повторяет проверку.
-- Бесплатные лимиты: 30 запросов за ~1 мин дали 429 у Groq и Gemini; в обычном темпе интервью (вопрос раз в 10–30 с,
-  плюс опережающие запросы) лимит не достигался, но длинная серия быстрых вопросов может переключить цепочку на запасные модели.
-- Распознавание украинского у Parakeet остаётся главным источником ошибок текста («Кавкой», «в Мані»); уточнение Whisper
-  иногда портит текст («Повернемося» → «Повернемо себе»).
+## Limitations
+- The model's answer is probabilistic: 15/15 on traps does not guarantee 100% on live questions; `--smoke-memory` repeats the check.
+- Free limits: 30 requests in ~1 min gave 429 at Groq and Gemini; at a normal interview pace (a question every 10–30 s,
+  plus speculative requests) the limit was not reached, but a long series of quick questions can switch the chain to fallback models.
+- Parakeet's Ukrainian recognition remains the main source of text errors ("Кавкой", "в Мані"); the Whisper refinement
+  sometimes spoils the text ("Повернемося" → "Повернемо себе").
 
-## Следующий шаг
-Владелец: 0.4.0 → «Микрофон Mac» → «Новое интервью» → вопросы из списка; после подсказки — ⌃⌥A (или меню «Сейчас отвечаю я»),
-ответ с цифрами, ⌃⌥A. Затем разбор истории (раздел «Ваши ответы»).
+## Next step
+Owner: 0.4.0 → "Mac microphone" → "New interview" → questions from the list; after a hint — ⌃⌥A (or the menu "I'm answering now"),
+an answer with numbers, ⌃⌥A. Then a review of the history (the "Your answers" section).

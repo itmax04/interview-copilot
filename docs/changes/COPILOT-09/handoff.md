@@ -1,280 +1,280 @@
-# Передача COPILOT-09
+# COPILOT-09 handoff
 
-ID: COPILOT-09-handoff · Статус: **этапы 1–7 готовы (0.13.1, build 34) — H-3: владелец проверяет сессию от мастера до разбора (AC-09, AC-11) и решает о слиянии в main** · Обновлено: 2026-10-25
-Ветка: `feat/copilot-09-parakeet-parity` (от `feat/copilot-08-profiles` @ `1f88465`)
-Связи: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md); исследование интерфейса — `docs/design/redesign/research.pdf`
+ID: COPILOT-09-handoff · Status: **stages 1–7 done (0.13.1, build 34) — H-3: the owner checks a session from the wizard to the review (AC-09, AC-11) and decides on merging into main** · Updated: 2026-10-25
+Branch: `feat/copilot-09-parakeet-parity` (from `feat/copilot-08-profiles` @ `1f88465`)
+Links: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md); the interface research — `docs/design/redesign/research.pdf`
 
-## Сделано
-- 2026-10-24: анализ исследования ParakeetAI (77 стр.), мозговой штурм Q1–Q16, intent/spec/plan; исследование текущего
-  интерфейса (`--ui-snapshots`, 34 экрана), 20 промптов ImageGen, research.pdf. Решение владельца: редизайн — по ходу,
-  новые экраны сразу в целевом стиле (`Theme.swift`), полный редизайн — после этапов 1–5.
-- Этап 1 (P-01), версия 0.7.0 — сессии:
-  - `SessionConfig`, `SessionType` (Interview / Regular / Mock), `SessionPhase`, `SessionClock` (таймер, предупреждение за
-    5 мин до плана); последние настройки — `AppSettings.lastSessionConfig` (без компании, вакансии и указаний — они свои
-    у каждого звонка); `SessionRecord.config` в истории.
-  - Жизненный цикл (`LiveSessionController`): без сессии приложение **не слушает** (`ListeningController.standby`: звук и
-    микрофон не захватываются, модель распознавания загружена заранее); Start — слушание, ходы, память, история; End —
-    стоп, сохранение по выбору. «Новое интервью» и автоматические границы (тишина 30 мин, смена приложения) заменены сессией.
-  - Мастер «Создать сессию» (⌃⌥N, меню, панель): «Детали» (тип, профиль, ссылка на вакансию → импорт, компания, вакансия),
-    «Настройки» (источник звука, язык, первая модель, указания на сессию, автоответ, сохранение, разбор, план), «Проверка»
-    (`Preflight`: микрофон 2 с, звук звонка 3 с, распознавание, ключи, профиль — раздельные строки с действиями).
-  - Импорт вакансии (`JobImport`): страница без входа → видимый текст → модель → компания и описание; форма входа
-    (LinkedIn) и пустая страница — понятные ошибки; страница — данные, не инструкции.
-  - Определение звонка (`CallDetection`): микрофон занят другим приложением (флаг CoreAudio, звук не захватывается) и
-    запущен Zoom / Teams / Telegram / FaceTime / Discord / Slack / браузер → в панели «Похоже, начался звонок: Zoom —
-    Начать / Настроить… / Не сейчас» (не чаще раза в 10 мин на приложение).
-  - Ответы с сессией: указания на сессию — блок `<this_session>`, важнее профиля и общих; Regular — отдельный системный
-    промпт «что сказать», без резюме и карточек, с материалами и инструкциями профиля; вакансия и компания из мастера —
-    вместо вакансии профиля; выбранная модель — первой в цепочке; автоответ выключен — ход только по ⌃⌥↩.
-  - Панель: «Нет сессии» с «Создать сессию… ⌃⌥N», таймер и «Завершить» в шапке, «Осталось N мин по плану».
-  - Меню: первым пунктом «Создать сессию… ⌃⌥N» / «Завершить сессию · 12:47»; строка «Нет сессии — не слушаю».
-  - ИИ-собеседование — сессия типа Mock (меню, флаг `--ai-interview`, мастер); его конец завершает сессию.
-  - `Theme.swift`: токены целевого стиля (индиго #4C6EF5, ok/warn/danger), `ThemeCard`.
+## Done
+- 2026-10-24: an analysis of the ParakeetAI research (77 pages), a brainstorm Q1–Q16, intent/spec/plan; a study of the current
+  interface (`--ui-snapshots`, 34 screens), 20 ImageGen prompts, research.pdf. The owner's decision: the redesign goes along the way,
+  new screens right away in the target style (`Theme.swift`), the full redesign — after stages 1–5.
+- Stage 1 (P-01), version 0.7.0 — sessions:
+  - `SessionConfig`, `SessionType` (Interview / Regular / Mock), `SessionPhase`, `SessionClock` (a timer, a warning
+    5 min before the plan); the last settings — `AppSettings.lastSessionConfig` (without the company, vacancy and instructions — they belong
+    to each call); `SessionRecord.config` in the history.
+  - Lifecycle (`LiveSessionController`): without a session the app **does not listen** (`ListeningController.standby`: audio and
+    the microphone are not captured, the recognition model is loaded in advance); Start — listening, turns, memory, history; End —
+    stop, saving as chosen. "New interview" and the automatic boundaries (30 min of silence, an app change) are replaced by the session.
+  - The "Create session" wizard (⌃⌥N, menu, panel): "Details" (type, profile, a vacancy link → import, company, vacancy),
+    "Settings" (audio source, language, the first model, session instructions, auto-answer, saving, review, plan), "Check"
+    (`Preflight`: microphone 2 s, call audio 3 s, recognition, keys, profile — separate lines with actions).
+  - Vacancy import (`JobImport`): a page without a sign-in → the visible text → the model → the company and the description; a sign-in form
+    (LinkedIn) and an empty page — clear errors; the page is data, not instructions.
+  - Call detection (`CallDetection`): the microphone is busy in another app (a CoreAudio flag, no audio is captured) and
+    Zoom / Teams / Telegram / FaceTime / Discord / Slack / a browser is running → the panel shows "Looks like a call started: Zoom —
+    Start / Configure… / Not now" (no more than once in 10 min per app).
+  - Answers with a session: session instructions — a `<this_session>` block, more important than the profile and the general ones; Regular — a separate system
+    prompt "what to say", without the résumé and cards, with the profile's materials and instructions; the vacancy and company from the wizard —
+    instead of the profile's vacancy; the selected model — first in the chain; auto-answer off — a turn only by ⌃⌥↩.
+  - Panel: "No session" with "Create session… ⌃⌥N", a timer and "End" in the header, "N min left per plan".
+  - Menu: the first item "Create session… ⌃⌥N" / "End session · 12:47"; the line "No session — not listening".
+  - The AI interview is a Mock session (menu, the `--ai-interview` flag, the wizard); its end ends the session.
+  - `Theme.swift`: target style tokens (indigo #4C6EF5, ok/warn/danger), `ThemeCard`.
 
-- Этап 2 (P-02), версия 0.8.0 — живой оверлей (R-07…R-11, R-17):
-  - `AnswerHistory` (CopilotCore): вопрос → версии ответа (hint / bank / strong / screenshot / refine) со статусами
-    waiting / streaming / complete / failed / cancelled / noMatch. Каждый запрос пишет только в свою версию по id — поздние
-    токены отменённого запроса не попадают в видимый ответ; новый вопрос прерывает незаконченные. До 50 вопросов.
-    Заголовок «Вопрос: …» — первое предложение-вопрос без «Эээ, / Uh / Ну».
-  - Панель (`PanelView`, `AnswerCardView`): шапка в две строки — уровни микрофона и звонка, таймер, свернуть, меню ⋯,
-    «Завершить»; ниже «Ответ ⌘↩ / Скриншот ⇧⌘↩ / Чат ⇧⌘Space». Строка расшифровки с «Очистить» и развернуть. Статус
-    распознавания: «Проверяю…» (опережающий запрос), «Вопрос найден», «Не вопрос · ответить вручную». Карточка: ← 3 / 7 →,
-    копировать, вкладки версий («2 · короче»), предыдущий ответ приглушённым, пока готовится новый; «Новый ответ», если
-    листаете старые; ошибка — причина и «Повторить»; чипы «Короче / Подробнее / Пример»; «↑ Claude».
-  - Чат (⇧⌘Space / ⌃⌥Space): режимы «Вопрос» (как голосовой ход), «Уточнить ответ» (новая версия), «На всю сессию»
-    (указание до конца сессии — значки над расшифровкой, снимаются ✕, добавляются к `<this_session>`). Панель получает
-    клавиатуру только пока открыт чат (`CopilotPanel.allowsKey`), Esc закрывает.
-  - Уточнение (`PromptBuilder.refine`): прежний ответ — блоком `<previous_answer>`, указание важнее правил длины и формата,
-    новые факты о кандидате — только из ответа, резюме, материалов и истории.
-  - Clear (Q13): расшифровка на экране и накопленные реплики следующего хода (`TurnController.clearPending`); память
-    интервью и сохранённая расшифровка остаются.
-  - Меню ⋯: автоответ, язык распознавания, масштаб (80–160%, `AppSettings.panelZoom`), следующий экран,
-    «Скрыть от захвата экрана» (`sharingType = .none`, `AppSettings.panelHiddenFromCapture`) и «Проверить видимость»:
-    оверлей на 0,25 с заливается пурпурным, делается снимок экрана со своими окнами, доля пурпурного в рамке окна →
-    «Виден / Не виден / Не удалось определить» с датой и версией macOS (`VisibilityProbe`).
-  - «Не слышу звонок N с» — в сессии со звуком приложения, если уровень звонка ниже порога ≥ 10 с; индикаторы уровня —
-    каждые 100 мс, шаг 3 дБ, запись в модель только при изменении.
-  - Горячие клавиши: ⌘-схема ParakeetAI регистрируется на Start и снимается на End (`HotkeyCenter.registerSession`);
-    ⌃⌥-аналоги действуют всегда (новые: ⌃⌥Space, ⌃⌥⌫, ⌃⌥←, ⌃⌥→).
+- Stage 2 (P-02), version 0.8.0 — the live overlay (R-07…R-11, R-17):
+  - `AnswerHistory` (CopilotCore): a question → answer versions (hint / bank / strong / screenshot / refine) with the statuses
+    waiting / streaming / complete / failed / cancelled / noMatch. Each request writes only into its own version by id — late
+    tokens of a cancelled request do not get into the visible answer; a new question interrupts unfinished ones. Up to 50 questions.
+    The title "Question: …" — the first question sentence without "Эээ, / Uh / Ну".
+  - Panel (`PanelView`, `AnswerCardView`): a two-row header — microphone and call levels, a timer, collapse, the ⋯ menu,
+    "End"; below it "Answer ⌘↩ / Screenshot ⇧⌘↩ / Chat ⇧⌘Space". A transcript line with "Clear" and expand. The detection
+    status: "Checking…" (a speculative request), "Question detected", "Not a question · answer manually". The card: ← 3 / 7 →,
+    copy, version tabs ("2 · shorter"), the previous answer dimmed while a new one is being prepared; "New answer" if
+    you are browsing old ones; an error — the reason and "Retry"; the chips "Shorter / More detail / Example"; "↑ Claude".
+  - Chat (⇧⌘Space / ⌃⌥Space): the modes "Question" (like a voice turn), "Refine the answer" (a new version), "For the whole session"
+    (an instruction until the end of the session — badges above the transcript, removed with ✕, added to `<this_session>`). The panel gets
+    the keyboard only while the chat is open (`CopilotPanel.allowsKey`), Esc closes it.
+  - Refinement (`PromptBuilder.refine`): the previous answer — a `<previous_answer>` block, the instruction is more important than the length and format rules,
+    new facts about the candidate — only from the answer, résumé, materials and history.
+  - Clear (Q13): the transcript on screen and the accumulated lines of the next turn (`TurnController.clearPending`); the interview
+    memory and the saved transcript stay.
+  - The ⋯ menu: auto-answer, recognition language, scale (80–160%, `AppSettings.panelZoom`), the next display,
+    "Hide from screen capture" (`sharingType = .none`, `AppSettings.panelHiddenFromCapture`) and "Check visibility":
+    the overlay is filled with magenta for 0.25 s, a screen capture including own windows is taken, the share of magenta in the window frame →
+    "Visible / Not visible / Could not determine" with the date and the macOS version (`VisibilityProbe`).
+  - "Can't hear the call for N s" — in a session with app audio, if the call level is below the threshold for ≥ 10 s; level indicators —
+    every 100 ms, a 3 dB step, written to the model only on change.
+  - Hotkeys: the ParakeetAI ⌘ scheme is registered on Start and removed on End (`HotkeyCenter.registerSession`);
+    the ⌃⌥ equivalents always work (new: ⌃⌥Space, ⌃⌥⌫, ⌃⌥←, ⌃⌥→).
 
-- Этап 3 (P-03), версия 0.9.0 — настройки ответа с живым предпросмотром (R-12, Q6):
-  - `AnswerStyle` (CopilotCore): формат (суть + пункты / только пункты / сплошной текст), длина (короткий ≤ 40 слов /
-    сбалансированный ≤ 80 / подробный ≤ 150), тон (формальный / нейтральный / дружелюбный). Правило формата в системной
-    части собеседования и обычного звонка строит `formatRule`; стандарт дает **дословно прежнюю строку** (проверено тестом) —
-    поведение и кэш промпта без изменений. Подробному — 800 токенов. Инструкции владельца идут после и важнее (08/R-04).
-  - Где задается: Settings → Models → «Стиль ответа по умолчанию» (`AppSettings.answerStyle`); мастер → «Настройки» →
-    «Стиль ответа» → «Настроить…»: «Сохранить для сессии» (`SessionConfig.style`, не переносится в следующую сессию) или
-    «По умолчанию» (настройки и эта сессия).
-  - Редактор (`AnswerStyleEditor` + `StylePreview`): слева переключатели, справа карточка как в оверлее — ответ модели на
-    пример вопроса («О себе / Поведенческий / Технический», uk/ru/en; для обычного звонка — свои примеры) по профилю
-    сессии с вакансией из мастера (`SessionConfig.applyingJob`, общий с `AnswerController`), с цепочкой сессии.
-    Запрос — через 0,6 с после последнего изменения, прежний отменяется; готовые ответы кэшируются (переключение туда-обратно
-    не тратит лимиты); подпись «Groq · 1,1 с · 38 слов»; «Сгенерировать заново».
-  - `AnswerShape`: подсчет слов, пунктов и строк прозы — для подписи предпросмотра, тестов и живых проверок.
+- Stage 3 (P-03), version 0.9.0 — answer settings with a live preview (R-12, Q6):
+  - `AnswerStyle` (CopilotCore): format (gist + bullets / bullets only / continuous text), length (short ≤ 40 words /
+    balanced ≤ 80 / detailed ≤ 150), tone (formal / neutral / friendly). The format rule in the system
+    part of the interview and the regular call is built by `formatRule`; the standard gives **the previous line verbatim** (checked by a test) —
+    behavior and the prompt cache are unchanged. Detailed — 800 tokens. The owner's instructions go after it and take precedence (08/R-04).
+  - Where it is set: Settings → Models → "Default answer style" (`AppSettings.answerStyle`); the wizard → "Settings" →
+    "Answer style" → "Configure…": "Save for the session" (`SessionConfig.style`, not carried over to the next session) or
+    "Default" (the settings and this session).
+  - The editor (`AnswerStyleEditor` + `StylePreview`): toggles on the left, a card like in the overlay on the right — the model's answer to a
+    sample question ("About yourself / Behavioral / Technical", uk/ru/en; for a regular call — its own samples) based on the session
+    profile with the vacancy from the wizard (`SessionConfig.applyingJob`, shared with `AnswerController`), with the session chain.
+    The request goes 0.6 s after the last change, the previous one is cancelled; finished answers are cached (switching back and forth
+    does not spend limits); a caption "Groq · 1.1 s · 38 words"; "Regenerate".
+  - `AnswerShape`: counting words, bullets and prose lines — for the preview caption, tests and live checks.
 
-- Этап 4 (P-04), версия 0.10.0 — разбор после End (R-13, R-14, Q8, Q15):
-  - Запись сессии: ваши фразы с временем (`SessionRecord.ownerUtterances`, с уточнением Whisper) и разбор
-    (`SessionRecord.review`: статус pending / running(done, total) / done / failed, комментарии, сводка, «Спросить ИИ»).
-    Старые файлы читаются; испорченный разбор не мешает открыть расшифровку (тест).
-  - `ReviewPrompt` (CopilotCore): комментарии к ответам порциями по 6 (JSON: что получилось, чего не хватило, как сказать
-    лучше — на языке интервью); сводка — для собеседования темы, сильные и слабые места, следующие шаги; для обычного
-    звонка — итог, договоренности, следующие шаги; «Спросить ИИ» — по расшифровке и сводке, с 4 прежними вопросами.
-    Расшифровка — последние 14 000 символов. Ответы, расшифровка и профиль — данные; фильтр личных данных.
-  - `ReviewController`: после End (если включены «Разбор после завершения» и «Сохранять расшифровку») — в фоне, цепочка
-    сессии, сохранение после каждой порции; ошибка → «Разбор не закончен: причина» с «Повторить», готовые комментарии
-    остаются, повтор продолжает с места. Окно сессий открывается на завершенной сессии — расшифровка видна сразу.
-  - Окно «Сессии»: компания и тип в списке; вкладки «Сводка» (сводка, затем вопрос → ваш ответ → комментарий →
-    «Подсказка на экране»), «Расшифровка» (Интервьюер / Вы / подсказки отдельно, время от начала, переключатель
-    подсказок), «Спросить ИИ» (вопросы-подсказки, ответы сохраняются в разборе); для старых сессий — «Сделать разбор»;
-    удаление — с подтверждением, вместе с разбором.
+- Stage 4 (P-04), version 0.10.0 — the review after End (R-13, R-14, Q8, Q15):
+  - The session record: your phrases with time (`SessionRecord.ownerUtterances`, with the Whisper refinement) and the review
+    (`SessionRecord.review`: status pending / running(done, total) / done / failed, comments, summary, "Ask AI").
+    Old files are readable; a broken review does not prevent opening the transcript (test).
+  - `ReviewPrompt` (CopilotCore): comments on answers in batches of 6 (JSON: what worked, what was missing, how to say it
+    better — in the interview language); the summary — for an interview the topics, strengths and weaknesses, next steps; for a regular
+    call — the outcome, agreements, next steps; "Ask AI" — based on the transcript and the summary, with the 4 previous questions.
+    The transcript — the last 14,000 characters. Answers, the transcript and the profile are data; the PII filter.
+  - `ReviewController`: after End (if "Review after finishing" and "Save the transcript" are on) — in the background, the session
+    chain, saving after each batch; an error → "Review not finished: reason" with "Retry", finished comments
+    stay, a retry continues from where it stopped. The sessions window opens on the finished session — the transcript is visible right away.
+  - The "Sessions" window: the company and type in the list; the tabs "Summary" (the summary, then question → your answer → comment →
+    "Hint on screen"), "Transcript" (Interviewer / You / hints separately, time from the start, a hints
+    toggle), "Ask AI" (suggested questions, answers are saved in the review); for old sessions — "Make a review";
+    deletion — with confirmation, together with the review.
 
-- Этап 5 (P-05), версия 0.11.0 — скриншоты-задачи и контекст (R-15, R-16, AC-08):
-  - `ScreenshotTaskTracker` (CopilotCore): снимок в течение 30 с после прошлого — та же задача (до 3 снимков), иначе новая;
-    задача активна 15 минут после последнего снимка или вопроса о ней, пока есть решение; Clear, ✕ и конец сессии ее
-    закрывают. Повторный снимок решает задачу заново по всем снимкам — новой версией того же вопроса («2 снимка»).
-  - Решение разбирается по разделам (`ScreenshotTask.statement`, `promptSummary`): заголовок карточки — «Задача: <условие>»;
-    в запросы на вопросы голосом идет блок `<active_task>` (условие, подход, сложность, код до 1 800 символов) с правилом
-    «только если вопрос о ней». Блок — в пользовательской части: системная часть и ее кэш не меняются.
-  - `FollowUpDetector`: короткий вопрос без предмета («А сложность?», «Почему так?», «А якщо…», «What if…», «Can you do
-    better?») — до 9 слов, без «вы / ви / you / ваш / расскажите» после начала. Такой вопрос относится к активной задаче,
-    без нее — к прошлому обмену (вопрос и показанная подсказка). Ответ о задаче — до 800 токенов (бывает код).
-  - Оверлей: плашка «Задача · 2 снимка» с миниатюрами и ✕ над карточкой ответа.
+- Stage 5 (P-05), version 0.11.0 — screenshot tasks and context (R-15, R-16, AC-08):
+  - `ScreenshotTaskTracker` (CopilotCore): a shot within 30 s of the previous one — the same task (up to 3 shots), otherwise a new one;
+    a task is active for 15 minutes after the last shot or a question about it, while it has a solution; Clear, ✕ and the session end
+    close it. A repeated shot solves the task again over all shots — as a new version of the same question ("2 shots").
+  - The solution is parsed by sections (`ScreenshotTask.statement`, `promptSummary`): the card title — "Task: <problem>";
+    requests for voice questions get an `<active_task>` block (the problem, the approach, the complexity, code up to 1,800 characters) with the rule
+    "only if the question is about it". The block is in the user part: the system part and its cache do not change.
+  - `FollowUpDetector`: a short question without a subject ("А сложность?", "Почему так?", "А якщо…", "What if…", "Can you do
+    better?") — up to 9 words, without "вы / ви / you / ваш / расскажите" after the start. Such a question refers to the active task,
+    without one — to the previous exchange (the question and the hint shown). An answer about a task — up to 800 tokens (code happens).
+  - Overlay: a "Task · 2 shots" plate with thumbnails and ✕ above the answer card.
 
-- Этап 6, версия 0.12.0 — полный редизайн по образцам владельца (ImageGen P00–P19, папка
+- Stage 6, version 0.12.0 — a full redesign after the owner's samples (ImageGen P00–P19, the folder
   `~/Desktop/InterviewCopilot-redesign/Результат-ImageGen/design/imagegen/`):
-  - Дизайн-система `Design/DesignSystem.swift` (IC: цвета P00, кнопки, карточки, бейджи, клавиши, логотип) — взята из
-    ветки редизайна владельца (`Результат-ImageGen/source`, коммиты 48159e1, cf0e764); `Theme` указывает на те же цвета.
-    Остальной код той ветки (свои сессии, мастер, `transform` промпта) **не переносился**: он сделан на коде до этапа 1 и
-    дублирует этапы 1–5. Взяты разметка «Сегодня» и вход в ИИ-собеседование.
-  - Оверлей (P01–P06, P10): темное стекло, волны уровней, кнопки с клавишами (в узкой панели сокращаются), пилюли
-    статуса, «Активная задача» с миниатюрами, «Копировать код», свернутый — одна строка, карточка «Звонок в Zoom».
-    Панель по умолчанию 420×540 pt.
-  - Главное окно (P12): «Сегодня» (готовность, последние сессии, подготовка вопросов), «Сессии», «Профили»,
-    «ИИ-собеседование», «Настройки»; открывается при запуске; меню и разбор открывают нужный раздел.
-  - Сессии (P15–P16), профиль (P13), настройки с разделами (P17), мастер (P07–P09), стиль ответа (P11),
-    первый запуск (P18, ключ Groq), страницы ИИ-собеседования и пробного звонка (P19 — палитра).
-  - Сравнение «образец ↔ реализация» — `docs/design/copilot-09/stage6/*.jpg` (16 пар).
+  - The design system `Design/DesignSystem.swift` (IC: P00 colors, buttons, cards, badges, keys, logo) — taken from
+    the owner's redesign branch (`Результат-ImageGen/source`, commits 48159e1, cf0e764); `Theme` points to the same colors.
+    The rest of that branch's code (its own sessions, wizard, prompt `transform`) **was not carried over**: it was built on the code before stage 1 and
+    duplicates stages 1–5. The "Today" layout and the entry to the AI interview were taken.
+  - The overlay (P01–P06, P10): dark glass, level waves, buttons with keys (shortened in a narrow panel), status
+    pills, "Active task" with thumbnails, "Copy code", collapsed — one line, a "Call in Zoom" card.
+    The default panel is 420×540 pt.
+  - The main window (P12): "Today" (readiness, recent sessions, question preparation), "Sessions", "Profiles",
+    "AI interview", "Settings"; it opens at launch; the menu and the review open the right section.
+  - Sessions (P15–P16), profile (P13), settings with sections (P17), the wizard (P07–P09), answer style (P11),
+    first launch (P18, the Groq key), the AI interview and test call pages (P19 — the palette).
+  - A "sample ↔ implementation" comparison — `docs/design/copilot-09/stage6/*.jpg` (16 pairs).
 
-- Этап 7, версия 0.13.0 — итоговая проверка (P-06) и доработки по ее итогам:
-  - Состояния для приемки — в CopilotCore с тестами: `QuestionDetection` (переходы и «Готовлю ответ…», AC-04),
-    `SessionPhase.canStart/canEnd` (AC-01), `SessionConfig.withSessionNotes` (указания из чата, AC-05).
-  - Повторное «Ответ» на тот же вопрос в течение 2 с, пока ответ готовится, не создает второй ход (AC-03).
-  - Занятая другим приложением ⌘-клавиша — в оверлее подсказка ⌃⌥; мастер не читает файлы профиля на каждую
-    перерисовку; «К списку сессий» запоминается.
-  - «Пример» в живом прогоне добавлял выдуманные метрики («+30 %») в 3 из 4 раз — указание ужесточено, 4/4.
-- Дополнение по запросу владельца (2026-10-25): **несколько ключей одного провайдера, без ограничения числа**
-  (0.13.1 — по замечанию владельца снят предел 5). Слоты в Связке ключей (`groq`, `groq#2`…), шаг цепочки на ключ,
-  все ключи провайдера — подряд перед следующим провайдером: 429 у ключа — сразу следующий ключ; ключ с лимитом ждет
-  сброса по подсказке провайдера (заголовок `retry-after`, «try again in 6.18s», Gemini `retryDelay`; без подсказки —
-  60 с) и не пробуется первым; только когда лимит у всех ключей — следующий провайдер. Таймаут/5xx — остывает модель;
-  недействительный ключ — только он (30 мин); изменение ключей в настройках сбрасывает ожидание. Удаление ключа
-  перенумеровывает остальные без пропусков. Настройки → Ключи моделей: «Ключ 2, 3…», «Еще ключ — другого аккаунта». Предупреждение владельцу: регистрировать несколько аккаунтов, чтобы
-  обходить лимиты, может запрещать условия Groq — решение и риск блокировки на стороне владельца.
+- Stage 7, version 0.13.0 — the final check (P-06) and improvements after it:
+  - States for acceptance — in CopilotCore with tests: `QuestionDetection` (transitions and "Preparing an answer…", AC-04),
+    `SessionPhase.canStart/canEnd` (AC-01), `SessionConfig.withSessionNotes` (instructions from the chat, AC-05).
+  - A repeated "Answer" on the same question within 2 s while the answer is being prepared does not create a second turn (AC-03).
+  - A ⌘ key taken by another app — the overlay hints ⌃⌥; the wizard does not read the profile files on every
+    redraw; "Back to the session list" is remembered.
+  - "Example" in the live run added invented metrics ("+30 %") 3 times out of 4 — the instruction was tightened, 4/4.
+- An addition at the owner's request (2026-10-25): **several keys of one provider, with no limit on the number**
+  (0.13.1 — the limit of 5 was removed after the owner's remark). Slots in the Keychain (`groq`, `groq#2`…), a chain step per key,
+  all the provider's keys go in a row before the next provider: a 429 on a key — the next key right away; a rate-limited key waits
+  for the reset per the provider's hint (the `retry-after` header, "try again in 6.18s", Gemini `retryDelay`; without a hint —
+  60 s) and is not tried first; only when all keys are rate-limited — the next provider. A timeout/5xx — the model cools down;
+  an invalid key — only that key (30 min); changing keys in the settings resets the wait. Deleting a key
+  renumbers the rest without gaps. Settings → Model keys: "Key 2, 3…", "Another key — from another account". A warning to the owner: registering several accounts to
+  get around limits may be forbidden by Groq's terms — the decision and the risk of a ban are on the owner's side.
 
-## Решения исполнителя
-- Определение звонка — по флагу CoreAudio «вход занят», а не по звуку: без сессии приложение не слушает (Q3), уведомлений
-  macOS не нужно (предложение — в панели).
-- Проверка перед стартом захватывает звук звонка 3 с только для уровня (без распознавания) — это действие владельца в мастере.
-- «Не сохранять расшифровку» — запись сессии не пишется на диск вовсе (память живёт до конца звонка).
-- Режимы «Bank + hint» и т. п. не трогались; тип сессии определяет `useProfile` (Interview/Mock — с профилем).
-- Строка статуса в панели обрезалась при таймере и «Завершить» — исправлено в этапе 2 (шапка в две строки).
-- Этап 2: ответ остаётся в истории и после End — его можно дочитать и скопировать; новая сессия очищает историю.
-- Этап 2: проверка видимости сравнивает **оттенок**, а не точный цвет — снимок приходит в цветовом пространстве дисплея
-  (#FF00FF на P3 ≈ 234/51/247); точное сравнение давало ложное «Не виден». Доля 5–30% — «Не удалось определить».
-- Этап 2: «Подробнее» и «Пример» в живом прогоне выдумывали проекты и цифры — в блок уточнения добавлено правило
-  «новые факты о кандидате — только из ответа, резюме, материалов и истории» (решение COPILOT-08: опыт — только из материалов).
-- Этап 3: стиль сессии хранится только если отличается от стиля по умолчанию; «По умолчанию» сбрасывает стиль сессии.
-- Этап 3: в подробном стиле модель дописывает правдоподобные достижения, которых нет в профиле («скоротив час відповіді
-  на 30 %») — это действующее правило «импровизировать, когда факта нет» (COPILOT-08), а не ошибка стиля; факты профиля
-  сохраняются. **Вопрос владельцу:** запретить придуманные цифры и достижения в ответах (как уже сделано в уточнениях)?
-- Этап 4: «как сказать лучше» не выдумывает цифры и события историй — вместо них места «[цифра]», «[результат]»,
-  «[ситуация]», «[что вы сделали]»: видно, какой факт подготовить. В живом прогоне модель вначале дописывала проценты и
-  целую историю конфликта — правило ужесточено (3 прогона подряд PASS); общие слова (выбор архитектуры) иногда остаются.
-- Этап 4: разбор только для сохраненных сессий («Сохранять расшифровку» выключено — разбирать нечего, в мастере это уже так).
-- Этап 4: ошибка «Спросить ИИ» показывается под полем и не сохраняется, чтобы не попасть в контекст следующего вопроса.
-- Решение владельца (2026-10-24): в обычных ответах на звонке **логичная импровизация остается** (правило COPILOT-08);
-  запрет выдуманных фактов — только в уточнениях («Подробнее», «Пример») и в разборе («как сказать лучше»).
-- Этап 5: «Clear» закрывает и задачу со скриншота — после очистки голосовые вопросы к ней не относятся.
-- Этап 6 — отличия от образцов (сознательно):
-  - Оценка «83 %» (P12, P15) не показывается — разбор ее не считает, выдумывать число нельзя; в «Сегодня» вместо
-    «Оценки» — состояние разбора.
-  - Логотипы компаний (Apple, Яндекс) — буква на цветном квадрате: чужие бренды не рисуем.
-  - P04: меню ⋮ — системное меню, без новых ⌘A, ⌘L, ⌘0, ⌘⇧M, ⌘⇧H, ⌘⇧V: это глобальные клавиши, они перехватывались бы
-    у всех приложений; всплывающая SwiftUI-панель над неактивирующим окном без живой проверки рискованна.
-  - P10: системное уведомление — карточкой в оверлее (решение этапа 1: без разрешения на уведомления).
-  - P16: вкладок «Заметки», «Оценка» и кнопки «Открыть в записи» нет — таких функций нет.
-  - P13: предпросмотр резюме справа не сделан — редактор во всю ширину. P14: таблица вопросов и материалов — прежние
-    `QuestionsView`/`MaterialsView` во вкладках профиля, без отдельных пунктов «Вопросы»/«Материалы» в боковой панели.
-  - P17: строки провайдеров с логотипами и перетаскиванием не сделаны — прежние формы ключей и цепочки внутри разделов.
-  - P18: шага «Профиль» нет (3 шага) — профиль заполняется в главном окне. P19: ИИ-собеседование остается страницей
-    в браузере (голос и захват звука Chrome), перекрашенной под P00; встроить в окно — отдельная задача.
-  - Окна — светлые (как в образцах), оверлей — темный; страницы в браузере следуют теме системы.
-- Этап 7: проверка «нет выдуманных цифр» не считает числа в коде; «семирічний» — тот же факт, что «7 років».
-- Этап 7: дубль «Ответ» отсекается по тексту и времени (2 с), только пока ответ не готов — потом можно спросить снова.
-- Этап 7: известное — Gemini 3.8 Flash в начале прогона не прислала первый токен и за 20 с, затем бесплатный лимит
-  этой модели кончился (429); запасная Gemini Flash Lite отвечает за 0,8 с. Цепочка после первого отказа «остужает»
-  модель и идет к запасной — на звонке теряется одно ожидание. Можно поставить Flash Lite основной или добавить второй
-  ключ Gemini.
-- Риск (решение владельца Q10): на время сессии ⌘← / ⌘→ / ⌘↩ / ⇧⌘⌫ перехватываются у всех приложений — например,
-  в редакторе кода на лайв-кодинге ⌘← не перейдёт к началу строки. Если мешает — вернуть только ⌃⌥ (одна строка в
-  `sessionStarted`) или сделать схему настраиваемой.
+## Executor decisions
+- Call detection — by the CoreAudio flag "input busy", not by audio: without a session the app does not listen (Q3), no macOS
+  notifications are needed (the offer is in the panel).
+- The pre-start check captures the call audio for 3 s only for the level (without recognition) — this is the owner's action in the wizard.
+- "Do not save the transcript" — the session record is not written to disk at all (the memory lives until the end of the call).
+- The "Bank + hint" etc. modes were not touched; the session type determines `useProfile` (Interview/Mock — with a profile).
+- The panel status line was cut off with a timer and "End" — fixed in stage 2 (a two-row header).
+- Stage 2: the answer stays in the history after End too — it can be read to the end and copied; a new session clears the history.
+- Stage 2: the visibility check compares the **hue**, not the exact color — the capture comes in the display color space
+  (#FF00FF on P3 ≈ 234/51/247); an exact comparison gave a false "Not visible". A share of 5–30% — "Could not determine".
+- Stage 2: "More detail" and "Example" in the live run invented projects and numbers — the refinement block got the rule
+  "new facts about the candidate — only from the answer, résumé, materials and history" (COPILOT-08 decision: experience — only from the materials).
+- Stage 3: the session style is stored only if it differs from the default style; "Default" resets the session style.
+- Stage 3: in the detailed style the model adds plausible achievements that are not in the profile ("скоротив час відповіді
+  на 30 %") — this is the current rule "improvise when there is no fact" (COPILOT-08), not a style bug; profile facts
+  are kept. **A question to the owner:** forbid invented numbers and achievements in answers (as already done in refinements)?
+- Stage 4: "how to say it better" does not invent numbers and story events — instead there are placeholders "[number]", "[result]",
+  "[situation]", "[what you did]": it shows which fact to prepare. In the live run the model at first added percentages and
+  a whole conflict story — the rule was tightened (3 runs in a row PASS); generic words (the choice of architecture) sometimes remain.
+- Stage 4: the review is only for saved sessions ("Save the transcript" off — nothing to review; the wizard already works this way).
+- Stage 4: an "Ask AI" error is shown under the field and is not saved, so that it does not get into the context of the next question.
+- The owner's decision (2026-10-24): in normal answers on a call **logical improvisation stays** (the COPILOT-08 rule);
+  the ban on invented facts — only in refinements ("More detail", "Example") and in the review ("how to say it better").
+- Stage 5: "Clear" also closes the screenshot task — after clearing, voice questions do not refer to it.
+- Stage 6 — deliberate differences from the samples:
+  - The "83 %" score (P12, P15) is not shown — the review does not compute it, and a number must not be invented; "Today" shows the review
+    state instead of the "Score".
+  - Company logos (Apple, Yandex) — a letter on a colored square: we do not draw other brands.
+  - P04: the ⋮ menu is a system menu, without new ⌘A, ⌘L, ⌘0, ⌘⇧M, ⌘⇧H, ⌘⇧V: these are global keys, they would be intercepted
+    from all apps; a SwiftUI popover over a non-activating window is risky without a live check.
+  - P10: the system notification — a card in the overlay (the stage 1 decision: no notification permission).
+  - P16: there are no "Notes", "Score" tabs and no "Open in the recording" button — these features do not exist.
+  - P13: the résumé preview on the right was not done — the editor is full width. P14: the questions and materials table — the existing
+    `QuestionsView`/`MaterialsView` in the profile tabs, without separate "Questions"/"Materials" items in the sidebar.
+  - P17: provider rows with logos and drag-and-drop were not done — the existing key and chain forms inside the sections.
+  - P18: there is no "Profile" step (3 steps) — the profile is filled in the main window. P19: the AI interview stays a page
+    in the browser (voice and Chrome audio capture), recolored to P00; embedding it in the window is a separate task.
+  - The windows are light (as in the samples), the overlay is dark; the browser pages follow the system theme.
+- Stage 7: the "no invented numbers" check does not count numbers in code; "семирічний" is the same fact as "7 років".
+- Stage 7: a duplicate "Answer" is cut off by text and time (2 s), only while the answer is not ready — after that you can ask again.
+- Stage 7: known — Gemini 3.8 Flash at the start of the run did not send the first token even in 20 s, then the free limit
+  of that model ran out (429); the fallback Gemini Flash Lite answers in 0.8 s. After the first failure the chain "cools down" the
+  model and goes to the fallback — one wait is lost on a call. Flash Lite can be made the primary, or a second
+  Gemini key can be added.
+- Risk (the owner's decision Q10): during a session ⌘← / ⌘→ / ⌘↩ / ⇧⌘⌫ are intercepted from all apps — for example,
+  in a code editor during live coding ⌘← will not go to the start of the line. If it gets in the way — keep only ⌃⌥ (one line in
+  `sessionStarted`) or make the scheme configurable.
 
-## Проверки (2026-10-24)
-| Проверка | Результат |
+## Checks (2026-10-24)
+| Check | Result |
 |---|---|
-| `swift test` | **277 тестов PASS** (+9: настройки сессии, цепочка, таймер и план, проверка перед стартом, определение звонка, импорт вакансии, промпт Regular и указаний, история с config; меню — сессия первым пунктом) |
-| `scripts/run-evals.sh` | turn, bank, filter-text, memory, materials — без изменений, PASS |
+| `swift test` | **277 tests PASS** (+9: session settings, chain, timer and plan, pre-start check, call detection, vacancy import, the Regular and instruction prompts, history with config; menu — the session as the first item) |
+| `scripts/run-evals.sh` | turn, bank, filter-text, memory, materials — unchanged, PASS |
 | `scripts/secret-scan.sh` | 0 findings |
-| `--smoke-session` | 5/5: компания и описание из синтетической страницы, «Ignore previous instructions» не выполнено, без навигации |
-| `--smoke-memory` (новые) | обычный звонок 3/3 (цифры из материалов), указание на сессию важнее профиля 3/3 (ответ по-английски) |
-| `--smoke-memory 1` (все 15) | 13/15 — 2 FAIL: Groq 429 + таймаут Gemini после ~25 запросов подряд (лимиты, не поведение); повтор через 75 с — PASS |
-| `--smoke-prepare` (регрессия 08) | после паузы 7/7 (до паузы черновики — 429) |
-| `--ui-snapshots` | мастер (3 шага), панель «нет сессии», «начался звонок», сессия с таймером и планом — просмотрены |
-| Вживую: мастер, Start/End, определение звонка | NOT RUN — H-1, владелец |
+| `--smoke-session` | 5/5: the company and description from a synthetic page, "Ignore previous instructions" not executed, no navigation |
+| `--smoke-memory` (new) | a regular call 3/3 (numbers from the materials), a session instruction over the profile 3/3 (an answer in English) |
+| `--smoke-memory 1` (all 15) | 13/15 — 2 FAILs: Groq 429 + a Gemini timeout after ~25 requests in a row (limits, not behavior); a repeat after 75 s — PASS |
+| `--smoke-prepare` (08 regression) | after a pause 7/7 (before the pause drafts — 429) |
+| `--ui-snapshots` | the wizard (3 steps), the "no session" panel, "a call started", a session with a timer and a plan — reviewed |
+| Live: the wizard, Start/End, call detection | NOT RUN — H-1, owner |
 
-Этап 2 (2026-10-24):
-| Проверка | Результат |
+Stage 2 (2026-10-24):
+| Check | Result |
 |---|---|
-| `swift test` | **288 тестов PASS** (+11: история ответов — переходы, «новый ответ», чужие токены, версии, «не вопрос», лимит, заголовки; `PromptBuilder.refine`; ⌘-схема сессии без пересечений с ⌃⌥; `VisibilityProbe` — оттенок в разных цветовых пространствах, вердикт, доля в рамке) |
+| `swift test` | **288 tests PASS** (+11: answer history — transitions, "new answer", foreign tokens, versions, "not a question", limit, titles; `PromptBuilder.refine`; the session ⌘ scheme without overlaps with ⌃⌥; `VisibilityProbe` — hue in different color spaces, verdict, share in the frame) |
 | `scripts/run-evals.sh` | turn, bank, filter-text 214/214, memory 8/8, materials 23/24 — PASS |
 | `scripts/secret-scan.sh` | 0 findings |
-| `--smoke-memory` «уточнение» (5 сценариев × 3) | **15/15** после двух правок промпта (было 7/9: «Короче» оставлял список; 11/15: «Подробнее / Пример» выдумывали цифры) |
-| `--smoke-memory 1` (все 20) | 15/20 подряд: 4 FAIL — Groq 429 после ~60 запросов, 1 FAIL — ловушка Kafka (#1); через 90 с: ловушка Kafka **5/5**, четыре упавших по лимиту — **4/4** |
-| `--ui-snapshots` | 26 состояний панели просмотрены; исправлены: кнопки шапки переносились по буквам, «Завершить» и «↑ Claude» обрезались, чипы переносились при масштабе 130%. Снимки — `docs/design/copilot-09/stage2/` |
-| Вживую: оверлей в звонке, чат с клавиатуры, ⌘-клавиши, свернуть, следующий экран, проверка видимости | NOT RUN — H-2, владелец |
+| `--smoke-memory` "refinement" (5 scenarios × 3) | **15/15** after two prompt fixes (was 7/9: "Shorter" kept a list; 11/15: "More detail / Example" invented numbers) |
+| `--smoke-memory 1` (all 20) | 15/20 in a row: 4 FAILs — Groq 429 after ~60 requests, 1 FAIL — the Kafka trap (#1); after 90 s: the Kafka trap **5/5**, the four that failed on the limit — **4/4** |
+| `--ui-snapshots` | 26 panel states reviewed; fixed: header buttons wrapped letter by letter, "End" and "↑ Claude" were cut off, chips wrapped at 130% scale. Shots — `docs/design/copilot-09/stage2/` |
+| Live: the overlay in a call, chat from the keyboard, ⌘ keys, collapse, next display, visibility check | NOT RUN — H-2, owner |
 
-Этап 3 (2026-10-24):
-| Проверка | Результат |
+Stage 3 (2026-10-24):
+| Check | Result |
 |---|---|
-| `swift test` | **296 тестов PASS** (+8: стандарт = прежняя строка промпта для собеседования и звонка; правила форматов, длин и тонов; инструкции владельца после стиля; токены подробного; стиль сессии не переносится, старые файлы читаются; вакансия сессии; подсчет слов и пунктов; примеры вопросов на uk/ru/en) |
+| `swift test` | **296 tests PASS** (+8: the standard = the previous prompt line for the interview and the call; format, length and tone rules; owner instructions after the style; detailed tokens; the session style is not carried over, old files are readable; the session vacancy; counting words and bullets; sample questions in uk/ru/en) |
 | `scripts/run-evals.sh` | turn, bank, filter-text, memory, materials — PASS |
 | `scripts/secret-scan.sh` | 0 findings |
-| `--smoke-memory` «стиль» (4 сценария × 3) | **11/12 → 12/12**: короткий сплошной ≤ 40 слов без пунктов 3/3, только пункты 3/3, подробный с фактами профиля 3/3, обычный звонок коротко и формально 3/3 (одна «ошибка» — ложная проверки: сумма словами «двенадцать тысяч», проверка исправлена, повтор 2/2). До этого — ложная проверка «новых цифр» в подробном (см. решения) и Groq 429 |
-| `--ui-snapshots` | редактор стиля (стандарт и «текст · короткий · дружелюбный»), мастер с карточкой стиля — просмотрены; исправлено: переключатель формата не помещался в колонку. Снимки — `docs/design/copilot-09/stage3/` |
-| Вживую: предпросмотр в мастере и в Settings на ваших ключах | NOT RUN — H-2, владелец |
+| `--smoke-memory` "style" (4 scenarios × 3) | **11/12 → 12/12**: short continuous ≤ 40 words without bullets 3/3, bullets only 3/3, detailed with profile facts 3/3, a regular call short and formal 3/3 (one "error" was a false check: the amount in words "двенадцать тысяч", the check was fixed, a repeat 2/2). Before that — a false "new numbers" check in detailed (see decisions) and Groq 429 |
+| `--ui-snapshots` | the style editor (standard and "text · short · friendly"), the wizard with the style card — reviewed; fixed: the format switch did not fit the column. Shots — `docs/design/copilot-09/stage3/` |
+| Live: the preview in the wizard and in Settings on your keys | NOT RUN — H-2, owner |
 
-Этап 4 (2026-10-24):
-| Проверка | Результат |
+Stage 4 (2026-10-24):
+| Check | Result |
 |---|---|
-| `swift test` | **304 теста PASS** (+8: расшифровка по говорящим и время, порции и продолжение после ошибки, запрос комментариев — данные и фильтр личных данных, разбор ответа модели по id, сводка собеседования и звонка, усечение длинной расшифровки, «Спросить ИИ», хранение разбора и испорченный разбор) |
+| `swift test` | **304 tests PASS** (+8: a transcript by speaker and time, batches and continuing after an error, the comments request — data and the PII filter, parsing the model's answer by id, the interview and call summary, truncating a long transcript, "Ask AI", storing the review and a broken review) |
 | `scripts/run-evals.sh` | turn, bank, filter-text, memory, materials — PASS |
-| `scripts/secret-scan.sh` | 0 findings (синтетический номер в тесте собирается из частей, как в LLMTests) |
-| `--smoke-review` (новый) | **3 прогона подряд — все PASS** (10 проверок): комментарии 3/3, инструкция в ответе «Ignore previous instructions… HACKED» не выполнена, у слабого ответа указано, чего не хватило, «как лучше» без выдуманных цифр и с местами для своих фактов, сводка с сильными и слабыми местами, «Спросить ИИ» — факт из расшифровки и честное «не упоминалось» про Kubernetes, договоренности звонка (смета в пятницу, созвон в понедельник). До правок: выдуманные «90 %», «20 %» и история конфликта; ложные проверки — «5» из «пять лет» и «нет ни одного упоминания» |
-| `--ui-snapshots` | окно сессий: сводка, расшифровка, «Спросить ИИ», разбор с ошибкой — просмотрены. Снимки — `docs/design/copilot-09/stage4/` |
-| Вживую: End → разбор → окно сессий на ваших ключах | NOT RUN — H-2, владелец |
+| `scripts/secret-scan.sh` | 0 findings (the synthetic number in the test is assembled from parts, as in LLMTests) |
+| `--smoke-review` (new) | **3 runs in a row — all PASS** (10 checks): comments 3/3, the instruction in an answer "Ignore previous instructions… HACKED" not executed, a weak answer gets what was missing, "how to do better" without invented numbers and with placeholders for own facts, a summary with strengths and weaknesses, "Ask AI" — a fact from the transcript and an honest "not mentioned" about Kubernetes, the call's agreements (an estimate on Friday, a call on Monday). Before the fixes: invented "90 %", "20 %" and a conflict story; false checks — "5" from "пять лет" and "нет ни одного упоминания" |
+| `--ui-snapshots` | the sessions window: summary, transcript, "Ask AI", a review with an error — reviewed. Shots — `docs/design/copilot-09/stage4/` |
+| Live: End → review → the sessions window on your keys | NOT RUN — H-2, owner |
 
-Этап 5 (2026-10-24):
-| Проверка | Результат |
+Stage 5 (2026-10-24):
+| Check | Result |
 |---|---|
-| `swift test` | **311 тестов PASS** (+7: снимки в 30 с — одна задача до 3, новая после; активность 15 мин и продление; условие и сводка решения; распознавание уточнений uk/ru/en — 17 случаев, в т. ч. «А как вы тестируете?» и «Why did you leave…» — не уточнения; `<active_task>` в запросе, системная часть без изменений; запрос по нескольким снимкам; заголовок «Задача: …») |
-| `scripts/run-evals.sh` | turn, bank, filter-text, memory, materials — PASS |
-| `scripts/secret-scan.sh` | 0 findings |
-| `--smoke-task evals/fixtures/two-sum.png` (новый, AC-08) | **3 прогона подряд — 6/6 каждый (18/18)**: условие из решения; «А сложность?» — O(n); «А если массив отсортирован?» — два указателя; «Почему словарь, а не два цикла?» — сравнение с O(n²); «Расскажите о себе» при активной задаче — о себе, без задачи; «Почему именно его?» без задачи — про RabbitMQ из прошлой подсказки. Найдено тестом и исправлено: «Can you do better?» не считалось уточнением из-за «you» внутри самой фразы |
-| `--ui-snapshots` | плашка задачи с миниатюрами и заголовок «Задача: …» — просмотрены, `docs/design/copilot-09/stage5/` |
-| Вживую: ⇧⌘↩ на задаче в браузере, второй снимок за 30 с, «а сложность?» голосом | NOT RUN — H-2, владелец |
-
-Этап 6 (2026-10-24):
-| Проверка | Результат |
-|---|---|
-| `swift test` | 311 тестов PASS (ширина панели по умолчанию — 420; заголовок задачи с заглавной) |
+| `swift test` | **311 tests PASS** (+7: shots within 30 s — one task up to 3, a new one after; 15 min activity and extension; the problem and the solution summary; recognizing uk/ru/en follow-ups — 17 cases, including "А как вы тестируете?" and "Why did you leave…" which are not follow-ups; `<active_task>` in the request, the system part unchanged; a request over several shots; the title "Task: …") |
 | `scripts/run-evals.sh` | turn, bank, filter-text, memory, materials — PASS |
 | `scripts/secret-scan.sh` | 0 findings |
-| `scripts/build-app.sh` | 0.12.0 (32), подпись InterviewCopilot |
-| `--ui-snapshots` | 64 снимка просмотрены; по ходу исправлены: таймер и клавиши переносились по буквам, кнопки обрезались, `TabView` в профиле и настройках рисовался черными полосами (заменен своими вкладками), даты на английском, «Сбалансированный» обрезался |
-| Вживую: главное окно при запуске, разделы, мастер, оверлей в звонке | NOT RUN — H-2, владелец |
+| `--smoke-task evals/fixtures/two-sum.png` (new, AC-08) | **3 runs in a row — 6/6 each (18/18)**: the problem from the solution; "А сложность?" — O(n); "А если массив отсортирован?" — two pointers; "Почему словарь, а не два цикла?" — a comparison with O(n²); "Расскажите о себе" with an active task — about yourself, without the task; "Почему именно его?" without a task — about RabbitMQ from the previous hint. Found by a test and fixed: "Can you do better?" was not treated as a follow-up because of the "you" inside the phrase itself |
+| `--ui-snapshots` | the task plate with thumbnails and the title "Task: …" — reviewed, `docs/design/copilot-09/stage5/` |
+| Live: ⇧⌘↩ on a task in a browser, a second shot within 30 s, "а сложность?" by voice | NOT RUN — H-2, owner |
 
-Этап 7 (2026-10-24…25):
-| Проверка | Результат |
+Stage 6 (2026-10-24):
+| Check | Result |
 |---|---|
-| Полная проверка CLAUDE.md | `swift test` **323 PASS** (+12: состояния, повтор «Ответ», несколько ключей — в памяти и в настоящей Связке ключей); evals turn/bank/filter-text/memory/materials PASS; secret-scan 0; `build-app.sh` 0.13.0 (33), `codesign --verify --strict --deep` OK |
-| `--smoke-llm` | Groq: первый токен 228–489 мс, через цепочку 275–453 мс (COPILOT-04: 0,74 с) — не хуже. Gemini 3.8 Flash — см. «известное» |
-| `--smoke-memory 1` (24) | 22/24 подряд (с 12-го — запасная Gemini Lite после 429 Groq); 2 FAIL разобраны: ложная проверка «семирічним» (исправлена, 3/3 на Groq) и «Пример» с выдуманными «30 %» (указание ужесточено, 4/4) |
-| `--smoke-prepare` · `--smoke-session` · `--smoke-review` · `--smoke-task` · `--smoke-screenshot` | 7/7 · 5/5 · 10/10 · 6/6 · OK (Gemini, 3,2 с, код и сложность; Groq изображения не принимает — отказ локальный, без запроса) |
-| Несколько ключей вживую | цепочка через подписанную сборку и настоящую Связку ключей: Groq 453 мс; переход между ключами при 429 — тестами (второго ключа на этом Mac нет) |
+| `swift test` | 311 tests PASS (the default panel width is 420; the task title is capitalized) |
+| `scripts/run-evals.sh` | turn, bank, filter-text, memory, materials — PASS |
+| `scripts/secret-scan.sh` | 0 findings |
+| `scripts/build-app.sh` | 0.12.0 (32), signature InterviewCopilot |
+| `--ui-snapshots` | 64 shots reviewed; fixed along the way: the timer and keys wrapped letter by letter, buttons were cut off, `TabView` in the profile and settings was drawn with black bars (replaced with own tabs), dates in English, "Balanced" was cut off |
+| Live: the main window at launch, sections, the wizard, the overlay in a call | NOT RUN — H-2, owner |
 
-Приемка (spec.md COPILOT-09):
-| AC | Свидетельство | Статус |
+Stage 7 (2026-10-24…25):
+| Check | Result |
+|---|---|
+| The full CLAUDE.md check | `swift test` **323 PASS** (+12: states, a repeated "Answer", several keys — in memory and in the real Keychain); evals turn/bank/filter-text/memory/materials PASS; secret-scan 0; `build-app.sh` 0.13.0 (33), `codesign --verify --strict --deep` OK |
+| `--smoke-llm` | Groq: first token 228–489 ms, through the chain 275–453 ms (COPILOT-04: 0.74 s) — no worse. Gemini 3.8 Flash — see "known" |
+| `--smoke-memory 1` (24) | 22/24 in a row (from the 12th — the fallback Gemini Lite after a Groq 429); 2 FAILs analyzed: a false check "семирічним" (fixed, 3/3 on Groq) and "Example" with an invented "30 %" (the instruction was tightened, 4/4) |
+| `--smoke-prepare` · `--smoke-session` · `--smoke-review` · `--smoke-task` · `--smoke-screenshot` | 7/7 · 5/5 · 10/10 · 6/6 · OK (Gemini, 3.2 s, code and complexity; Groq does not accept images — a local refusal, no request) |
+| Several keys live | the chain through the signed build and the real Keychain: Groq 453 ms; switching between keys on 429 — by tests (there is no second key on this Mac) |
+
+Acceptance (COPILOT-09 spec.md):
+| AC | Evidence | Status |
 |---|---|---|
-| AC-01 Мастер, Start/End, состояния | SessionTests (настройки, валидация, последние значения), SessionStateTests (Start/End идемпотентны, после ошибки — снова Start) | PASS |
-| AC-02 «Нет разрешения» ≠ «нет сигнала» | SessionTests.preflightSeparatesPermissionFromSilentSource | PASS (тест); вживую — H-3 |
-| AC-03 Ответ принадлежит запросу | OverlayTests: чужие токены не попадают в версию, новый вопрос прерывает незаконченные; повтор «Ответ» за 2 с не дублирует | PASS |
-| AC-04 Состояния по событиям | SessionStateTests: «Проверяю → Вопрос найден → idle», «Не вопрос», «Готовлю ответ…», сброс | PASS |
-| AC-05 История, уточнение-версия, указание на сессию | OverlayTests (история, версии), refine в PromptBuilder, `withSessionNotes` → `<this_session>`; живые «уточнение» и «указание на сессию важнее профиля» | PASS |
-| AC-06 Стиль меняет форму, не факты | живые «стиль: …» 12/12 (этап 3) + 3/3 короткий сплошной (этап 7) | PASS |
-| AC-07 Разбор | ReviewTests (комментарии, сводка, испорченный разбор не прячет расшифровку), `--smoke-review` 10/10 | PASS |
-| AC-08 Скриншот + «а сложность?» | `--smoke-task` 6/6 (этап 5: 18/18) | PASS |
-| AC-09 Проверка видимости | — | NOT RUN — владелец (H-3) |
-| AC-10 Нет регрессий, задержка не хуже 07 | полная проверка PASS; первый токен Groq не хуже записей 04/07; путь «конец вопроса → запрос» без новых обращений к диску, сети и Связке ключей (ключей читается меньше, чем раньше) | PASS (без живого звонка) |
-| AC-11 Сессия от мастера до разбора | — | NOT RUN — владелец (H-3) |
+| AC-01 Wizard, Start/End, states | SessionTests (settings, validation, last values), SessionStateTests (Start/End are idempotent, after an error — Start again) | PASS |
+| AC-02 "No permission" ≠ "no signal" | SessionTests.preflightSeparatesPermissionFromSilentSource | PASS (test); live — H-3 |
+| AC-03 An answer belongs to its request | OverlayTests: foreign tokens do not get into a version, a new question interrupts unfinished ones; a repeated "Answer" within 2 s does not duplicate | PASS |
+| AC-04 States by events | SessionStateTests: "Checking → Question detected → idle", "Not a question", "Preparing an answer…", reset | PASS |
+| AC-05 History, a refinement version, a session instruction | OverlayTests (history, versions), refine in PromptBuilder, `withSessionNotes` → `<this_session>`; the live "refinement" and "a session instruction over the profile" | PASS |
+| AC-06 Style changes the form, not the facts | the live "style: …" 12/12 (stage 3) + 3/3 short continuous (stage 7) | PASS |
+| AC-07 Review | ReviewTests (comments, summary, a broken review does not hide the transcript), `--smoke-review` 10/10 | PASS |
+| AC-08 A screenshot + "а сложность?" | `--smoke-task` 6/6 (stage 5: 18/18) | PASS |
+| AC-09 Visibility check | — | NOT RUN — owner (H-3) |
+| AC-10 No regressions, latency no worse than 07 | the full check PASS; Groq's first token no worse than the 04/07 records; the "end of a question → request" path without new disk, network and Keychain access (fewer keys are read than before) | PASS (without a live call) |
+| AC-11 A session from the wizard to the review | — | NOT RUN — owner (H-3) |
 
-## Следующий шаг
-H-1 + H-2: владелец в 0.8.0 — ⌃⌥N → мастер → «Начать сессию» → пара вопросов голосом → ⌘← / ⌘→ по истории →
-«Короче» → ⇧⌘Space «На всю сессию: отвечай по-английски» → ⋯ → «Скрыть от захвата экрана» → «Проверить видимость»
-(и то же при демонстрации экрана в Zoom/Meet) → «Завершить». В 0.9.0 — мастер → «Стиль ответа» → «Настроить…» → переключить
-формат и длину, посмотреть предпросмотр. В 0.10.0 — после «Завершить» откроется окно сессии: сводка, комментарии к
-ответам, расшифровка, «Спросить ИИ». В 0.11.0 — ⇧⌘↩ на задаче (второй снимок за 30 с — к той же), затем голосом
-«а сложность?».
+## Next step
+H-1 + H-2: the owner in 0.8.0 — ⌃⌥N → the wizard → "Start session" → a couple of voice questions → ⌘← / ⌘→ through the history →
+"Shorter" → ⇧⌘Space "For the whole session: answer in English" → ⋯ → "Hide from screen capture" → "Check visibility"
+(and the same during screen sharing in Zoom/Meet) → "End". In 0.9.0 — the wizard → "Answer style" → "Configure…" → switch
+the format and length, look at the preview. In 0.10.0 — after "End" the session window opens: the summary, comments on
+answers, the transcript, "Ask AI". In 0.11.0 — ⇧⌘↩ on a task (a second shot within 30 s goes to the same one), then by voice
+"а сложность?".
 
-**H-3 (0.13.0):** созвон или самопроверка от мастера до разбора (AC-11) и «Проверить видимость» при демонстрации экрана
-(AC-09); при желании — второй ключ Groq в Настройках → Ключи моделей. Затем решение владельца: слить
-`feat/copilot-09-parakeet-parity` в `main`.
+**H-3 (0.13.0):** a call or a self-check from the wizard to the review (AC-11) and "Check visibility" during screen sharing
+(AC-09); optionally — a second Groq key in Settings → Model keys. Then the owner's decision: merge
+`feat/copilot-09-parakeet-parity` into `main`.

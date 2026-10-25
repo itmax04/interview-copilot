@@ -1,26 +1,26 @@
-# COPILOT-10: Intent — светлая и темная тема, интерфейс на русском и английском
+# COPILOT-10: Intent — light and dark theme, the interface in Russian and English
 
-ID: COPILOT-10-intent · Статус: **accepted** (2026-10-25: владелец выбрал варианты мозгового штурма) · Версия: 1 · Дата: 2026-10-25 · Владелец: itmax04
-Связи: [spec.md](spec.md), [plan.md](plan.md)
+ID: COPILOT-10-intent · Status: **accepted** (2026-10-25: the owner chose the brainstorm options) · Version: 1 · Date: 2026-10-25 · Owner: itmax04
+Links: [spec.md](spec.md), [plan.md](plan.md)
 
-## Проблема
-Окна приложения всегда светлые: вечером и в темной теме macOS они слепят и выбиваются из системы. Интерфейс только
-на русском (а меню в строке состояния — частично на английском), поэтому показать приложение англоязычному
-пользователю или пользоваться им в англоязычной среде неудобно.
+## Problem
+The app windows are always light: in the evening and in the macOS dark theme they are glaring and stand out from the system. The interface is only
+in Russian (and the status bar menu is partly in English), so showing the app to an English-speaking
+user or using it in an English-speaking environment is inconvenient.
 
-## Желаемый результат
-Владелец выбирает тему окон (как в системе, светлая, темная) и язык интерфейса (как в системе, русский, английский).
-Смена применяется сразу, без перезапуска. Оверлей на звонке остается темным. Тексты ИИ для владельца (разбор после
-звонка, «Спросить ИИ») — на языке интерфейса; подсказки на звонке — по-прежнему на языке собеседника.
+## Desired outcome
+The owner chooses the window theme (as in the system, light, dark) and the interface language (as in the system, Russian, English).
+A change applies right away, without a restart. The call overlay stays dark. AI texts for the owner (the review after
+a call, "Ask AI") are in the interface language; hints on a call are still in the interviewer's language.
 
-## Решения владельца (мозговой штурм 2026-10-25)
-| № | Вопрос | Решение |
+## Owner decisions (brainstorm 2026-10-25)
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Варианты темы | «Как в системе / Светлая / Темная»; по умолчанию — как в системе. Окна следуют теме, оверлей на звонке всегда темный |
-| Q2 | Когда применяется язык | Сразу, без перезапуска |
-| Q3 | Язык текстов ИИ для владельца | Разбор и «Спросить ИИ» — на языке интерфейса; подсказки на звонке — на языке собеседника |
-| Q4 | Значения по умолчанию и где выбирать | Язык системы и тема системы; выбор — в онбординге и в «Настройки → Основное» |
+| Q1 | Theme options | "As in the system / Light / Dark"; the default — as in the system. Windows follow the theme, the call overlay is always dark |
+| Q2 | When the language applies | Right away, without a restart |
+| Q3 | The language of AI texts for the owner | The review and "Ask AI" — in the interface language; hints on a call — in the interviewer's language |
+| Q4 | Defaults and where to choose | The system language and the system theme; the choice — in onboarding and in "Settings → General" |
 
-## Вне рамок
-Другие языки интерфейса (в т. ч. украинский), перевод содержимого (резюме, вопросов, ответов), английские голоса и фразы
-тестового звонка (там и так три языка).
+## Out of scope
+Other interface languages (including Ukrainian), translating content (the résumé, questions, answers), English voices and phrases
+of the test call (it already has three languages).

@@ -1,28 +1,28 @@
 # COPILOT-11: Spec
 
-ID: COPILOT-11-spec · Статус: **accepted** · Версия: 1 · Дата: 2026-10-25
-Связи: [intent.md](intent.md), [plan.md](plan.md)
+ID: COPILOT-11-spec · Status: **accepted** · Version: 1 · Date: 2026-10-25
+Links: [intent.md](intent.md), [plan.md](plan.md)
 
-## Требования
-| ID | Требование |
+## Requirements
+| ID | Requirement |
 |---|---|
-| R-01 | Когда все попытки цепочки отказали, она не сдается: «последний шанс» — ждет сброс лимита ближайшего ключа (≤ 25 с), пробует медленные модели с терпеливым таймаутом (≥ 12 с); дневной лимит (часы) не ждется. Работает и в параллельном режиме |
-| R-02 | Параллельный запрос (hedge) уходит к другому провайдеру, а не ко второму ключу того же: второй ключ не быстрее, но тратит свой минутный лимит токенов |
-| R-03 | Запрос со снимком не отправляется провайдерам без изображений (Groq, Cerebras, свой API) |
-| R-04 | У моделей Gemini нижняя граница таймаута первого токена — 7 с (замер: ответ приходит за 2,4–3,8 с) |
-| R-05 | Правило промпта: на «работали ли вы с X?» — утвердительный развернутый ответ (4–6 предложений), опора на профиль, без выдуманных работодателей, дат и чисел |
-| R-07 | Рассказ интервьюера о себе, компании, команде, роли или процессе без вопроса и просьбы — не вопрос: ответ «—» (раньше модель отвечала «Дякую за представлення, я Олексій…»). Если рассказ заканчивается вопросом — отвечать только на него |
-| R-08 | «Профиль → Вопросы → Удалить все…» удаляет все вопросы профиля после подтверждения; резюме, инструкции и материалы остаются |
-| R-06 | Оверлей тянется мышью за все стороны и углы; курсор меняется; в правом нижнем углу — значок; ширина 280–1000 запоминается и не сбрасывается слайдером |
+| R-01 | When all chain attempts have failed, it does not give up: a "last resort" waits for the nearest key's limit reset (≤ 25 s) and tries slow models with a patient timeout (≥ 12 s); a daily limit (hours) is not waited for. It also works in the parallel mode |
+| R-02 | A parallel request (hedge) goes to another provider, not to a second key of the same one: a second key is not faster but spends its own per-minute token limit |
+| R-03 | A request with a screenshot is not sent to providers without images (Groq, Cerebras, a custom API) |
+| R-04 | Gemini models have a first-token timeout floor of 7 s (measured: the answer arrives in 2.4–3.8 s) |
+| R-05 | A prompt rule: to "have you worked with X?" — an affirmative detailed answer (4–6 sentences), relying on the profile, without invented employers, dates and numbers |
+| R-07 | The interviewer talking about themselves, the company, the team, the role or the process without a question or a request is not a question: the answer is "—" (previously the model answered "Дякую за представлення, я Олексій…"). If the monologue ends with a question — answer only that |
+| R-08 | "Profile → Questions → Delete all…" deletes all the profile's questions after a confirmation; the résumé, instructions and materials stay |
+| R-06 | The overlay can be dragged by all sides and corners with the mouse; the cursor changes; a grip icon in the bottom-right corner; the width 280–1000 is remembered and is not reset by the slider |
 
-## Критерии приемки
-| ID | Критерий | Как проверить |
+## Acceptance criteria
+| ID | Criterion | How to check |
 |---|---|---|
-| AC-01 | Все ключи с лимитом + Gemini не уложился в 4 с → ответ приходит без ручного вмешательства | `ChainResilienceTests`, журнал тестового звонка (случай 07:23:28 UTC) |
-| AC-02 | Дневной лимит не заставляет ждать | `dailyLimitIsNotWaitedFor` |
-| AC-03 | Скриншот не тратит попытки на Groq | `screenshotSkipsProvidersWithoutImages` |
-| AC-04 | «Вы работали с X?» — «Так…», без отказа и выдуманных чисел | `--smoke-memory` сценарий «опыт с инструментом» (5/5), `ExperienceRuleTests` |
-| AC-05 | Полосы изменения размера есть на всех сторонах и углах окна | `--smoke-panel-resize`, `PanelResizingTests` |
-| AC-07 | Рассказ интервьюера → «—»; рассказ с вопросом в конце → ответ на вопрос | `--smoke-memory` сценарии «интервьюер…» (12/12) |
-| AC-08 | «Удалить все…» очищает вопросы, файл читается как пустой | `EmptyQuestionBankTests`, снимок вкладки |
-| AC-06 | Полная проверка CLAUDE.md проходит | вывод команд в handoff |
+| AC-01 | All keys rate-limited + Gemini did not fit into 4 s → the answer arrives without manual intervention | `ChainResilienceTests`, the test call log (the case at 07:23:28 UTC) |
+| AC-02 | A daily limit does not make it wait | `dailyLimitIsNotWaitedFor` |
+| AC-03 | A screenshot does not spend attempts on Groq | `screenshotSkipsProvidersWithoutImages` |
+| AC-04 | "Have you worked with X?" — "Так…", without a refusal and invented numbers | `--smoke-memory` scenario "experience with a tool" (5/5), `ExperienceRuleTests` |
+| AC-05 | Resize strips exist on all sides and corners of the window | `--smoke-panel-resize`, `PanelResizingTests` |
+| AC-07 | An interviewer monologue → "—"; a monologue with a question at the end → an answer to the question | `--smoke-memory` scenarios "interviewer…" (12/12) |
+| AC-08 | "Delete all…" clears the questions, the file reads as empty | `EmptyQuestionBankTests`, a snapshot of the tab |
+| AC-06 | The full CLAUDE.md check passes | command output in the handoff |

@@ -1,100 +1,100 @@
-# Передача COPILOT-11
+# COPILOT-11 handoff
 
-ID: COPILOT-11-handoff · Статус: **готово (0.15.0, build 36) — H-1: живая проверка владельцем** · Обновлено: 2026-10-25
-Ветка: `feat/copilot-11-test-call-fixes` (от `feat/copilot-10-theme-language` @ `9dcf965`)
-Связи: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md)
+ID: COPILOT-11-handoff · Status: **done (0.15.0, build 36) — H-1: the owner's live check** · Updated: 2026-10-25
+Branch: `feat/copilot-11-test-call-fixes` (from `feat/copilot-10-theme-language` @ `9dcf965`)
+Links: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md)
 
-## Разбор тестового звонка (сессия 2026-10-25T08-22-18, 8 мин, 47 вопросов)
-| Показатель | Значение |
+## Test call analysis (session 2026-10-25T08-22-18, 8 min, 47 questions)
+| Metric | Value |
 |---|---|
-| Источники ответов | Groq `gpt-oss-120b` — 42, Gemini `flash-lite` — 4, карточка базы — 1 |
-| Первый токен | Groq: медиана 1,5 с, p90 2,1 с; Gemini: медиана 2,9 с |
-| Входных токенов на запрос | 5 345 … 6 960 (медиана 6 262): профиль, инструкции, факты, материалы, история |
-| Лимит Groq (бесплатный) | 8 000 токенов в минуту на ключ → при ~6 300 на запрос один ключ тянет ~1 запрос в минуту; три ключа — ~3–4 запроса в минуту при вопросах каждые 8–10 с |
-| Ошибки в журнале | ≈ 30 отказов 429 по минутному лимиту (retry-after 1–41 с), 3 таймаута Gemini (4 с) |
+| Answer sources | Groq `gpt-oss-120b` — 42, Gemini `flash-lite` — 4, a bank card — 1 |
+| First token | Groq: median 1.5 s, p90 2.1 s; Gemini: median 2.9 s |
+| Input tokens per request | 5,345 … 6,960 (median 6,262): profile, instructions, facts, materials, history |
+| Groq limit (free) | 8,000 tokens per minute per key → at ~6,300 per request one key handles ~1 request per minute; three keys — ~3–4 requests per minute with questions every 8–10 s |
+| Errors in the log | ≈ 30 per-minute 429 refusals (retry-after 1–41 s), 3 Gemini timeouts (4 s) |
 
-**Случай с ручным переключением (вопрос 8, 07:23:28 UTC).** Ход пришел, когда у всех трех ключей Groq был лимит (12, 21, 37 с),
-а `gemini-3.8-flash` и `gemini-flash-lite` не уложились в таймаут 4 с (их первый токен — 2,4–3,8 с). Цепочка прошла по кругу
-один раз, «сдалась» (`no_match`, 6,9 с от конца фразы), и владелец нажал «Ответ»; повтор получил ответ от `flash-lite` за 3 с.
-Причины: (1) цепочка не ждет сброса лимита, который наступает через секунды; (2) Gemini отрезается таймаутом 4 с на каждом
-втором запросе, и ее модель «остывает» на 5 минут; (3) параллельный запуск (`hedgeAfter` 1,5 с при медиане Groq 1,5 с)
-срабатывал почти на каждом запросе и отправлял копию на второй ключ Groq, тратя его минутный лимит; (4) при скриншоте цепочка
-сначала пробовала три ключа Groq, который изображения не принимает (отказ 08:16:16), и лишь потом Gemini.
+**The case with a manual switch (question 8, 07:23:28 UTC).** The turn came when all three Groq keys were rate-limited (12, 21, 37 s),
+and `gemini-3.8-flash` and `gemini-flash-lite` did not fit into the 4 s timeout (their first token takes 2.4–3.8 s). The chain went around
+once, "gave up" (`no_match`, 6.9 s after the end of the phrase), and the owner pressed "Answer"; the retry got an answer from `flash-lite` in 3 s.
+Causes: (1) the chain does not wait for a limit reset that comes in seconds; (2) Gemini is cut off by the 4 s timeout on every
+second request, and its model "cools down" for 5 minutes; (3) the parallel launch (`hedgeAfter` 1.5 s with a Groq median of 1.5 s)
+fired on almost every request and sent a copy to the second Groq key, spending its per-minute limit; (4) for a screenshot the chain
+first tried three Groq keys, which does not accept images (the refusal at 08:16:16), and only then Gemini.
 
-**Работает корректно.** Переход между ключами Groq (key=1 → 2 → 3, видно в журнале), переход к Gemini при общем лимите,
-подсказка retry-after, отсутствие повторов вопроса, честные ответы про пробелы (платная реклама, After Effects — по инструкциям
-профиля), STAR-ответы, язык ответа (украинский), конец вопроса и пауза (`turn_end` ≈ 0,7–0,8 с после речи).
+**Works correctly.** Switching between Groq keys (key=1 → 2 → 3, visible in the log), switching to Gemini on a shared limit,
+the retry-after hint, no repeated questions, honest answers about gaps (paid ads, After Effects — per the profile
+instructions), STAR answers, the answer language (Ukrainian), the end of a question and the pause (`turn_end` ≈ 0.7–0.8 s after speech).
 
-**Замечено, но не менялось.**
-- Распознавание на микрофон Mac местами искажает вопрос («Чем Айа Ю Джис утрясняется…»), но модель восстанавливает смысл по контексту.
-- Без инструкции модель придумывает факты о кандидате (вопрос «Скільки вам років?» → «Мені 27 років», выдуманная «кампанія для
-  бутанського ринку» из искаженной фразы, «за два дні освоїв Veo» при том, что в базе ответ «не использовал»). Это следствие
-  правила COPILOT-08 «импровизировать свободно»; теперь для вопросов про инструменты оно ограничено правилом R-05.
-- Промпт 5–7 тыс. токенов — главный потребитель минутного лимита Groq. Если ключей Groq мало, лучше добавить ключи или
-  сократить материалы/инструкции; сам промпт не менялся.
+**Noticed but not changed.**
+- Recognition on the Mac microphone sometimes distorts the question ("Чем Айа Ю Джис утрясняется…"), but the model restores the meaning from the context.
+- Without an instruction the model invents facts about the candidate (the question "Скільки вам років?" → "Мені 27 років", an invented "campaign for
+  the Bhutanese market" from a distorted phrase, "mastered Veo in two days" while the bank answer says "did not use"). This follows from
+  the COPILOT-08 rule "improvise freely"; for questions about tools it is now limited by rule R-05.
+- A 5–7 k token prompt is the main consumer of the Groq per-minute limit. If there are few Groq keys, it is better to add keys or
+  shorten the materials/instructions; the prompt itself was not changed.
 
-## Сделано
-- **Цепочка** (`ProviderChain`):
-  - `lastResort` — когда все попытки отказали: ждет сброс лимита ключа (≤ 25 с; ключи, у которых сброс через ≤ 3 с, идут в порядке
-    цепочки), медленные модели (таймаут/5xx) пробует сразу с таймаутом `max(3·таймаут, 12 с)`, общий потолок; дневной лимит не ждется;
-    без `health` (сильная модель, проверки) поведение прежнее. Работает в последовательном и параллельном режимах.
-  - Параллельный запрос (hedge) — только к другому провайдеру (`launch(avoiding:)`); второй ключ того же провайдера — только
-    при отказе первого.
-  - `LLMProvider.acceptsImages`: Groq, Cerebras и «свой API» не получают запрос со снимком (Gemini идет сразу).
-  - `Step.minFirstTokenTimeout`: у шагов Gemini нижняя граница 7 с (`ChainFactory.geminiMinFirstTokenTimeout`).
-  - `ProviderHealth.keyReadyIn` — через сколько секунд сбросится лимит ключа.
-- **Промпт** (`PromptBuilder.system`, режим «Собеседование» с профилем): на «работали ли вы с X?» — утвердительный развернутый
-  ответ (4–6 предложений), с «Так…», опора на профиль, без выдуманных работодателей, дат, количеств и процентов. Сценарий
-  `опыт с инструментом` в `--smoke-memory`: 5/5 на Groq (`gpt-oss-120b`); один из трех прежних прогонов выдумал число «8» —
-  формулировка про числа ужесточена.
-- **Оверлей**: `PanelResizeHandle` — полосы 6 pt по сторонам и 18 pt в углах (курсор изменения размера, события по
-  `NSEvent.mouseLocation`, панель не активируется), значок в правом нижнем углу; по высоте свернутая панель не растягивается;
-  ширина 280–1000 pt (было 300–520) запоминается через `onResizedByUser` — `apply` больше не возвращает ширину из слайдера при
-  любом изменении настроек (это и мешало); высота — до 4 000 pt. Геометрия — `PanelResizing` в Core.
-- **Рассказ интервьюера не вопрос** (`PromptBuilder`, правило «нет ответа»): до правки на рассказ интервьюера о себе и о
-  компании модель отвечала (живой замер 0/6: «Дякую, Олено, за представлення, я Олексій…»). Теперь — «—» (панель: «Не вопрос»),
-  если же рассказ кончается вопросом или просьбой — ответ только на нее. Сценарии `интервьюер…`: 12/12; обычный звонок — то же правило.
-- **«Удалить все…»** на вкладке «Вопросы» (`QuestionsView`, `BankController.deleteAllCards`): подтверждение «Удалить все вопросы (N)?»,
-  недоступно во время подготовки; резюме, инструкции и материалы не затрагиваются.
-- Версия 0.15.0 (build 36).
+## Done
+- **Chain** (`ProviderChain`):
+  - `lastResort` — when all attempts have failed: waits for a key's limit reset (≤ 25 s; keys whose reset is within ≤ 3 s go in chain
+    order), tries slow models (timeout/5xx) right away with a `max(3·timeout, 12 s)` timeout, a shared ceiling; a daily limit is not waited for;
+    without `health` (the strong model, checks) the behavior is the same as before. Works in the sequential and parallel modes.
+  - A parallel request (hedge) — only to another provider (`launch(avoiding:)`); a second key of the same provider — only
+    when the first one fails.
+  - `LLMProvider.acceptsImages`: Groq, Cerebras and "custom API" do not get a request with a screenshot (Gemini goes right away).
+  - `Step.minFirstTokenTimeout`: Gemini steps have a 7 s floor (`ChainFactory.geminiMinFirstTokenTimeout`).
+  - `ProviderHealth.keyReadyIn` — in how many seconds a key's limit resets.
+- **Prompt** (`PromptBuilder.system`, the "Interview" mode with a profile): to "have you worked with X?" — an affirmative detailed
+  answer (4–6 sentences), starting with "Так…", relying on the profile, without invented employers, dates, counts and percentages. The scenario
+  `опыт с инструментом` ("experience with a tool") in `--smoke-memory`: 5/5 on Groq (`gpt-oss-120b`); one of the three earlier runs invented the number "8" —
+  the wording about numbers was tightened.
+- **Overlay**: `PanelResizeHandle` — 6 pt strips on the sides and 18 pt in the corners (a resize cursor, events by
+  `NSEvent.mouseLocation`, the panel is not activated), a grip icon in the bottom-right corner; a collapsed panel does not stretch in height;
+  the width 280–1000 pt (was 300–520) is remembered through `onResizedByUser` — `apply` no longer brings back the slider width on
+  every settings change (that is what got in the way); the height — up to 4,000 pt. The geometry — `PanelResizing` in Core.
+- **An interviewer monologue is not a question** (`PromptBuilder`, the "no answer" rule): before the fix the model answered the interviewer's
+  story about themselves and the company (a live measurement 0/6: "Дякую, Олено, за представлення, я Олексій…"). Now — "—" (the panel: "Not a question");
+  if the story ends with a question or a request — an answer only to that. The `интервьюер…` ("interviewer…") scenarios: 12/12; a regular call — the same rule.
+- **"Delete all…"** on the "Questions" tab (`QuestionsView`, `BankController.deleteAllCards`): the confirmation "Delete all questions (N)?",
+  unavailable during preparation; the résumé, instructions and materials are not affected.
+- Version 0.15.0 (build 36).
 
-## Решения исполнителя
-- Ключ не ждется дольше 25 с: дольше владелец остается без подсказки, и ответ уже не нужен; тогда — ошибка и кнопка «Повторить», как раньше.
-- Правило про опыт не разрешает выдумывать **конкретику** (работодателей, даты, числа): утвердительный ответ без цифр выдерживает
-  уточняющие вопросы («в каком проекте?», «сколько?»), а с цифрами — нет. Сами факты о том, *с какими задачами* инструмент
-  использовался, модель формулирует из профиля и общих знаний об инструменте.
-- Инструкции владельца важнее встроенных правил (COPILOT-08), поэтому строки из **инструкций профиля** «Не утверждай, что я
-  запускал платную рекламу…» и «After Effects, Premiere, Figma, Photoshop не приписывай…», а также абзац «Чего у меня пока нет…»
-  в «Фактах о себе» перебивают новое правило. Файлы владельца я не менял — это его данные; нужное он убирает в окне «Профиль».
-- Таймаут 7 с для Gemini — на уровне фабрики цепочки, а не настройки: пользовательский «Таймаут первого токена» (4 с) остается для остальных.
+## Executor decisions
+- A key is not waited for longer than 25 s: longer than that the owner is left without a hint and the answer is no longer needed; then — an error and the "Retry" button, as before.
+- The experience rule does not allow inventing **specifics** (employers, dates, numbers): an affirmative answer without numbers withstands
+  follow-up questions ("in which project?", "how many?"), and one with numbers does not. The facts about *which tasks* the tool
+  was used for are phrased by the model from the profile and general knowledge about the tool.
+- The owner's instructions take precedence over the built-in rules (COPILOT-08), so the lines from the **profile instructions** "Не утверждай, что я
+  запускал платную рекламу…" ("Don't claim I ran paid ads…") and "After Effects, Premiere, Figma, Photoshop не приписывай…" ("Don't attribute After Effects…"), as well as the paragraph "Чего у меня пока нет…" ("What I don't have yet…")
+  in "Facts about me", override the new rule. I did not change the owner's files — this is their data; they remove what is needed in the "Profile" window.
+- The 7 s timeout for Gemini is at the chain factory level, not a setting: the user's "First-token timeout" (4 s) stays for the others.
 
-## Проверки (2026-10-25)
-| Команда | Результат |
+## Checks (2026-10-25)
+| Command | Result |
 |---|---|
-| `swift test` | PASS — 356 тестов в 55 наборах (новые: `ChainResilienceTests` 9, `ExperienceRuleTests` 4, `PanelResizingTests` 5, `EmptyQuestionBankTests` 1) |
+| `swift test` | PASS — 356 tests in 55 suites (new: `ChainResilienceTests` 9, `ExperienceRuleTests` 4, `PanelResizingTests` 5, `EmptyQuestionBankTests` 1) |
 | `scripts/run-evals.sh` | PASS — bank, filter-text, memory, materials (5 PASS, 0 FAIL) |
 | `scripts/secret-scan.sh` | PASS — 0 findings |
-| `scripts/check-localization.sh` | PASS — 793 ключа, 0 без перевода |
-| `scripts/build-app.sh` | PASS — `dist/InterviewCopilot.app` подписан |
-| `--smoke-memory` «опыт с инструментом» | PASS 5/5 (Groq `gpt-oss-120b`) |
-| `--smoke-panel-resize` | PASS — 9/9: 4 стороны, 4 угла, середина (панель 401×680) |
-| `--smoke-memory` полностью | 27/28; сценарий-ловушка «Kafka только в подсказке» (вопрос в искаженной записи «Ви чи ви згадували, що працювали з Кавкой?») — 14/15 при повторах: правило «работали ли вы с X?» иногда отвечает «Так…» на ловушку; остальные сценарии — без отказов |
+| `scripts/check-localization.sh` | PASS — 793 keys, 0 without a translation |
+| `scripts/build-app.sh` | PASS — `dist/InterviewCopilot.app` is signed |
+| `--smoke-memory` "experience with a tool" | PASS 5/5 (Groq `gpt-oss-120b`) |
+| `--smoke-panel-resize` | PASS — 9/9: 4 sides, 4 corners, the middle (a 401×680 panel) |
+| `--smoke-memory` in full | 27/28; the trap scenario "Kafka only in the hint" (the question in a distorted transcript "Ви чи ви згадували, що працювали з Кавкой?") — 14/15 on repeats: the "have you worked with X?" rule sometimes answers "Так…" to the trap; the other scenarios — no failures |
 
-## Приемка
-| AC | Свидетельство | Статус |
+## Acceptance
+| AC | Evidence | Status |
 |---|---|---|
-| AC-01 | `allKeysLimitedThenAnswerAfterReset` (оба режима), `slowModelIsGivenTimeWhenNothingElseIsLeft` | PASS в тестах; живая проверка при реальных лимитах — H-1 |
+| AC-01 | `allKeysLimitedThenAnswerAfterReset` (both modes), `slowModelIsGivenTimeWhenNothingElseIsLeft` | PASS in tests; a live check under real limits — H-1 |
 | AC-02 | `dailyLimitIsNotWaitedFor` | PASS |
 | AC-03 | `screenshotSkipsProvidersWithoutImages` | PASS |
-| AC-04 | живой сценарий 5/5, `ExperienceRuleTests` | PASS |
-| AC-05 | `--smoke-panel-resize`, `PanelResizingTests` | PASS; само перетаскивание мышью в живом окне — H-1 |
-| AC-06 | проверки выше | PASS |
+| AC-04 | the live scenario 5/5, `ExperienceRuleTests` | PASS |
+| AC-05 | `--smoke-panel-resize`, `PanelResizingTests` | PASS; the mouse drag itself in a live window — H-1 |
+| AC-06 | the checks above | PASS |
 
-## Не проверено
-- Перетаскивание мышью в запущенном приложении (нет захвата экрана и ввода в этой среде): наличие полос и их стороны проверены
-  по реальному окну, арифметика — тестами.
-- Ожидание лимита при настоящем исчерпании ключей — только на тестовых провайдерах.
+## Not verified
+- Dragging with the mouse in the running app (no screen capture and input in this environment): the strips and their sides were checked
+  on the real window, the arithmetic — by tests.
+- Waiting for a limit under real key exhaustion — only on test providers.
 
-## Следующий шаг
-H-1: запустить 0.15.0, потянуть оверлей за углы и стороны, пройти тестовое собеседование еще раз; убрать из инструкций профиля
-две строки про платную рекламу и «не приписывай» (при желании). Затем — решение о merge COPILOT-09…11 в `main`.
+## Next step
+H-1: launch 0.15.0, drag the overlay by the corners and sides, go through the test interview again; remove from the profile instructions
+the two lines about paid ads and "don't attribute" (if desired). Then — the decision on merging COPILOT-09…11 into `main`.

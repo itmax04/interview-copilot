@@ -1,68 +1,68 @@
-# COPILOT-05: Intent — только речь участников интервью
+# COPILOT-05: Intent — only the interview participants' speech
 
-ID: COPILOT-05-intent · Статус: **accepted** (2026-10-23, «да принимаю начинай первый этап») · Версия: 1 · Дата: 2026-10-23 · Владелец: itmax04
-Связи: [spec.md](spec.md), [plan.md](plan.md), [handoff.md](handoff.md), [COPILOT-04](../COPILOT-04/spec.md),
+ID: COPILOT-05-intent · Status: **accepted** (2026-10-23, "yes, I accept, start the first stage") · Version: 1 · Date: 2026-10-23 · Owner: itmax04
+Links: [spec.md](spec.md), [plan.md](plan.md), [handoff.md](handoff.md), [COPILOT-04](../COPILOT-04/spec.md),
 [COPILOT-03](../COPILOT-03/spec.md), [ADR-0001](../../decisions/ADR-0001-stack.md)
-Источник решений: мозговой штурм с владельцем 2026-10-23 (четыре блока вопросов, ответы — таблица ниже).
+Source of decisions: a brainstorm with the owner on 2026-10-23 (four blocks of questions, answers in the table below).
 
-## Проблема
-На тестах в режиме «Микрофон Mac» в расшифровку попадают посторонние голоса (люди рядом), ТВ, видео и музыка,
-шум без речи (клавиатура, улица — превращается в «Угу», «Yeah») и эхо динамиков. Это портит расшифровку и подсказки.
-Кроме того, в расшифровку попадает речь на других языках (например, немецкий из ТВ), хотя интервью идёт на выбранном языке.
+## Problem
+In tests in the "Mac microphone" mode, the transcript picks up other voices (people nearby), TV, video and music,
+noise without speech (keyboard, street — turns into "Угу", "Yeah") and speaker echo. This spoils the transcript and the hints.
+In addition, speech in other languages gets into the transcript (for example, German from a TV), although the interview is in the selected language.
 
-## Желаемый результат
-- В расшифровку и подсказки попадает только речь участников интервью: интервьюеров (их может быть несколько) и владельца.
-- Речь на чужих языках не попадает, но английские профессиональные термины в речи на выбранном языке сохраняются.
-- Отфильтрованное видно серой строкой и не влияет на подсказки, поэтому ошибку фильтра легко заметить.
+## Desired outcome
+- Only the interview participants' speech gets into the transcript and the hints: interviewers (there may be several) and the owner.
+- Speech in other languages does not get in, but English professional terms inside speech in the selected language are kept.
+- Filtered content is shown as a gray line and does not affect hints, so a filter mistake is easy to notice.
 
-## Решения владельца (2026-10-23)
-| № | Вопрос | Решение |
+## Owner decisions (2026-10-23)
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Где замечены посторонние звуки | Режим «Микрофон Mac» |
-| Q2 | Что мешает | Люди рядом; ТВ, видео, музыка; шум без речи; эхо динамиков |
-| Q3 | Чья речь нужна | Несколько интервьюеров + владелец |
-| Q4 | Что делать с отфильтрованным | Показывать серым, в подсказки и историю не идёт |
-| Q5 | Как узнать голос владельца | Один раз записать образец 20–30 с; хранится только «отпечаток» (числа) |
-| Q6 | Зачем расшифровывать речь владельца | Только как контекст для подсказок (текст уходит в модель); не в панели, не в истории. **Изменено 2026-10-23 (COPILOT-06 Q1): в истории сессий сохраняется** |
-| Q7 | Выбран украинский, звучит русский (или наоборот) | Пропускать оба: uk и ru — одна группа |
-| Q8 | Целая английская фраза интервьюера в uk/ru интервью | В канале звонка пропускать; строгий фильтр — для микрофона и «Весь системный звук» |
-| Q9 | Термины | Правило + словарь: латиница внутри фразы на выбранном языке — всегда; целиком английская фраза в микрофоне — если ≤ 4 слов и все слова — термины (резюме, вакансия, база, встроенный IT-список) |
-| Q10 | Скорость | Всё включено по умолчанию, отдельные переключатели в Settings → Audio |
-| Q11 | Наушники | По-разному — нужно эхоподавление |
-| Q12 | Язык «Auto» | Пропускать только uk / ru / en, остальные — серым |
-| Q13 | Самопроверка «Микрофон Mac» | Вопросами считается только голос владельца |
-| Q14 | Канал звонка | Нейросетевой детектор речи + фильтр языка, без шумоподавления (вопросы не замедляются) |
-| Q15 | Проверка | Синтетические смеси + живой тест владельца (~10 мин) |
-| Q16 | Порядок | Задача → этапы с отдельными сборками |
+| Q1 | Where the extraneous sounds were noticed | The "Mac microphone" mode |
+| Q2 | What interferes | People nearby; TV, video, music; noise without speech; speaker echo |
+| Q3 | Whose speech is needed | Several interviewers + the owner |
+| Q4 | What to do with filtered content | Show it in gray, it does not go into hints or history |
+| Q5 | How to recognize the owner's voice | Record a 20–30 s sample once; only a "print" (numbers) is stored |
+| Q6 | Why transcribe the owner's speech | Only as context for hints (the text goes to the model); not in the panel, not in history. **Changed 2026-10-23 (COPILOT-06 Q1): saved in session history** |
+| Q7 | Ukrainian is selected but Russian is heard (or vice versa) | Let both through: uk and ru are one group |
+| Q8 | A whole English phrase of the interviewer in a uk/ru interview | Let it through in the call channel; the strict filter is for the microphone and "All system audio" |
+| Q9 | Terms | Rule + dictionary: Latin script inside a phrase in the selected language — always; a whole English phrase on the microphone — if ≤ 4 words and all words are terms (résumé, job, bank, a built-in IT list) |
+| Q10 | Speed | Everything on by default, separate toggles in Settings → Audio |
+| Q11 | Headphones | Varies — echo cancellation is needed |
+| Q12 | Language "Auto" | Let only uk / ru / en through, the rest — gray |
+| Q13 | Self-check "Mac microphone" | Only the owner's voice counts as questions |
+| Q14 | Call channel | A neural speech detector + the language filter, no noise suppression (questions are not slowed down) |
+| Q15 | Verification | Synthetic mixes + a live test by the owner (~10 min) |
+| Q16 | Order | Task → stages with separate builds |
 
-## Границы
-Входит:
-- два канала с разными правилами — звонок (интервьюеры) и микрофон (только владелец);
-- нейросетевой детектор речи (Silero), фильтр языка с исключением для терминов;
-- отпечаток голоса владельца (CAM++), шумо- и эхоподавление микрофона (LocalVQE);
-- речь владельца как контекст подсказок; синтетический набор и eval `filter`.
+## Scope
+In:
+- two channels with different rules — the call (interviewers) and the microphone (only the owner);
+- a neural speech detector (Silero), a language filter with an exception for terms;
+- the owner's voiceprint (CAM++), microphone noise and echo suppression (LocalVQE);
+- the owner's speech as hint context; a synthetic set and the `filter` eval.
 
-Не входит:
-- разделение интервьюеров между собой (диаризация); фильтр чужих голосов на стороне интервьюера;
-- шумоподавление канала звонка (Q14); новые языки кроме uk/ru/en;
-- показ речи владельца в панели и в истории (Q6).
+Out:
+- separating interviewers from each other (diarization); filtering other voices on the interviewer's side;
+- noise suppression of the call channel (Q14); new languages beyond uk/ru/en;
+- showing the owner's speech in the panel and history (Q6).
 
-## Ограничения
-- Всё локально: аудио на диск не пишется (01/R-04); образец голоса после расчёта отпечатка удаляется.
-- Отпечаток голоса — биометрические данные: только на этом Mac, удаляются кнопкой, не в Git и не в логах.
-- **Исключение из 01/R-02** (микрофон не расшифровывается): по решению Q3/Q6 речь владельца расшифровывается,
-  её текст уходит в модель только как контекст подсказки.
-- Новые модели FluidAudio (Silero VAD, CAM++, LocalVQE) — с закреплённой ревизией и SHA256, запись в ADR-0001.
-  Новых пакетов SwiftPM нет: всё в FluidAudio 0.17.7.
-- Память ≤ 1,5 ГБ (01/R-25); задержка вопросов из звонка не растёт (COPILOT-04).
+## Constraints
+- Everything is local: audio is not written to disk (01/R-04); the voice sample is deleted after the print is computed.
+- The voiceprint is biometric data: only on this Mac, deleted with a button, not in Git and not in logs.
+- **Exception to 01/R-02** (the microphone is not transcribed): per decisions Q3/Q6 the owner's speech is transcribed,
+  its text goes to the model only as hint context.
+- New FluidAudio models (Silero VAD, CAM++, LocalVQE) — with a pinned revision and SHA256, recorded in ADR-0001.
+  No new SwiftPM packages: everything is in FluidAudio 0.17.7.
+- Memory ≤ 1.5 GB (01/R-25); the latency of questions from the call does not grow (COPILOT-04).
 
-## Допущения
-- A-1. На реальном созвоне голоса комнаты владельца в канал звонка не попадают (захват по приложению); их источник —
-  только микрофон.
-- A-2. В режиме «Микрофон Mac» без звука звонка эхо отменять не по чему: только шумоподавление.
-- A-3. Синтетические голоса macOS (Lesya, Milena, Samantha, Daniel, Fred, Anna, Thomas) достаточны для первичной
-  настройки порогов; на живом голосе пороги проверяются при H-2.
+## Assumptions
+- A-1. On a real call the voices in the owner's room do not get into the call channel (capture per app); their source is
+  only the microphone.
+- A-2. In the "Mac microphone" mode without call audio there is nothing to cancel echo against: only noise suppression.
+- A-3. The synthetic macOS voices (Lesya, Milena, Samantha, Daniel, Fred, Anna, Thomas) are enough for the initial
+  threshold tuning; thresholds are checked on the live voice at H-2.
 
-## Открытые вопросы
-Блокеров нет. Проверяются по ходу: порог сходства голоса на живом голосе (P-04, H-2); работает ли эхоподавление
-без наушников при громких динамиках (P-05).
+## Open questions
+No blockers. Checked along the way: the voice similarity threshold on the live voice (P-04, H-2); whether echo cancellation works
+without headphones at loud speaker volume (P-05).

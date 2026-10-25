@@ -1,59 +1,59 @@
-# COPILOT-05: План
+# COPILOT-05: Plan
 
-ID: COPILOT-05-plan · Статус: **accepted** (2026-10-23, «да принимаю начинай первый этап») · Версия: 1 · Дата: 2026-10-23 · Владелец: itmax04
-Связи: [intent.md](intent.md) · [spec.md](spec.md) · [handoff.md](handoff.md). Требования — только ссылками на R-/AC-.
+ID: COPILOT-05-plan · Status: **accepted** (2026-10-23, "yes, I accept, start the first stage") · Version: 1 · Date: 2026-10-23 · Owner: itmax04
+Links: [intent.md](intent.md) · [spec.md](spec.md) · [handoff.md](handoff.md). Requirements — by R-/AC- references only.
 
-## Состояние
-- Ветка `feat/copilot-05-speech-filter` от `feat/copilot-04-instant-answers` @ `f7e3f94` (v0.1.11).
-- Голоса `say` на Mac: Lesya (uk), Milena (ru), Samantha, Fred, Daniel, Karen (en), Anna (de), Thomas (fr).
-  Второго голоса uk/ru нет — «чужой голос» для uk/ru: Milena↔Lesya и сдвиг высоты; живая проверка — H-2.
+## State
+- Branch `feat/copilot-05-speech-filter` from `feat/copilot-04-instant-answers` @ `f7e3f94` (v0.1.11).
+- `say` voices on the Mac: Lesya (uk), Milena (ru), Samantha, Fred, Daniel, Karen (en), Anna (de), Thomas (fr).
+  There is no second uk/ru voice — the "other voice" for uk/ru: Milena↔Lesya and a pitch shift; the live check — H-2.
 
-## Точки владельца
-| H | Когда | Действие |
+## Owner points
+| H | When | Action |
 |---|---|---|
-| H-0 | До P-00 | Принять intent/spec/plan |
-| H-1 | После этапа 1 (сборка 0.2.0) | 5 минут с ТВ на другом языке в режиме «Микрофон Mac» — чужой язык серым? |
-| H-2 | После этапа 3 | Записать образец голоса; 10 минут с ТВ и человеком рядом (AC-07) |
-| H-3 | P-09 | Приёмка по report.md |
+| H-0 | Before P-00 | Accept intent/spec/plan |
+| H-1 | After stage 1 (build 0.2.0) | 5 minutes with a TV in another language in the "Mac microphone" mode — is the foreign language gray? |
+| H-2 | After stage 3 | Record a voice sample; 10 minutes with a TV and a person nearby (AC-07) |
+| H-3 | P-09 | Acceptance per report.md |
 
-## Шаги
-Каждый шаг: код → проверки → handoff → коммит `P-xx: …`; push — по команде владельца.
+## Steps
+Each step: code → checks → handoff → commit `P-xx: …`; push — on the owner's command.
 
-**P-00. Baseline.** `swift test`, evals, тестовый звонок 0.1.11 — цифры в handoff.
+**P-00. Baseline.** `swift test`, evals, the 0.1.11 test call — numbers in the handoff.
 
-**P-01. Набор и eval `filter`.** `scripts/make-filter-fixtures.sh`: смеси «вопрос + фон» (ТВ de/fr/en голосами `say`,
-музыка и шум синтезом, второй голос), 16 кГц моно, в `evals/audio/filter/`; манифест с ожиданием (принять/отбросить,
-причина). `copilot-eval filter` — AC-01…AC-04 по каналам. Baseline до фильтров.
+**P-01. The set and the `filter` eval.** `scripts/make-filter-fixtures.sh`: "question + background" mixes (a de/fr/en TV with `say` voices,
+synthesized music and noise, a second voice), 16 kHz mono, in `evals/audio/filter/`; a manifest with expectations (keep/drop,
+reason). `copilot-eval filter` — AC-01…AC-04 per channel. A baseline before the filters.
 
-**Этап 1 — без новых моделей кроме VAD, сборка 0.2.0, H-1**
-- **P-02. Фильтр языка и термины** — R-05, R-06, R-09: `LanguageGate` (CopilotCore, чистая логика + тесты),
-  `Resources/terms-en.txt`, словарь из резюме/вакансии/базы, серые строки в панели, S-08.
-- **P-03. Silero VAD** — R-02, R-08: манифест и установщик моделей, `VadManager` в потоке, переключатель; eval turn
-  не хуже (0% / 0%), AC-04.
+**Stage 1 — no new models except the VAD, build 0.2.0, H-1**
+- **P-02. Language filter and terms** — R-05, R-06, R-09: `LanguageGate` (CopilotCore, pure logic + tests),
+  `Resources/terms-en.txt`, a dictionary from the résumé/job/bank, gray lines in the panel, S-08.
+- **P-03. Silero VAD** — R-02, R-08: a model manifest and installer, `VadManager` in the stream, a toggle; the turn eval
+  no worse (0% / 0%), AC-04.
 
-**Этап 2 — голос владельца, сборка 0.2.1**
-- **P-04. Образец и фильтр голоса** — R-03, S-03, S-09: окно записи образца, CAM++, порог по eval (AC-03),
-  самопроверка и ИИ-собеседование (R-01).
+**Stage 2 — the owner's voice, build 0.2.1**
+- **P-04. Sample and voice filter** — R-03, S-03, S-09: a sample recording window, CAM++, a threshold from the eval (AC-03),
+  self-check and the AI interview (R-01).
 
-**Этап 3 — шумо- и эхоподавление, сборка 0.2.2, H-2**
-- **P-05. LocalVQE** — R-04, S-06: потоковый режим 16 мс, опора = звук звонка; AC-05, AC-06.
+**Stage 3 — noise and echo suppression, build 0.2.2, H-2**
+- **P-05. LocalVQE** — R-04, S-06: the 16 ms streaming mode, reference = call audio; AC-05, AC-06.
 
-**Этап 4 — речь владельца как контекст, сборка 0.2.3**
-- **P-06. Канал микрофона на созвоне** — R-01, R-07, S-07: расшифровка речи владельца, блок `<candidate_said>`,
-  тест промпта.
+**Stage 4 — the owner's speech as context, build 0.2.3**
+- **P-06. The microphone channel on a call** — R-01, R-07, S-07: transcribing the owner's speech, a `<candidate_said>` block,
+  a prompt test.
 
-**P-07. Замеры.** eval `filter`, тестовый звонок, `metrics.py`, `footprint-monitor.sh 10`.
-**P-08. Ревью** свежим контекстом по ветке против spec, исправить P0/P1.
-**P-09. Отчёт** `report.md`, ADR-0001 (модели), evals/README (пороги). H-3.
+**P-07. Measurements.** The `filter` eval, the test call, `metrics.py`, `footprint-monitor.sh 10`.
+**P-08. Review** with a fresh context on the branch against the spec, fix P0/P1.
+**P-09. Report** `report.md`, ADR-0001 (models), evals/README (thresholds). H-3.
 
-## Риски
-| Риск | Признак | Действие |
+## Risks
+| Risk | Sign | Action |
 |---|---|---|
-| Parakeet пишет украинскую речь «по-русски» | Ложные отбрасывания | uk/ru — одна группа (Q7), уже заложено |
-| Короткие фразы: язык не определяется | Ложные отбрасывания коротких вопросов | R-05: < 3 слов не отбрасывать |
-| Синтетический голос ≠ живой | Порог голоса не подходит | Порог из H-2, ползунок чувствительности в Audio |
-| LocalVQE (бета) искажает речь | WER микрофона растёт | Сравнение WER с ним и без; выключить по умолчанию, если хуже |
-| Память | > 1,5 ГБ | Отключение LocalVQE при нехватке; модели маленькие (VAD ~2 МБ, LocalVQE 4,8 млн параметров) |
+| Parakeet writes Ukrainian speech "in Russian" | False drops | uk/ru are one group (Q7), already built in |
+| Short phrases: the language is not detected | False drops of short questions | R-05: do not drop < 3 words |
+| Synthetic voice ≠ live voice | The voice threshold does not fit | A threshold from H-2, a sensitivity slider in Audio |
+| LocalVQE (beta) distorts speech | Microphone WER grows | Compare WER with and without it; off by default if worse |
+| Memory | > 1.5 GB | Switch off LocalVQE when short of memory; the models are small (VAD ~2 MB, LocalVQE 4.8 M parameters) |
 
-## Готово, когда
-AC-01…AC-08 со свидетельствами в report.md, ревью без P0/P1, владелец подтвердил H-3.
+## Done when
+AC-01…AC-08 with evidence in report.md, a review without P0/P1, the owner confirmed H-3.

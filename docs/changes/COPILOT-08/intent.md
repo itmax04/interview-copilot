@@ -1,41 +1,41 @@
-# COPILOT-08: Intent — профили: резюме, инструкции, материалы, вопросы с ответами
+# COPILOT-08: Intent — profiles: résumé, instructions, materials, questions with answers
 
-ID: COPILOT-08-intent · Статус: **accepted** (H-0 2026-10-24: «начинай этап 1») · Версия: 1 · Дата: 2026-10-24 · Владелец: itmax04
-Связи: [spec.md](spec.md), [plan.md](plan.md)
+ID: COPILOT-08-intent · Status: **accepted** (H-0 2026-10-24: "start stage 1") · Version: 1 · Date: 2026-10-24 · Owner: itmax04
+Links: [spec.md](spec.md), [plan.md](plan.md)
 
-## Проблема
-Сведения о владельце живут в текстовых файлах папки профиля (`resume.md`, `stories.md`, `questions.yaml`), которые
-нужно править вручную; PDF и Word не читаются. Профиль один, у владельца — вымышленный пример. Указать модели, *как*
-отвечать, нельзя: всё, что в профиле, — данные, а не инструкции. Материалы (конспекты, документация) подключить некуда.
-Карточка базы показывается дословно, не под формулировку вопроса.
+## Problem
+The owner's details live in text files of the profile folder (`resume.md`, `stories.md`, `questions.yaml`) that
+have to be edited by hand; PDF and Word are not read. There is one profile, and the owner's is a made-up example. There is no way to tell the model *how*
+to answer: everything in the profile is data, not instructions. There is nowhere to attach materials (notes, documentation).
+A bank card is shown verbatim, not adapted to the wording of the question.
 
-## Желаемый результат
-Владелец создаёт профили под вакансии, загружает резюме, описание вакансии, материалы (PDF, Word, текст), пишет свои
-инструкции (общие и для профиля) и список примерных вопросов (файлом в свободной форме или в таблице), при желании с
-ответами. Приложение заранее готовит черновики ответов и формулировки на трёх языках. На интервью модель узнаёт похожий
-вопрос, опирается на ответ владельца и материалы, подстраивает ответ под точную формулировку и следует инструкциям.
+## Desired outcome
+The owner creates profiles for vacancies, uploads a résumé, a job description, materials (PDF, Word, text), writes their own
+instructions (general and per profile) and a list of sample questions (as a free-form file or in a table), optionally with
+answers. The app prepares draft answers and wordings in three languages in advance. In the interview the model recognizes a similar
+question, relies on the owner's answer and the materials, adapts the answer to the exact wording and follows the instructions.
 
-## Решения владельца (мозговой штурм 2026-10-24)
-| № | Вопрос | Решение |
+## Owner decisions (brainstorm 2026-10-24)
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Форматы | PDF, Word (.docx), текст (.txt, .md, .rtf). Сканы/OCR — нет |
-| Q2 | Где загружать | Окно «Профиль» (перетащить или «Загрузить…»), рядом — прочитанный текст, его можно править |
-| Q3 | Профилей | Несколько (под вакансии): своё резюме, вакансия, инструкции, материалы, вопросы; переключение в меню Profile |
-| Q4 | «Дополнительные подсказки» | Всё сразу: свои инструкции (стиль, акценты, указания — добавлять, менять, дополнять), факты о себе, вакансия, материалы по теме. Модель учитывает всё |
-| Q5 | Вопросы | Файл в свободной форме + таблица в окне профиля (добавить, исправить, удалить) |
-| Q6 | Похожий вопрос с ответом владельца | Модель подстраивает ответ владельца под формулировку и язык (~1 с) |
-| Q7 | Вопрос без ответа | Черновик заранее: модель готовит ответы, владелец смотрит, правит, подтверждает |
-| Q8 | Логика ответа | Есть в материалах — опираться на них, адаптируя; нет — импровизировать свободно, своими знаниями и контекстом; технические вопросы — как сейчас |
-| Q9 | Нет факта об опыте | **Импровизировать свободно** (в том числе опыт и цифры), не противореча материалам |
-| Q10 | Объём материалов | Десятки–сотни страниц: резюме и инструкции — в каждый запрос, из материалов — 3–5 похожих фрагментов (локальный поиск bge-m3) |
-| Q11 | Инструкции против встроенных правил | Побеждают инструкции владельца (стиль, длина, формат, акценты, язык); остаются только правила надёжности: «не подтверждать несказанное», «—» на не-вопрос |
-| Q12 | Нынешний профиль-пример | Удалить, начать с пустого |
-| Q13 | Разбор файла вопросов | Сначала локальные правила («?», нумерация, Q:/A:, «Вопрос/Ответ»), не вышло — моделью; результат — в таблицу на проверку |
-| Q14 | Формулировки | Да: модель добавляет 3–5 формулировок uk/ru/en к каждому вопросу (один раз), их видно и можно править |
-| Q15 | Инструкции | Общие (везде, и «Без профиля») + свои у профиля; в споре побеждает профиль |
-| Q16 | Модель подготовки | Цепочка из настроек (бесплатно), порциями с паузами из-за лимитов |
+| Q1 | Formats | PDF, Word (.docx), text (.txt, .md, .rtf). Scans/OCR — no |
+| Q2 | Where to upload | The "Profile" window (drag or "Upload…"), next to it — the extracted text, which can be edited |
+| Q3 | Profiles | Several (per vacancy): its own résumé, vacancy, instructions, materials, questions; switching in the Profile menu |
+| Q4 | "Additional hints" | Everything at once: own instructions (style, emphasis, directions — add, change, extend), facts about oneself, the vacancy, topic materials. The model takes everything into account |
+| Q5 | Questions | A free-form file + a table in the profile window (add, fix, delete) |
+| Q6 | A similar question with the owner's answer | The model adapts the owner's answer to the wording and language (~1 s) |
+| Q7 | A question without an answer | A draft in advance: the model prepares answers, the owner reviews, edits, confirms |
+| Q8 | Answer logic | If it is in the materials — rely on them, adapting; if not — improvise freely, with own knowledge and context; technical questions — as now |
+| Q9 | No fact about experience | **Improvise freely** (including experience and numbers), without contradicting the materials |
+| Q10 | Materials volume | Tens to hundreds of pages: the résumé and instructions — in every request, from the materials — 3–5 similar fragments (local bge-m3 search) |
+| Q11 | Instructions vs. built-in rules | The owner's instructions win (style, length, format, emphasis, language); only the reliability rules stay: "do not confirm what was not said", "—" for a non-question |
+| Q12 | The current example profile | Delete it, start empty |
+| Q13 | Parsing the questions file | Local rules first ("?", numbering, Q:/A:, "Вопрос/Ответ"), if that fails — with the model; the result goes to the table for review |
+| Q14 | Wordings | Yes: the model adds 3–5 uk/ru/en wordings to each question (once), they are visible and editable |
+| Q15 | Instructions | General (everywhere, including "No profile") + per profile; in a conflict the profile wins |
+| Q16 | Preparation model | The chain from the settings (free), in batches with pauses because of limits |
 
-## Границы
-Входит: профили, извлечение текста, окно «Профиль», инструкции, материалы с поиском, вопросы (импорт, таблица,
-формулировки, черновики), подстройка ответа, удаление примера, тесты, eval, живой прогон. Не входит: OCR сканов,
-синхронизация между Mac, новые зависимости (PDF — PDFKit, Word/RTF — AppKit, всё системное).
+## Scope
+In: profiles, text extraction, the "Profile" window, instructions, materials with search, questions (import, table,
+wordings, drafts), answer adaptation, removing the example, tests, evals, a live run. Out: OCR of scans,
+syncing between Macs, new dependencies (PDF — PDFKit, Word/RTF — AppKit, all system frameworks).

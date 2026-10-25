@@ -1,5 +1,5 @@
 {
-  "_comment": "Модели фильтров COPILOT-05 (R-08): официальные репозитории FluidInference на Hugging Face, закреплённая ревизия, SHA256 каждого файла. Установка: scripts/fetch-filter-models.py",
+  "_comment": "COPILOT-05 filter models (R-08): the official FluidInference repositories on Hugging Face, a pinned revision, the SHA256 of each file. Install: scripts/fetch-filter-models.py",
   "models": [
     {
       "repo": "FluidInference/silero-vad-coreml",

@@ -1,77 +1,77 @@
-# COPILOT-05: Спецификация — фильтр посторонней речи и языка
+# COPILOT-05: Specification — filtering extraneous speech and language
 
-ID: COPILOT-05-spec · Статус: **accepted** (2026-10-23, «да принимаю начинай первый этап») · Версия: 1 · Дата: 2026-10-23 · Владелец: itmax04
-Связи: [intent.md](intent.md) (решения Q1–Q16) · [plan.md](plan.md) · [handoff.md](handoff.md)
-Номера без префикса — этой задачи; прошлых — «01/», «03/», «04/». Требования прошлых задач действуют, кроме исключений ниже.
+ID: COPILOT-05-spec · Status: **accepted** (2026-10-23, "yes, I accept, start the first stage") · Version: 1 · Date: 2026-10-23 · Owner: itmax04
+Links: [intent.md](intent.md) (decisions Q1–Q16) · [plan.md](plan.md) · [handoff.md](handoff.md)
+Numbers without a prefix belong to this task; previous ones — "01/", "03/", "04/". Requirements of previous tasks apply, except for the exceptions below.
 
-## 1. Термины
-- **Канал звонка** — звук приложения созвона (Chrome/Zoom/Telegram) или «Весь системный звук». Источник речи интервьюеров.
-- **Канал микрофона** — микрофон Mac. Источник речи владельца; в режиме «Микрофон Mac» — и вопросов (самопроверка).
-- **Отпечаток голоса** — 192 числа (эмбеддинг CAM++) по образцу речи владельца; сравнение — косинусное сходство.
-- **Разрешённые языки** — uk+ru (группа), en; набор зависит от выбора Language (R-05).
-- **Отфильтрованная реплика** — итоговый текст, не прошедший фильтр; показывается серым с причиной, в подсказки не идёт.
+## 1. Terms
+- **Call channel** — the audio of the call app (Chrome/Zoom/Telegram) or "All system audio". The source of the interviewers' speech.
+- **Microphone channel** — the Mac microphone. The source of the owner's speech; in the "Mac microphone" mode — also of questions (self-check).
+- **Voiceprint** — 192 numbers (a CAM++ embedding) from a sample of the owner's speech; compared by cosine similarity.
+- **Allowed languages** — uk+ru (a group), en; the set depends on the Language choice (R-05).
+- **Filtered utterance** — a final text that did not pass the filter; shown in gray with a reason, does not go into hints.
 
-## 2. Сценарии
-- **S-01. ТВ на немецком.** Дано: «Микрофон Mac», Language = Українська. Когда: рядом говорит ТВ по-немецки.
-  Тогда: реплика ТВ серым «игнорировано: язык de», подсказка не появляется.
-- **S-02. Термины.** Дано: Language = Русский. Когда: «Как вы настраивали CI/CD и code review в GitLab?».
-  Тогда: реплика проходит, термины латиницей сохранены.
-- **S-03. Чужой голос рядом.** Дано: образец голоса записан, «Микрофон Mac». Когда: человек рядом говорит по-русски.
-  Тогда: серым «игнорировано: чужой голос».
-- **S-04. Английская фраза интервьюера.** Дано: созвон в Meet, Language = Русский. Когда: интервьюер говорит
-  «Let's continue in English. Tell me about your last project.» Тогда: реплика проходит (Q8), подсказка есть.
-- **S-05. Шум без речи.** Когда: клавиатура, музыка без слов, улица. Тогда: реплик нет (детектор речи).
-- **S-06. Эхо без наушников.** Дано: созвон, динамики Mac. Когда: интервьюер говорит, микрофон слышит динамики.
-  Тогда: эхо не расшифровывается как речь владельца; речь владельца — да.
-- **S-07. Ответ владельца как контекст.** Когда: интервьюер задаёт уточняющий вопрос после ответа владельца.
-  Тогда: модель получает последние реплики владельца и не повторяет сказанное; в панели их нет.
-- **S-08. Ошибка фильтра.** Когда: нужная реплика стала серой. Тогда: клик по серой строке или ⌃⌥↩ в течение 15 с —
-  ответ по ней.
-- **S-09. Образец голоса.** Когда: Settings → Audio → «Записать образец голоса», чтение текста 20–30 с.
-  Тогда: «Образец сохранён», есть «Перезаписать» и «Удалить»; звук образца после расчёта удалён.
+## 2. Scenarios
+- **S-01. A TV in German.** Given: "Mac microphone", Language = Українська. When: a TV speaks German nearby.
+  Then: the TV line is gray "ignored: language de", no hint appears.
+- **S-02. Terms.** Given: Language = Русский. When: "Как вы настраивали CI/CD и code review в GitLab?".
+  Then: the utterance passes, the Latin terms are kept.
+- **S-03. Another voice nearby.** Given: a voice sample is recorded, "Mac microphone". When: a person nearby speaks Russian.
+  Then: gray "ignored: other voice".
+- **S-04. An English phrase by the interviewer.** Given: a Meet call, Language = Русский. When: the interviewer says
+  "Let's continue in English. Tell me about your last project." Then: the utterance passes (Q8), there is a hint.
+- **S-05. Noise without speech.** When: a keyboard, music without words, a street. Then: no utterances (speech detector).
+- **S-06. Echo without headphones.** Given: a call, Mac speakers. When: the interviewer speaks, the microphone hears the speakers.
+  Then: the echo is not transcribed as the owner's speech; the owner's speech is.
+- **S-07. The owner's answer as context.** When: the interviewer asks a follow-up after the owner's answer.
+  Then: the model gets the owner's last lines and does not repeat what was said; they are not in the panel.
+- **S-08. A filter mistake.** When: a needed utterance became gray. Then: a click on the gray line or ⌃⌥↩ within 15 s —
+  an answer to it.
+- **S-09. Voice sample.** When: Settings → Audio → "Record a voice sample", reading a text for 20–30 s.
+  Then: "Sample saved", there are "Re-record" and "Delete"; the sample audio is deleted after the computation.
 
-## 3. Требования
-- **R-01. Два канала.** Канал звонка — как сейчас (01/R-01, 01/R-03), фильтры R-02 и R-05. Канал микрофона:
-  - на созвоне расшифровывается (исключение из 01/R-02), проходит R-02…R-05, результат — только контекст для подсказок (R-07);
-  - в режиме «Микрофон Mac» — источник вопросов, принимается только голос владельца (Q13);
-  - в ИИ-собеседовании (03/R-32) ответ владельца проходит тот же фильтр голоса.
-  Определение «владелец говорит» (01/R-02, S-07 TurnDetector) сохраняется.
-- **R-02. Детектор речи.** Silero VAD (FluidAudio `VadManager`, потоковый режим) вместо энергетического детектора
-  на обоих каналах; отрезки без речи не распознаются. Порог — по eval `filter`. Переключатель «Нейросетевой детектор речи».
-- **R-03. Отпечаток голоса.** Образец 20–30 с (текст на экране, uk/ru/en на выбор); CAM++ → эмбеддинг в
-  `…/InterviewCopilot/voice/owner.json`, звук образца не сохраняется. Фраза микрофона ≥ 1 с принимается, если сходство
-  ≥ порога (по eval, записывается в evals/README); короче 1 с — по сходству соседних фраз или как в R-05.
-  Без образца: только R-02, R-04, R-05 и подсказка «Запишите образец голоса» в Audio. Переключатель «Только мой голос».
-- **R-04. Шумо- и эхоподавление микрофона.** LocalVQE v1.3, потоковый режим 16 мс. Опорный сигнал для эха —
-  захваченный звук звонка, если идёт захват; иначе — только шумоподавление (A-2). Канал звонка не обрабатывается (Q14).
-  Переключатель «Шумо- и эхоподавление».
-- **R-05. Фильтр языка** (итоговый текст каждой реплики).
-  - Разрешено: Українська/Русский → {uk, ru}; English → {en}; Auto → {uk, ru, en} (Q7, Q12).
-  - Язык фразы: Apple `NLLanguageRecognizer` (на устройстве) + доля кириллицы/латиницы; uk и ru — одна группа.
-  - Латинские слова внутри фразы на разрешённом языке сохраняются всегда (Q9).
-  - Целиком английская фраза при uk/ru: в канале звонка проходит (Q8); в микрофоне и «Весь системный звук» — только
-    если ≤ 4 слов и все слова — термины из словаря: резюме, вакансия, `questions.yaml`, встроенный IT-список (`Resources/terms-en.txt`).
-  - Фраза короче 3 слов с неуверенным языком не отбрасывается (лучше пропустить, чем потерять вопрос).
-  - Переключатель «Фильтр языка».
-- **R-06. Отфильтрованное.** Серая строка в расшифровке с причиной («язык de», «чужой голос»); не идёт в определение
-  хода, подсказки, историю и контекст; S-08 — ответ по ней по запросу. В режиме созвона отфильтрованная речь микрофона
-  не показывается (речь владельца в панели не показывается — Q6).
-- **R-07. Контекст из речи владельца.** До 3 последних прошедших фильтр фраз владельца (≤ 600 символов) в промпте
-  отдельным блоком `<candidate_said>` — данные, а не инструкции (01/R-11), фильтр ПД (01/R-12).
-- **R-08. Модели.** Silero VAD, CAM++, LocalVQE v1.3 — официальные репозитории FluidInference на Hugging Face,
-  закреплённая ревизия и SHA256 в манифесте (как `parakeet-models.json`), установщик `scripts/fetch-filter-models.py`,
-  `ModelHub.offlineMode = true` при работе. Нет моделей → соответствующий фильтр выключен, в Audio — подсказка.
-- **R-09. Журнал.** Только числа: `filtered reason=lang|voice|vad channel=call|mic lang=… similarity=…`; текст не пишется (01/R-24).
-- **R-10. Настройки Audio.** Четыре переключателя (R-02…R-05), по умолчанию включены (Q10); кнопки образца голоса (S-09).
+## 3. Requirements
+- **R-01. Two channels.** The call channel — as now (01/R-01, 01/R-03), filters R-02 and R-05. The microphone channel:
+  - on a call it is transcribed (an exception to 01/R-02), passes R-02…R-05, the result is only hint context (R-07);
+  - in the "Mac microphone" mode — the source of questions, only the owner's voice is accepted (Q13);
+  - in the AI interview (03/R-32) the owner's answer passes the same voice filter.
+  The "the owner is speaking" detection (01/R-02, S-07 TurnDetector) stays.
+- **R-02. Speech detector.** Silero VAD (FluidAudio `VadManager`, streaming mode) instead of the energy detector
+  on both channels; segments without speech are not recognized. The threshold — by the `filter` eval. A "Neural speech detector" toggle.
+- **R-03. Voiceprint.** A 20–30 s sample (text on screen, uk/ru/en to choose); CAM++ → an embedding in
+  `…/InterviewCopilot/voice/owner.json`, the sample audio is not saved. A microphone phrase ≥ 1 s is accepted if the similarity
+  is ≥ the threshold (from the eval, recorded in evals/README); shorter than 1 s — by the similarity of neighboring phrases or as in R-05.
+  Without a sample: only R-02, R-04, R-05 and the hint "Record a voice sample" in Audio. A "Only my voice" toggle.
+- **R-04. Microphone noise and echo suppression.** LocalVQE v1.3, the 16 ms streaming mode. The echo reference signal is
+  the captured call audio if capture is running; otherwise — only noise suppression (A-2). The call channel is not processed (Q14).
+  A "Noise and echo suppression" toggle.
+- **R-05. Language filter** (the final text of each utterance).
+  - Allowed: Українська/Русский → {uk, ru}; English → {en}; Auto → {uk, ru, en} (Q7, Q12).
+  - Phrase language: Apple `NLLanguageRecognizer` (on device) + the share of Cyrillic/Latin; uk and ru are one group.
+  - Latin words inside a phrase in an allowed language are always kept (Q9).
+  - A whole English phrase with uk/ru: passes in the call channel (Q8); on the microphone and in "All system audio" — only
+    if ≤ 4 words and all words are dictionary terms: résumé, job, `questions.yaml`, a built-in IT list (`Resources/terms-en.txt`).
+  - A phrase shorter than 3 words with an uncertain language is not dropped (better to let it through than to lose a question).
+  - A "Language filter" toggle.
+- **R-06. Filtered content.** A gray line in the transcript with a reason ("language de", "other voice"); does not go into turn
+  detection, hints, history or context; S-08 — an answer to it on request. In call mode the filtered microphone speech
+  is not shown (the owner's speech is not shown in the panel — Q6).
+- **R-07. Context from the owner's speech.** Up to 3 of the owner's last phrases that passed the filter (≤ 600 characters) in the prompt
+  as a separate `<candidate_said>` block — data, not instructions (01/R-11), the PII filter (01/R-12).
+- **R-08. Models.** Silero VAD, CAM++, LocalVQE v1.3 — the official FluidInference repositories on Hugging Face,
+  a pinned revision and SHA256 in a manifest (like `parakeet-models.json`), the installer `scripts/fetch-filter-models.py`,
+  `ModelHub.offlineMode = true` at runtime. No models → the corresponding filter is off, with a hint in Audio.
+- **R-09. Log.** Numbers only: `filtered reason=lang|voice|vad channel=call|mic lang=… similarity=…`; no text is logged (01/R-24).
+- **R-10. Audio settings.** Four toggles (R-02…R-05), on by default (Q10); voice sample buttons (S-09).
 
-## 4. Критерии приёмки
-| AC | Критерий | Проверка |
+## 4. Acceptance criteria
+| AC | Criterion | Check |
 |---|---|---|
-| AC-01 | Чужой язык: на ≥ 30 синтетических смесях (вопрос uk/ru/en + ТВ de/fr/en, музыка, шум) отфильтровано ≥ 90% чужих фраз; нужных фраз отброшено ≤ 5% | eval `filter` |
-| AC-02 | Термины: ≥ 15 uk/ru фраз с английскими терминами — 0 отброшено, латиница сохранена | eval `filter` |
-| AC-03 | Голос: «владелец» (синтетический голос с образцом) принят ≥ 95%, другие голоса отклонены ≥ 90% | eval `filter` (голоса `say`) + H-2 на живом голосе |
-| AC-04 | Шум без речи: ≥ 20 записей — не больше 1 реплики | eval `filter` |
-| AC-05 | Задержка: канал звонка — медиана «конец речи → итог» не хуже 0.1.11 + 50 мс; канал микрофона — не больше +300 мс | `scripts/metrics.py`, тестовый звонок |
-| AC-06 | Память ≤ 1,5 ГБ за 10 минут со всеми фильтрами | `scripts/footprint-monitor.sh 10` |
-| AC-07 | Живой тест 10 мин (ТВ / человек рядом): владелец оценивает «посторонней речи в подсказках нет» ≥ 4 из 5 эпизодов | H-2 |
-| AC-08 | `swift test`, eval bank/turn (прежние пороги), secret scan 0, сборка и подпись | команды в report |
+| AC-01 | Foreign language: on ≥ 30 synthetic mixes (a uk/ru/en question + a de/fr/en TV, music, noise) ≥ 90% of foreign phrases are filtered; ≤ 5% of needed phrases dropped | `filter` eval |
+| AC-02 | Terms: ≥ 15 uk/ru phrases with English terms — 0 dropped, Latin script kept | `filter` eval |
+| AC-03 | Voice: the "owner" (a synthetic voice with a sample) accepted ≥ 95%, other voices rejected ≥ 90% | `filter` eval (`say` voices) + H-2 on the live voice |
+| AC-04 | Noise without speech: ≥ 20 recordings — no more than 1 utterance | `filter` eval |
+| AC-05 | Latency: call channel — the median "end of speech → final" no worse than 0.1.11 + 50 ms; microphone channel — no more than +300 ms | `scripts/metrics.py`, the test call |
+| AC-06 | Memory ≤ 1.5 GB over 10 minutes with all filters | `scripts/footprint-monitor.sh 10` |
+| AC-07 | A live 10-minute test (TV / a person nearby): the owner rates "no extraneous speech in hints" in ≥ 4 of 5 episodes | H-2 |
+| AC-08 | `swift test`, bank/turn evals (previous thresholds), secret scan 0, build and signing | commands in the report |

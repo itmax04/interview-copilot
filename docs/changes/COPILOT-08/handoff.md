@@ -1,93 +1,93 @@
-# Передача COPILOT-08
+# COPILOT-08 handoff
 
-ID: COPILOT-08-handoff · Статус: **этапы 1–3 готовы (0.6.0, build 26) — H-2: самопроверка владельца со своим профилем** · Обновлено: 2026-10-24
-Ветка: `feat/copilot-08-profiles` (от `feat/copilot-07-hardening` @ `ab4b53f`)
-Связи: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md)
+ID: COPILOT-08-handoff · Status: **stages 1–3 done (0.6.0, build 26) — H-2: the owner's self-check with their own profile** · Updated: 2026-10-24
+Branch: `feat/copilot-08-profiles` (from `feat/copilot-07-hardening` @ `ab4b53f`)
+Links: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md)
 
-## Сделано
-- 2026-10-24: мозговой штурм (Q1–Q16 в intent.md), intent/spec/plan; H-0 — «начинай этап 1».
-- Этап 1 (P-01, P-02), версия 0.5.0:
-  - `ProfileLibrary` (CopilotCore/Profiles): профили `profiles/<id>/` (700/600), создание, переименование, удаление,
-    загрузка файла в раздел с копией исходника в `sources/`, общие инструкции `instructions.md`; перенос старой папки
-    `profile/` — неизменённая копия примера удаляется (Q12), изменённая переносится целиком.
-  - `DocumentText`: PDF (PDFKit), .docx и .rtf (AppKit), .txt и .md; скан без текста, неизвестный формат и битый файл —
-    понятные ошибки. Новых зависимостей нет.
-  - Промпт: блок `<owner_instructions>` (общие + профиля) в конце системной части — важнее правил стиля/длины/формата/языка,
-    кроме правил надёжности; фильтр ПД применяется и к инструкциям; с инструкциями `max_tokens` подсказки 800 и строка
-    «язык из инструкций важнее». Нет факта — свободная импровизация (Q9) без противоречий профилю; карточка-основа —
-    «ваш подготовленный ответ, сохранить факты, подстроить формулировку».
-  - Окно «Профиль» (меню «Профиль: резюме, инструкции…», Profile → «Профили…», запуск `--profile`): выбор, «Новый…» (⌘N),
-    «Переименовать…», «Удалить…» с подтверждением; вкладки «Резюме», «Факты о себе», «Вакансия» — «Загрузить файл…» (⌘O),
-    перетаскивание, правка текста с автосохранением; «Инструкции» — профиля и общие; счётчик символов в каждом запросе
-    с предупреждением после 12 000.
-  - Меню Profile: список профилей, «Без профиля», «Профили…»; активный профиль сохраняется (`activeProfileID`).
-  - `--smoke-memory`: +4 сценария COPILOT-08 (без списков по инструкции, «не упоминать Kafka», факт из резюме, язык из инструкций).
-  - Тест `slowButStartedStreamIsNotTimedOut` больше не плавает: запас по времени (0,4 с при таймауте 1 с вместо 0,15/0,3).
+## Done
+- 2026-10-24: a brainstorm (Q1–Q16 in intent.md), intent/spec/plan; H-0 — "start stage 1".
+- Stage 1 (P-01, P-02), version 0.5.0:
+  - `ProfileLibrary` (CopilotCore/Profiles): profiles `profiles/<id>/` (700/600), creating, renaming, deleting,
+    uploading a file into a section with a copy of the source in `sources/`, general instructions `instructions.md`; moving the old
+    `profile/` folder — an unchanged copy of the example is deleted (Q12), a changed one is moved as a whole.
+  - `DocumentText`: PDF (PDFKit), .docx and .rtf (AppKit), .txt and .md; a scan without text, an unknown format and a broken file —
+    clear errors. No new dependencies.
+  - Prompt: an `<owner_instructions>` block (general + profile) at the end of the system part — more important than the style/length/format/language rules,
+    except the reliability rules; the PII filter applies to instructions too; with instructions the hint's `max_tokens` is 800 and a line
+    "the language from the instructions wins". No fact — free improvisation (Q9) without contradicting the profile; a base card —
+    "your prepared answer, keep the facts, adapt the wording".
+  - The "Profile" window (the menu "Profile: résumé, instructions…", Profile → "Profiles…", launch with `--profile`): choosing, "New…" (⌘N),
+    "Rename…", "Delete…" with confirmation; the "Résumé", "Facts about me", "Vacancy" tabs — "Upload file…" (⌘O),
+    dragging, editing text with autosave; "Instructions" — profile and general; a character counter per request
+    with a warning after 12,000.
+  - The Profile menu: the list of profiles, "No profile", "Profiles…"; the active profile is saved (`activeProfileID`).
+  - `--smoke-memory`: +4 COPILOT-08 scenarios (no lists per the instruction, "do not mention Kafka", a fact from the résumé, the language from the instructions).
+  - The `slowButStartedStreamIsNotTimedOut` test is no longer flaky: a time margin (0.4 s with a 1 s timeout instead of 0.15/0.3).
 
-- Этап 2 (P-03), версия 0.5.1 — материалы:
-  - `Materials.swift`: `MaterialChunker` (абзац = фрагмент, короткие куски склеиваются до ~200 символов, лимит 800; длинный
-    абзац — по предложениям), `MaterialIndex` (до 4 фрагментов, сходство ≥ 0,47, ≤ 3 200 символов), `MaterialIndexBuilder`
-    (пачки по 8 с прогрессом и отменой, кэш векторов — бинарный plist в профиле, 600, чистится от удалённых фрагментов).
-  - `ProfileLibrary`: материалы в `materials/<файл>.md`, исходники в `materials/sources/`; добавить, удалить, прочитать.
-  - `BankController.lookup`: один эмбеддинг вопроса — и база, и материалы; индекс перестраивается в фоне при добавлении,
-    удалении, смене профиля и модели. В промпт — блок `<materials>` (данные, фильтр ПД) и правило «использовать, если по теме».
-    Ответ сильной моделью (⌃⌥C) получает те же фрагменты; «Без профиля» — без материалов.
-  - Окно «Профиль» → «Материалы»: «Добавить файлы…» (несколько сразу, ⌘O), перетаскивание, просмотр прочитанного текста,
-    «Удалить…» с подтверждением, статус индексации.
-  - eval `materials` (в прогоне по умолчанию): 23/24 найдено, 2/8 лишнее — PASS. `--smoke-memory`: +2 сценария (факт из
-    конспекта, чужой фрагмент игнорируется); `INTERVIEWCOPILOT_SMOKE_ONLY`, `INTERVIEWCOPILOT_SMOKE_FULL` для разбора.
+- Stage 2 (P-03), version 0.5.1 — materials:
+  - `Materials.swift`: `MaterialChunker` (a paragraph = a fragment, short pieces are glued up to ~200 characters, a limit of 800; a long
+    paragraph — by sentences), `MaterialIndex` (up to 4 fragments, similarity ≥ 0.47, ≤ 3,200 characters), `MaterialIndexBuilder`
+    (batches of 8 with progress and cancellation, a vector cache — a binary plist in the profile, 600, cleaned of deleted fragments).
+  - `ProfileLibrary`: materials in `materials/<file>.md`, sources in `materials/sources/`; add, delete, read.
+  - `BankController.lookup`: one question embedding — both for the bank and the materials; the index is rebuilt in the background on adding,
+    deleting, a profile change and a model change. The prompt gets a `<materials>` block (data, the PII filter) and the rule "use if on topic".
+    The strong-model answer (⌃⌥C) gets the same fragments; "No profile" — no materials.
+  - The "Profile" window → "Materials": "Add files…" (several at once, ⌘O), dragging, viewing the extracted text,
+    "Delete…" with confirmation, the indexing status.
+  - The `materials` eval (in the default run): 23/24 found, 2/8 extra — PASS. `--smoke-memory`: +2 scenarios (a fact from
+    notes, an unrelated fragment is ignored); `INTERVIEWCOPILOT_SMOKE_ONLY`, `INTERVIEWCOPILOT_SMOKE_FULL` for analysis.
 
-- Этап 3 (P-04), версия 0.6.0 — вопросы:
-  - `BankCard.status` (`none` / `own` / `draft` / `approved`) и `prepared`; вопрос без ответа — правильная карточка, в поиск
-    не идёт. `QuestionBankWriter` — запись `questions.yaml` (тот же формат, ответы блоком `|`), старые файлы читаются.
-  - `QuestionImport`: правила — метки Q/A, «Вопрос/Ответ», «П/В» (uk), таблица текстом (Tab, « | », «;»), нумерованный
-    список, заголовки Markdown, строки с «?»; не подошли — модель по частям ≤ 6 000 символов; повторы пропускаются.
-  - `QuestionPreparation`: формулировки uk/ru/en пачками по 8, черновики пачками по 4 (профиль, инструкции, до 4 фрагментов
-    материалов на вопрос); результат — по id в актуальную базу, ответ владельца и правки во время подготовки не трогаются.
-  - `AnswerRouter`: «Bank + hint» — найденный ответ владельца идёт в модель основой («сохранить факты, подстроить
-    формулировку и язык»); без моделей — дословно; «Question bank only» — дословно.
-  - Окно «Профиль» → «Вопросы»: список со статусами и числом формулировок, правка вопроса/ответа/формулировок с
-    автосохранением (правка черновика делает его «вашим»), «Импорт файла…» (⌘I) с проверкой найденного, «Добавить вопрос»,
-    «Подготовить» с прогрессом и «Остановить», «Подтвердить черновики», предупреждение о неподготовленных.
-  - `--smoke-prepare` (формулировки, черновики, сохранность ответа, поиск bge-m3 на других языках), сценарий подстройки в
+- Stage 3 (P-04), version 0.6.0 — questions:
+  - `BankCard.status` (`none` / `own` / `draft` / `approved`) and `prepared`; a question without an answer is a valid card that does not go
+    into search. `QuestionBankWriter` — writing `questions.yaml` (the same format, answers as a `|` block), old files are readable.
+  - `QuestionImport`: rules — Q/A labels, "Вопрос/Ответ", "П/В" (uk), a text table (Tab, " | ", ";"), a numbered
+    list, Markdown headings, lines with "?"; if none fit — the model in parts of ≤ 6,000 characters; duplicates are skipped.
+  - `QuestionPreparation`: uk/ru/en wordings in batches of 8, drafts in batches of 4 (profile, instructions, up to 4 material
+    fragments per question); the result goes by id into the current bank, the owner's answer and edits during preparation are not touched.
+  - `AnswerRouter`: "Bank + hint" — the owner's answer that was found goes to the model as the basis ("keep the facts, adapt the
+    wording and language"); without models — verbatim; "Question bank only" — verbatim.
+  - The "Profile" window → "Questions": a list with statuses and the number of wordings, editing the question/answer/wordings with
+    autosave (editing a draft makes it "yours"), "Import file…" (⌘I) with a review of what was found, "Add question",
+    "Prepare" with progress and "Stop", "Approve drafts", a warning about unprepared ones.
+  - `--smoke-prepare` (wordings, drafts, keeping the answer, bge-m3 search in other languages), an adaptation scenario in
     `--smoke-memory`; `copilot-eval bank --first-only`.
 
-## Решения исполнителя
-- Подготовка — по кнопке, не сама после импорта: владелец выбрал «черновик заранее, смотрю и подтверждаю» (Q7), а запросы
-  тратят бесплатные лимиты. Вместо автозапуска — заметное предупреждение: eval показал, что без формулировок поиск вдвое слабее.
-- Режимы «Bank + hint» и «Generate every answer» теперь отвечают одинаково при наличии моделей (обе — подстройка); различие
-  осталось без моделей. Режим не удалён: старые настройки владельца читаются без сброса.
-- Тест `errorStartsNextImmediately`: порог 1 → 3 с (смысл — «не ждать hedgeAfter = 5 с»); под нагрузкой было 1,1 с.
-- Нарезка «абзац = фрагмент»: склейка до 800 смешивала темы соседних абзацев (eval: 8 фрагментов, 22/24 → 16 и 24/24 при 0,45).
-- Порог 0,47 (а не 0,45): лишние фрагменты у вопросов не по теме 4/8 → 2/8 ценой одного промаха (редкий термин ru↔uk).
-- Пачки эмбеддингов по 8: вопрос на интервью ждёт индексацию не дольше одной пачки (~0,4 с) — замок модели общий.
-- Скорость индексации ~55 мс на фрагмент (M1): 300 страниц (~1 900 фрагментов) — около 2 минут в фоне, один раз; дальше — кэш.
-- «Факты о себе» = прежний `stories.md` (тег `<stories>` в промпте): совместимость с профилями COPILOT-01.
-- Инструкции — в конце системной части (последними, после профиля): живой прогон 07 показал, что указания ближе к концу
-  модель выполняет надёжнее.
-- Последний профиль не удаляется «в пустоту»: вместо него создаётся пустой «Мой профиль».
-- Индекс базы прежнего профиля сбрасывается при переключении и не применяется, если профиль сменили во время пересчёта.
-- Проверка ответа «1,2 млн» в сценарии принимает и «мільйона»: первый прогон 27/30 — все три FAIL были ошибкой проверки.
+## Executor decisions
+- Preparation is by a button, not automatic after the import: the owner chose "a draft in advance, I review and confirm" (Q7), and requests
+  spend free limits. Instead of an automatic start — a visible warning: the eval showed that without wordings the search is twice as weak.
+- The "Bank + hint" and "Generate every answer" modes now answer the same way when models are available (both adapt); the difference
+  remains without models. The mode was not removed: the owner's old settings are read without a reset.
+- The `errorStartsNextImmediately` test: the threshold 1 → 3 s (the point is "do not wait for hedgeAfter = 5 s"); under load it was 1.1 s.
+- Chunking "a paragraph = a fragment": gluing up to 800 mixed the topics of neighboring paragraphs (eval: 8 fragments, 22/24 → 16 and 24/24 at 0.45).
+- The 0.47 threshold (not 0.45): extra fragments for off-topic questions 4/8 → 2/8 at the cost of one miss (a rare ru↔uk term).
+- Embedding batches of 8: a question in an interview waits for the indexing no longer than one batch (~0.4 s) — the model lock is shared.
+- Indexing speed ~55 ms per fragment (M1): 300 pages (~1,900 fragments) — about 2 minutes in the background, once; then — the cache.
+- "Facts about me" = the former `stories.md` (the `<stories>` tag in the prompt): compatibility with COPILOT-01 profiles.
+- Instructions are at the end of the system part (last, after the profile): the 07 live run showed that the model follows instructions
+  closer to the end more reliably.
+- The last profile is not deleted "into nothing": an empty "My profile" is created instead.
+- The bank index of the previous profile is reset on switching and is not applied if the profile changed during the rebuild.
+- The answer check "1,2 млн" in the scenario also accepts "мільйона": the first run 27/30 — all three FAILs were check errors.
 
-## Проверки
-| Шаг | Команда | Результат |
+## Checks
+| Step | Command | Result |
 |---|---|---|
-| P-01/P-02 | `swift test` ×3 | 255 тестов PASS (+10: профили, перенос примера, PDF/Word/RTF/TXT/MD, скан, импорт, инструкции, настройки) |
-| P-01 | `scripts/run-evals.sh` | turn 0%/0% · bank 94,9%/0% · filter-text 214/214 · memory 8/8, 0/2 — PASS |
+| P-01/P-02 | `swift test` ×3 | 255 tests PASS (+10: profiles, moving the example, PDF/Word/RTF/TXT/MD, scan, import, instructions, settings) |
+| P-01 | `scripts/run-evals.sh` | turn 0%/0% · bank 94.9%/0% · filter-text 214/214 · memory 8/8, 0/2 — PASS |
 | P-01 | `scripts/secret-scan.sh` | 0 findings |
-| P-01 | `--smoke-memory 3` → `2` | 27/30 (3 — ошибка проверки) → **20/20** после исправления проверки |
+| P-01 | `--smoke-memory 3` → `2` | 27/30 (3 — check errors) → **20/20** after fixing the check |
 | P-02 | `scripts/build-app.sh` | OK |
-| P-02 | окно «Профиль» вживую | NOT RUN — H-1, владелец |
-| P-03 | `swift test` | 260 тестов PASS (+5: нарезка, индекс и кэш, бюджет фрагментов, материалы в профиле, блок в промпте) |
-| P-03 | `scripts/run-evals.sh` | turn, bank, filter-text, memory без изменений; **materials 23/24, 2/8 — PASS** |
-| P-03 | `--smoke-memory 2` | 21/24 → 24/24: 2 FAIL — ошибка проверки («трьох» ≠ «три»), 1 — лимиты Groq/Gemini |
+| P-02 | the "Profile" window live | NOT RUN — H-1, owner |
+| P-03 | `swift test` | 260 tests PASS (+5: chunking, index and cache, fragment budget, materials in the profile, the block in the prompt) |
+| P-03 | `scripts/run-evals.sh` | turn, bank, filter-text, memory unchanged; **materials 23/24, 2/8 — PASS** |
+| P-03 | `--smoke-memory 2` | 21/24 → 24/24: 2 FAILs — check errors ("трьох" ≠ "три"), 1 — Groq/Gemini limits |
 | P-03 | `scripts/secret-scan.sh` | 0 findings |
-| P-04 | `swift test` ×3 | 268 тестов PASS (+8: формат и статусы, 7 форматов импорта, разбор моделью, слияние, формулировки, черновики, запрос, ChainText) |
-| P-04 | `copilot-eval bank --first-only` | одна формулировка на карточку — top-1 **48,7%** (порог 0,74; 79,5% при 0,65) против **94,9%** с формулировками на трёх языках |
-| P-04 | `--smoke-prepare` | 7/7: формулировки uk/ru/en, черновики без списков по инструкции, ваш ответ цел, поиск en/ru/en → нужная карточка (0,97 / 0,81 / 0,80) |
-| P-04 | `--smoke-memory 2` | **26/26** (в т. ч. подстройка ответа владельца на другой язык с сохранением цифр 4/4) |
-| P-04 | `scripts/run-evals.sh`, `secret-scan.sh` | все PASS, 0 findings |
+| P-04 | `swift test` ×3 | 268 tests PASS (+8: format and statuses, 7 import formats, parsing with the model, merging, wordings, drafts, request, ChainText) |
+| P-04 | `copilot-eval bank --first-only` | one wording per card — top-1 **48.7%** (threshold 0.74; 79.5% at 0.65) versus **94.9%** with wordings in three languages |
+| P-04 | `--smoke-prepare` | 7/7: uk/ru/en wordings, drafts without lists per the instruction, your answer intact, en/ru/en search → the right card (0.97 / 0.81 / 0.80) |
+| P-04 | `--smoke-memory 2` | **26/26** (including adapting the owner's answer to another language with the numbers kept, 4/4) |
+| P-04 | `scripts/run-evals.sh`, `secret-scan.sh` | all PASS, 0 findings |
 
-## Следующий шаг
-H-2 (AC-08): владелец в 0.6.0 загружает резюме, инструкции, материалы и 10 вопросов (файлом), «Подготовить», проверяет
-черновики, затем самопроверка в «Микрофон Mac». После приёмки — P-05 (финальная проверка, слияние по решению владельца).
+## Next step
+H-2 (AC-08): in 0.6.0 the owner uploads a résumé, instructions, materials and 10 questions (as a file), "Prepare", reviews
+the drafts, then a self-check in "Mac microphone". After acceptance — P-05 (the final check, merging per the owner's decision).

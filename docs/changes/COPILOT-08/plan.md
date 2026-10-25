@@ -1,16 +1,16 @@
-# COPILOT-08: План
+# COPILOT-08: Plan
 
-ID: COPILOT-08-plan · Статус: **accepted** (2026-10-24) · Дата: 2026-10-24
-Связи: [intent.md](intent.md) · [spec.md](spec.md)
+ID: COPILOT-08-plan · Status: **accepted** (2026-10-24) · Date: 2026-10-24
+Links: [intent.md](intent.md) · [spec.md](spec.md)
 
-| Шаг | Что | Требования | Проверка |
+| Step | What | Requirements | Check |
 |---|---|---|---|
-| H-0 | Владелец подтверждает intent/spec | — | ответ владельца |
-| P-01 | Этап 1. Профили на диске, перенос/удаление примера, извлечение текста PDF/Word/RTF/текст, общие и профильные инструкции в промпте, новая логика ответа | R-01, R-02, R-04, R-05, R-10 | `swift test`, `--smoke-memory` (инструкции) |
-| P-02 | Окно «Профиль»: профили, резюме, вакансия, инструкции, загрузка и правка текста; меню Profile | R-03 | `swift test`, сборка; H-1 — владелец загружает своё резюме |
-| P-03 | Этап 2. Материалы: фрагменты, индекс bge-m3, блок `<materials>`; eval `materials` | R-06 | eval, `swift test` |
-| P-04 | Этап 3. Вопросы: импорт (правила + модель), таблица, подготовка (формулировки, черновики), подстройка карточки | R-07, R-08, R-09 | eval `bank`, `swift test`, `--smoke-memory` |
-| P-05 | Полная проверка, версия, handoff; H-2 — живая самопроверка владельца со своим профилем | все | полная проверка CLAUDE.md, AC-08 |
+| H-0 | The owner confirms intent/spec | — | the owner's answer |
+| P-01 | Stage 1. Profiles on disk, moving/removing the example, PDF/Word/RTF/text extraction, general and profile instructions in the prompt, the new answer logic | R-01, R-02, R-04, R-05, R-10 | `swift test`, `--smoke-memory` (instructions) |
+| P-02 | The "Profile" window: profiles, résumé, vacancy, instructions, uploading and editing text; the Profile menu | R-03 | `swift test`, build; H-1 — the owner uploads their résumé |
+| P-03 | Stage 2. Materials: fragments, a bge-m3 index, the `<materials>` block; the `materials` eval | R-06 | eval, `swift test` |
+| P-04 | Stage 3. Questions: import (rules + model), table, preparation (wordings, drafts), card adaptation | R-07, R-08, R-09 | the `bank` eval, `swift test`, `--smoke-memory` |
+| P-05 | Full check, version, handoff; H-2 — the owner's live self-check with their own profile | all | the full CLAUDE.md check, AC-08 |
 
-Риски: сложная вёрстка PDF (колонки) даёт перемешанный текст — его можно поправить в окне; большие материалы — только
-фрагменты, без полного текста; лимиты Groq при подготовке сотен вопросов — порции и паузы, черновики можно готовить частями.
+Risks: complex PDF layout (columns) gives mixed-up text — it can be fixed in the window; large materials — only
+fragments, no full text; Groq limits while preparing hundreds of questions — batches and pauses, drafts can be prepared in parts.

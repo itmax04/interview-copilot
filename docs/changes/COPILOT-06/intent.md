@@ -1,25 +1,25 @@
-# COPILOT-06: Intent — память интервью
+# COPILOT-06: Intent — interview memory
 
-ID: COPILOT-06-intent · Статус: **accepted** (2026-10-23, ответы владельца на 4 вопроса) · Версия: 1 · Дата: 2026-10-23 · Владелец: itmax04
-Связи: [spec.md](spec.md), [handoff.md](handoff.md), [COPILOT-05](../COPILOT-05/spec.md) (речь владельца, R-07)
+ID: COPILOT-06-intent · Status: **accepted** (2026-10-23, the owner's answers to 4 questions) · Version: 1 · Date: 2026-10-23 · Owner: itmax04
+Links: [spec.md](spec.md), [handoff.md](handoff.md), [COPILOT-05](../COPILOT-05/spec.md) (the owner's speech, R-07)
 
-## Проблема
-Подсказка учитывает только текущий вопрос, 6 последних реплик интервьюера и 3 последние фразы владельца. Через 20–30 минут
-интервьюер возвращается к теме («вернёмся к вашему платёжному модулю») — модель уже не знает, что было сказано.
+## Problem
+A hint takes into account only the current question, the interviewer's 6 last lines and the owner's 3 last phrases. After 20–30 minutes
+the interviewer returns to a topic ("let's get back to your payment module") — the model no longer knows what was said.
 
-## Желаемый результат
-Модель воспринимает интервью как один разговор: помнит вопросы и ответы с начала сессии, находит нужный фрагмент при
-возврате к теме, не противоречит сказанному и не выдумывает прошлые ответы, которых нет в истории.
+## Desired outcome
+The model treats the interview as one conversation: it remembers the questions and answers from the start of the session, finds the right fragment when
+a topic comes back, does not contradict what was said and does not invent past answers that are not in the history.
 
-## Решения владельца (2026-10-23)
-| № | Вопрос | Решение |
+## Owner decisions (2026-10-23)
+| # | Question | Decision |
 |---|---|---|
-| Q1 | Что делать с памятью после интервью | Сохранять в историю сессий (локально, срок R-18 — 30 дней); **меняет решение Q6 COPILOT-05** — речь владельца теперь в истории |
-| Q2 | Границы сессии | Автоматически (запуск, смена приложения звонка, тишина > 30 мин) + пункт меню «Новое интервью» |
-| Q3 | Сводка фактов моделью | Нет — только поиск по реально сказанному (bge-m3, локально), без лишних запросов |
-| Q4 | Объём истории в запросе | Средне: 4 последних обмена целиком + до 3 найденных старых (~+1,5 тыс. токенов) |
+| Q1 | What to do with the memory after the interview | Save it in the session history (locally, retention R-18 — 30 days); **changes decision Q6 of COPILOT-05** — the owner's speech is now in the history |
+| Q2 | Session boundaries | Automatic (launch, a change of the call app, silence > 30 min) + a "New interview" menu item |
+| Q3 | A fact summary by the model | No — only search over what was actually said (bge-m3, locally), no extra requests |
+| Q4 | History size in a request | Medium: the 4 last exchanges in full + up to 3 found older ones (~+1.5 k tokens) |
 
-## Границы
-Входит: обмены «вопрос → ответ владельца → подсказка», короткая и долгая память, отсылки к прошлому, история сессий,
-«Новое интервью», eval `memory`. Не входит: сводка моделью, ответы владельца в ИИ-собеседовании (идут своим путём, 03/R-32),
-показ обменов в окне истории (данные — в JSON сессии).
+## Scope
+In: "question → the owner's answer → hint" exchanges, short and long memory, references to the past, session history,
+"New interview", the `memory` eval. Out: a summary by the model, the owner's answers in the AI interview (they go their own way, 03/R-32),
+showing exchanges in the history window (the data is in the session JSON).

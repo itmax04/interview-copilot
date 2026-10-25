@@ -1,75 +1,75 @@
-# COPILOT-09: Спецификация — живой помощник уровня ParakeetAI
+# COPILOT-09: Specification — a live assistant on the ParakeetAI level
 
-ID: COPILOT-09-spec · Статус: **accepted** (2026-10-24) · Версия: 1 · Дата: 2026-10-24 · Владелец: itmax04
-Связи: [intent.md](intent.md) · [plan.md](plan.md)
+ID: COPILOT-09-spec · Status: **accepted** (2026-10-24) · Version: 1 · Date: 2026-10-24 · Owner: itmax04
+Links: [intent.md](intent.md) · [plan.md](plan.md)
 
-## Требования
-### Сессия (этап 1)
-- **R-01. Мастер «Создать сессию»** (меню, ⌃⌥N, уведомление R-05): шаг «Детали» — тип Interview / Regular / Mock, профиль,
-  компания, вакансия (текст или «Вставить ссылку на вакансию» R-04); шаг «Настройки» — язык, модель (первая в цепочке),
-  настройки ответа (R-12), инструкции на сессию, Auto Generate, «Сохранять расшифровку», «Разбор после End», план длительности.
-  Черновик хранится при переходах между шагами; последние значения — по умолчанию для следующей сессии.
-- **R-02. Жизненный цикл**: нет сессии → не слушаем (меню «Создать сессию…»); Start — захват и распознавание; End — стоп,
-  сохранение по выбору, разбор в фоне. Состояния: draft, starting, active, ending, ended, failed — с понятной ошибкой.
-  «Новое интервью» заменяется на End + новая сессия. Таймер в оверлее; план — предупреждение за 5 минут.
-- **R-03. Проверка перед стартом**: микрофон (уровень), звук звонка (есть ли сигнал в выбранном приложении), модель
-  распознавания, ключи моделей, разрешение на снимок экрана — отдельными строками с причиной и действием «Исправить».
-- **R-04. Импорт вакансии по ссылке**: загрузка страницы (URLSession, без входа), текст страницы → модель → компания и
-  описание; ошибка или страница со входом (LinkedIn) — «вставьте текст вакансии».
-- **R-05. Автоопределение звонка**: когда в Zoom / Meet (Chrome) / Telegram появляется звук звонка, а сессии нет —
-  уведомление «Начать сессию?» с последними настройками (не чаще раза в 10 минут на приложение).
-- **R-06. Типы**: Interview — как сейчас (резюме, карточки, материалы); Regular — «что сказать» от первого лица по теме,
-  инструкциям и материалам, без резюме и карточек, разбор — сводка и договорённости; Mock — запуск ИИ-собеседования.
+## Requirements
+### Session (stage 1)
+- **R-01. The "Create session" wizard** (menu, ⌃⌥N, the R-05 notification): the "Details" step — the Interview / Regular / Mock type, the profile,
+  the company, the vacancy (text or "Paste a vacancy link", R-04); the "Settings" step — the language, the model (the first in the chain),
+  answer settings (R-12), session instructions, Auto Generate, "Save the transcript", "Review after End", a duration plan.
+  The draft is kept when moving between steps; the last values are the defaults for the next session.
+- **R-02. Lifecycle**: no session → not listening (the menu "Create session…"); Start — capture and recognition; End — stop,
+  saving as chosen, the review in the background. States: draft, starting, active, ending, ended, failed — with a clear error.
+  "New interview" is replaced by End + a new session. A timer in the overlay; a plan — a warning 5 minutes before.
+- **R-03. A pre-start check**: the microphone (level), the call audio (whether there is a signal in the selected app), the recognition
+  model, the model keys, the screen recording permission — separate lines with a reason and a "Fix" action.
+- **R-04. Importing a vacancy from a link**: loading the page (URLSession, no sign-in), the page text → the model → the company and
+  the description; an error or a page behind a sign-in (LinkedIn) — "paste the vacancy text".
+- **R-05. Call auto-detection**: when call audio appears in Zoom / Meet (Chrome) / Telegram and there is no session —
+  a notification "Start a session?" with the last settings (no more than once in 10 minutes per app).
+- **R-06. Types**: Interview — as now (résumé, cards, materials); Regular — "what to say" in the first person on the topic,
+  instructions and materials, without the résumé and cards, the review — a summary and agreements; Mock — launching the AI interview.
 
-### Живой оверлей (этап 2)
-- **R-07. Раскладка**: панель действий (индикаторы микрофона и звонка, Answer ⌘↩, Screenshot ⌘⇧↩, Chat ⌘⇧Space, переместить,
-  свернуть, таймер, меню ⋮, End); строка расшифровки (последняя реплика, разворачивается в список, «Clear» ⌘⇧⌫);
-  статус распознавания вопроса; карточка ответа: «Вопрос: <кратко>», ответ, ←/→ (⌘←/→) по истории, копировать, развернуть.
-- **R-08. Состояния**: «Слушаю», «Проверяю…» (идёт пауза хода / опережающий запрос), «Вопрос найден», «Не вопрос»,
-  «Готовлю ответ…» (у нового запроса свой заголовок; прошлый ответ — приглушён и подписан «предыдущий»), «Ошибка» с
-  причиной и «Повторить»; источник: «нет сигнала N с», «распознавание перезапускается». Только запрос-владелец меняет карточку.
-- **R-09. История ответов** сессии: ←/→, позиция «3 / 7»; новый ответ при просмотре старого — значок «новый ответ ↓»,
-  без прыжка. Прокрутка при генерации — следовать, пока пользователь не прокрутил вверх.
-- **R-10. Chat** (⌘⇧Space, поле в оверлее, фокус только при открытии): новый вопрос; уточнение текущего («короче», «без Kafka»)
-  — новая версия того же вопроса; быстрые кнопки «Короче / Подробнее / Пример»; «/всё время …» — указание на сессию
-  (значок в оверлее, снимается кликом).
-- **R-11. Меню оверлея**: Auto Generate, язык, масштаб +/−/сброс, «На другой экран», Private (R-17), «Завершить сессию».
-  ⌘-клавиши — только при активной сессии; ⌃⌥ остаются.
+### Live overlay (stage 2)
+- **R-07. Layout**: an action bar (microphone and call indicators, Answer ⌘↩, Screenshot ⌘⇧↩, Chat ⌘⇧Space, move,
+  collapse, timer, the ⋮ menu, End); a transcript line (the last line, expands into a list, "Clear" ⌘⇧⌫);
+  the question detection status; the answer card: "Question: <short>", the answer, ←/→ (⌘←/→) through the history, copy, expand.
+- **R-08. States**: "Listening", "Checking…" (a turn pause / a speculative request is running), "Question detected", "Not a question",
+  "Preparing an answer…" (a new request has its own title; the previous answer is dimmed and labeled "previous"), "Error" with
+  a reason and "Retry"; the source: "no signal for N s", "recognition is restarting". Only the owning request changes the card.
+- **R-09. The session answer history**: ←/→, the position "3 / 7"; a new answer while viewing an old one — a "new answer ↓" badge,
+  without a jump. Scrolling during generation — follow until the user scrolls up.
+- **R-10. Chat** (⌘⇧Space, a field in the overlay, focus only when opened): a new question; refining the current one ("shorter", "without Kafka")
+  — a new version of the same question; quick buttons "Shorter / More detail / Example"; "/always …" — a session instruction
+  (a badge in the overlay, removed with a click).
+- **R-11. The overlay menu**: Auto Generate, language, scale +/−/reset, "Move to another display", Private (R-17), "End session".
+  ⌘ keys — only during an active session; ⌃⌥ stay.
 
-### Ответы (этап 3)
-- **R-12. Настройки ответа**: формат (сценарий + пункты / только пункты / сплошной сценарий), длина (короткий / сбалансированный
-  / подробный), тон (формальный / нейтральный / дружелюбный); живой предпросмотр — ответ модели на пример выбранного типа
-  вопроса (поведенческий, технический, о себе) по активному профилю; «Сохранить» (сессия) и «По умолчанию».
-  Инструкции владельца важнее (08/R-04).
+### Answers (stage 3)
+- **R-12. Answer settings**: format (script + bullets / bullets only / a continuous script), length (short / balanced
+  / detailed), tone (formal / neutral / friendly); a live preview — the model's answer to a sample of the selected question
+  type (behavioral, technical, about yourself) based on the active profile; "Save" (session) and "Default".
+  The owner's instructions take precedence (08/R-04).
 
-### Разбор (этап 4)
-- **R-13. После End** в фоне: комментарий ИИ к каждому вашему ответу (что хорошо, чего не хватило, как сказать лучше),
-  общая сводка (темы, сильные и слабые места, следующие шаги; для Regular — сводка и договорённости).
-- **R-14. Окно сессии**: вкладки «Сводка» (вопрос → ваш ответ → комментарий → показанная подсказка), «Расшифровка»
-  (Интервьюер / Вы, время, подсказки отдельно), «Спросить ИИ» (чат по этой сессии). Прогресс разбора, ошибка не прячет расшифровку.
+### Review (stage 4)
+- **R-13. After End** in the background: an AI comment on each of your answers (what was good, what was missing, how to say it better),
+  an overall summary (topics, strengths and weaknesses, next steps; for Regular — a summary and agreements).
+- **R-14. The session window**: the tabs "Summary" (question → your answer → comment → the hint shown), "Transcript"
+  (Interviewer / You, time, hints separately), "Ask AI" (a chat about this session). Review progress; an error does not hide the transcript.
 
-### Скриншоты и контекст (этап 5)
-- **R-15. Скриншот-задача**: миниатюра в оверлее; снимок в течение 30 с — к той же задаче (до 3), позже — новая; активная
-  задача — в памяти интервью (условие, решение кратко), голосовые уточнения «а если…», «сложность?» относятся к ней.
-- **R-16. Контекст**: «Clear» очищает строку и «последние реплики» для следующего ответа (память и история остаются);
-  смена темы не тянет старое (07/R-03); уточняющий вопрос без явной ссылки («почему так?») — к последнему ответу.
+### Screenshots and context (stage 5)
+- **R-15. A screenshot task**: a thumbnail in the overlay; a shot within 30 s goes to the same task (up to 3), later — a new one; the active
+  task is in the interview memory (the problem, the solution in brief), voice follow-ups "what if…", "complexity?" refer to it.
+- **R-16. Context**: "Clear" clears the line and the "last lines" for the next answer (the memory and history stay);
+  a topic change does not pull in old content (07/R-03); a follow-up without an explicit reference ("why so?") refers to the last answer.
 
-### Приватность (этап 2)
-- **R-17. Private**: окно оверлея исключается из захвата экрана (`sharingType`); кнопка «Проверить видимость» делает снимок
-  экрана через ScreenCaptureKit и сообщает, виден ли оверлей в захвате, — с версией macOS; в интерфейсе нет обещания
-  «невидимо для всех». Хранение: «Сохранять расшифровку» (R-01), удаление сессии с разбором и снимками.
+### Privacy (stage 2)
+- **R-17. Private**: the overlay window is excluded from screen capture (`sharingType`); a "Check visibility" button takes a
+  screen capture through ScreenCaptureKit and reports whether the overlay is visible in the capture — with the macOS version; the interface has no promise of
+  "invisible to everyone". Storage: "Save the transcript" (R-01), deleting a session with its review and screenshots.
 
-## Критерии приёмки
-| AC | Критерий | Проверка |
+## Acceptance criteria
+| AC | Criterion | Check |
 |---|---|---|
-| AC-01 | Мастер: черновик при переходах, валидация, последние значения; Start/End и состояния | `swift test` (модель сессии) |
-| AC-02 | Проверка перед стартом различает «нет разрешения» и «нет сигнала» | `swift test`, ручная |
-| AC-03 | Ответ принадлежит запросу: двойное нажатие, новый вопрос во время ответа — без смешивания | `swift test` |
-| AC-04 | Состояния Checking / Question detected / No question / Готовлю — по событиям | `swift test` |
-| AC-05 | История ответов, Chat-уточнение создаёт версию, указание на сессию действует | `swift test`, `--smoke` |
-| AC-06 | Настройки ответа меняют форму, не факты (короткий ≤ 40 слов, без списков для «сценарий») | `--smoke-memory` |
-| AC-07 | Разбор: комментарий к каждому записанному ответу, сводка; ошибка разбора не теряет расшифровку | `swift test`, `--smoke` |
-| AC-08 | Скриншот + голосовое уточнение «а сложность?» отвечает про ту же задачу | `--smoke` |
-| AC-09 | Private: проверка видимости даёт честный результат на этом Mac | ручная (владелец) |
-| AC-10 | Регрессий нет: тесты, eval, secret-scan, сборка; задержка первых слов не хуже 07 | полная проверка |
-| AC-11 | Владелец: созвон или самопроверка по сессии от мастера до разбора | владелец |
+| AC-01 | Wizard: the draft across steps, validation, last values; Start/End and states | `swift test` (session model) |
+| AC-02 | The pre-start check distinguishes "no permission" from "no signal" | `swift test`, manual |
+| AC-03 | An answer belongs to its request: a double press, a new question during an answer — no mixing | `swift test` |
+| AC-04 | The Checking / Question detected / No question / Preparing states — by events | `swift test` |
+| AC-05 | The answer history, a Chat refinement creates a version, a session instruction takes effect | `swift test`, `--smoke` |
+| AC-06 | Answer settings change the form, not the facts (short ≤ 40 words, no lists for "script") | `--smoke-memory` |
+| AC-07 | Review: a comment on each recorded answer, a summary; a review error does not lose the transcript | `swift test`, `--smoke` |
+| AC-08 | A screenshot + the voice follow-up "and the complexity?" answers about the same task | `--smoke` |
+| AC-09 | Private: the visibility check gives an honest result on this Mac | manual (owner) |
+| AC-10 | No regressions: tests, evals, secret-scan, build; first-word latency no worse than 07 | full check |
+| AC-11 | Owner: a call or a self-check with a session from the wizard to the review | owner |

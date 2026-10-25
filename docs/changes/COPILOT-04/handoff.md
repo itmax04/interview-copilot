@@ -1,51 +1,51 @@
-# Передача COPILOT-04
+# COPILOT-04 handoff
 
-ID: COPILOT-04-handoff · Обновлено: 2026-10-23 · Ветка: `feat/copilot-04-instant-answers` (от `feat/copilot-03-ai-interviewer` @ `b32fdec`)
-Связи: [intent.md](intent.md), [spec.md](spec.md)
+ID: COPILOT-04-handoff · Updated: 2026-10-23 · Branch: `feat/copilot-04-instant-answers` (from `feat/copilot-03-ai-interviewer` @ `b32fdec`)
+Links: [intent.md](intent.md), [spec.md](spec.md)
 
-## Сделано (2026-10-23)
-- R-01 опережающий запрос, R-02 пауза 350 мс после «?», R-03 суть первой строкой, R-04 метрики, R-05 импровизация.
-- Настройки Audio: «Пауза после вопроса со знаком «?»» и «Начинать ответ заранее». Версия 0.1.7 (build 8).
+## Done (2026-10-23)
+- R-01 speculative request, R-02 350 ms pause after "?", R-03 gist on the first line, R-04 metrics, R-05 improvisation.
+- Audio settings: "Pause after a question ending in "?"" and "Start answering early". Version 0.1.7 (build 8).
 
-## Замер офлайн (eval turn, 36 случаев, итог Parakeet через 500 мс после конца речи)
-| Конфигурация | Ход после конца речи, среднее | Модель получает вопрос | Лишние запросы |
+## Offline measurement (turn eval, 36 cases, Parakeet final 500 ms after the end of speech)
+| Configuration | Turn after the end of speech, mean | The model gets the question | Extra requests |
 |---|---:|---:|---:|
-| До (T = 700 мс) | 700 мс | 700 мс (по ходу) | 0 |
-| Пауза 350 мс для «?» | 596 мс | — | 0 |
-| + опережающий запрос | 596 мс | **500 мс** в 23 ходах из 26: 12 — сразу ходом («?»), 11 — опережающим запросом | 3 |
-| + вопросительные слова (`questionStarters`) | 596 мс | 500 мс | 3 — выигрыша нет, флаг выключен |
+| Before (T = 700 ms) | 700 ms | 700 ms (at the turn) | 0 |
+| 350 ms pause for "?" | 596 ms | — | 0 |
+| + speculative request | 596 ms | **500 ms** in 23 of 26 turns: 12 — directly by the turn ("?"), 11 — by the speculative request | 3 |
+| + question words (`questionStarters`) | 596 ms | 500 ms | 3 — no gain, the flag is off |
 
-Модель получает вопрос на ~200 мс раньше (на оборванных фразах — без изменений: там ждём продолжения).
-Опережающий запрос не стартует в тот же момент, что и ход (итог пришёл после паузы) — исправлено по живому логу 2026-10-23.
+The model gets the question ~200 ms earlier (no change on cut-off phrases: there we wait for a continuation).
+The speculative request did not start at the same moment as the turn (the final arrived after the pause) — fixed from the live log of 2026-10-23.
 
-## Живой лог 2026-10-23 18:10 (v0.1.8, источник Microphone, 1 вопрос)
-- Ключ Groq сохранён и проверен (`model_ids provider=groq present=true`).
-- Распознавание у владельца — **Whisper medium** (`recognitionBackend = whisper`), итог фразы через 1,8 с (`stt_ms=1334`):
-  ход через 2,0 с после конца речи, первые слова Groq через 0,74 с после хода — **2,7 с** от конца вопроса.
-- Вывод: для цели ≤ 1 с нужен Parakeet (итог ~0,5 с); модель установлена полностью (23 файла).
-Дальше упирается в паузу VAD (350 мс) и итог Parakeet (~150 мс) — кандидаты в следующую задачу.
+## Live log 2026-10-23 18:10 (v0.1.8, Microphone source, 1 question)
+- The Groq key is saved and checked (`model_ids provider=groq present=true`).
+- The owner's recognition is **Whisper medium** (`recognitionBackend = whisper`), the phrase final after 1.8 s (`stt_ms=1334`):
+  the turn 2.0 s after the end of speech, Groq's first words 0.74 s after the turn — **2.7 s** from the end of the question.
+- Conclusion: the ≤ 1 s goal needs Parakeet (final ~0.5 s); the model is fully installed (23 files).
+Further it is bounded by the VAD pause (350 ms) and the Parakeet final (~150 ms) — candidates for the next task.
 
-## Живой лог 2026-10-23 18:22 (v0.1.10, Parakeet)
-- Переключено на Parakeet (по команде владельца; изменён только `recognitionBackend`, копия настроек — вне Git):
-  итог фразы через **507 мс** (`stt_ms=131`) вместо 1,8 с; украинский текст уточняет Whisper turbo (~2,2 с, подсказку не задерживает).
-- Опережающий запрос стартовал за 135 мс до хода, но ещё собирался (чтение ключей из Связки ключей) и был отменён.
-  Исправлено в 0.1.11: ход забирает и готовящийся запрос; если тот решит, что нужна карточка базы, — ответ обычным путём.
+## Live log 2026-10-23 18:22 (v0.1.10, Parakeet)
+- Switched to Parakeet (on the owner's command; only `recognitionBackend` was changed, a copy of the settings — outside Git):
+  the phrase final after **507 ms** (`stt_ms=131`) instead of 1.8 s; Whisper turbo refines Ukrainian text (~2.2 s, does not delay the hint).
+- The speculative request started 135 ms before the turn but was still being assembled (reading keys from the Keychain) and was cancelled.
+  Fixed in 0.1.11: the turn adopts a request that is still being prepared too; if that one decides a bank card is needed — the answer goes the normal way.
 
-## R-06 свой API (2026-10-23)
-Провайдер `custom`, блок в Keys, поле модели в Models, строка меню без ненастроенного своего API.
-`swift test` 201 тест PASS (два прогона подряд; в первом прогоне до правки ожиданий один раз упал
-`slowButStartedStreamIsNotTimedOut` — тест по таймингу, при повторах PASS). NOT RUN: живой запрос через свой ключ.
-Версия 0.1.10 (build 11).
+## R-06 custom API (2026-10-23)
+The `custom` provider, a block in Keys, a model field in Models, the menu line without an unconfigured custom API.
+`swift test` 201 tests PASS (two runs in a row; in the first run, before the expectations were fixed, the timing test
+`slowButStartedStreamIsNotTimedOut` failed once, PASS on reruns). NOT RUN: a live request through the owner's key.
+Version 0.1.10 (build 11).
 
-## Проверки
-`swift build` PASS; `swift test` 195 тестов PASS (+6); eval turn 0% / 0%, mean 596 мс; eval bank 94,9% / 0%;
-secret scan 0 findings; `scripts/build-app.sh` + `codesign --verify --strict` — в итоговом сообщении сессии.
+## Checks
+`swift build` PASS; `swift test` 195 tests PASS (+6); turn eval 0% / 0%, mean 596 ms; bank eval 94.9% / 0%;
+secret scan 0 findings; `scripts/build-app.sh` + `codesign --verify --strict` — in the session's final message.
 
 ## NOT RUN
-- AC-01, AC-03 — живой замер с ключом Groq (нет ключей у исполнителя).
+- AC-01, AC-03 — a live measurement with a Groq key (the executor has no keys).
 
-## H-1 — живой замер (владелец, ≈ 15 мин)
-1. Settings → Keys: ключ Groq (console.groq.com, бесплатно). Profile → «Без профиля» (или профиль).
-2. Меню → «ИИ-собеседование…», 10 вопросов на русском и 10 на английском, отвечать коротко.
-3. В Терминале: `scripts/metrics.py --last 30m` — строки «C4-AC-01 speech_end → first_token» и «Опережающие запросы».
-4. Для сравнения — Settings → Audio, выключить «Начинать ответ заранее», повторить 5 вопросов.
+## H-1 — live measurement (owner, ≈ 15 min)
+1. Settings → Keys: a Groq key (console.groq.com, free). Profile → "No profile" (or a profile).
+2. Menu → "AI interview…", 10 questions in Russian and 10 in English, answer briefly.
+3. In Terminal: `scripts/metrics.py --last 30m` — the lines "C4-AC-01 speech_end → first_token" and "Speculative requests".
+4. For comparison — Settings → Audio, turn off "Start answering early", repeat 5 questions.

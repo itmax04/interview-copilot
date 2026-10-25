@@ -1,107 +1,107 @@
-# Передача COPILOT-05
+# COPILOT-05 handoff
 
-ID: COPILOT-05-handoff · Статус: **этапы 1–4 готовы (0.2.6) — ждёт живой тест на созвоне (H-2)** · Обновлено: 2026-10-23
-Ветка: `feat/copilot-05-speech-filter` (от `feat/copilot-04-instant-answers` @ `f7e3f94`)
-Связи: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md)
+ID: COPILOT-05-handoff · Status: **stages 1–4 done (0.2.6) — awaiting a live call test (H-2)** · Updated: 2026-10-23
+Branch: `feat/copilot-05-speech-filter` (from `feat/copilot-04-instant-answers` @ `f7e3f94`)
+Links: [intent.md](intent.md), [spec.md](spec.md), [plan.md](plan.md)
 
-## Сделано
-- 2026-10-23: мозговой штурм с владельцем (Q1–Q16 в intent.md), документы intent/spec/plan. Код не менялся.
-- Проверено в FluidAudio 0.17.7 (`.build/checkouts/FluidAudio`): `VadManager` — Silero, куски 4096 сэмплов (256 мс),
-  потоковый API; `CampPlusEmbedder` — эмбеддинг 192, косинусное сходство; `LocalVqeManager` — AEC + шумоподавление,
-  v1.3 4,8 млн параметров, режим `.realtime16ms`, бета.
+## Done
+- 2026-10-23: a brainstorm with the owner (Q1–Q16 in intent.md), the intent/spec/plan documents. No code changed.
+- Checked in FluidAudio 0.17.7 (`.build/checkouts/FluidAudio`): `VadManager` — Silero, 4096-sample chunks (256 ms),
+  a streaming API; `CampPlusEmbedder` — a 192-number embedding, cosine similarity; `LocalVqeManager` — AEC + noise suppression,
+  v1.3 with 4.8 M parameters, the `.realtime16ms` mode, beta.
 
-- 2026-10-23: H-0 пройдена («да принимаю начинай первый этап»), статусы → accepted.
-- Этап 1 (P-00…P-03), версия 0.2.0 (build 13):
-  - `LanguageGate` + `TermDictionary` + встроенный IT-список (`Sources/CopilotCore/Filter/`), серые строки в панели,
-    ⌃⌥↩ / клик по серой строке (S-08), журнал `filtered reason=lang|vad`.
-  - `SileroSpeechGate`: Silero проверяет закрытую реплику перед распознаванием; `filter-models.json`,
-    `scripts/fetch-filter-models.py` (модель установлена у владельца, 5 файлов сверены по SHA256).
-  - Settings → Audio: «Фильтр языка», «Нейросетевой детектор речи».
-  - Набор и eval `filter` (`scripts/make-filter-fixtures.py`, `evals/filter/`), `filter-text` в прогоне по умолчанию.
+- 2026-10-23: H-0 passed ("yes, I accept, start the first stage"), statuses → accepted.
+- Stage 1 (P-00…P-03), version 0.2.0 (build 13):
+  - `LanguageGate` + `TermDictionary` + a built-in IT list (`Sources/CopilotCore/Filter/`), gray lines in the panel,
+    ⌃⌥↩ / a click on a gray line (S-08), the log `filtered reason=lang|vad`.
+  - `SileroSpeechGate`: Silero checks a closed utterance before recognition; `filter-models.json`,
+    `scripts/fetch-filter-models.py` (the model is installed at the owner's, 5 files verified by SHA256).
+  - Settings → Audio: "Language filter", "Neural speech detector".
+  - The set and the `filter` eval (`scripts/make-filter-fixtures.py`, `evals/filter/`), `filter-text` in the default run.
 
-## Решения исполнителя
-- R-02: Silero не заменяет энергетический детектор, а проверяет закрытую реплику: у Silero шаг 256 мс, сегментация на нём
-  задержала бы конец фразы (цель COPILOT-04). Эффект тот же — шум без речи не распознаётся.
-- R-05: встроенный IT-список — Swift-массив (`BuiltinTerms.swift`), а не `Resources/terms-en.txt`: у CopilotCore нет ресурсов.
-- R-05: лимит «≤ 4 слов» считает только значимые слова («pull request and code review» — 4 термина).
-- R-06: в тестовом звонке фильтры выключены — он меряет само распознавание.
-- Отфильтрованная реплика для определения хода — как отброшенный шум (`.discarded`), уточнение Whisper её не возвращает.
+## Executor decisions
+- R-02: Silero does not replace the energy detector but checks a closed utterance: Silero's step is 256 ms, segmenting with it
+  would delay the end of a phrase (the COPILOT-04 goal). The effect is the same — noise without speech is not recognized.
+- R-05: the built-in IT list is a Swift array (`BuiltinTerms.swift`), not `Resources/terms-en.txt`: CopilotCore has no resources.
+- R-05: the "≤ 4 words" limit counts only significant words ("pull request and code review" — 4 terms).
+- R-06: filters are off in the test call — it measures recognition itself.
+- A filtered utterance counts for turn detection as discarded noise (`.discarded`); the Whisper refinement does not bring it back.
 
-## Текущий шаг
-H-1 — владелец 5 минут с ТВ на другом языке в режиме «Микрофон Mac» (инструкция — в сообщении сессии).
+## Current step
+H-1 — the owner spends 5 minutes with a TV in another language in the "Mac microphone" mode (instructions — in the session message).
 
-## Проверки
-| Шаг | Команда | Результат |
+## Checks
+| Step | Command | Result |
 |---|---|---|
-| P-00 | `swift test`, evals (до изменений) | 201 тест PASS; turn 0%/0% (596 мс); bank 94,9% / 0% |
-| P-01…P-03 | `swift test` | 212 тестов PASS (+11: фильтр языка, словарь, ответ по серой строке, проверка речи, Silero на реальной модели) |
-| P-01 | `scripts/run-evals.sh` | turn 0%/0%; bank 94,9%/0%; filter-text 214/214 |
-| P-01 | `scripts/run-evals.sh filter` без фильтров | чужой язык 0/16, потеряно 0/20, шум 0/20 |
-| P-03 | `scripts/run-evals.sh filter` | чужой язык **16/16**, потеряно 1/20 (5%), термины не отброшены 8/8, шум 0/20, Silero ~5 мс — PASS |
+| P-00 | `swift test`, evals (before changes) | 201 tests PASS; turn 0%/0% (596 ms); bank 94.9% / 0% |
+| P-01…P-03 | `swift test` | 212 tests PASS (+11: language filter, dictionary, answering a gray line, speech check, Silero on the real model) |
+| P-01 | `scripts/run-evals.sh` | turn 0%/0%; bank 94.9%/0%; filter-text 214/214 |
+| P-01 | `scripts/run-evals.sh filter` without filters | foreign language 0/16, lost 0/20, noise 0/20 |
+| P-03 | `scripts/run-evals.sh filter` | foreign language **16/16**, lost 1/20 (5%), terms kept 8/8, noise 0/20, Silero ~5 ms — PASS |
 
-## H-1, первый живой тест (2026-10-23 21:20, v0.2.0, «Микрофон Mac», Українська)
-Владелец: «текст генерирует рандомные слова сам по себе» (в панели «Дякую!», «Відкарман»). Журнал (только числа):
-- движок у владельца снова **Whisper medium** (`recognitionBackend = whisper`): итог ~1,3 с, Whisper выдумывает слова на шуме;
-- шум комнаты у микрофона −46…−58 dBFS открывал реплики: порог детектора −62 dBFS подобран для тихого звука Meet;
-- Silero отсёк 8 коротких отрезков, но несколько (0,66–1,2 с) прошли и стали словами.
-Исправлено в 0.2.1 (build 14): порог для источника «Микрофон Mac» −45 dBFS (`StreamingTranscriber.microphoneVAD`);
-Silero засчитывает речь от 2 кусков (≈ 0,5 с) или одного с уверенностью ≥ 0,9; `HallucinationFilter` — известные
-концовки субтитров Whisper в репликах ≤ 2,5 с отбрасываются (`filtered reason=hallucination`).
-Проверки: 214 тестов PASS; eval filter без изменений (16/16, потеряно 1/20, термины 8/8, шум 0/20); turn/bank/filter-text PASS.
-Рекомендации владельцу: Parakeet вместо Whisper; системный режим микрофона «Voice Isolation» (Пункт управления) доступен
-для InterviewCopilot — подавляет фоновые голоса и шум на уровне macOS.
+## H-1, first live test (2026-10-23 21:20, v0.2.0, "Mac microphone", Українська)
+Owner: "the text generates random words by itself" (the panel showed "Дякую!", "Відкарман"). Log (numbers only):
+- the owner's engine was again **Whisper medium** (`recognitionBackend = whisper`): final ~1.3 s, Whisper invents words on noise;
+- room noise at the microphone −46…−58 dBFS opened utterances: the −62 dBFS detector threshold was tuned for quiet Meet audio;
+- Silero cut 8 short segments, but several (0.66–1.2 s) passed and became words.
+Fixed in 0.2.1 (build 14): the threshold for the "Mac microphone" source is −45 dBFS (`StreamingTranscriber.microphoneVAD`);
+Silero counts speech from 2 chunks (≈ 0.5 s) or one with confidence ≥ 0.9; `HallucinationFilter` — known Whisper
+subtitle endings in utterances ≤ 2.5 s are dropped (`filtered reason=hallucination`).
+Checks: 214 tests PASS; the filter eval unchanged (16/16, lost 1/20, terms 8/8, noise 0/20); turn/bank/filter-text PASS.
+Recommendations to the owner: Parakeet instead of Whisper; the system microphone mode "Voice Isolation" (Control Center) is available
+for InterviewCopilot — it suppresses background voices and noise at the macOS level.
 
-## H-1, второй тест (21:31, v0.2.1, Whisper medium + «Українська»)
-Английское видео с телефона — в панели украинские фразы. Журнал: все итоги `lang=uk`, Whisper с заданным языком пишет
-любую речь выбранным языком, фильтр языка видит «украинский» текст. Очередь Whisper отставала до 9 с.
-Вывод: фильтр языка требует распознавания без навязанного языка — Parakeet (eval: 16/16). В Audio добавлено
-предупреждение при Whisper + выбранный язык + фильтр (0.2.2, build 15).
+## H-1, second test (21:31, v0.2.1, Whisper medium + "Українська")
+An English video from a phone — Ukrainian phrases in the panel. Log: all finals `lang=uk`; Whisper with a set language writes
+any speech in the selected language, so the language filter sees "Ukrainian" text. The Whisper queue lagged up to 9 s.
+Conclusion: the language filter needs recognition without an imposed language — Parakeet (eval: 16/16). A warning was added in Audio
+for Whisper + a selected language + the filter (0.2.2, build 15).
 
-## Этап 2 (P-04): отпечаток голоса, версия 0.2.3 (build 16)
-- `VoicePrint` (отпечаток + персональный порог), `VoiceEmbedder` (CAM++), `VoiceGateBox`; событие `.foreignVoice` вместо
-  `final` — серая строка «чужой голос 0,xx»; проверка включена в «Микрофон Mac» и в ответе на ИИ-собеседовании.
-- Settings → Audio → «Ваш голос»: запись образца 25 с (текст на языке интервью, Enter — старт/стоп), удаление,
-  автопорог или ползунок 0,50–0,90. CAM++ установлена у владельца (8 файлов сверены по SHA256).
-- Решения исполнителя: порог персональный (калибровка по кускам образца) — синтетический «свой» голос неестественно стабилен;
-  проверка голоса после распознавания (текст нужен для серой строки), +~0,2 с к итогу только в режиме микрофона.
-- Проверки: 220 тестов PASS (+6, в т. ч. CAM++ на реальной модели); eval voice — свой 18/18, чужие 89/96 (93%) — PASS;
-  filter, filter-text, turn, bank — без изменений.
+## Stage 2 (P-04): voiceprint, version 0.2.3 (build 16)
+- `VoicePrint` (print + personal threshold), `VoiceEmbedder` (CAM++), `VoiceGateBox`; a `.foreignVoice` event instead of
+  `final` — a gray line "other voice 0.xx"; the check is on in "Mac microphone" and for the answer in the AI interview.
+- Settings → Audio → "Your voice": recording a 25 s sample (text in the interview language, Enter — start/stop), deletion,
+  an automatic threshold or a 0.50–0.90 slider. CAM++ is installed at the owner's (8 files verified by SHA256).
+- Executor decisions: a personal threshold (calibrated on chunks of the sample) — a synthetic "own" voice is unnaturally stable;
+  the voice is checked after recognition (the text is needed for the gray line), +~0.2 s to the final only in microphone mode.
+- Checks: 220 tests PASS (+6, incl. CAM++ on the real model); the voice eval — own 18/18, others 89/96 (93%) — PASS;
+  filter, filter-text, turn, bank — unchanged.
 
-## Живой тест голоса (2026-10-23 22:31, v0.2.3, образец из файла владельца)
-- Образец: голосовая запись владельца 49 с (Ogg Opus, вероятно телефон) → `copilot-eval voice-enroll`: 27,5 с речи,
-  разброс 0,87, автопорог 0,79. Временная копия звука удалена, отпечаток — `voice/owner.json` (права 600).
-- Журнал: видео 0,49 / 0,49; владелец 0,67 / 0,67 / 0,73 — **отклонён** (порог 0,79): образец записан другим микрофоном.
-  Короткие реплики видео (< 1 с, «До свидания») не проверялись и сложились в ход.
-- Исправлено в 0.2.4 (build 17): короткие реплики от 0,5 с речи проверяются с порогом −0,1; в журнал пишется и сходство
-  принятых (`voice_ok`). Рекомендация: перезаписать образец через микрофон Mac (Settings → Audio) или ручной порог ~0,6.
+## Live voice test (2026-10-23 22:31, v0.2.3, sample from the owner's file)
+- Sample: the owner's 49 s voice recording (Ogg Opus, probably a phone) → `copilot-eval voice-enroll`: 27.5 s of speech,
+  spread 0.87, automatic threshold 0.79. The temporary audio copy was deleted, the print — `voice/owner.json` (permissions 600).
+- Log: video 0.49 / 0.49; the owner 0.67 / 0.67 / 0.73 — **rejected** (threshold 0.79): the sample was recorded with another microphone.
+  Short video utterances (< 1 s, "До свидания") were not checked and added up to a turn.
+- Fixed in 0.2.4 (build 17): short utterances from 0.5 s of speech are checked with the threshold −0.1; the similarity of accepted
+  ones is logged too (`voice_ok`). Recommendation: re-record the sample through the Mac microphone (Settings → Audio) or a manual threshold ~0.6.
 
-## Этап 3 (P-05): шумоподавление, версия 0.2.5 (build 18)
-- LocalVQE v1.3 установлен (8 файлов сверены по SHA256); `SpeechEnhancer`, `EnhancerBox`, очистка закрытой реплики
-  перед распознаванием и проверкой голоса (`StreamingTranscriber.setAudioEnhancer`), только канал микрофона.
-- eval `enhance` (50 фраз): Parakeet 3,9% → с LocalVQE 6,3% ошибок — хуже на всех шумах. По плану (риски): выключено по
-  умолчанию, переключатель «экспериментально» в Audio → «Ваш голос» с пометкой о замере; для шума — Voice Isolation macOS.
-- Решение исполнителя: эхоподавление (нужен опорный сигнал звонка, выровненный по времени) — на этапе 4 вместе с
-  расшифровкой микрофона во время звонка; в режиме «Микрофон Mac» опорного сигнала нет.
-- Проверки: 222 теста PASS (два прогона); память на живом звонке — NOT RUN (приложение закрыто владельцем), AC-06 — на H-2.
+## Stage 3 (P-05): noise suppression, version 0.2.5 (build 18)
+- LocalVQE v1.3 installed (8 files verified by SHA256); `SpeechEnhancer`, `EnhancerBox`, cleaning a closed utterance
+  before recognition and the voice check (`StreamingTranscriber.setAudioEnhancer`), microphone channel only.
+- The `enhance` eval (50 phrases): Parakeet 3.9% → with LocalVQE 6.3% errors — worse on all noises. Per the plan (risks): off by
+  default, an "experimental" toggle in Audio → "Your voice" with a note about the measurement; for noise — macOS Voice Isolation.
+- Executor decision: echo cancellation (needs a time-aligned call reference signal) — at stage 4 together with
+  transcribing the microphone during a call; in the "Mac microphone" mode there is no reference signal.
+- Checks: 222 tests PASS (two runs); memory on a live call — NOT RUN (the owner closed the app), AC-06 — at H-2.
 
-## Этап 4 (P-06): речь владельца как контекст, версия 0.2.6 (build 19)
-- Второй распознаватель для микрофона на созвоне (источник — приложение звонка или весь системный звук): тот же движок,
-  без промежуточного текста и без уточнения Whisper (`Config.allowRevision = false`), порог микрофона −45 dBFS, Silero.
-- Отпечаток голоса проверяет каждую фразу (`VoiceGateBox.check(ignoringActive:)`): чужие голоса и эхо интервьюера из
-  динамиков отсекаются. Без образца: фильтр языка микрофона + правило эха по времени (фраза, закончившаяся во время речи
-  в звонке или в пределах 1,5 с после неё, не используется).
-- `CandidateContext`: до 3 фраз за 3 минуты, ≤ 600 символов, только в памяти; блок `<candidate_said>` в промпте (данные,
-  фильтр ПД), правило в системной части. В панели и истории речи владельца нет (Q6). Настройка «Учитывать мои ответы».
-- Найдено и исправлено: в промпт шли и серые (отфильтрованные) строки расшифровки — теперь только прошедшие фильтры.
-- Решение исполнителя (R-04): потоковое эхоподавление LocalVQE по звуку звонка не включено — эхо отсекает отпечаток
-  голоса и правило по времени, а LocalVQE на eval `enhance` ухудшил распознавание; модель 16 мс установлена для будущего замера.
-- Проверки: 225 тестов PASS; turn/bank/filter-text без изменений. NOT RUN: живой созвон (задержка вопросов AC-05
-  при одновременной речи, память AC-06) — H-2.
+## Stage 4 (P-06): the owner's speech as context, version 0.2.6 (build 19)
+- A second recognizer for the microphone on a call (the source is the call app or all system audio): the same engine,
+  without interim text and without the Whisper refinement (`Config.allowRevision = false`), the −45 dBFS microphone threshold, Silero.
+- The voiceprint checks every phrase (`VoiceGateBox.check(ignoringActive:)`): other voices and the interviewer's echo from
+  the speakers are cut. Without a sample: the microphone language filter + a timing echo rule (a phrase that ended during speech
+  in the call or within 1.5 s after it is not used).
+- `CandidateContext`: up to 3 phrases within 3 minutes, ≤ 600 characters, memory only; a `<candidate_said>` block in the prompt (data,
+  PII filter), a rule in the system part. The owner's speech is not in the panel or history (Q6). A setting "Use my answers".
+- Found and fixed: gray (filtered) transcript lines also went into the prompt — now only lines that passed the filters.
+- Executor decision (R-04): streaming LocalVQE echo cancellation on the call audio is not enabled — the voiceprint and the timing rule
+  cut the echo, and LocalVQE worsened recognition on the `enhance` eval; the 16 ms model is installed for a future measurement.
+- Checks: 225 tests PASS; turn/bank/filter-text unchanged. NOT RUN: a live call (question latency AC-05
+  with simultaneous speech, memory AC-06) — H-2.
 
-## Наблюдения
-- На синтетическом шуме Parakeet и без Silero не выдаёт текста (0/20): выигрыш Silero на этом наборе не виден;
-  «Угу/Yeah» на шуме замечены на живых звонках (COPILOT-03) — проверяется на H-1.
-- Термины в синтетических uk/ru вопросах Parakeet пишет кириллицей (голоса произносят их «по-русски»): латиница в тексте
-  3/8 — это распознавание, не фильтр; фильтр их не отбрасывает (8/8). Помогает уточнение Whisper (03/R-37) и COPILOT-02.
-- Единственная потеря: украинский вопрос на фоне музыки Parakeet распознал как польскую бессмыслицу — фильтр отсёк её.
-  Серую строку можно нажать или ⌃⌥↩ (S-08).
+## Observations
+- On synthetic noise Parakeet produces no text even without Silero (0/20): Silero's gain is not visible on this set;
+  "Угу/Yeah" on noise was seen on live calls (COPILOT-03) — checked at H-1.
+- Parakeet writes terms in synthetic uk/ru questions in Cyrillic (the voices pronounce them "in Russian"): Latin script in the text
+  3/8 — that is recognition, not the filter; the filter does not drop them (8/8). The Whisper refinement (03/R-37) and COPILOT-02 help.
+- The only loss: Parakeet recognized a Ukrainian question over music as Polish nonsense — the filter cut it.
+  The gray line can be clicked or ⌃⌥↩ pressed (S-08).

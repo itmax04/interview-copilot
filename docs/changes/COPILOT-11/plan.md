@@ -1,12 +1,12 @@
-# COPILOT-11: План
+# COPILOT-11: Plan
 
-ID: COPILOT-11-plan · Статус: **accepted** (2026-10-25) · Дата: 2026-10-25
-Связи: [intent.md](intent.md) · [spec.md](spec.md)
+ID: COPILOT-11-plan · Status: **accepted** (2026-10-25) · Date: 2026-10-25
+Links: [intent.md](intent.md) · [spec.md](spec.md)
 
-| Шаг | Что | Требования | Проверка |
+| Step | What | Requirements | Check |
 |---|---|---|---|
-| P-01 | Разбор истории тестового звонка и журнала: причина прерывания | — | журнал `llm`, сессия 2026-10-25T08-22-18 |
-| P-02 | Цепочка: последний шанс, hedge к другому провайдеру, снимки, граница таймаута Gemini | R-01…R-04 | `ChainResilienceTests`, `swift test` |
-| P-03 | Правило «работали ли вы с X» + живой сценарий | R-05 | `--smoke-memory` (5/5), `ExperienceRuleTests` |
-| P-04 | Размер оверлея мышью | R-06 | `--smoke-panel-resize`, `PanelResizingTests`, снимки |
-| P-05 | Версия 0.15.0, полная проверка, handoff; H-1 — живая проверка владельцем | все | полная проверка CLAUDE.md |
+| P-01 | An analysis of the test call history and the log: the cause of the interruption | — | the `llm` log, session 2026-10-25T08-22-18 |
+| P-02 | Chain: last resort, hedge to another provider, screenshots, the Gemini timeout floor | R-01…R-04 | `ChainResilienceTests`, `swift test` |
+| P-03 | The "have you worked with X" rule + a live scenario | R-05 | `--smoke-memory` (5/5), `ExperienceRuleTests` |
+| P-04 | Resizing the overlay with the mouse | R-06 | `--smoke-panel-resize`, `PanelResizingTests`, snapshots |
+| P-05 | Version 0.15.0, the full check, handoff; H-1 — the owner's live check | all | the full CLAUDE.md check |

@@ -146,7 +146,7 @@ redacted (`SSE.redactIdentifiers`).
 | Task | What | Branch |
 |---|---|---|
 | COPILOT-01 | v1: capture, Whisper, bank, Gemini/DeepSeek/Claude, overlay, menu, history | `feat/copilot-01` |
-| COPILOT-02 | Parakeet v3 documents (not merged into the chain) | `docs/copilot-02` |
+| COPILOT-02 | Parakeet v3 accuracy plan, a draft superseded by COPILOT-03/05; English copy in `docs/changes/COPILOT-02/` | `docs/copilot-02` (documents only) |
 | COPILOT-03 | AI voice interview, Parakeet + hybrid with Whisper, "No profile" mode | `feat/copilot-03-ai-interviewer` |
 | COPILOT-04 | instant answers: Groq/Cerebras, parallel requests, speculative request, custom API | `feat/copilot-04-instant-answers` |
 | COPILOT-05 | filters: Silero, language with terms, voiceprint, LocalVQE, owner speech on calls | `feat/copilot-05-speech-filter` |
@@ -156,7 +156,7 @@ redacted (`SSE.redactIdentifiers`).
 | COPILOT-09 | ParakeetAI parity: sessions (wizard, Start/End, pre-check, job import), live overlay, answer style, review after End, screenshot tasks, redesign from ImageGen references, multiple keys (0.7–0.13) | `feat/copilot-09-parakeet-parity` |
 | COPILOT-10 | light and dark window theme, Russian and English UI (instant switch), review in the UI language (0.14) | `feat/copilot-10-theme-language` |
 | COPILOT-11 | fixes after the test interview: chain "last resort", hedge to another provider, screenshots only to image-capable providers, Gemini timeout floor, "have you worked with X?" rule, interviewer monologue is not a question, overlay resizing, "Delete all" questions (0.15) | `feat/copilot-11-test-call-fixes` |
-| COPILOT-12 | final review: capture start/stop race, history wipe, error redaction, Groq token budget, English documentation and `AGENTS.md` (0.15.1) | `feat/copilot-12-final-review` |
+| COPILOT-12 | final review: capture start/stop race, history wipe, error redaction, Groq token budget, repository hygiene, English documentation and `AGENTS.md`, `main` fast-forwarded (0.15.1) | `feat/copilot-12-final-review` |
 
 Branches form a chain (each from the previous one). `main` is fast-forwarded to the latest reviewed task by the owner's decision.
 

@@ -1,38 +1,38 @@
-# COPILOT-07: Спецификация — аудит и доводка
+# COPILOT-07: Specification — audit and finishing
 
-ID: COPILOT-07-spec · Статус: **accepted** (2026-10-24) · Версия: 1 · Дата: 2026-10-24 · Владелец: itmax04
-Связи: [intent.md](intent.md) · [handoff.md](handoff.md)
+ID: COPILOT-07-spec · Status: **accepted** (2026-10-24) · Version: 1 · Date: 2026-10-24 · Owner: itmax04
+Links: [intent.md](intent.md) · [handoff.md](handoff.md)
 
-## Требования
-- **R-01. Показанное — не сказанное.** В истории промпта ответ без записи — `Candidate: (not recorded)`, показанная подсказка —
-  отдельной строкой `Shown suggestion (may not have been said)`. Отсылку к прошлому («Ви згадували…?») модель проверяет
-  только по строкам `Candidate:`; без них — не соглашается («Так», «Да», «Yes», «as I said» запрещены в начале ответа).
-  Указание стоит сразу после вопроса (в задании), а не перед историей. Уточняет 06/R-04, 06/R-07.
-- **R-02. Обмен — по номеру хода.** `SessionExchange.turnID`: подсказка находит свой обмен, даже если уточнение Whisper уже
-  заменило текст вопроса или тот же вопрос задан дважды; текущий ход не входит в свою историю. Старые файлы истории читаются.
-- **R-03. Отсылки по основам слов.** `ReferenceDetector`: «повернемо», «повернімо», «ви згадува», «ви казал», «вы говорил»,
-  «вы упоминал», «you were saying»… (живой текст «Повернемо себе до…» — отсылка).
-- **R-04. Не вопрос.** Обрывки, которые только объявляют вопрос («Є таке питання», «У меня вопрос», «I have a question»), —
-  ответ «—»; такой обмен без ответа удаляется из памяти.
-- **R-05. Зарплата без профиля** — рыночная вилка для роли и уровня, в месяц, брутто, в USD (если разговор не задаёт валюту).
-- **R-06. «Сейчас отвечаю я» видно.** В самопроверке («Микрофон Mac») пункт меню «Сейчас отвечаю я / Закончить мой ответ»
-  с горячей клавишей и подсказка в подвале панели; подписи клавиш везде — из текущих сочетаний.
-- **R-07. Ответы ИИ-собеседования — в память**, как ответы на созвоне.
-- **R-08. История.** Сессия без содержимого начинается с первой реплики и получает имя источника; в окне — раздел
-  «Ваши ответы»; склонение «вопрос/вопроса/вопросов». Файлы истории — права 600, папка 700 (старые исправляются при запуске).
-- **R-09. Надёжность.** Параллельная цепочка: ошибка без перехода заканчивается `exhausted` (панель не остаётся в
-  «Готовлю подсказку…»). Счётчик диагностики `turn_stall` сбрасывается на любом ходе.
-- **R-10. Чистка.** Удалён неиспользуемый путь `<candidate_said>` (`CandidateContext`): с COPILOT-06 ответы владельца идут в
-  память интервью, а блок и его правило всё ещё были в каждом запросе. Текст настройки «Учитывать мои ответы» обновлён.
-- **R-11. Живая проверка промпта** — `--smoke-memory [N]`: синтетические сценарии через цепочку из настроек, автоматическая
-  проверка текста (`PromptScenarios`).
+## Requirements
+- **R-01. Shown is not said.** In the prompt history an answer without a recording is `Candidate: (not recorded)`, the hint shown is
+  a separate line `Shown suggestion (may not have been said)`. The model checks a reference to the past ("Ви згадували…?")
+  only against `Candidate:` lines; without them it does not agree ("Так", "Да", "Yes", "as I said" are forbidden at the start of the answer).
+  The instruction is placed right after the question (in the task), not before the history. Refines 06/R-04, 06/R-07.
+- **R-02. An exchange by turn number.** `SessionExchange.turnID`: a hint finds its exchange even if the Whisper refinement has already
+  replaced the question text or the same question was asked twice; the current turn is not in its own history. Old history files are readable.
+- **R-03. References by word stems.** `ReferenceDetector`: "повернемо", "повернімо", "ви згадува", "ви казал", "вы говорил",
+  "вы упоминал", "you were saying"… (the live text "Повернемо себе до…" is a reference).
+- **R-04. Not a question.** Fragments that only announce a question ("Є таке питання", "У меня вопрос", "I have a question") get
+  the answer "—"; such an exchange without an answer is removed from the memory.
+- **R-05. Salary without a profile** — a market range for the role and level, per month, gross, in USD (unless the conversation sets a currency).
+- **R-06. "I'm answering now" is visible.** In the self-check ("Mac microphone") a menu item "I'm answering now / Finish my answer"
+  with a hotkey and a hint in the panel footer; key labels everywhere come from the current shortcuts.
+- **R-07. AI interview answers go into the memory**, like answers on a call.
+- **R-08. History.** A session without content starts with the first line and gets the source name; the window has a
+  "Your answers" section; the plural forms "вопрос/вопроса/вопросов". History files — permissions 600, folder 700 (old ones are fixed at launch).
+- **R-09. Reliability.** The parallel chain: an error without a fallback ends with `exhausted` (the panel does not stay in
+  "Preparing a hint…"). The `turn_stall` diagnostic counter is reset on any turn.
+- **R-10. Cleanup.** The unused `<candidate_said>` path (`CandidateContext`) was removed: since COPILOT-06 the owner's answers go into
+  the interview memory, but the block and its rule were still in every request. The text of the "Use my answers" setting was updated.
+- **R-11. A live prompt check** — `--smoke-memory [N]`: synthetic scenarios through the chain from the settings, automatic
+  text checks (`PromptScenarios`).
 
-## Критерии приёмки
-| AC | Критерий | Проверка |
+## Acceptance criteria
+| AC | Criterion | Check |
 |---|---|---|
-| AC-01 | Ловушка «вы упоминали» не подтверждается — и без истории, и когда термин есть только в показанной подсказке | `--smoke-memory` (≥ 5 прогонов) |
-| AC-02 | Возврат к записанному ответу держит его факты; зарплата — вилка в USD; обрывок — «—» | `--smoke-memory` |
-| AC-03 | Подсказка привязана к ходу после уточнения текста; обрывок удаляется; права файлов истории | `swift test` |
-| AC-04 | Пункт «Сейчас отвечаю я» только в самопроверке, с горячей клавишей | `swift test` (MenuLayout) |
-| AC-05 | Регрессий нет: тесты, eval turn/bank/filter-text/memory, secret-scan, сборка .app | полная проверка CLAUDE.md |
-| AC-06 | Повторный живой тест памяти с ⌃⌥A записывает ответы и даёт подсказки по ним | владелец |
+| AC-01 | The "you mentioned" trap is not confirmed — both without history and when the term is only in the hint shown | `--smoke-memory` (≥ 5 runs) |
+| AC-02 | A return to a recorded answer keeps its facts; salary — a range in USD; a fragment — "—" | `--smoke-memory` |
+| AC-03 | A hint is bound to its turn after the text refinement; a fragment is removed; history file permissions | `swift test` |
+| AC-04 | The "I'm answering now" item only in the self-check, with a hotkey | `swift test` (MenuLayout) |
+| AC-05 | No regressions: tests, the turn/bank/filter-text/memory evals, secret-scan, the .app build | the full CLAUDE.md check |
+| AC-06 | A repeated live memory test with ⌃⌥A records answers and gives hints based on them | owner |

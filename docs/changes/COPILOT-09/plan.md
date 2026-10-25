@@ -1,18 +1,18 @@
-# COPILOT-09: План
+# COPILOT-09: Plan
 
-ID: COPILOT-09-plan · Статус: **accepted** (2026-10-24) · Дата: 2026-10-24
-Связи: [intent.md](intent.md) · [spec.md](spec.md)
+ID: COPILOT-09-plan · Status: **accepted** (2026-10-24) · Date: 2026-10-24
+Links: [intent.md](intent.md) · [spec.md](spec.md)
 
-| Шаг | Что | Требования | Проверка |
+| Step | What | Requirements | Check |
 |---|---|---|---|
-| H-0 | Владелец подтверждает intent/spec | — | ответ владельца |
-| P-01 | Этап 1. Сессии: модель сессии и состояния, мастер, Start/End, таймер с планом, проверка перед стартом, импорт вакансии по ссылке, автоопределение звонка, типы Interview/Regular/Mock | R-01…R-06 | `swift test`, сборка; H-1 — владелец создаёт сессию |
-| P-02 | Этап 2. Живой оверлей: раскладка, состояния, история ответов, Chat, ⌘-клавиши в сессии, меню, масштаб, другой экран, Private с проверкой | R-07…R-11, R-17 | `swift test`, `--smoke`; H-2 — владелец на созвоне |
-| P-03 | Этап 3. Настройки ответа с живым предпросмотром | R-12 | `swift test`, `--smoke-memory` |
-| P-04 | Этап 4. Разбор после End: комментарии, сводка, «Спросить ИИ», расшифровка по говорящим | R-13, R-14 | `swift test`, `--smoke` |
-| P-05 | Этап 5. Скриншоты-задачи и контекст, Clear | R-15, R-16 | `swift test`, `--smoke` |
-| P-06 | Полная проверка, версия, handoff; H-3 — владелец: сессия от мастера до разбора | все | полная проверка CLAUDE.md, AC-11 |
+| H-0 | The owner confirms intent/spec | — | the owner's answer |
+| P-01 | Stage 1. Sessions: the session model and states, the wizard, Start/End, a timer with a plan, a pre-start check, importing a vacancy from a link, call auto-detection, the Interview/Regular/Mock types | R-01…R-06 | `swift test`, build; H-1 — the owner creates a session |
+| P-02 | Stage 2. The live overlay: layout, states, answer history, Chat, ⌘ keys in a session, menu, scale, another display, Private with a check | R-07…R-11, R-17 | `swift test`, `--smoke`; H-2 — the owner on a call |
+| P-03 | Stage 3. Answer settings with a live preview | R-12 | `swift test`, `--smoke-memory` |
+| P-04 | Stage 4. Review after End: comments, a summary, "Ask AI", a transcript by speaker | R-13, R-14 | `swift test`, `--smoke` |
+| P-05 | Stage 5. Screenshot tasks and context, Clear | R-15, R-16 | `swift test`, `--smoke` |
+| P-06 | Full check, version, handoff; H-3 — the owner: a session from the wizard to the review | all | the full CLAUDE.md check, AC-11 |
 
-Риски: ⌘↩ в сессии перехватывает «отправить» в чатах Zoom/Meet/Telegram (решение владельца Q10; ⌃⌥ остаются);
-`sharingType` не действует на захват через ScreenCaptureKit в части версий macOS — поэтому проверка, а не обещание;
-разбор и предпросмотр тратят бесплатные лимиты — фон, порциями.
+Risks: ⌘↩ in a session intercepts "send" in the Zoom/Meet/Telegram chats (the owner's decision Q10; ⌃⌥ stay);
+`sharingType` does not affect ScreenCaptureKit capture in some macOS versions — hence a check, not a promise;
+the review and the preview spend free limits — in the background, in batches.
