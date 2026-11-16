@@ -8,6 +8,7 @@ final class FakeRecognizer: SpeechRecognizer, @unchecked Sendable {
     private var calls: [(samples: Int, language: String?, reducedContext: Bool, peak: Float)] = []
     var transcribeCalls: [(samples: Int, language: String?, reducedContext: Bool, peak: Float)] { lock.withLock { calls } }
     private(set) var detectCalls = 0
+    var detectedCount: Int { lock.withLock { detectCalls } }
     var nativeMultilingual = false
     var detected = "uk"
     var text = "привіт"
@@ -132,14 +133,20 @@ struct StreamingTranscriberTests {
         let (t, buffer, fake, sink) = make(sticky: true)
         fake.detected = "en"
         fake.tokenProbability["en"] = 0.95 // уверенное распознавание
+        var afterTwo = 0
         for i in 1...4 {
             feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
             feed(t, buffer, EnergyVADTests.tone(ms: 2000, amplitude: 0.3))
             feed(t, buffer, EnergyVADTests.noise(ms: 600, amplitude: 0.001))
             #expect(await sink.waitFor { events in events.filter { if case .final = $0 { true } else { false } }.count == i })
+            if i == 2 { afterTwo = fake.detectedCount }
         }
-        // Детектор — только в первых двух репликах, дальше язык разговора.
-        #expect(fake.detectCalls == 2)
+        // Детектор — только в первых двух репликах, дальше язык разговора. Сколько раз он сработал в первых двух,
+        // зависит от гонки: звук подаётся быстрее реального времени, и частичный прогон второй реплики может не успеть
+        // до её конца — тогда итог берёт язык прошлой реплики без детектора (1 вызов вместо 2). Проверяем суть:
+        // после закрепления детектор больше не вызывается.
+        #expect((1...2).contains(afterTwo))
+        #expect(fake.detectedCount == afterTwo)
     }
 
     @Test func explicitLanguageSkipsDetection() async {
@@ -281,7 +288,9 @@ final class CancelledOnceRecognizer: SpeechRecognizer, @unchecked Sendable {
     }
 
     func transcribe(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription {
-        let fail = lock.withLock { () -> Bool in
+        // Считаются и срываются только итоговые прогоны (полный контекст). Хвост детектора речи держит реплику дольше
+        // интервала частичных прогонов, и частичный (`try?`) иначе съедал бы заготовленную ошибку — тест мигал.
+        let fail = !reducedContext && lock.withLock { () -> Bool in
             _calls += 1
             guard failuresLeft > 0 else { return false }
             failuresLeft -= 1
@@ -299,7 +308,7 @@ final class CancelledOnceRecognizer: SpeechRecognizer, @unchecked Sendable {
 
 @Suite("StreamingTranscriber — итог не теряется из-за чужой отмены (COPILOT-13)")
 struct FinalRetryTests {
-    /// Тишина, 0,6 с тона и снова тишина: одна короткая реплика без частичных прогонов. Тишина в начале нужна
+    /// Тишина, 0,6 с тона и снова тишина: одна короткая реплика. Тишина в начале нужна
     /// детектору речи — уровень шума он берёт по минимуму энергии, и тон с первого кадра считался бы фоном.
     func runPhrase(_ recognizer: SpeechRecognizer) async -> [TranscriptEvent] {
         let buffer = AudioRingBuffer(seconds: 30)

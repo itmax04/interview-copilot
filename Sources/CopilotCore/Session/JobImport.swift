@@ -88,7 +88,13 @@ public enum JobImport {
             let cf = CFStringConvertIANACharSetNameToEncoding(name as CFString)
             if cf != kCFStringEncodingInvalidId {
                 let encoding = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(cf))
-                if encoding != .utf8, let text = String(data: data, encoding: encoding) { return text }
+                // Страница, обрезанная по лимиту посреди многобайтового символа (Shift_JIS, GB18030, UTF-16), целиком
+                // не декодируется: пробуем без хвоста в 1–3 байта, иначе весь текст ушёл бы в UTF-8 мусором.
+                if encoding != .utf8 {
+                    for drop in 0...3 {
+                        if let text = String(data: data.dropLast(drop), encoding: encoding) { return text }
+                    }
+                }
             }
         }
         return String(decoding: data, as: UTF8.self)
@@ -115,36 +121,40 @@ public enum JobImport {
         return String(lines.joined(separator: "\n").prefix(maxPageCharacters))
     }
 
-    /// Именованные сущности, кроме `&amp;` (она раскрывается последней).
-    static let namedEntities: [(String, String)] = [
-        ("&nbsp;", " "), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"),
-        ("&mdash;", "—"), ("&ndash;", "–"), ("&laquo;", "«"), ("&raquo;", "»"), ("&hellip;", "…"),
+    static let namedEntities: [String: String] = [
+        "amp": "&", "nbsp": " ", "lt": "<", "gt": ">", "quot": "\"", "apos": "'",
+        "mdash": "—", "ndash": "–", "laquo": "«", "raquo": "»", "hellip": "…",
     ]
 
-    private static let numericEntity = try! NSRegularExpression(pattern: "&#([xX][0-9a-fA-F]{1,6}|[0-9]{1,7});")
+    private static let entity = try! NSRegularExpression(pattern: "&(#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z]{2,8});")
 
-    /// Раскрывает сущности HTML ровно один раз. `&amp;` — последней: в словаре без порядка `&amp;lt;` иногда
-    /// превращалось в «<» вместо «&lt;». Числовые (`&#8212;`, `&#x43F;`) раскрываются в символ: раньше заменялись
-    /// пробелом, и страница с кириллицей в числовых сущностях теряла весь текст.
+    /// Раскрывает сущности HTML ровно один раз, одним проходом слева направо: результат замены повторно не
+    /// разбирается, поэтому `&amp;lt;` даёт «&lt;», а `&#38;amp;` — «&amp;». Числовые (`&#8212;`, `&#x43F;`)
+    /// раскрываются в символ: раньше заменялись пробелом, и страница с кириллицей в числовых сущностях теряла весь
+    /// текст. Незнакомые именованные остаются как есть.
     static func decodeEntities(_ text: String) -> String {
         guard text.contains("&") else { return text }
-        var s = text
-        for (entity, value) in namedEntities { s = s.replacingOccurrences(of: entity, with: value) }
-        if s.contains("&#") {
-            let ns = s as NSString
-            var out = ""
-            var last = 0
-            for match in numericEntity.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
-                out += ns.substring(with: NSRange(location: last, length: match.range.location - last))
-                let body = ns.substring(with: match.range(at: 1))
-                let value = body.first == "x" || body.first == "X" ? UInt32(body.dropFirst(), radix: 16) : UInt32(body)
+        let ns = text as NSString
+        var out = ""
+        var last = 0
+        for match in entity.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let body = ns.substring(with: match.range(at: 1))
+            let value: String
+            if body.hasPrefix("#") {
+                let digits = body.dropFirst()
+                let code = digits.first == "x" || digits.first == "X" ? UInt32(digits.dropFirst(), radix: 16) : UInt32(digits)
                 // Управляющие символы и недопустимые коды — пробелом.
-                if let value, value >= 32, let scalar = Unicode.Scalar(value) { out.unicodeScalars.append(scalar) } else { out += " " }
-                last = match.range.location + match.range.length
+                if let code, code >= 32, let scalar = Unicode.Scalar(code) { value = String(Character(scalar)) } else { value = " " }
+            } else if let named = namedEntities[body.lowercased()] {
+                value = named
+            } else {
+                continue
             }
-            s = out + ns.substring(from: last)
+            out += ns.substring(with: NSRange(location: last, length: match.range.location - last))
+            out += value
+            last = match.range.location + match.range.length
         }
-        return s.replacingOccurrences(of: "&amp;", with: "&")
+        return out + ns.substring(from: last)
     }
 
     /// Почти пустая страница или форма входа вместо вакансии. Ссылка «Войти» в навигации — не повод: у обычной

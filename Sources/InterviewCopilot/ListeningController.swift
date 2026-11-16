@@ -876,17 +876,20 @@ final class ListeningController {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard let self else { return }
-                // Вне слушания (нет сессии, пауза) звука нет: уровни гасятся один раз, а не 10 раз в секунду весь день.
-                guard self.phase == .listening else {
-                    if !idle {
-                        idle = true
-                        self.levelDB = -120
-                        self.micLevelDB = -120
-                        self.onLevels?()
-                    }
+                // Без захвата (нет сессии, пауза, нет разрешения) звука нет: уровни гасит `setPhase`, а цикл не будит
+                // интерфейс 10 раз в секунду весь день. В `.idle` и `.error` микрофон владельца ещё работает — там
+                // индикатор живой, как раньше.
+                guard self.reportsLevels else {
+                    idle = true
                     continue
                 }
-                idle = false
+                if idle {
+                    // Пик, накопленный за простой, не показываем первым же кадром.
+                    idle = false
+                    _ = self.levelMeter.takeDB()
+                    _ = self.mic?.takePeakDB()
+                    continue
+                }
                 self.levelDB = self.levelMeter.takeDB()
                 self.micLevelDB = self.mic?.takePeakDB() ?? (self.source == .microphone ? self.levelDB : -120)
                 self.micPeakSecond = max(self.micPeakSecond, self.micLevelDB)
@@ -901,9 +904,23 @@ final class ListeningController {
         }
     }
 
+    /// Есть ли что показывать на индикаторах уровня: при паузе, без сессии и без разрешения захват остановлен.
+    private var reportsLevels: Bool {
+        switch phase {
+        case .listening, .idle, .error: true
+        case .paused, .standby, .noPermission: false
+        }
+    }
+
     private func setPhase(_ new: Phase) {
         guard phase != new else { return }
         phase = new
+        // Гасим до `onChange`: он перерисовывает и скрытую панель, а отдельный кадр уровней скрытая панель пропускает —
+        // иначе после паузы при скрытой панели волны застывали бы на последнем значении.
+        if !reportsLevels {
+            levelDB = -120
+            micLevelDB = -120
+        }
         updateOwnerChannel()
         onChange?()
     }

@@ -68,6 +68,16 @@ struct JobPageDecodingTests {
         #expect(JobImport.decodeEntities("a &amp;lt; b") == "a &lt; b")
         #expect(JobImport.decodeEntities("R&amp;D &lt;team&gt;") == "R&D <team>")
         #expect(JobImport.decodeEntities("&amp;#39;") == "&#39;")
+        #expect(JobImport.decodeEntities("&#38;amp; &#x26;lt;") == "&amp; &lt;")
+        #expect(JobImport.decodeEntities("C&#39;est &NBSP;&unknown; ok") == "C'est  &unknown; ok")
+    }
+
+    /// Обрезка по лимиту посреди двухбайтового символа не должна ронять декодирование в UTF-8.
+    @Test func truncatedMultibytePageKeepsCharset() throws {
+        let data = try #require("求人情報 Swift エンジニア".data(using: .shiftJIS))
+        let cut = data.dropLast(1)
+        #expect(String(data: cut, encoding: .shiftJIS) == nil)
+        #expect(JobImport.decode(Data(cut), encodingName: "shift_jis").hasPrefix("求人情報 Swift"))
     }
 
     @Test func numericEntitiesBecomeCharacters() {
