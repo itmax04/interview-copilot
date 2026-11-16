@@ -5,7 +5,7 @@ Native macOS app in Swift 6 (SwiftUI + AppKit), built with SwiftPM, no `.xcodepr
 Read `AGENTS.md` first (purpose, setup, repository map, architecture, conventions, recipes, checks), then
 `docs/ARCHITECTURE.md` for module details. Stack and reasons — `docs/decisions/ADR-0001-stack.md`.
 Tasks live in `docs/changes/COPILOT-NN/` (intent → spec → plan → handoff); the latest has the highest number
-(currently COPILOT-12).
+(currently COPILOT-13).
 
 ## Checks
 - Quick: `swift build && swift test`
