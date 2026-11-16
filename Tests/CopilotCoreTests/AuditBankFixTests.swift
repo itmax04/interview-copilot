@@ -82,9 +82,15 @@ struct FileWatcherStopTests {
         let watcher = FileWatcher(url: url) { counter.hit() }
         watcher.start()
         defer { watcher.stop() }
-        try await Task.sleep(for: .milliseconds(200))
-        try Data("b".utf8).write(to: url, options: .atomic)
-        #expect(await waitForCalls(counter, seconds: 5))
+        // `arm()` работает асинхронно: переписываем файл, пока вызов не придёт (а не один раз после 200 мс — на
+        // нагруженной машине наблюдение могло ещё не встать, и тест падал; COPILOT-13 L4).
+        var arrived = false
+        for attempt in 0..<40 where !arrived {
+            try await Task.sleep(for: .milliseconds(150))
+            try Data("b\(attempt)".utf8).write(to: url, options: .atomic)
+            arrived = await waitForCalls(counter, seconds: 0.3)
+        }
+        #expect(arrived)
     }
 
     @Test("После stop() наблюдение не оживает, когда файл появляется")

@@ -877,8 +877,8 @@ final class ListeningController {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard let self else { return }
                 // Без захвата (нет сессии, пауза, нет разрешения) звука нет: уровни гасит `setPhase`, а цикл не будит
-                // интерфейс 10 раз в секунду весь день. В `.idle` и `.error` микрофон владельца ещё работает — там
-                // индикатор живой, как раньше.
+                // интерфейс 10 раз в секунду весь день. В `.idle` микрофон владельца ещё работает — там
+                // индикатор живой, как раньше; в `.error` индикаторы погашены.
                 guard self.reportsLevels else {
                     idle = true
                     continue
@@ -907,8 +907,9 @@ final class ListeningController {
     /// Есть ли что показывать на индикаторах уровня: при паузе, без сессии и без разрешения захват остановлен.
     private var reportsLevels: Bool {
         switch phase {
-        case .listening, .idle, .error: true
-        case .paused, .standby, .noPermission: false
+        case .listening, .idle: true
+        // `.error` может длиться часами: индикаторы гаснут, цикл не будит интерфейс 10 раз в секунду (L3).
+        case .paused, .standby, .noPermission, .error: false
         }
     }
 
