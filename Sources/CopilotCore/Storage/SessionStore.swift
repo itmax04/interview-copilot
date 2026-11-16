@@ -174,14 +174,40 @@ public final class SessionStore: @unchecked Sendable {
         }
     }
 
+    /// Время начала сессии из имени файла (`yyyy-MM-dd'T'HH-mm-ss` и, возможно, `-2`); nil — имя другого вида.
+    static func startDate(fromFileName name: String) -> Date? {
+        fileFormatter.date(from: String(name.prefix(19)))
+    }
+
+    /// Запас на смену часового пояса и перевод часов: имя файла пишется по местному времени.
+    static let nameDateMargin: TimeInterval = 26 * 3600
+
     /// Удалить сессии старше `days` дней. Возвращает число удалённых.
+    ///
+    /// Сессия, начатая (по имени файла) заведомо позже порога, не читается вовсе: раньше каждый старт сессии разбирал
+    /// на главном потоке JSON всей истории. Файл, который не читается (повреждён, старый формат), удаляется по времени
+    /// изменения: раньше он переживал срок хранения навсегда, а в нём расшифровка (R-19).
     @discardableResult
     public func purge(olderThan days: Int, now: Date = Date()) -> Int {
         let cutoff = now.addingTimeInterval(-Double(days) * 86_400)
-        var removed = 0
-        for s in list() where (s.endedAt ?? s.startedAt) < cutoff {
-            if (try? delete(s.id)) != nil { removed += 1 }
+        return lock.withLock {
+            let files = (try? FileManager.default.contentsOfDirectory(at: directory,
+                                                                      includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+            var removed = 0
+            for file in files where file.pathExtension == "json" {
+                let named = Self.startDate(fromFileName: file.deletingPathExtension().lastPathComponent)
+                if let named, named >= cutoff.addingTimeInterval(Self.nameDateMargin) { continue }
+                let last: Date
+                if let session = try? Self.decoder.decode(SessionRecord.self, from: Data(contentsOf: file)) {
+                    last = session.endedAt ?? session.startedAt
+                } else {
+                    let modified = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                    guard let latest = [named, modified].compactMap({ $0 }).max() else { continue }
+                    last = latest
+                }
+                if last < cutoff, (try? FileManager.default.removeItem(at: file)) != nil { removed += 1 }
+            }
+            return removed
         }
-        return removed
     }
 }

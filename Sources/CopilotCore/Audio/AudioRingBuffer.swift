@@ -31,10 +31,19 @@ public final class AudioRingBuffer: @unchecked Sendable {
         lock.withLock {
             var input = samples[...]
             if input.count > capacity { input = input.suffix(capacity) ; written += Int64(samples.count - capacity) }
-            for s in input {
-                storage[Int(written % Int64(capacity))] = s
-                written += 1
+            // Два блочных копирования (до конца кольца и с начала) вместо деления по модулю на каждый сэмпл:
+            // запись идёт из потока захвата под замком, который ждёт и распознавание.
+            let count = input.count
+            let offset = Int(written % Int64(capacity))
+            let head = min(count, capacity - offset)
+            input.withUnsafeBufferPointer { src in
+                storage.withUnsafeMutableBufferPointer { dst in
+                    guard let from = src.baseAddress, let to = dst.baseAddress else { return }
+                    (to + offset).update(from: from, count: head)
+                    if head < count { to.update(from: from + head, count: count - head) }
+                }
             }
+            written += Int64(count)
         }
     }
 
@@ -44,14 +53,18 @@ public final class AudioRingBuffer: @unchecked Sendable {
             let end = min(to ?? written, written)
             let start = max(from, written - Int64(capacity), 0)
             guard end > start else { return [] }
-            var out = [Float]()
-            out.reserveCapacity(Int(end - start))
-            var p = start
-            while p < end {
-                out.append(storage[Int(p % Int64(capacity))])
-                p += 1
+            // Реплика до 25 с (400 тыс. сэмплов) читается на каждый частичный прогон — блочно, а не по сэмплу.
+            let count = Int(end - start)
+            let offset = Int(start % Int64(capacity))
+            let head = min(count, capacity - offset)
+            return [Float](unsafeUninitializedCapacity: count) { out, initialized in
+                storage.withUnsafeBufferPointer { src in
+                    guard let from = src.baseAddress, let to = out.baseAddress else { return }
+                    to.initialize(from: from + offset, count: head)
+                    if head < count { (to + head).initialize(from: from, count: count - head) }
+                    initialized = count
+                }
             }
-            return out
         }
     }
 

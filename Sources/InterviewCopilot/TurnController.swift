@@ -37,6 +37,7 @@ final class TurnController {
         let t = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+        t.tolerance = 0.01   // система объединяет пробуждения; на паузу T (≥ 350 мс) 10 мс не влияют
         RunLoop.main.add(t, forMode: .common)
         timer = t
     }

@@ -265,3 +265,86 @@ struct StreamingTranscriberTests {
     }
 
 }
+
+/// Распознаватель, у которого первый итог «отменён» чужим `cancel()` (COPILOT-13).
+final class CancelledOnceRecognizer: SpeechRecognizer, @unchecked Sendable {
+    private let lock = NSLock()
+    private var failuresLeft: Int
+    private var _calls = 0
+    var calls: Int { lock.withLock { _calls } }
+    let error: Error
+    let nativeMultilingual = true
+
+    init(failures: Int, error: Error = WhisperError.cancelled) {
+        failuresLeft = failures
+        self.error = error
+    }
+
+    func transcribe(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription {
+        let fail = lock.withLock { () -> Bool in
+            _calls += 1
+            guard failuresLeft > 0 else { return false }
+            failuresLeft -= 1
+            return true
+        }
+        if fail { throw error }
+        return Transcription(text: "расскажите о себе", language: "ru", languageProbabilities: [:],
+                             audioSeconds: Double(samples.count) / 16_000, elapsedMs: 1, noSpeechProbability: 0,
+                             averageTokenProbability: 0.9)
+    }
+
+    func detectLanguage(_ samples: [Float]) throws -> (String, [String: Float]) { ("ru", ["ru": 1]) }
+    func cancel() {}
+}
+
+@Suite("StreamingTranscriber — итог не теряется из-за чужой отмены (COPILOT-13)")
+struct FinalRetryTests {
+    /// Тишина, 0,6 с тона и снова тишина: одна короткая реплика без частичных прогонов. Тишина в начале нужна
+    /// детектору речи — уровень шума он берёт по минимуму энергии, и тон с первого кадра считался бы фоном.
+    func runPhrase(_ recognizer: SpeechRecognizer) async -> [TranscriptEvent] {
+        let buffer = AudioRingBuffer(seconds: 30)
+        let sink = EventSink()
+        let t = StreamingTranscriber(recognizer: recognizer, buffer: buffer) { sink.add($0) }
+        let tone = (0..<9_600).map { Float(sin(Double($0) * 2 * .pi * 220 / 16_000)) * 0.3 }
+        let samples = [Float](repeating: 0, count: 8_000) + tone + [Float](repeating: 0, count: 9_600)
+        var i = 0
+        while i < samples.count {
+            let chunk = Array(samples[i..<min(i + 320, samples.count)])
+            buffer.append(chunk)
+            t.process(chunk)
+            i += 320
+        }
+        _ = await sink.waitFor { events in
+            events.contains { if case .final = $0 { return true }; if case .discarded = $0 { return true }; return false }
+        }
+        return sink.events
+    }
+
+    @Test func strayCancelIsRetried() async {
+        let recognizer = CancelledOnceRecognizer(failures: 1)
+        let events = await runPhrase(recognizer)
+        #expect(events.contains { if case .final(_, let text, _, _, _) = $0 { return text == "расскажите о себе" }; return false })
+        #expect(recognizer.calls == 2)
+    }
+
+    @Test func taskCancellationIsRetried() async {
+        let recognizer = CancelledOnceRecognizer(failures: 2, error: CancellationError())
+        let events = await runPhrase(recognizer)
+        #expect(events.contains { if case .final = $0 { return true }; return false })
+        #expect(recognizer.calls == 3)
+    }
+
+    @Test func repeatedCancelGivesUp() async {
+        let recognizer = CancelledOnceRecognizer(failures: 10)
+        let events = await runPhrase(recognizer)
+        #expect(events.contains { if case .discarded = $0 { return true }; return false })
+        #expect(recognizer.calls == 3)
+    }
+
+    @Test func otherErrorsAreNotRetried() async {
+        let recognizer = CancelledOnceRecognizer(failures: 1, error: WhisperError.inferenceFailed(-1))
+        let events = await runPhrase(recognizer)
+        #expect(events.contains { if case .discarded = $0 { return true }; return false })
+        #expect(recognizer.calls == 1)
+    }
+}

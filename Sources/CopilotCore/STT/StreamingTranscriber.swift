@@ -410,7 +410,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             }
         }
         do {
-            let result = try recognizer.transcribe(audio, language: lang, prompt: prompt(for: lang), reducedContext: config.finalReducedContext)
+            let result = try finalTranscription(audio, language: lang, epoch: scheduledEpoch)
             let seconds = Double(audio.count) / Double(buffer.sampleRate)
             // Выдумки Whisper на тишине и шуме («Дякую!», «Спасибо за просмотр») — как отброшенный шум (COPILOT-05).
             if HallucinationFilter.isLikely(result.text, audioSeconds: seconds) {
@@ -473,6 +473,31 @@ public final class StreamingTranscriber: @unchecked Sendable {
             Log.stt.error("final transcription failed: \(String(describing: error), privacy: .public)")
             onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
         }
+    }
+
+    /// Итог фразы с повтором после чужой отмены. `cancel()` адресован частичному прогону, но попадает и в итог:
+    /// движок один на два канала (собеседник и владелец), а между проверкой `runningPartial` и отменой очередь успевает
+    /// перейти к итогу. Без повтора такая фраза терялась целиком (`discarded`). Пауза отменяет по-настоящему — её
+    /// отличает эпоха.
+    private func finalTranscription(_ audio: [Float], language: String?, epoch scheduledEpoch: Int) throws -> Transcription {
+        var attempt = 0
+        while true {
+            do {
+                return try recognizer.transcribe(audio, language: language, prompt: prompt(for: language),
+                                                 reducedContext: config.finalReducedContext)
+            } catch {
+                attempt += 1
+                guard Self.isCancellation(error), attempt < 3,
+                      lock.withLock({ epoch == scheduledEpoch && !paused }) else { throw error }
+                Log.stt.info("final transcription hit by a stray cancel, retry \(attempt)")
+            }
+        }
+    }
+
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if case WhisperError.cancelled = error { return true }
+        return false
     }
 
     /// Уточнение итога в отдельной очереди. При ошибке или паузе — исходный текст, чтобы ожидающие не зависли.

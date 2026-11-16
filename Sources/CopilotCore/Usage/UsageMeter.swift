@@ -80,7 +80,9 @@ public final class UsageMeter: @unchecked Sendable {
     private let url: URL?
     private let pricing: Pricing
     private let lock = NSLock()
-    public private(set) var state: State
+    private var _state: State
+    /// Снимок счётчиков. Читается из интерфейса, пишется из задач ответа — только под замком.
+    public var state: State { lock.withLock { _state } }
     private let now: () -> Date
 
     public init(pricing: Pricing, storage: URL?, now: @escaping () -> Date = Date.init) {
@@ -88,33 +90,39 @@ public final class UsageMeter: @unchecked Sendable {
         self.url = storage
         self.now = now
         if let url = storage, let data = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(State.self, from: data) {
-            state = s
+            _state = s
         } else {
-            state = State()
+            _state = State()
         }
         rollover()
     }
 
-    static func keys(_ date: Date) -> (String, String) {
+    /// Один форматтер на всё приложение: `keys` вызывается на каждый ответ и на каждое обновление строки статуса,
+    /// а создание `DateFormatter` — дорогая операция.
+    private static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
-        let day = f.string(from: date)
+        return f
+    }()
+
+    static func keys(_ date: Date) -> (String, String) {
+        let day = dayFormatter.string(from: date)
         return (day, String(day.prefix(7)))
     }
 
     private func rollover() {
         let (day, month) = Self.keys(now())
-        if state.month != month {
-            state.month = month
-            state.monthCost = 0
-            state.monthPaidCost = 0
+        if _state.month != month {
+            _state.month = month
+            _state.monthCost = 0
+            _state.monthPaidCost = 0
         }
-        if state.day != day {
-            state.day = day
-            state.dayCost = 0
-            state.dayRequests = [:]
-            state.dayLimited = [:]
+        if _state.day != day {
+            _state.day = day
+            _state.dayCost = 0
+            _state.dayRequests = [:]
+            _state.dayLimited = [:]
         }
     }
 
@@ -125,22 +133,22 @@ public final class UsageMeter: @unchecked Sendable {
         defer { lock.unlock(); save() }
         rollover()
         let cost = pricing.cost(provider: provider, model: model, usage: usage, at: now(), geminiFreeTier: settings.geminiFreeTier)
-        let before = state.monthPaidCost
-        state.dayCost += cost
-        state.monthCost += cost
-        if ChainFactory.isPaid(provider, settings: settings) { state.monthPaidCost += cost }
-        state.dayRequests[provider.rawValue, default: 0] += 1
+        let before = _state.monthPaidCost
+        _state.dayCost += cost
+        _state.monthCost += cost
+        if ChainFactory.isPaid(provider, settings: settings) { _state.monthPaidCost += cost }
+        _state.dayRequests[provider.rawValue, default: 0] += 1
         // Только переход через лимит: после «Включить снова» владельцем платные провайдеры не выключаются
         // повторно до следующего месяца (R-18 Budget: «до подтверждения владельцем»).
         let limit = settings.monthlyBudgetUSD
-        return limit > 0 && before < limit && state.monthPaidCost >= limit
+        return limit > 0 && before < limit && _state.monthPaidCost >= limit
     }
 
     public func recordError(provider: ProviderID, error: LLMError) {
         guard case .http(429, _) = error else { return }
         lock.lock()
         rollover()
-        state.dayLimited[provider.rawValue] = true
+        _state.dayLimited[provider.rawValue] = true
         lock.unlock()
         save()
     }
@@ -150,14 +158,14 @@ public final class UsageMeter: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         rollover()
-        let gemini = state.dayLimited[ProviderID.gemini.rawValue] == true
-            ? L10n.t("Gemini: лимит") : L10n.f("Gemini: %lld запр.", state.dayRequests[ProviderID.gemini.rawValue] ?? 0)
-        return L10n.f("Сегодня: $%.2f · %@", state.dayCost, gemini)
+        let gemini = _state.dayLimited[ProviderID.gemini.rawValue] == true
+            ? L10n.t("Gemini: лимит") : L10n.f("Gemini: %lld запр.", _state.dayRequests[ProviderID.gemini.rawValue] ?? 0)
+        return L10n.f("Сегодня: $%.2f · %@", _state.dayCost, gemini)
     }
 
     private func save() {
         guard let url else { return }
-        let snapshot = lock.withLock { state }
+        let snapshot = state
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(snapshot) { try? data.write(to: url, options: .atomic) }
     }

@@ -75,13 +75,16 @@ final class SessionController {
         scheduleSave()
     }
 
-    /// Сохранение не чаще раза в 2 с; пустые сессии не сохраняются.
+    /// Сохранение не чаще раза в 2 с; пустые сессии не сохраняются. Назначенная запись не откладывается новыми
+    /// изменениями: раньше каждое изменение переносило её ещё на 2 с, и в плотном разговоре (реплики обеих сторон,
+    /// обмены, ответы) файл мог не обновляться минутами — при сбое терялось всё с последней паузы.
     private func scheduleSave() {
-        saveTask?.cancel()
+        guard saveTask == nil else { return }
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
-            self?.saveNow()
+            guard !Task.isCancelled, let self else { return }
+            self.saveTask = nil
+            self.saveNow()
         }
     }
 
@@ -94,6 +97,7 @@ final class SessionController {
     @discardableResult
     func finish() -> SessionRecord? {
         saveTask?.cancel()
+        saveTask = nil
         current?.endedAt = Date()
         saveNow()
         let finished = current

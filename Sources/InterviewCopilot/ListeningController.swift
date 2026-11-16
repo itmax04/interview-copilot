@@ -393,6 +393,7 @@ final class ListeningController {
         stopping = false
         captureWanted = false
         transcriber?.setPaused(true)
+        callSpeaking = false
         partialText = nil
         ownerAnswering = false
         setPhase(.standby)
@@ -421,6 +422,7 @@ final class ListeningController {
     func startSession() {
         transcript = []
         partialText = nil
+        callSpeaking = false
         start()
     }
 
@@ -446,6 +448,8 @@ final class ListeningController {
         case .listening:
             captureWanted = false
             transcriber?.setPaused(true)
+            // Пауза глотает «собеседник замолчал»: без сброса фразы владельца считались бы эхом до следующей реплики звонка.
+            callSpeaking = false
             partialText = nil
             Task {
                 await capture?.stop()
@@ -868,9 +872,21 @@ final class ListeningController {
         guard levelTask == nil else { return }
         levelTask = Task { [weak self] in
             var tick = 0
+            var idle = false
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(100))
                 guard let self else { return }
+                // Вне слушания (нет сессии, пауза) звука нет: уровни гасятся один раз, а не 10 раз в секунду весь день.
+                guard self.phase == .listening else {
+                    if !idle {
+                        idle = true
+                        self.levelDB = -120
+                        self.micLevelDB = -120
+                        self.onLevels?()
+                    }
+                    continue
+                }
+                idle = false
                 self.levelDB = self.levelMeter.takeDB()
                 self.micLevelDB = self.mic?.takePeakDB() ?? (self.source == .microphone ? self.levelDB : -120)
                 self.micPeakSecond = max(self.micPeakSecond, self.micLevelDB)

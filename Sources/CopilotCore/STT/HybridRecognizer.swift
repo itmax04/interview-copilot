@@ -79,17 +79,22 @@ public final class HybridRecognizer: SpeechRecognizer, @unchecked Sendable {
     /// Прерывает только быстрый прогон: уточнение прошлой реплики идёт своим ходом (отменяет `cancelRevision`).
     public func cancel() { primary.cancel() }
 
+    /// Загрузку Whisper (секунды) сериализует отдельный замок: `cancelRevision` вызывается с главного потока (пауза)
+    /// и под общим замком ждал бы всю загрузку модели.
+    private let loadLock = NSLock()
+
     private func verifierInstance() -> SpeechRecognizer? {
-        lock.lock()
-        defer { lock.unlock() }
-        if let verifier { return verifier }
-        guard !verifierFailed else { return nil }
+        if let ready = lock.withLock({ verifier }) { return ready }
+        loadLock.lock()
+        defer { loadLock.unlock() }
+        if let ready = lock.withLock({ verifier }) { return ready }
+        guard !lock.withLock({ verifierFailed }) else { return nil }
         do {
             let v = try loadVerifier()
-            verifier = v
+            lock.withLock { verifier = v }
             return v
         } catch {
-            verifierFailed = true
+            lock.withLock { verifierFailed = true }
             Log.stt.error("hybrid: whisper not loaded: \(String(describing: error), privacy: .public)")
             return nil
         }

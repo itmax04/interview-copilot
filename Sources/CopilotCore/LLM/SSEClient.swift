@@ -14,7 +14,12 @@ public protocol StreamingTransport: Sendable {
 public struct URLSessionStreamingTransport: StreamingTransport {
     let session: URLSession
 
-    public init(session: URLSession = URLSessionStreamingTransport.makeSession()) {
+    /// Одна сессия на приложение. Раньше каждый `URLSessionStreamingTransport()` создавал свою: вызовы
+    /// `ChainFactory.providers()` на запрос (мастер сессии, ИИ-собеседование, снимок экрана) не переиспользовали
+    /// соединение (новое TLS-рукопожатие перед первым токеном) и копили сессии — без `invalidate` они живут до выхода.
+    public static let sharedSession = makeSession()
+
+    public init(session: URLSession = URLSessionStreamingTransport.sharedSession) {
         self.session = session
     }
 

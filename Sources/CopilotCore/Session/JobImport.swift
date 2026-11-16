@@ -42,21 +42,62 @@ public enum JobImport {
         return url
     }
 
+    /// Одна сессия без cookies и кэша: раньше на каждую ссылку создавалась новая `URLSession`, которую никто не закрывал.
+    static let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.httpCookieStorage = nil
+        config.urlCache = nil
+        return URLSession(configuration: config)
+    }()
+
+    /// Больше этого со страницы не читаем: в запрос уходит не больше `maxPageCharacters` текста, а ссылка может вести
+    /// на файл любого размера — раньше он целиком загружался в память.
+    public static let maxPageBytes = 3_000_000
+
     /// Загрузка страницы (10 с, без cookies). Не HTTP 2xx — ошибка сети.
     public static func fetch(_ url: URL) async throws -> String {
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
                          forHTTPHeaderField: "User-Agent")
         request.httpShouldHandleCookies = false
-        let data: Data, response: URLResponse
-        do { (data, response) = try await URLSession(configuration: .ephemeral).data(for: request) } catch {
+        do {
+            let (bytes, response) = try await session.bytes(for: request)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                throw http.statusCode == 401 || http.statusCode == 403 || http.statusCode == 999 ? JobImportError.loginWall
+                    : JobImportError.network("HTTP \(http.statusCode)")
+            }
+            var data = Data()
+            data.reserveCapacity(min(maxPageBytes, max(0, Int(clamping: response.expectedContentLength))))
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count >= maxPageBytes { break }
+            }
+            return decode(data, encodingName: response.textEncodingName)
+        } catch let error as JobImportError {
+            throw error
+        } catch {
             throw JobImportError.network(error.localizedDescription)
         }
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw http.statusCode == 401 || http.statusCode == 403 || http.statusCode == 999 ? JobImportError.loginWall
-                : JobImportError.network("HTTP \(http.statusCode)")
+    }
+
+    /// Текст страницы в её кодировке: из заголовка ответа, иначе из `<meta charset>`, иначе UTF-8. Сайты вакансий
+    /// в windows-1251 раньше читались как UTF-8 и превращались в «�».
+    static func decode(_ data: Data, encodingName: String?) -> String {
+        let name = encodingName ?? metaCharset(data)
+        if let name {
+            let cf = CFStringConvertIANACharSetNameToEncoding(name as CFString)
+            if cf != kCFStringEncodingInvalidId {
+                let encoding = String.Encoding(rawValue: CFStringConvertEncodingToNSStringEncoding(cf))
+                if encoding != .utf8, let text = String(data: data, encoding: encoding) { return text }
+            }
         }
         return String(decoding: data, as: UTF8.self)
+    }
+
+    static func metaCharset(_ data: Data) -> String? {
+        let head = String(decoding: data.prefix(2048), as: UTF8.self)
+        guard let range = head.range(of: #"charset\s*=\s*["']?[A-Za-z0-9_\-]+"#, options: [.regularExpression, .caseInsensitive]) else { return nil }
+        return head[range].split(whereSeparator: { "=\"' ".contains($0) }).last.map(String.init)
     }
 
     /// Видимый текст страницы: без скриптов, стилей и тегов, с раскрытыми сущностями, без лишних пробелов.
@@ -67,14 +108,43 @@ public enum JobImport {
         }
         s = s.replacingOccurrences(of: "<(br|/p|/div|/li|/h[1-6]|li)[^>]*>", with: "\n", options: [.regularExpression, .caseInsensitive])
         s = s.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
-        let entities = ["&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": "\"", "&#39;": "'", "&apos;": "'",
-                        "&mdash;": "—", "&ndash;": "–", "&laquo;": "«", "&raquo;": "»", "&hellip;": "…"]
-        for (k, v) in entities { s = s.replacingOccurrences(of: k, with: v) }
-        s = s.replacingOccurrences(of: "&#(\\d+);", with: " ", options: .regularExpression)
+        s = decodeEntities(s)
         let lines = s.components(separatedBy: "\n")
             .map { $0.replacingOccurrences(of: "[ \\t\\r]+", with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         return String(lines.joined(separator: "\n").prefix(maxPageCharacters))
+    }
+
+    /// Именованные сущности, кроме `&amp;` (она раскрывается последней).
+    static let namedEntities: [(String, String)] = [
+        ("&nbsp;", " "), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""), ("&#39;", "'"), ("&apos;", "'"),
+        ("&mdash;", "—"), ("&ndash;", "–"), ("&laquo;", "«"), ("&raquo;", "»"), ("&hellip;", "…"),
+    ]
+
+    private static let numericEntity = try! NSRegularExpression(pattern: "&#([xX][0-9a-fA-F]{1,6}|[0-9]{1,7});")
+
+    /// Раскрывает сущности HTML ровно один раз. `&amp;` — последней: в словаре без порядка `&amp;lt;` иногда
+    /// превращалось в «<» вместо «&lt;». Числовые (`&#8212;`, `&#x43F;`) раскрываются в символ: раньше заменялись
+    /// пробелом, и страница с кириллицей в числовых сущностях теряла весь текст.
+    static func decodeEntities(_ text: String) -> String {
+        guard text.contains("&") else { return text }
+        var s = text
+        for (entity, value) in namedEntities { s = s.replacingOccurrences(of: entity, with: value) }
+        if s.contains("&#") {
+            let ns = s as NSString
+            var out = ""
+            var last = 0
+            for match in numericEntity.matches(in: s, range: NSRange(location: 0, length: ns.length)) {
+                out += ns.substring(with: NSRange(location: last, length: match.range.location - last))
+                let body = ns.substring(with: match.range(at: 1))
+                let value = body.first == "x" || body.first == "X" ? UInt32(body.dropFirst(), radix: 16) : UInt32(body)
+                // Управляющие символы и недопустимые коды — пробелом.
+                if let value, value >= 32, let scalar = Unicode.Scalar(value) { out.unicodeScalars.append(scalar) } else { out += " " }
+                last = match.range.location + match.range.length
+            }
+            s = out + ns.substring(from: last)
+        }
+        return s.replacingOccurrences(of: "&amp;", with: "&")
     }
 
     /// Почти пустая страница или форма входа вместо вакансии. Ссылка «Войти» в навигации — не повод: у обычной

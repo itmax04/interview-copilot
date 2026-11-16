@@ -4,7 +4,12 @@ import Foundation
 /// Определяет, говорит ли владелец в микрофон — R-02. Звук микрофона не расшифровывается,
 /// не сохраняется и никуда не отправляется: в памяти только текущий кадр для VAD.
 public final class MicActivityDetector: @unchecked Sendable {
-    private let engine = AVAudioEngine()
+    /// Tap микрофона с перезапуском при смене устройства ввода (`MicrophoneTap`).
+    private lazy var tap = MicrophoneTap(label: "mic VAD", onBuffer: { [weak self] buffer in
+        self?.handle(buffer)
+    }, onInterruption: { [weak self] in
+        self?.resetSpeaking()
+    })
     private let converter = PCMConverter()
     /// Порог для микрофона выше, чем для звука собеседника: фон комнаты, клавиатура и вентилятор не должны считаться
     /// речью владельца (иначе автоответ блокируется, S-07). Голос у ноутбучного микрофона — примерно −35…−15 dBFS.
@@ -48,28 +53,29 @@ public final class MicActivityDetector: @unchecked Sendable {
     public func start() throws {
         guard Permissions.microphone == .granted else { return }
         guard !lock.withLock({ running }) else { return }
-        let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
-        guard format.sampleRate > 0 else { return }
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-            self?.handle(buffer)
-        }
-        engine.prepare()
-        try engine.start()
+        guard try tap.start() else { return }
         lock.withLock { running = true }
         Log.audio.info("mic VAD started")
     }
 
     public func stop() {
         guard lock.withLock({ running }) else { return }
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        tap.stop()
         lock.withLock {
             running = false
             speaking = false
             vad.reset()
         }
         Log.audio.info("mic VAD stopped")
+    }
+
+    /// Устройство ввода сменилось посреди речи: конца речи со старого устройства уже не будет — сообщаем его сами.
+    private func resetSpeaking() {
+        let wasSpeaking = lock.withLock { () -> Bool in
+            defer { speaking = false; vad.reset() }
+            return speaking
+        }
+        if wasSpeaking { onChange(false) }
     }
 
     private func handle(_ buffer: AVAudioPCMBuffer) {
