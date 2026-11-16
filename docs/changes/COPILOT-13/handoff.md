@@ -3,9 +3,9 @@
 ## Identity
 - Task: COPILOT-13 (technical audit and fixes). Intent: `docs/changes/COPILOT-13/intent.md`.
 - Branch `feat/copilot-13-audit-fixes`, created from `main` (`6081670`). Not pushed.
-- Code commit: `ac936b8`; this handoff and the task index are in the commit after it.
-- The checkout lives in a temporary folder made by the Claude app for one session (no fixed path). The branch
-  exists only there until the owner moves the folder or allows a push.
+- Code commits: `ac936b8` (audit fixes), `f3e0c21` (fixes after the independent review of `ac936b8`).
+- The checkout is `~/interview-copilot-audit` (moved there by the owner on 2026-11-16). There is no local `main`
+  branch in it: the base is commit `6081670` (`scratch/main`). Nothing is pushed.
 
 ## Goal and scope
 Owner request (translated): "a full technical audit and comprehensive code review; find and fix every bug and
@@ -64,13 +64,18 @@ Also `CopilotEmbeddings`, `copilot-eval`, `scripts/`, `Resources/Interviewer` an
 | `scripts/secret-scan.sh` | PASS, 0 findings |
 | `scripts/check-localization.sh` | PASS, 796 keys, 0 missing |
 | `scripts/build-app.sh` | PASS: signed `dist/InterviewCopilot.app` built (exit 0) |
-| Independent review of `ac936b8` | NOT VERIFIED: a fresh reviewer was started, its verdict was not received before the session ended |
+| Independent review of `ac936b8` | DONE (fresh subagent, strong tier): APPROVE WITH FIXES, no high-severity findings. All five findings fixed in `f3e0c21`: flaky `FinalRetryTests`; level indicator dead in `.idle`/`.error` and frozen after a pause with the panel hidden; stale `MicrophoneTap` restart attempts; double entity decoding and charset loss on a truncated page |
+| Affected suites after `f3e0c21` (`StreamingTranscriber`, `FinalRetry`, `JobPage`, `SessionPurge`, `RingBuffer`) | PASS 12 runs of 12 |
+| Full `swift test` and the other §9 checks on `f3e0c21` | NOT RUN by the session that made `f3e0c21`: the working tree also held another session's uncommitted audit changes |
 | Microphone restart on a real device change | NOT RUN (needs hardware and a live session) |
 | Live checks `--smoke-*` | NOT RUN (signed app, spends quota) |
 
 ## Open
-- `ac936b8` changes concurrency-sensitive code (`MicrophoneTap`, `HybridRecognizer` locks, `finalTranscription`
-  retry, unsafe copies in `AudioRingBuffer`) and has no recorded independent review yet.
+- `f3e0c21` (review fixes) has no independent review of its own.
+- `stickyLanguageAfterTwoConfidentUtterances` failed 9 runs of 12 after `ac936b8` and 0 of 12 on the base code: the
+  block-copy ring buffer made the test feeder outrun the work queue, so the second utterance's partial run (the one
+  that calls the detector) sometimes never started. Audio arrives in real time in the app, so only the test was
+  changed (it now checks that the detector is not called after the language is pinned).
 - `MicrophoneTap` was verified only by build and unit tests; the engine restart path has no automated test.
 - About two thirds of the code is not audited yet (list above).
 
@@ -80,9 +85,7 @@ Also `CopilotEmbeddings`, `copilot-eval`, `scripts/`, `Resources/Interviewer` an
   shortcut to skip files that cannot be old.
 
 ## Next
-1. Run an independent review of `git show ac936b8` (fresh reviewer, focus: data races, lock order, `AVAudioEngine`
-   calls from the notification path, bounds in `AudioRingBuffer`, purge pre-filter, save throttle). Fix findings,
-   rerun `swift test`.
+1. (done) Independent review of `ac936b8`; findings fixed in `f3e0c21`.
 2. (done) `scripts/build-app.sh` passed on `ac936b8`; rerun it after any further code change.
 3. Continue the audit with the "Not audited yet" list: `BankController`, `InterviewerController`,
    `TestCallController`, the rest of `App.swift`, then `Bank/*`, `Memory/*`, `Review/*`, `PromptBuilder`, then the views.
