@@ -81,8 +81,23 @@ public final class LlamaEmbedder: TextEmbedder, @unchecked Sendable {
     private func embedOne(_ text: String) throws -> [Float] {
         let utf8 = Array(text.utf8CString)
         var tokens = [llama_token](repeating: 0, count: maxTokens)
-        let n = utf8.withUnsafeBufferPointer { buf in
+        var n = utf8.withUnsafeBufferPointer { buf in
             llama_tokenize(vocab, buf.baseAddress, Int32(utf8.count - 1), &tokens, Int32(maxTokens), true, true)
+        }
+        if n < 0, n != Int32.min {
+            // Текст длиннее окна модели: `llama_tokenize` возвращает −(нужное число токенов). Раньше это была «ошибка
+            // токенизации»: один плотный фрагмент материалов срывал весь индекс, а длинный вопрос или обмен с развёрнутым
+            // ответом не попадал в поиск по базе и памяти интервью. Теперь берётся начало текста (COPILOT-13).
+            var all = [llama_token](repeating: 0, count: Int(-n))
+            let total = utf8.withUnsafeBufferPointer { buf in
+                llama_tokenize(vocab, buf.baseAddress, Int32(utf8.count - 1), &all, Int32(all.count), true, true)
+            }
+            guard total > maxTokens else { throw EmbedderError.tokenizeFailed }
+            tokens = Array(all.prefix(maxTokens))
+            // Завершающий служебный токен модели (</s> у bge-m3) остаётся последним.
+            let last = all[Int(total) - 1]
+            if last == llama_vocab_eos(vocab) || last == llama_vocab_sep(vocab) { tokens[maxTokens - 1] = last }
+            n = Int32(maxTokens)
         }
         guard n > 0 else { throw EmbedderError.tokenizeFailed }
         if let mem = llama_get_memory(ctx) { llama_memory_clear(mem, true) }

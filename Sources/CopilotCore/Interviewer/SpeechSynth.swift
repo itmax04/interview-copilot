@@ -24,8 +24,8 @@ public enum SpeechSynthError: Error, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .noVoice(let lang): "В macOS нет голоса для языка \(lang). Добавьте его: Системные настройки → Универсальный доступ → Устный контент → Системный голос."
-        case .empty: "Синтез речи не вернул звук"
+        case .noVoice(let lang): L10n.f("В macOS нет голоса для языка %@. Добавьте его: Системные настройки → Универсальный доступ → Устный контент → Системный голос.", lang)
+        case .empty: L10n.t("Синтез речи не вернул звук")
         }
     }
 }

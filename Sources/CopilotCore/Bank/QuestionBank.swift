@@ -156,7 +156,9 @@ public enum QuestionBankWriter {
             if !c.tags.isEmpty { out += "  tags: [\(c.tags.map(quote).joined(separator: ", "))]\n" }
             out += "  questions:\n"
             for q in c.questions { out += "    - \(quote(q))\n" }
-            let answer = c.answer.trimmingCharacters(in: .whitespacesAndNewlines)
+            // Ответ — блоком «|»: разрыв строки Unicode (вставка из Pages, Word) или управляющий символ внутри него
+            // делал весь файл нечитаемым — «ошибка в строке N» вместо базы (COPILOT-13).
+            let answer = PlainText.printable(c.answer).trimmingCharacters(in: .whitespacesAndNewlines)
             if answer.isEmpty {
                 out += "  answer: \"\"\n"
             } else {
@@ -170,7 +172,7 @@ public enum QuestionBankWriter {
 
     /// Строка YAML в двойных кавычках (экранирование совместимо с JSON).
     static func quote(_ s: String) -> String {
-        let one = s.replacingOccurrences(of: "\n", with: " ")
+        let one = PlainText.printable(s).replacingOccurrences(of: "\n", with: " ")
         let data = (try? JSONSerialization.data(withJSONObject: [one], options: [.withoutEscapingSlashes])) ?? Data()
         let json = String(decoding: data, as: UTF8.self)
         return String(json.dropFirst().dropLast())

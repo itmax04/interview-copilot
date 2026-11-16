@@ -50,6 +50,9 @@ public final class FileWatcher: @unchecked Sendable {
     /// После `stop()` отложенные перевешивание и вызов не срабатывают (COPILOT-13): раньше остановленное наблюдение
     /// оживало через секунду, если файла не было, и ещё раз вызывало `onChange` после остановки.
     private var stopped = false
+    /// Файла не было при попытке повесить наблюдение: когда он появится, это тоже изменение (COPILOT-13). Раньше
+    /// `onChange` не вызывался, и после «удалили и положили заново» приложение показывало прежнее содержимое.
+    private var waitingForFile = false
 
     public init(url: URL, onChange: @escaping @Sendable () -> Void) {
         self.url = url
@@ -79,6 +82,7 @@ public final class FileWatcher: @unchecked Sendable {
         let fd = open(url.path, O_EVTONLY)
         guard fd >= 0 else {
             // Файла пока нет — пробуем позже.
+            waitingForFile = true
             queue.asyncAfter(deadline: .now() + 1) { [weak self] in self?.arm() }
             return
         }
@@ -94,6 +98,10 @@ public final class FileWatcher: @unchecked Sendable {
         s.setCancelHandler { close(fd) }
         source = s
         s.resume()
+        if waitingForFile {
+            waitingForFile = false
+            debounce()
+        }
     }
 
     private func debounce() {

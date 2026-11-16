@@ -128,7 +128,8 @@ public final class ProfileLibrary: @unchecked Sendable {
             let sources = sourcesDirectory(id)
             try fm.createDirectory(at: sources, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let copy = sources.appendingPathComponent("\(doc.rawValue).\(url.pathExtension.lowercased())")
-            if fm.fileExists(atPath: copy.path) { try fm.removeItem(at: copy) }
+            // Запись с заменой, без удаления заранее: если загружают сам сохранённый исходник, прежний код сначала
+            // удалял его, а потом не мог прочитать — файл пропадал (COPILOT-13).
             try Data(contentsOf: url).write(to: copy, options: .atomic)
             try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: copy.path)
             try writeFile(text, to: directory(id).appendingPathComponent(doc.fileName))
@@ -172,11 +173,8 @@ public final class ProfileLibrary: @unchecked Sendable {
             let sources = dir.appendingPathComponent("sources", isDirectory: true)
             try fm.createDirectory(at: sources, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let copy = sources.appendingPathComponent(name)
-            if copy.standardizedFileURL != url.standardizedFileURL {
-                if fm.fileExists(atPath: copy.path) { try fm.removeItem(at: copy) }
-                try Data(contentsOf: url).write(to: copy, options: .atomic)
-                try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: copy.path)
-            }
+            try Data(contentsOf: url).write(to: copy, options: .atomic)   // с заменой; тот же файл остаётся на месте
+            try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: copy.path)
             try writeFile(text, to: dir.appendingPathComponent(name + ".md"))
         }
         return MaterialFile(name: name, characters: text.count)

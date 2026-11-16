@@ -903,3 +903,6 @@
 "Без ответа" = "No answer";
 "Формулировки uk / ru / en" = "uk / ru / en phrasings";
 "Репетиция: модель задает вопросы голосом, вы отвечаете в микрофон" = "Rehearsal: the model asks questions by voice, you answer into the microphone";
+"Профиль сменили — подготовка остановлена. Готовое сохранено в прежнем профиле." = "The profile was changed — preparation stopped. Finished parts are saved in the previous profile.";
+"В macOS нет голоса для языка %@. Добавьте его: Системные настройки → Универсальный доступ → Устный контент → Системный голос." = "macOS has no voice for the language %@. Add one: System Settings → Accessibility → Spoken Content → System Voice.";
+"Синтез речи не вернул звук" = "Speech synthesis returned no audio";

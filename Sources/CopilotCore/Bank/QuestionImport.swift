@@ -137,8 +137,24 @@ public enum QuestionImport {
         var out: [String] = []
         var current = ""
         for p in text.components(separatedBy: "\n\n") {
-            if current.count + p.count + 2 > maxCharacters, !current.isEmpty { out.append(current); current = "" }
-            current += (current.isEmpty ? "" : "\n\n") + String(p.prefix(maxCharacters))
+            if p.count <= maxCharacters {
+                if current.count + p.count + 2 > maxCharacters, !current.isEmpty { out.append(current); current = "" }
+                current += (current.isEmpty ? "" : "\n\n") + p
+                continue
+            }
+            // Абзац длиннее части (файл без пустых строк между вопросами): по строкам, а строка длиннее части — кусками.
+            // Раньше от такого абзаца оставались первые `maxCharacters` символов, остальные вопросы молча терялись (COPILOT-13).
+            var separator = "\n\n"
+            for line in p.components(separatedBy: "\n") {
+                var rest = Substring(line)
+                repeat {
+                    let piece = rest.prefix(maxCharacters)
+                    rest = rest.dropFirst(maxCharacters)
+                    if current.count + piece.count + separator.count > maxCharacters, !current.isEmpty { out.append(current); current = "" }
+                    current += (current.isEmpty ? "" : separator) + piece
+                    separator = "\n"
+                } while !rest.isEmpty
+            }
         }
         if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out.append(current) }
         return out

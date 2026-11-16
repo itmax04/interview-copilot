@@ -50,7 +50,7 @@ public enum DocumentText {
 
     /// Пробелы в конце строк, неразрывные пробелы и больше одной пустой строки подряд убираются.
     static func normalize(_ s: String) -> String {
-        let lines = s.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        let lines = PlainText.unifiedLineBreaks(s)
             .replacingOccurrences(of: "\u{00A0}", with: " ")
             .components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
         var out: [String] = []
@@ -59,5 +59,36 @@ public enum DocumentText {
             out.append(line)
         }
         return out.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+/// Текст без символов, которые ломают разбор по строкам и запись в YAML (COPILOT-13).
+public enum PlainText {
+    /// Все разрывы строк — «\n». Word и Pages отдают мягкий перенос как U+2028, абзац — U+2029, разрыв страницы — U+000C,
+    /// перенос внутри ячейки — U+000B: без замены строки файла вопросов склеивались в одну.
+    public static func unifiedLineBreaks(_ s: String) -> String {
+        var out = String.UnicodeScalarView()
+        var afterCR = false
+        for u in s.unicodeScalars {
+            switch u.value {
+            case 0x0A: if !afterCR { out.append("\n") }   // «\r\n» — один перевод строки
+            case 0x0D, 0x0B, 0x0C, 0x85, 0x2028, 0x2029: out.append("\n")
+            default: out.append(u)
+            }
+            afterCR = u.value == 0x0D
+        }
+        return String(out)
+    }
+
+    /// Только символы, допустимые в YAML: разрывы строк приведены к «\n», прочие управляющие символы убраны.
+    public static func printable(_ s: String) -> String {
+        var out = String.UnicodeScalarView()
+        for u in unifiedLineBreaks(s).unicodeScalars {
+            switch u.value {
+            case 0x09, 0x0A, 0x20...0x7E, 0xA0...0xD7FF, 0xE000...0xFEFE, 0xFF00...0xFFFD, 0x1_0000...0x10_FFFF: out.append(u)
+            default: break
+            }
+        }
+        return String(out)
     }
 }

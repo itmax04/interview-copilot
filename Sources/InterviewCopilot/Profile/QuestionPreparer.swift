@@ -10,6 +10,10 @@ final class QuestionPreparer {
     private let model: AppModel
     private let providers = ChainFactory.providers()
     private var task: Task<Void, Never>?
+    /// Номер запущенной работы. Остановленная или прежняя работа ещё доходит до ближайшего `await` и не должна менять
+    /// состояние: раньше после «Остановить» сообщение «Остановлено. Готовое сохранено.» сразу сменялось ошибкой
+    /// «Модели недоступны: нет ответа» — прерванный запрос возвращался как неудачный (COPILOT-13).
+    private var generation = 0
 
     private(set) var running = false
     private(set) var progress: (done: Int, total: Int) = (0, 0)
@@ -29,6 +33,7 @@ final class QuestionPreparer {
     }
 
     func cancel() {
+        generation += 1
         task?.cancel()
         task = nil
         running = false
@@ -53,13 +58,15 @@ final class QuestionPreparer {
             Log.app.info("questions import rules=\(byRules.count)")
             return
         }
-        start(total: QuestionImport.chunks(text).count, label: "Разбираю файл моделью") { [weak self] in
+        start(total: QuestionImport.chunks(text).count, label: "Разбираю файл моделью") { [weak self] run in
             guard let self else { return }
             var found: [ImportedQuestion] = []
             let chain = await self.chain()
             for part in QuestionImport.chunks(text) {
-                if Task.isCancelled { return }
-                switch await ChainText.collect(chain, QuestionImport.llmRequest(part)) {
+                guard self.isCurrent(run) else { return }
+                let result = await ChainText.collect(chain, QuestionImport.llmRequest(part))
+                guard self.isCurrent(run) else { return }
+                switch result {
                 case .success(let answer): found += QuestionImport.parseLLM(answer)
                 case .failure(let e): self.fail(e.description); return
                 }
@@ -95,13 +102,18 @@ final class QuestionPreparer {
         let drafting = QuestionPreparation.batches(QuestionPreparation.needsDraft(bank.cards).map(\.id), size: QuestionPreparation.draftBatch)
         guard !phrasing.isEmpty || !drafting.isEmpty else { succeed("Всё уже подготовлено."); return }
         let settings = model.settings
-        start(total: phrasing.count + drafting.count, label: "Готовлю формулировки и черновики") { [weak self] in
+        // Подготовка относится к профилю, с которого начата. Номера карточек (q-1, q-2…) в профилях совпадают: после смены
+        // профиля формулировки и черновики чужих вопросов записались бы в карточки нового профиля (COPILOT-13).
+        let profileID = bank.activeID
+        start(total: phrasing.count + drafting.count, label: "Готовлю формулировки и черновики") { [weak self] run in
             guard let self else { return }
             let chain = await self.chain()
             for ids in phrasing {
-                if Task.isCancelled { return }
+                guard self.isCurrent(run), self.sameProfile(profileID) else { return }
                 let cards = self.bank.cards.filter { ids.contains($0.id) }
-                switch await ChainText.collect(chain, QuestionPreparation.phrasingsRequest(cards)) {
+                let result = await ChainText.collect(chain, QuestionPreparation.phrasingsRequest(cards))
+                guard self.isCurrent(run), self.sameProfile(profileID) else { return }
+                switch result {
                 case .success(let text):
                     self.bank.saveCards(QuestionPreparation.applyPhrasings(text, to: self.bank.cards, requested: ids))
                 case .failure(let e): self.fail(e.description); return
@@ -109,16 +121,19 @@ final class QuestionPreparer {
                 self.step()
             }
             for ids in drafting {
-                if Task.isCancelled { return }
+                guard self.isCurrent(run), self.sameProfile(profileID) else { return }
                 var items: [(card: BankCard, materials: [MaterialHit])] = []
                 for card in self.bank.cards where ids.contains(card.id) && !card.hasAnswer {
                     items.append((card, await self.bank.materials(for: card.questions.first ?? "")))
                 }
+                guard self.isCurrent(run), self.sameProfile(profileID) else { return }
                 if !items.isEmpty {
                     let request = QuestionPreparation.draftsRequest(items, profile: self.bank.profile,
                                                                     generalInstructions: self.bank.generalInstructions,
                                                                     redactPII: settings.piiFilterEnabled)
-                    switch await ChainText.collect(chain, request) {
+                    let result = await ChainText.collect(chain, request)
+                    guard self.isCurrent(run), self.sameProfile(profileID) else { return }
+                    switch result {
                     case .success(let text): self.bank.saveCards(QuestionPreparation.applyDrafts(text, to: self.bank.cards))
                     case .failure(let e): self.fail(e.description); return
                     }
@@ -133,16 +148,31 @@ final class QuestionPreparer {
 
     // MARK: Внутреннее
 
-    private func start(total: Int, label: String, _ work: @escaping @MainActor () async -> Void) {
+    private func start(total: Int, label: String, _ work: @escaping @MainActor (Int) async -> Void) {
+        generation += 1
+        let run = generation
         running = true
         failed = false
         progress = (0, total)
         message = label + "…"
         task = Task { [weak self] in
-            await work()
-            self?.running = false
-            self?.task = nil
+            await work(run)
+            // Прежняя работа, закончившись позже, не сбрасывает состояние новой.
+            guard let self, self.generation == run else { return }
+            self.running = false
+            self.task = nil
         }
+    }
+
+    /// Работа `run` — всё ещё текущая: её не остановили и после неё не начали другую.
+    private func isCurrent(_ run: Int) -> Bool { generation == run && !Task.isCancelled }
+
+    /// Активный профиль — тот, с которого начата подготовка; иначе она останавливается с сообщением.
+    private func sameProfile(_ id: String?) -> Bool {
+        guard bank.activeID != id else { return true }
+        fail(L("Профиль сменили — подготовка остановлена. Готовое сохранено в прежнем профиле."))
+        Log.app.info("questions preparation stopped: profile changed")
+        return false
     }
 
     private func step() {
