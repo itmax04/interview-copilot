@@ -57,6 +57,9 @@ public final class BankIndexBuilder: @unchecked Sendable {
     private let cacheURL: URL?
     private var cache: [String: [Float]] = [:]
     private let lock = NSLock()
+    /// Эмбеддинги — пачками, как в `MaterialIndexBuilder`: эмбеддер занят на весь вызов `embed`, а поиск по ходу
+    /// на созвоне (`embedQuery`) не должен ждать пересчёта всей базы (COPILOT-13).
+    static let batch = 8
 
     public init(embedder: TextEmbedder, cacheDirectory: URL?) {
         self.embedder = embedder
@@ -93,8 +96,10 @@ public final class BankIndexBuilder: @unchecked Sendable {
         for card in cards { for q in card.questions where cache[Self.key(q)] == nil { missing.append(q) } }
         if !missing.isEmpty {
             let unique = Array(Set(missing))
-            let embedded = try embedder.embed(unique)
-            for (q, v) in zip(unique, embedded) { cache[Self.key(q)] = v }
+            for start in stride(from: 0, to: unique.count, by: Self.batch) {
+                let slice = Array(unique[start..<min(start + Self.batch, unique.count)])
+                for (q, v) in zip(slice, try embedder.embed(slice)) { cache[Self.key(q)] = v }
+            }
             saveCache()
         }
         for (i, card) in cards.enumerated() {

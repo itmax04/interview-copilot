@@ -33,6 +33,8 @@ final class BankController {
     private var builder: BankIndexBuilder?
     private var watcher: FileWatcher?
     private var embedderModel: String?
+    /// Номер пересчёта индекса: результат более раннего пересчёта не должен заменить более поздний (COPILOT-13).
+    private var indexGeneration = 0
     var onChange: (() -> Void)?
 
     var questionsURL: URL? { activeID.map { library.questionsURL($0) } }
@@ -48,6 +50,7 @@ final class BankController {
     }
 
     func start(embeddingModel: String, activeProfileID: String?) {
+        var failure: String?
         do {
             switch try library.migrateLegacy(AppPaths.profile, example: Self.exampleProfileURL) {
             case .none: break
@@ -56,7 +59,7 @@ final class BankController {
             }
             if library.list().isEmpty { try library.create(name: ProfileLibrary.defaultName) }
         } catch {
-            self.error = L("Профиль: %@", "\(error.localizedDescription)")
+            failure = L("Профиль: %@", "\(error.localizedDescription)")
         }
         generalInstructions = ProfileLibrary.readGeneralInstructions()
         profiles = library.list()
@@ -65,6 +68,15 @@ final class BankController {
         reload()
         reloadMaterials()
         armWatcher()
+        report(failure)
+    }
+
+    /// Ошибка операции (запись, переименование, удаление) показывается и после перечитывания базы:
+    /// `reload()` при удачном разборе сбрасывает `error`, и раньше сообщение пропадало, не успев появиться (COPILOT-13).
+    private func report(_ failure: String?) {
+        guard let failure else { return }
+        error = failure
+        onChange?()
     }
 
     private func armWatcher() {
@@ -82,6 +94,10 @@ final class BankController {
         guard id != activeID, profiles.contains(where: { $0.id == id }) else { return }
         activeID = id
         index = nil   // карточки прежнего профиля не должны находиться, пока строится новый индекс
+        indexGeneration += 1   // и пересчёт, начатый для прежнего профиля, уже не нужен (в т. ч. при возврате A → B → A)
+        // Если questions.yaml нового профиля не разбирается, `reload()` оставляет прежние карточки (S-10) — но это
+        // карточки другого профиля: таблица показала бы их, а сохранение записало бы в чужой файл (COPILOT-13).
+        cards = []
         materialIndex = .empty
         reload()
         reloadMaterials()
@@ -105,23 +121,27 @@ final class BankController {
 
     func renameActive(to name: String) {
         guard let id = activeID else { return }
-        do { try library.rename(id, to: name) } catch { self.error = L("Профиль: %@", "\(error.localizedDescription)") }
+        var failure: String?
+        do { try library.rename(id, to: name) } catch { failure = L("Профиль: %@", "\(error.localizedDescription)") }
         profiles = library.list()
         reload()
+        report(failure)
     }
 
     /// Удаление активного профиля; последний профиль не удаляется — вместо него создаётся пустой.
     func deleteActive() {
         guard let id = activeID else { return }
+        var failure: String?
         do {
             try library.delete(id)
             if library.list().isEmpty { try library.create(name: ProfileLibrary.defaultName) }
         } catch {
-            self.error = L("Профиль: %@", "\(error.localizedDescription)")
+            failure = L("Профиль: %@", "\(error.localizedDescription)")
         }
         profiles = library.list()
         activeID = nil
         if let first = profiles.first { select(first.id) } else { onChange?() }
+        report(failure)
     }
 
     func text(_ doc: ProfileDocument) -> String {
@@ -156,17 +176,22 @@ final class BankController {
     /// Освобождение моделей до выхода (ggml-metal падает, если ресурсы живы во время статических деструкторов).
     func shutdown() {
         watcher?.stop()
+        materialTask?.cancel()
+        materialTask = nil
         builder = nil
         index = nil
+        embedder = nil   // тот же эмбеддер держал и индекс материалов: без этого модель жила до выхода
     }
 
     private func loadEmbedder(_ file: String) {
-        guard embedderModel != file else { return }
+        // Та же модель грузится повторно, только если прошлая попытка не удалась: файл могли докачать уже после запуска.
+        guard embedderModel != file || builder == nil else { return }
         embedderModel = file
         let path = AppPaths.model(file).path
         guard FileManager.default.fileExists(atPath: path) else {
             status = L("Нет модели эмбеддингов: %@ (scripts/fetch-models.sh)", "\(file)")
             builder = nil
+            embedder = nil
             return
         }
         let spec = EmbeddingModels.spec(for: file)
@@ -185,6 +210,14 @@ final class BankController {
         loadEmbedder(file)
         reload()
         reloadMaterials()
+    }
+
+    /// Модели докачаны мастером первого запуска: если эмбеддер при старте не загрузился (файла ещё не было),
+    /// загрузить его сейчас. Раньше база и поиск по материалам не работали до перезапуска приложения (COPILOT-13).
+    func retryEmbedderIfMissing() {
+        guard builder == nil, let file = embedderModel else { return }
+        embeddingModelChanged(file)
+        if builder != nil { Log.app.info("embedding model loaded after download") }
     }
 
     // MARK: Материалы (R-06)
@@ -210,9 +243,12 @@ final class BankController {
             Task { @MainActor in self?.materialProgress(done, of: total, profile: id) }
         }
         materialTask = Task { [weak self] in
-            let result = await Task.detached(priority: .utility) { () -> Result<MaterialIndex, Error> in
+            // Отмена `materialTask` сама до отдельной задачи не доходит: раньше прежняя индексация досчитывала
+            // все фрагменты и занимала эмбеддер, хотя её результат уже никому не был нужен (COPILOT-13).
+            let work = Task.detached(priority: .utility) { () -> Result<MaterialIndex, Error> in
                 Result { try builder.build(files, progress: report, isCancelled: { Task.isCancelled }) }
-            }.value
+            }
+            let result = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
             guard let self, !Task.isCancelled, self.activeID == id else { return }
             self.materialTask = nil
             switch result {
@@ -257,13 +293,15 @@ final class BankController {
     /// Сохранить вопросы активного профиля (таблица, импорт, подготовка) и перечитать базу.
     func saveCards(_ new: [BankCard]) {
         guard let url = questionsURL else { return }
+        var failure: String?
         do {
             try Data(QuestionBankWriter.yaml(new).utf8).write(to: url, options: .atomic)
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
         } catch {
-            self.error = L("Вопросы: %@", "\(error.localizedDescription)")
+            failure = L("Вопросы: %@", "\(error.localizedDescription)")
         }
         reload()
+        report(failure)
     }
 
     /// Удалить все вопросы профиля сразу (COPILOT-11). Резюме, инструкции и материалы остаются.
@@ -307,13 +345,16 @@ final class BankController {
         onChange?()
         guard let builder else { return }
         status = "Пересчитываю эмбеддинги…"
+        indexGeneration += 1
+        let generation = indexGeneration
         Task.detached(priority: .utility) { [builder, parsed, id] in
             let started = Date()
             // Вопросы без ответа в поиск не идут: опереться не на что (R-07); они ждут черновика.
             let result = Result { try builder.build(parsed.filter(\.hasAnswer)) }
             await MainActor.run { [weak self] in
-                // Профиль успели сменить — индекс прежнего не нужен.
-                guard let self, self.activeID == id else { return }
+                // Профиль успели сменить или базу перечитали ещё раз — этот индекс устарел. Пересчёты заканчиваются
+                // не по порядку: без номера удалённые карточки могли вернуться в поиск (COPILOT-13).
+                guard let self, self.activeID == id, self.indexGeneration == generation else { return }
                 switch result {
                 case .success(let index):
                     self.index = index

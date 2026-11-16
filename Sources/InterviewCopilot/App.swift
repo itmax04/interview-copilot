@@ -117,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         OnboardingWindowController(model: model, listening: listening) { [weak self] in
             self?.onboarding.close()
             self?.listening.enterStandby()
+            self?.bank.retryEmbedderIfMissing()   // модель эмбеддингов могла быть скачана только что
         }
     }
     private let panelModel = PanelModel()

@@ -47,6 +47,9 @@ public final class FileWatcher: @unchecked Sendable {
     private var source: DispatchSourceFileSystemObject?
     private let onChange: @Sendable () -> Void
     private var pending: DispatchWorkItem?
+    /// После `stop()` отложенные перевешивание и вызов не срабатывают (COPILOT-13): раньше остановленное наблюдение
+    /// оживало через секунду, если файла не было, и ещё раз вызывало `onChange` после остановки.
+    private var stopped = false
 
     public init(url: URL, onChange: @escaping @Sendable () -> Void) {
         self.url = url
@@ -54,17 +57,24 @@ public final class FileWatcher: @unchecked Sendable {
     }
 
     public func start() {
-        queue.async { self.arm() }
+        queue.async {
+            self.stopped = false
+            self.arm()
+        }
     }
 
     public func stop() {
         queue.sync {
+            stopped = true
+            pending?.cancel()
+            pending = nil
             source?.cancel()
             source = nil
         }
     }
 
     private func arm() {
+        guard !stopped else { return }
         source?.cancel()
         let fd = open(url.path, O_EVTONLY)
         guard fd >= 0 else {

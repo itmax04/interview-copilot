@@ -69,6 +69,7 @@ final class InterviewerController {
             alert.messageText = "ИИ-собеседование недоступно"
             alert.informativeText = "Откройте собранное приложение InterviewCopilot.app: в нём находится страница собеседования."
             alert.runModal()
+            onEnd?()   // иначе сессия Mock оставалась активной без собеседования и без слушания
             return
         }
         do {
@@ -239,6 +240,9 @@ final class InterviewerController {
                 self.stage = .speaking
                 Log.app.notice("interviewer question ready index=\(self.history.count + 1) words=\(TranscriptComparison.words(spoken).count) wav_bytes=\(audio.count)")
             } catch {
+                // Пока шёл синтез, собеседование могли остановить или начать заново: ошибка прежнего вопроса
+                // не должна переводить новое состояние в «сбой».
+                guard !Task.isCancelled, self.active, self.stage == .thinking else { return }
                 self.fail(L("Синтез речи: %@", "\(error)"))
             }
         }
