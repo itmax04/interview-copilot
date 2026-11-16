@@ -1,5 +1,7 @@
 # COPILOT-13 — handoff
 
+ID: COPILOT-13-handoff · Status: **closed by the owner's decision (2026-11-16); branch not pushed, not merged into `main`** · Updated: 2026-11-16
+
 ## Identity
 - Task: COPILOT-13 (technical audit and fixes). Intent: `docs/changes/COPILOT-13/intent.md`.
 - Branch `feat/copilot-13-audit-fixes`, created from `main` (`6081670`). Not pushed.
@@ -43,14 +45,11 @@ STILL NOT READ: layout parts of `History/SessionHistoryWindow`, `Workspace/Works
 `Onboarding/PermissionsView`, `Design/*`, `ParrotIcon`, `Theme`, `MainMenu`, `SettingsWindow`, `SmokeTest`, `UISnapshots`,
 `TurnEval`, `BankEval`, `PromptScenarios`, `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall` pages.
 
-## Not audited yet (older list; subtract the fourth stage above)
-App: `Panel/PanelController`, `Panel/PanelResize`, `SettingsWindow`, `MainMenu`, `Theme`, `ParrotIcon`, `Design/*`, all
-SwiftUI views (`Panel/PanelView`, `Panel/AnswerCardView`, `Workspace/`, `Session/`, `History/SessionHistoryWindow`,
-`Settings/`, `Onboarding/`, `Profile/ProfileWindow`, the table part of `Profile/QuestionsView`), `SmokeTest`,
-`UISnapshots`.
-`CopilotCore`: `Answer/AnswerStyle`, `Menu/MenuLayout`, `Domain/Modes`, `Bank/BankEval`, `Turns/TurnEval`,
-`Memory/PromptScenarios`.
-Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall` pages.
+## Not audited (final, consolidated list)
+The owner closed the task before these were read (about 6 000 of 22 900 lines): layout parts of `History/SessionHistoryWindow`,
+`Workspace/WorkspaceWindow` (after line 140), `Settings/*` views, `Onboarding/PermissionsView`, `Design/*`, `ParrotIcon`, `Theme`,
+`MainMenu`, `SettingsWindow`, `SmokeTest`, `UISnapshots`, `TurnEval`, `BankEval`, `PromptScenarios`, `copilot-eval`, `scripts/`,
+`Resources/Interviewer` and `Resources/TestCall` pages. Files listed as "read for logic only" in the fourth stage were not read for layout.
 
 ## Fixed (commit `ac936b8`)
 | # | Where | Defect | Fix |
@@ -158,7 +157,7 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
 | After `6290467`: `swift build`; `swift test --filter "ReviewFollowUp|LongTextEmbedding|QuestionImportChunk|QuestionBankWriterSanitizing"` | PASS, 9 tests |
 | After `2b48047`: `swift build` | PASS (app target has no tests) |
 | Independent review of `0c5cb4a` + `f3e0c21` | DONE (fresh reviewer, strong tier, read-only): APPROVE WITH FIXES, no high findings; 3 medium and 5 low NOT FIXED yet, see "Open: review of 0c5cb4a/f3e0c21". Reviewer's own runs: `swift build --build-tests` PASS; FileWatcherStop/BankIndexBatching/FinalRetry/StreamingTranscriber/JobPageDecoding suites 6 of 6 runs PASS, 5 more under full CPU load PASS. |
-| Full §9 check after `2b48047` | NOT RUN |
+| Full §9 check after `2b48047` | superseded: run on `38c79a8`, see "Verified" |
 | Microphone restart on a real device change | NOT RUN (needs hardware and a live session) |
 | Live checks `--smoke-*` | NOT RUN (signed app, spends quota) |
 
@@ -207,10 +206,16 @@ The app target has no test target: M1, M3, L1–L3 are verified by build and rea
 ## Verified (final check of this stage, HEAD `38c79a8`)
 - `swift test`: PASS, 393 tests in 69 suites. `scripts/run-evals.sh`: PASS (filter-text 214/214, memory 8/8 and 0/2, materials AC-05 23/24, unrelated 2/8). `scripts/secret-scan.sh`: PASS, 0 findings. `scripts/check-localization.sh`: PASS, 800 keys, 0 missing. `scripts/build-app.sh`: PASS, `dist/InterviewCopilot.app` built and signed.
 
-## Next
-1. Review findings M1–M3, L1–L5 are closed (see above).
-2. Optionally read the "STILL NOT READ" list of the fourth stage; fix findings.
-3. Full §9 check: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`;
-   no source edits while it runs. Record PASS/FAIL in "Verified", commit the handoff.
-Rules: commit by explicit path only, no `git stash`, no push. Stop and ask the owner before pushing, changing tuned thresholds
-or prompt rules, adding a dependency.
+## Closing (2026-11-16)
+- Owner's decision, 2026-11-16: «остановись после текущей сессии и закрой задачу». No further audit pass or review round is started.
+- Final commit of code: `38c79a8`; this handoff is the last commit. Final check: see "Verified" (393 tests, evals, secret scan, localization, app build all PASS).
+- Findings still open or unverified, with the reason:
+  - The "Not audited" list above: not read, by the owner's decision.
+  - No independent review of the M1–M3 / L1–L4 fixes (`db031ca`…`38c79a8`): the task was closed instead.
+  - Fixes in the app target (M1, M3, L1, L2, L3) are verified by build and reading only: no test target.
+  - M2: no user-visible error when the microphone engine gives up (logged only); the engine restart path has no automated test.
+  - L2 residual: the build closure's captured `builder` may be released on a background thread right after the 3 s wait.
+  - Microphone restart on a real device change and live `--smoke-*` checks: NOT RUN (hardware / quota).
+  - Known limitations listed earlier in this file (`LlamaEmbedder` keeps the start of a long text, stale "Review in progress" badge, partial batch
+    review comments, review of a still-running session, two `QuestionPreparer` instances, `LocalTestCallServer` without read timeout) stay as written.
+- Nothing was pushed; nothing was merged into `main`; no branch was deleted. Push and merge are the owner's separate decision.
