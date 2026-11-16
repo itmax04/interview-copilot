@@ -132,7 +132,7 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
 | Full §9 check on `0c5cb4a` repeated by the third-stage session, clean tree, 2026-11-16 | PASS: `swift test` 380 tests in 62 suites; evals exit 0 (filter-text 214/214, memory 8/8 and 0/2, materials 23/24 and 2/8); secret scan 0 findings; localization 796 keys, 0 missing; `scripts/build-app.sh` exit 0 |
 | New tests of `fb36c06` against the code before the fixes | FAIL as expected, 9 of 11 tests: YAML reader "control characters are not allowed" and "could not find expected ':'", glued lines, one chunk instead of several, deleted source file, "Ошибка токенизации", no `onChange` |
 | Full §9 check on the tree committed as `fb36c06` | PASS: `swift build` 0 warnings in sources; `swift test` 391 tests in 68 suites; evals exit 0 (filter-text 214/214, memory 8/8 and 0/2, materials 23/24 and 2/8); secret scan 0 findings; localization 799 keys, 0 missing, 0 format mismatches; `scripts/build-app.sh` exit 0, signed bundle |
-| Independent review of `fb36c06` | NOT VERIFIED: a fresh reviewer (standard tier, read-only) was started; its report had not arrived when the session ended on the context limit |
+| Independent review of `fb36c06` | DONE (fresh reviewer, standard tier, read-only): APPROVE WITH FIXES, no high-severity findings; 1 medium and 4 low findings are NOT FIXED yet (listed in "Open") |
 | Microphone restart on a real device change | NOT RUN (needs hardware and a live session) |
 | Live checks `--smoke-*` | NOT RUN (signed app, spends quota) |
 
@@ -148,7 +148,17 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
   that calls the detector) sometimes never started. Audio arrives in real time in the app, so only the test was
   changed (it now checks that the detector is not called after the language is pinned).
 - `MicrophoneTap` was verified only by build and unit tests; the engine restart path has no automated test.
-- `fb36c06` has no independent review verdict yet (see "Verified").
+- Review findings for `fb36c06`, not fixed (the session ended on the context limit):
+  - medium: `QuestionPreparer.importFile` has no profile check and its "no questions found" branch has no
+    current-run check. Questions parsed by the model for profile A land in `pendingImport` after a switch to B and
+    are then added to B; a cancelled run with no chunks can overwrite the "Stopped" message. Fix: capture
+    `bank.activeID` before `start`, guard `isCurrent(run)` and `sameProfile` before `pendingImport = found` and
+    before the final `fail`.
+  - low: `QuestionBankWriter.yaml` — a question that is empty after `PlainText.printable` is written as `""`, the
+    parser drops it and rejects the file if it was the only one; skip empty questions when writing.
+  - low: `LlamaEmbedder` truncates silently; add a log line.
+  - low: `LongTextEmbeddingTests` passes silently when bge-m3 is absent, and its `> 0.6` threshold is model-dependent.
+  - low: `QuestionImport.chunks` cuts an over-long line at a fixed length (mid-word); prefer a space.
 - Row 26 (`QuestionPreparer`) is verified only by build and reading: the app target has no tests.
 - Not audited yet: the SwiftUI views and the rest of the list above (about 6 000 lines of 22 900).
 
@@ -160,7 +170,8 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
 ## Next
 1. Independent review of `git show 0c5cb4a`, `git show f3e0c21` and `git show fb36c06` (fresh reviewer, points in "Open";
    for `fb36c06`: YAML round trip of unusual answers, `chunks` losing or duplicating text, the truncation path of
-   `LlamaEmbedder`, `FileWatcher` reload at start, `QuestionPreparer` state after an early return). Fix findings,
+   `LlamaEmbedder`, `FileWatcher` reload at start, `QuestionPreparer` state after an early return — reviewed, see
+   the findings in "Open": fix them first). Fix findings,
    rerun the full §9 check.
 2. (done, `fb36c06`) `LlamaEmbedder.embedOne` for texts over 512 tokens; the rest of `Bank/*` and `Profiles/*`,
    `Memory/*`, `Review/*`, `Answer/*`, `LLM/PromptBuilder`, `LiveSessionController`, `History/ReviewController`,
