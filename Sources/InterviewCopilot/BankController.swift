@@ -12,6 +12,9 @@ final class BankController {
     private(set) var profile = Profile(name: ProfileLibrary.defaultName)
     private(set) var cards: [BankCard] = []
     private(set) var error: String?
+    /// `questions.yaml` активного профиля существует, но не разбирается: запись из приложения затёрла бы файл, который
+    /// ещё можно исправить вручную (COPILOT-13 M3). Сбрасывается удачным разбором.
+    private(set) var questionsUnreadable = false
     private(set) var status = "База не загружена"
 
     let library = ProfileLibrary()
@@ -299,6 +302,10 @@ final class BankController {
     /// Сохранить вопросы активного профиля (таблица, импорт, подготовка) и перечитать базу.
     func saveCards(_ new: [BankCard]) {
         guard let url = questionsURL else { return }
+        guard !questionsUnreadable else {
+            report(L("Вопросы: файл questions.yaml не читается — исправьте его, затем повторите"))
+            return
+        }
         var failure: String?
         do {
             try Data(QuestionBankWriter.yaml(new).utf8).write(to: url, options: .atomic)
@@ -328,6 +335,7 @@ final class BankController {
     /// Перечитать базу. При ошибке остаётся прежняя рабочая версия (S-10).
     func reload() {
         guard let id = activeID, let questionsURL else {
+            questionsUnreadable = false
             cards = []
             onChange?()
             return
@@ -337,12 +345,15 @@ final class BankController {
         do {
             parsed = FileManager.default.fileExists(atPath: questionsURL.path) ? try QuestionBankParser.load(questionsURL) : []
             error = nil
+            questionsUnreadable = false
         } catch let e as QuestionBankError {
+            questionsUnreadable = true
             error = e.description
             Log.app.error("question bank parse error line=\(e.line ?? 0)")
             onChange?()
             return
         } catch {
+            questionsUnreadable = true
             self.error = L("База вопросов: %@", error.localizedDescription)
             onChange?()
             return

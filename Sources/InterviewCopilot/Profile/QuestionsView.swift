@@ -88,6 +88,7 @@ struct QuestionsView: View {
                 bank.saveCards(bank.cards + [BankCard(id: id, questions: ["Новый вопрос"], answer: "")])
                 selection = id
             }
+            .disabled(bank.questionsUnreadable)
             Divider().frame(height: 16)
             if preparer.running {
                 ProgressView(value: Double(preparer.progress.done), total: Double(max(preparer.progress.total, 1))).frame(width: 120)

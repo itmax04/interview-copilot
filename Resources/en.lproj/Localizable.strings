@@ -242,6 +242,7 @@
 "Индексирую материалы: %@ из %@ новых фрагментов" = "Indexing materials: %@ of %@ new chunks";
 "Материалы: %@" = "Materials: %@";
 "Вопросы: %@" = "Questions: %@";
+"Вопросы: файл questions.yaml не читается — исправьте его, затем повторите" = "Questions: questions.yaml cannot be read — fix it, then try again";
 "База: %@ карточек" = "Bank: %@ cards";
 "Ошибка индекса: %@" = "Index error: %@";
 "База не загружена" = "Bank not loaded";
