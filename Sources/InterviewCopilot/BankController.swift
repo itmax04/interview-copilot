@@ -31,6 +31,8 @@ final class BankController {
     private(set) var materialStatus = ""
     private var embedder: TextEmbedder?
     private var materialTask: Task<Void, Never>?
+    /// Фоновые построения индексов, держащие эмбеддер: `shutdown()` ждёт их, чтобы модель не освобождалась под ними (L2).
+    private let buildGroup = DispatchGroup()
 
     private var index: BankIndex?
     private var builder: BankIndexBuilder?
@@ -187,6 +189,8 @@ final class BankController {
         watcher?.stop()
         materialTask?.cancel()
         materialTask = nil
+        // Построения уже отменены или скоро закончатся; ждём недолго, чтобы не повесить выход.
+        _ = buildGroup.wait(timeout: .now() + 3)
         builder = nil
         index = nil
         embedder = nil   // тот же эмбеддер держал и индекс материалов: без этого модель жила до выхода
@@ -195,6 +199,13 @@ final class BankController {
     private func loadEmbedder(_ file: String) {
         // Та же модель грузится повторно, только если прошлая попытка не удалась: файл могли докачать уже после запуска.
         guard embedderModel != file || builder == nil else { return }
+        // Смена модели: индекс и индекс материалов построены другой моделью, их векторы несравнимы с запросами новой;
+        // незавершённое построение прежней модели не должно перезаписать статус и индекс (L1).
+        if embedderModel != file {
+            index = nil
+            indexGeneration += 1
+            materialIndex = .empty
+        }
         embedderModel = file
         let path = AppPaths.model(file).path
         guard FileManager.default.fileExists(atPath: path) else {
@@ -251,11 +262,14 @@ final class BankController {
             guard total > 0 else { return }
             Task { @MainActor in self?.materialProgress(done, of: total, profile: id) }
         }
+        let group = buildGroup
         materialTask = Task { [weak self] in
             // Отмена `materialTask` сама до отдельной задачи не доходит: раньше прежняя индексация досчитывала
             // все фрагменты и занимала эмбеддер, хотя её результат уже никому не был нужен (COPILOT-13).
+            group.enter()
             let work = Task.detached(priority: .utility) { () -> Result<MaterialIndex, Error> in
-                Result { try builder.build(files, progress: report, isCancelled: { Task.isCancelled }) }
+                defer { group.leave() }
+                return Result { try builder.build(files, progress: report, isCancelled: { Task.isCancelled }) }
             }
             let result = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
             guard let self, !Task.isCancelled, self.activeID == id else { return }
@@ -364,10 +378,13 @@ final class BankController {
         status = "Пересчитываю эмбеддинги…"
         indexGeneration += 1
         let generation = indexGeneration
+        let group = buildGroup
+        group.enter()
         Task.detached(priority: .utility) { [builder, parsed, id] in
             let started = Date()
             // Вопросы без ответа в поиск не идут: опереться не на что (R-07); они ждут черновика.
             let result = Result { try builder.build(parsed.filter(\.hasAnswer)) }
+            group.leave()
             await MainActor.run { [weak self] in
                 // Профиль успели сменить или базу перечитали ещё раз — этот индекс устарел. Пересчёты заканчиваются
                 // не по порядку: без номера удалённые карточки могли вернуться в поиск (COPILOT-13).
