@@ -71,7 +71,9 @@ final class OnboardingState {
             Task {
                 do {
                     try await downloader.download(f) { p in
-                        Task { @MainActor in self.downloads[f] = p }
+                        // Поздний отчёт о ходе не должен вернуть в `downloads` уже законченную загрузку: запись остаётся
+                        // навсегда, шаг «Модели» считает, что загрузка идёт, и повторить её нельзя (COPILOT-13).
+                        Task { @MainActor in if self.downloads[f] != nil { self.downloads[f] = p } }
                     }
                     present[f] = true
                 } catch {

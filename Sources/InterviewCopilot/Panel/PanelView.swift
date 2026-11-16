@@ -295,7 +295,9 @@ private struct LevelWave: View {
     private static let heights: [CGFloat] = [6, 11, 16, 20, 14, 18, 10, 13, 7]
 
     var body: some View {
-        let lit = Int(((min(max(level, -60), -20) + 60) / 40 * Float(Self.heights.count)).rounded())
+        // NaN (сбойный уровень) не доходит до `Int(...)`: это был бы сбой приложения.
+        let clamped = level.isNaN ? -60 : min(max(level, -60), -20)
+        let lit = Int(((clamped + 60) / 40 * Float(Self.heights.count)).rounded())
         HStack(spacing: 5) {
             Image(systemName: silent ? "mic.slash.fill" : icon).font(.system(size: 13))
                 .foregroundStyle(silent ? IC.red : lit > 0 ? IC.green : .white.opacity(0.55))

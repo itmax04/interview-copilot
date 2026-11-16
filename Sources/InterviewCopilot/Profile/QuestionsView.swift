@@ -136,6 +136,17 @@ struct CardEditor: View {
     let bank: BankController
     let card: BankCard
     let onDelete: () -> Void
+    /// Профиль, в котором открыт редактор: после смены профиля отложенное сохранение не должно записать правку в карточку
+    /// с тем же номером (q-1, q-2…) другого профиля (COPILOT-13).
+    private let profileID: String?
+
+    init(bank: BankController, card: BankCard, onDelete: @escaping () -> Void) {
+        self.bank = bank
+        self.card = card
+        self.onDelete = onDelete
+        profileID = bank.activeID
+    }
+
     @State private var question = ""
     @State private var answer = ""
     @State private var phrasings = ""
@@ -205,6 +216,7 @@ struct CardEditor: View {
     }
 
     private func update(_ change: (inout BankCard) -> Void) {
+        guard bank.activeID == profileID else { return }
         var cards = bank.cards
         guard let i = cards.firstIndex(where: { $0.id == card.id }) else { return }
         let before = cards[i]

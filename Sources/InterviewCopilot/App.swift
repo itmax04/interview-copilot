@@ -690,6 +690,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.onNextScreen = { [weak self] in self?.panel.moveToNextScreen() }
         panelModel.onToggleCollapse = { [weak self] in
             guard let self else { return }
+            // Свернутая панель прячет поле чата: без этого она оставалась окном с клавиатурой, а набор текста уходил
+            // в пустоту вместо звонка (AC-09, COPILOT-13).
+            if !self.panelModel.collapsed, self.panelModel.chatOpen {
+                self.panelModel.chatOpen = false
+                self.panel.setChatFocus(false)
+            }
             self.panel.setCollapsed(!self.panelModel.collapsed)
         }
         panelModel.onTogglePrivate = { [weak self] in

@@ -144,14 +144,20 @@ final class BankController {
         report(failure)
     }
 
-    func text(_ doc: ProfileDocument) -> String {
-        guard let id = activeID else { return "" }
+    /// `profileID` — профиль, для которого открыт редактор: после смены профиля окно ещё успевает вызвать `onDisappear`
+    /// старого редактора, и текст прежнего профиля записывался в новый (COPILOT-13).
+    func text(_ doc: ProfileDocument, profileID: String? = nil) -> String {
+        guard let id = profileID ?? activeID else { return "" }
         return library.read(doc, of: id)
     }
 
-    func save(_ text: String, _ doc: ProfileDocument) {
-        guard let id = activeID else { return }
+    func save(_ text: String, _ doc: ProfileDocument, profileID: String? = nil) {
+        guard let id = profileID ?? activeID else { return }
+        // Профиль, удалённый, пока редактор был открыт, не воскрешается записью файла в его папку.
+        guard profiles.contains(where: { $0.id == id }) else { return }
         do { try library.write(text, doc, of: id) } catch { self.error = L("Профиль: %@", "\(error.localizedDescription)") }
+        // Запись в неактивный профиль (редактор закрывается после смены профиля) не трогает загруженный профиль и индексы.
+        guard id == activeID else { return }
         profile = library.load(id)
         if doc != .instructions { onChange?() }
     }

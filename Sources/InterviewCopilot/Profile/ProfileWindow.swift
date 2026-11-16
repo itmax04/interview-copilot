@@ -232,6 +232,15 @@ struct ProfileView: View {
 struct DocumentEditor: View {
     let bank: BankController
     let doc: ProfileDocument
+    /// Профиль, для которого открыт редактор (см. `BankController.save`).
+    private let profileID: String?
+
+    init(bank: BankController, doc: ProfileDocument) {
+        self.bank = bank
+        self.doc = doc
+        profileID = bank.activeID
+    }
+
     @State private var text = ""
     @State private var message: String?
     @State private var failed = false
@@ -261,7 +270,7 @@ struct DocumentEditor: View {
                 .accessibilityLabel(doc.title)
         }
         .padding(8)
-        .onAppear { text = bank.text(doc) }
+        .onAppear { text = bank.text(doc, profileID: profileID) }
         .onChange(of: text) { _, new in scheduleSave(new) }
         .onDisappear { flush() }
     }
@@ -280,7 +289,7 @@ struct DocumentEditor: View {
         saveTask = Task {
             try? await Task.sleep(for: .milliseconds(700))
             guard !Task.isCancelled else { return }
-            bank.save(value, doc)
+            bank.save(value, doc, profileID: profileID)
         }
     }
 
@@ -288,7 +297,7 @@ struct DocumentEditor: View {
         guard saveTask != nil else { return }
         saveTask?.cancel()
         saveTask = nil
-        bank.save(text, doc)
+        bank.save(text, doc, profileID: profileID)
     }
 
     private func pickFile() {
@@ -328,6 +337,13 @@ struct DocumentEditor: View {
 /// Инструкции владельца (R-04): профиля и общие. Это указания модели — стиль, длина, акценты, чего не говорить.
 struct InstructionsEditor: View {
     let bank: BankController
+    private let profileID: String?
+
+    init(bank: BankController) {
+        self.bank = bank
+        profileID = bank.activeID
+    }
+
     @State private var profileText = ""
     @State private var generalText = ""
     @State private var saveTask: Task<Void, Never>?
@@ -347,7 +363,7 @@ struct InstructionsEditor: View {
         }
         .padding(8)
         .onAppear {
-            profileText = bank.text(.instructions)
+            profileText = bank.text(.instructions, profileID: profileID)
             generalText = bank.generalInstructions
         }
         .onChange(of: profileText) { _, _ in scheduleSave() }
@@ -367,7 +383,7 @@ struct InstructionsEditor: View {
     private func save() {
         saveTask?.cancel()
         saveTask = nil
-        if profileText != bank.text(.instructions) { bank.save(profileText, .instructions) }
+        if profileText != bank.text(.instructions, profileID: profileID) { bank.save(profileText, .instructions, profileID: profileID) }
         if generalText != bank.generalInstructions { bank.saveGeneralInstructions(generalText) }
     }
 }
