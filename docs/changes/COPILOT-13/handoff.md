@@ -63,7 +63,7 @@ Also `CopilotEmbeddings`, `copilot-eval`, `scripts/`, `Resources/Interviewer` an
 | `scripts/run-evals.sh` | PASS (bank, filter-text, memory, materials) |
 | `scripts/secret-scan.sh` | PASS, 0 findings |
 | `scripts/check-localization.sh` | PASS, 796 keys, 0 missing |
-| `scripts/build-app.sh` | NOT VERIFIED: started, the session ended before the result was read |
+| `scripts/build-app.sh` | PASS: signed `dist/InterviewCopilot.app` built (exit 0) |
 | Independent review of `ac936b8` | NOT VERIFIED: a fresh reviewer was started, its verdict was not received before the session ended |
 | Microphone restart on a real device change | NOT RUN (needs hardware and a live session) |
 | Live checks `--smoke-*` | NOT RUN (signed app, spends quota) |
@@ -83,7 +83,7 @@ Also `CopilotEmbeddings`, `copilot-eval`, `scripts/`, `Resources/Interviewer` an
 1. Run an independent review of `git show ac936b8` (fresh reviewer, focus: data races, lock order, `AVAudioEngine`
    calls from the notification path, bounds in `AudioRingBuffer`, purge pre-filter, save throttle). Fix findings,
    rerun `swift test`.
-2. Run `scripts/build-app.sh` and record the result here.
+2. (done) `scripts/build-app.sh` passed on `ac936b8`; rerun it after any further code change.
 3. Continue the audit with the "Not audited yet" list: `BankController`, `InterviewerController`,
    `TestCallController`, the rest of `App.swift`, then `Bank/*`, `Memory/*`, `Review/*`, `PromptBuilder`, then the views.
 4. Before stopping: full check from `AGENTS.md` §9, update this file.
