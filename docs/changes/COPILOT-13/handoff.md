@@ -5,7 +5,8 @@
 - Branch `feat/copilot-13-audit-fixes`, created from `main` (`6081670`). Not pushed.
 - Code commits: `ac936b8` (audit fixes), `f3e0c21` (fixes after the independent review of `ac936b8`), `0c5cb4a`
   (second audit stage: bank, AI interviewer, test call, `App.swift`), `fb36c06` (third audit stage: question bank
-  files, profiles, embedder, question preparation). No uncommitted changes.
+  files, profiles, embedder, question preparation), `6290467` (fixes for the review of `fb36c06`), `2b48047` (fourth stage:
+  panel, profile editors, onboarding). Handoff updated after `2b48047`; no uncommitted source changes.
 - The checkout is `~/interview-copilot-audit` (moved there by the owner on 2026-11-16). There is no local `main`
   branch in it: the base is commit `6081670` (`scratch/main`). Nothing is pushed.
 
@@ -33,7 +34,16 @@ Third stage (`fb36c06`), read in full — `CopilotCore`: `Bank/*` (except `BankE
 `History/ReviewController`, `Profile/QuestionPreparer`, `AppModel`, `MenuBarController`, `Panel/PanelModel`, the logic
 part of `Profile/QuestionsView` (`CardEditor`, `ImportReview`).
 
-## Not audited yet
+## Fourth stage (this section replaces parts of the lists below)
+Read in full: `Panel/PanelController`, `Panel/PanelResize`, `Panel/PanelView`, `Panel/AnswerCardView`, `CopilotCore`
+`Answer/AnswerStyle`, `Menu/MenuLayout`, `Domain/Modes`. Read for logic only (not layout): `Session/SessionWizard` (model part),
+`Session/AnswerStyleEditor` (preview model), `Settings/VoiceEnrollment`, `Settings/OtherSettingsViews` (hotkeys, budget),
+`Onboarding/OnboardingWindow` (state), `Profile/ProfileWindow` (editors), `Profile/QuestionsView` (CardEditor).
+STILL NOT READ: layout parts of `History/SessionHistoryWindow`, `Workspace/WorkspaceWindow` (after line 140), `Settings/*` views,
+`Onboarding/PermissionsView`, `Design/*`, `ParrotIcon`, `Theme`, `MainMenu`, `SettingsWindow`, `SmokeTest`, `UISnapshots`,
+`TurnEval`, `BankEval`, `PromptScenarios`, `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall` pages.
+
+## Not audited yet (older list; subtract the fourth stage above)
 App: `Panel/PanelController`, `Panel/PanelResize`, `SettingsWindow`, `MainMenu`, `Theme`, `ParrotIcon`, `Design/*`, all
 SwiftUI views (`Panel/PanelView`, `Panel/AnswerCardView`, `Workspace/`, `Session/`, `History/SessionHistoryWindow`,
 `Settings/`, `Onboarding/`, `Profile/ProfileWindow`, the table part of `Profile/QuestionsView`), `SmokeTest`,
@@ -80,6 +90,18 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
 | 25 | `FileWatcher` | A file that appears after watching started (deleted and put back later) did not call `onChange`: the app kept the old content and the read error. | The first successful arm after a miss reports a change. Test: `FileWatcherAppearTests`. |
 | 26 | `QuestionPreparer` | After "Stop" the message "Stopped. Finished parts are saved." was replaced by "Models unavailable: no answer" (the cancelled request came back as a failure). A run that ended late could reset the state of a newer run. Switching the profile during preparation wrote phrasings and drafts of the old profile's questions into the new profile's cards with the same ids (`q-1`, `q-2`…). | Run generation counter; every step checks that the run is current and the profile unchanged, otherwise it stops with a message. No automated test (app target). |
 | 27 | `SpeechSynthError` | Messages were plain Russian text, not localized. | `L10n` + English strings. |
+
+## Fixed (commits `6290467`, `2b48047`)
+| # | Where | Defect | Fix |
+|---|---|---|---|
+| 28 | `QuestionPreparer.importFile` | Model-parsed questions of profile A reached `pendingImport` after a switch to B; a cancelled run could overwrite "Stopped". | `profileID` captured, `isCurrent`/`sameProfile` checked in the loop and before the final result. App target: build and reading only. |
+| 29 | `QuestionBankWriter.yaml` | A question empty after `PlainText.printable` was written as `""`; the parser rejects a card with no questions. | Empty questions skipped, a card with none is not written. Test `ReviewFollowUpTests`. |
+| 30 | `QuestionImport.chunks` | A long line was cut at a fixed length, mid-word. | Cut at a space in the second half of the piece. Test `ReviewFollowUpTests`. |
+| 31 | `LlamaEmbedder`, `LongTextEmbeddingTests` | Silent truncation; test passed silently without the model with a model-dependent threshold. | Log line (counts only); `.enabled(if:)` trait; relative closeness assertion. Test run: PASS with bge-m3 installed. |
+| 32 | `DocumentEditor`, `InstructionsEditor`, `CardEditor`, `BankController.save/text` | After a profile switch the closing editor's `onDisappear` wrote the OLD profile's text into the NEW profile (always for Instructions, when a save was pending for documents; cards by the same `q-N` id). | Editors capture their profile id; `save`/`text` take `profileID`; writes to a deleted profile are refused; `CardEditor` drops a pending edit after a switch. App target: build only. |
+| 33 | `App.onToggleCollapse` | Collapsing the overlay with chat open left the panel as key window with no input field (keystrokes lost, call app loses keyboard). | Chat is closed before collapsing. Build only. |
+| 34 | `OnboardingState.downloadMissing` | A late progress callback re-added a finished model to `downloads`: stuck "downloading", no retry. | Progress is applied only while the entry exists. Build only. |
+| 35 | `PanelView.LevelWave` | NaN level reached `Int(...)`: crash. | NaN treated as -60. Build only. |
 
 ## Found, not changed (needs an owner decision or a live check)
 - `StreamingTranscriber.runFinal`: the comment says the sticky language is dropped after two low-confidence utterances,
@@ -133,6 +155,10 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
 | New tests of `fb36c06` against the code before the fixes | FAIL as expected, 9 of 11 tests: YAML reader "control characters are not allowed" and "could not find expected ':'", glued lines, one chunk instead of several, deleted source file, "Ошибка токенизации", no `onChange` |
 | Full §9 check on the tree committed as `fb36c06` | PASS: `swift build` 0 warnings in sources; `swift test` 391 tests in 68 suites; evals exit 0 (filter-text 214/214, memory 8/8 and 0/2, materials 23/24 and 2/8); secret scan 0 findings; localization 799 keys, 0 missing, 0 format mismatches; `scripts/build-app.sh` exit 0, signed bundle |
 | Independent review of `fb36c06` | DONE (fresh reviewer, standard tier, read-only): APPROVE WITH FIXES, no high-severity findings; 1 medium and 4 low findings are NOT FIXED yet (listed in "Open") |
+| After `6290467`: `swift build`; `swift test --filter "ReviewFollowUp|LongTextEmbedding|QuestionImportChunk|QuestionBankWriterSanitizing"` | PASS, 9 tests |
+| After `2b48047`: `swift build` | PASS (app target has no tests) |
+| Independent review of `0c5cb4a` + `f3e0c21` | NOT VERIFIED: a fresh reviewer (strong tier, reason: concurrency in `MicrophoneTap`/`FileWatcher`) was started in the previous session and had not reported when this handoff was written. Re-run it if no verdict exists. |
+| Full §9 check after `2b48047` | NOT RUN |
 | Microphone restart on a real device change | NOT RUN (needs hardware and a live session) |
 | Live checks `--smoke-*` | NOT RUN (signed app, spends quota) |
 
@@ -148,7 +174,7 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
   that calls the detector) sometimes never started. Audio arrives in real time in the app, so only the test was
   changed (it now checks that the detector is not called after the language is pinned).
 - `MicrophoneTap` was verified only by build and unit tests; the engine restart path has no automated test.
-- Review findings for `fb36c06`, not fixed (the session ended on the context limit):
+- Review findings for `fb36c06`: ALL FIXED in `6290467` (rows 28–31). Original list, for the record:
   - medium: `QuestionPreparer.importFile` has no profile check and its "no questions found" branch has no
     current-run check. Questions parsed by the model for profile A land in `pendingImport` after a switch to B and
     are then added to B; a cancelled run with no chunks can overwrite the "Stopped" message. Fix: capture
@@ -168,21 +194,10 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
   shortcut to skip files that cannot be old.
 
 ## Next
-1. Independent review of `git show 0c5cb4a`, `git show f3e0c21` and `git show fb36c06` (fresh reviewer, points in "Open";
-   for `fb36c06`: YAML round trip of unusual answers, `chunks` losing or duplicating text, the truncation path of
-   `LlamaEmbedder`, `FileWatcher` reload at start, `QuestionPreparer` state after an early return — reviewed, see
-   the findings in "Open": fix them first). Fix findings,
-   rerun the full §9 check.
-2. (done, `fb36c06`) `LlamaEmbedder.embedOne` for texts over 512 tokens; the rest of `Bank/*` and `Profiles/*`,
-   `Memory/*`, `Review/*`, `Answer/*`, `LLM/PromptBuilder`, `LiveSessionController`, `History/ReviewController`,
-   `Profile/QuestionPreparer`.
-3. Continue the audit with the "Not audited yet" list: `Panel/PanelController`, `Panel/PanelView`,
-   `Panel/AnswerCardView`, `Session/SessionWizard`, `History/SessionHistoryWindow`, `Workspace/WorkspaceWindow`,
-   `Profile/ProfileWindow`, `Settings/*`, `Onboarding/*`, then `AnswerStyle`, `MenuLayout`, `copilot-eval`, `scripts/`,
-   the HTML pages.
-4. Before stopping: full check from `AGENTS.md` §9, update this file.
-
-Two sessions wrote in this checkout on 2026-11-16. Rules agreed between them: commit by explicit path only, no
-`git stash`, no checkout of files another session is editing.
-
-Stop and ask the owner before: pushing, changing tuned thresholds or prompt rules, adding a dependency.
+1. Independent review of `git show 0c5cb4a` and `git show f3e0c21` (points in "Open"): fresh reviewer, strong tier. Fix findings
+   (tests where the code is in CopilotCore), commit by explicit path.
+2. Optionally read the "STILL NOT READ" list of the fourth stage; fix findings.
+3. Full §9 check: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`;
+   no source edits while it runs. Record PASS/FAIL in "Verified", commit the handoff.
+Rules: commit by explicit path only, no `git stash`, no push. Stop and ask the owner before pushing, changing tuned thresholds
+or prompt rules, adding a dependency.
