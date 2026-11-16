@@ -12,27 +12,23 @@ public final class MicrophoneCapture: @unchecked Sendable {
     })
     private let converter = PCMConverter()
     private let onSamples: @Sendable ([Float]) -> Void
-    private let lock = NSLock()
-    private var running = false
 
     public init(onSamples: @escaping @Sendable ([Float]) -> Void) {
         self.onSamples = onSamples
     }
 
-    public var isRunning: Bool { lock.withLock { running } }
+    /// Берётся у tap: после отказа перезапуска движка он остановлен сам, и следующий `start()` должен запуститься (M2).
+    public var isRunning: Bool { tap.isRunning }
 
     public func start() throws {
         guard Permissions.microphone == .granted else { throw AudioCaptureError.failed(L10n.t("Нет разрешения на микрофон")) }
         guard !isRunning else { return }
         guard try tap.start() else { throw AudioCaptureError.failed(L10n.t("Микрофон недоступен")) }
-        lock.withLock { running = true }
         Log.audio.info("capture started: Microphone")
     }
 
     public func stop() {
-        guard isRunning else { return }
         tap.stop()
-        lock.withLock { running = false }
         Log.audio.info("microphone capture stopped")
     }
 }

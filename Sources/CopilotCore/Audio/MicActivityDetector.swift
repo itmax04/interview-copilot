@@ -25,7 +25,6 @@ public final class MicActivityDetector: @unchecked Sendable {
     private var peakDB: Float = -120
     private let lock = NSLock()
     private var speaking = false
-    private var running = false
     private let onChange: @Sendable (Bool) -> Void
     /// Звук микрофона 16 кГц моно для расшифровки речи владельца на созвоне (COPILOT-05 R-07); nil — только VAD.
     private let samplesLock = NSLock()
@@ -52,17 +51,16 @@ public final class MicActivityDetector: @unchecked Sendable {
 
     public func start() throws {
         guard Permissions.microphone == .granted else { return }
-        guard !lock.withLock({ running }) else { return }
+        // Состояние «работает» берём у tap, а не храним у себя: после отказа перезапуска tap остановлен сам,
+        // и свой флаг заставил бы следующий start() молча вернуться на мёртвом движке (COPILOT-13 M2).
+        guard !tap.isRunning else { return }
         guard try tap.start() else { return }
-        lock.withLock { running = true }
         Log.audio.info("mic VAD started")
     }
 
     public func stop() {
-        guard lock.withLock({ running }) else { return }
         tap.stop()
         lock.withLock {
-            running = false
             speaking = false
             vad.reset()
         }

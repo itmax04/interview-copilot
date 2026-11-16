@@ -229,9 +229,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         listening.onOwnerTranscript = { [weak self] event in self?.interviewer.handleOwnerTranscript(event) }
         interviewer.onEnd = { [weak self] in
             // ИИ-собеседование — сессия типа Mock (COPILOT-09 R-06): закончилось оно — закончилась и сессия.
-            guard let self else { return }
-            if self.liveSession.isActive, self.liveSession.config.type == .mock { self.liveSession.end() }
-            self.refreshUI()
+            // Контроллер может вызвать onEnd синхронно внутри LiveSessionController.start (фаза ещё .starting,
+            // isActive == false): проверяем на следующем витке главного цикла, когда фаза уже .active.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                if self.liveSession.isActive, self.liveSession.config.type == .mock { self.liveSession.end() }
+                self.refreshUI()
+            }
         }
         interviewer.onOwnerAnswer = { [weak self] text in
             self?.memory.addAnswer(text)
