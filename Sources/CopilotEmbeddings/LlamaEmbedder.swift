@@ -94,6 +94,7 @@ public final class LlamaEmbedder: TextEmbedder, @unchecked Sendable {
             }
             guard total > maxTokens else { throw EmbedderError.tokenizeFailed }
             tokens = Array(all.prefix(maxTokens))
+            Log.app.info("embedder: text of \(total) tokens truncated to \(self.maxTokens)")
             // Завершающий служебный токен модели (</s> у bge-m3) остаётся последним.
             let last = all[Int(total) - 1]
             if last == llama_vocab_eos(vocab) || last == llama_vocab_sep(vocab) { tokens[maxTokens - 1] = last }

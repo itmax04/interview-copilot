@@ -150,12 +150,16 @@ public enum QuestionBankWriter {
         guard !cards.isEmpty else { return header + "[]\n" }
         var out = header
         for c in cards {
+            // Вопрос, пустой после очистки, записался бы как "" — разбор его отбрасывает, а карточка без вопросов делает
+            // весь файл нечитаемым; такие вопросы (и карточку без вопросов) не пишем (COPILOT-13).
+            let questions = c.questions.filter { !PlainText.printable($0).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            guard !questions.isEmpty else { continue }
             out += "- id: \(c.id)\n"
             out += "  status: \(c.status.rawValue)\n"
             if c.prepared { out += "  prepared: true\n" }
             if !c.tags.isEmpty { out += "  tags: [\(c.tags.map(quote).joined(separator: ", "))]\n" }
             out += "  questions:\n"
-            for q in c.questions { out += "    - \(quote(q))\n" }
+            for q in questions { out += "    - \(quote(q))\n" }
             // Ответ — блоком «|»: разрыв строки Unicode (вставка из Pages, Word) или управляющий символ внутри него
             // делал весь файл нечитаемым — «ошибка в строке N» вместо базы (COPILOT-13).
             let answer = PlainText.printable(c.answer).trimmingCharacters(in: .whitespacesAndNewlines)

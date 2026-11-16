@@ -148,8 +148,14 @@ public enum QuestionImport {
             for line in p.components(separatedBy: "\n") {
                 var rest = Substring(line)
                 repeat {
-                    let piece = rest.prefix(maxCharacters)
-                    rest = rest.dropFirst(maxCharacters)
+                    var piece = rest.prefix(maxCharacters)
+                    // Строка длиннее части режется по пробелу, а не посреди слова (в последней половине куска).
+                    if rest.count > maxCharacters, let space = piece.lastIndex(of: " "),
+                       piece.distance(from: piece.startIndex, to: space) >= maxCharacters / 2 {
+                        piece = piece[..<space]
+                    }
+                    rest = rest.dropFirst(piece.count)
+                    if rest.first == " " { rest = rest.dropFirst() }
                     if current.count + piece.count + separator.count > maxCharacters, !current.isEmpty { out.append(current); current = "" }
                     current += (current.isEmpty ? "" : separator) + piece
                     separator = "\n"

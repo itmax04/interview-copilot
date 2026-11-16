@@ -133,10 +133,13 @@ struct FileWatcherAppearTests {
 
 @Suite("COPILOT-13 — эмбеддинг текста длиннее окна модели")
 struct LongTextEmbeddingTests {
-    @Test("Длинный текст обрезается до окна модели, а не даёт ошибку")
+    static let modelPath = AppPaths.model(AppSettings.defaultEmbeddingModel).path
+
+    // Без модели тест пропускается (в отчёте «skipped», а не «passed»); тот же путь проверяет eval `materials`.
+    @Test("Длинный текст обрезается до окна модели, а не даёт ошибку",
+          .enabled(if: FileManager.default.fileExists(atPath: LongTextEmbeddingTests.modelPath)))
     func longTextIsTruncatedNotRejected() throws {
-        let path = AppPaths.model(AppSettings.defaultEmbeddingModel).path
-        guard FileManager.default.fileExists(atPath: path) else { return } // модель не установлена — проверка в eval `materials`
+        let path = Self.modelPath
         let embedder = try LlamaEmbedder(modelPath: path, useGPU: false)
         let sentence = "Мы перевели сервис оплаты на очереди сообщений и сократили время ответа. "
         let long = String(repeating: sentence, count: 80)   // ~5 800 символов, заметно больше 512 токенов
@@ -144,7 +147,32 @@ struct LongTextEmbeddingTests {
         #expect(vectors.count == 2)
         #expect(vectors[1].count == vectors[0].count)
         #expect(abs(vectors[1].dot(vectors[1]) - 1) < 0.01)
-        // Начало длинного текста — то же предложение: смысл сохраняется.
-        #expect(vectors[0].dot(vectors[1]) > 0.6)
+        // Начало длинного текста — то же предложение: ближе к нему, чем посторонний текст (порог не зависит от модели).
+        let other = try embedder.embed(["Прогноз погоды на завтра: дождь и сильный ветер."])[0]
+        #expect(vectors[0].dot(vectors[1]) > vectors[0].dot(other))
+    }
+}
+
+@Suite("COPILOT-13 — запись пустых вопросов и разрез длинной строки")
+struct ReviewFollowUpTests {
+    @Test("Вопрос, пустой после очистки, не пишется, и файл остаётся читаемым")
+    func emptyQuestionIsSkipped() throws {
+        let cards = [
+            BankCard(id: "a", questions: ["\u{2028}", "Расскажите о себе"], answer: "Ответ", tags: [], status: .own, prepared: false),
+            BankCard(id: "b", questions: ["\u{000B}"], answer: "Ответ", tags: [], status: .own, prepared: false),
+        ]
+        let parsed = try QuestionBankParser.parse(QuestionBankWriter.yaml(cards))
+        #expect(parsed.map(\.id) == ["a"])
+        #expect(parsed[0].questions == ["Расскажите о себе"])
+    }
+
+    @Test("Строка длиннее части режется по пробелу, текст не теряется")
+    func longLineSplitsAtSpace() {
+        let text = Array(repeating: "слово", count: 40).joined(separator: " ")   // 239 символов, без переводов строки
+        let parts = QuestionImport.chunks(text, maxCharacters: 50)
+        #expect(parts.count > 1)
+        #expect(parts.allSatisfy { $0.count <= 50 })
+        #expect(parts.flatMap { $0.split(separator: " ") }.allSatisfy { $0 == "слово" })
+        #expect(parts.flatMap { $0.split(separator: " ") }.count == 40)
     }
 }

@@ -58,20 +58,23 @@ final class QuestionPreparer {
             Log.app.info("questions import rules=\(byRules.count)")
             return
         }
+        // Вопросы, разобранные моделью для одного профиля, не должны попасть в другой после смены профиля (COPILOT-13).
+        let profileID = bank.activeID
         start(total: QuestionImport.chunks(text).count, label: "Разбираю файл моделью") { [weak self] run in
             guard let self else { return }
             var found: [ImportedQuestion] = []
             let chain = await self.chain()
             for part in QuestionImport.chunks(text) {
-                guard self.isCurrent(run) else { return }
+                guard self.isCurrent(run), self.sameProfile(profileID) else { return }
                 let result = await ChainText.collect(chain, QuestionImport.llmRequest(part))
-                guard self.isCurrent(run) else { return }
+                guard self.isCurrent(run), self.sameProfile(profileID) else { return }
                 switch result {
                 case .success(let answer): found += QuestionImport.parseLLM(answer)
                 case .failure(let e): self.fail(e.description); return
                 }
                 self.step()
             }
+            guard self.isCurrent(run), self.sameProfile(profileID) else { return }
             Log.app.info("questions import llm=\(found.count)")
             if found.isEmpty { self.fail("Вопросов в файле не найдено. Добавьте их в таблицу вручную.") } else {
                 self.pendingImport = found
