@@ -157,7 +157,7 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
 | Independent review of `fb36c06` | DONE (fresh reviewer, standard tier, read-only): APPROVE WITH FIXES, no high-severity findings; 1 medium and 4 low findings are NOT FIXED yet (listed in "Open") |
 | After `6290467`: `swift build`; `swift test --filter "ReviewFollowUp|LongTextEmbedding|QuestionImportChunk|QuestionBankWriterSanitizing"` | PASS, 9 tests |
 | After `2b48047`: `swift build` | PASS (app target has no tests) |
-| Independent review of `0c5cb4a` + `f3e0c21` | NOT VERIFIED: a fresh reviewer (strong tier, reason: concurrency in `MicrophoneTap`/`FileWatcher`) was started in the previous session and had not reported when this handoff was written. Re-run it if no verdict exists. |
+| Independent review of `0c5cb4a` + `f3e0c21` | DONE (fresh reviewer, strong tier, read-only): APPROVE WITH FIXES, no high findings; 3 medium and 5 low NOT FIXED yet, see "Open: review of 0c5cb4a/f3e0c21". Reviewer's own runs: `swift build --build-tests` PASS; FileWatcherStop/BankIndexBatching/FinalRetry/StreamingTranscriber/JobPageDecoding suites 6 of 6 runs PASS, 5 more under full CPU load PASS. |
 | Full §9 check after `2b48047` | NOT RUN |
 | Microphone restart on a real device change | NOT RUN (needs hardware and a live session) |
 | Live checks `--smoke-*` | NOT RUN (signed app, spends quota) |
@@ -188,14 +188,31 @@ Also `copilot-eval`, `scripts/`, `Resources/Interviewer` and `Resources/TestCall
 - Row 26 (`QuestionPreparer`) is verified only by build and reading: the app target has no tests.
 - Not audited yet: the SwiftUI views and the rest of the list above (about 6 000 lines of 22 900).
 
+## Open: review of 0c5cb4a/f3e0c21 (not fixed)
+- M1 medium: `InterviewerController.swift:72` (+ `catch` ~95): `onEnd` fires inside `LiveSessionController.start` (`LiveSessionController.swift:62-69`)
+  while `phase == .starting`; the handler in `App.swift:233` sees `isActive == false` and skips `end()`, then phase becomes `.active`.
+  Row 19's second half does not hold: a missing page resource / server error leaves an active Mock session with no interviewer.
+  Fix: defer in `interviewer.onEnd` (`DispatchQueue.main.async { if isActive && type == .mock { end() } }`) or a "pending end" flag checked after `onStart`.
+- M2 medium: `MicrophoneTap.swift:120` give-up clears only the tap's `running`; `MicActivityDetector.start()` (`:55`) and `MicrophoneCapture.start()` (`:26`)
+  return early on their own flags, so a dead engine is never retried and nothing is shown. Fix: `onStopped` callback from the tap that clears the owner's flag and
+  reports an error, or owners read `isRunning` from the tap. Unchecked: whether a new session calls the owner mic `stop()` before `start()`.
+- M3 medium: `BankController.swift:100`, `:294`: after `select` to a profile whose `questions.yaml` does not parse, `cards == []`; "Добавить вопрос"
+  (`QuestionsView.swift:88`) or `acceptImport` then overwrites the broken but recoverable file. Fix: remember whether the active file ever parsed; `saveCards`
+  refuses with `report(...)` when not; `QuestionsView` disables editing while `bank.error` is set.
+- L1: `BankController.swift:186-213, 346-348`: missing model file -> `reload()` returns before bumping `indexGeneration`; old build overwrites status/index; A->B
+  compares B query vectors with the A index. Fix: on model change `index = nil`, bump `indexGeneration`, clear `materialIndex`.
+- L2: `shutdown()` (`BankController.swift:177`) does not wait for running detached builds; embedder may be freed on a background thread at quit.
+- L3: `ListeningController.swift:906-911` level loop runs 10x/s in `.error` (can last hours); keep only `.idle` live.
+- L4: `FileWatcherStopTests.reportsChange` assumes async `arm()` finishes in 200 ms; poll and rewrite until the call arrives.
+- L5: sticky-language test loosened to `(1...2).contains(afterTwo)` (accepted earlier; coverage note).
+
 ## Executor decisions
 - Tuned thresholds and prompt rules were not touched.
 - Retention semantics are unchanged for readable sessions (end time from the file decides); the file name is only a
   shortcut to skip files that cannot be old.
 
 ## Next
-1. Independent review of `git show 0c5cb4a` and `git show f3e0c21` (points in "Open"): fresh reviewer, strong tier. Fix findings
-   (tests where the code is in CopilotCore), commit by explicit path.
+1. (review done) Fix M1, M2, M3 first, then L1–L4 (tests where the code is in CopilotCore; M2 in CopilotCore can be unit-tested), commit by explicit path.
 2. Optionally read the "STILL NOT READ" list of the fourth stage; fix findings.
 3. Full §9 check: `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`;
    no source edits while it runs. Record PASS/FAIL in "Verified", commit the handoff.
