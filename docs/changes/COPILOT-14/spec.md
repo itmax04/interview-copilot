@@ -1,0 +1,1 @@
+Preserve recorded speech and retryable review progress. Keep offline evaluations meaningful on invalid inputs, retain legacy session compatibility and remove unnecessary idle work. Exercise the repository's verification commands on macOS.

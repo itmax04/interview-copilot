@@ -1,0 +1,1 @@
+Baseline bc64695. The initial swift test run reported one failure in 393 tests. The sticky-language test observed three detector calls before the second final event, while its assertion allowed only one or two. Release verification and fixes are in progress.
