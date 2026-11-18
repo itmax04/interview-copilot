@@ -62,6 +62,22 @@ The store also checks that a loaded record ID agrees with its filename. The app-
 - Independent standard review found an Interviewer race where a playback error was suppressed while a Stop request was pending. The fix handles that error if Stop fails. Focused re-review approved the recovery code and verified the Stop, stall, EOF and queue transitions using the page scripts.
 - NOT RUN in this stage: Safari, real provider or microphone traffic, and end-to-end ScreenCaptureKit routing under fault injection. The browser scenarios use the real packaged pages and a synthetic HTTP counterpart. The native app was built and signed locally.
 
+## Native audio recovery in Chrome and Safari
+
+- Verified the browser-recovery code from `095578e` on macOS 15.7.2 with desktop Chrome 157.0.8103.79 and Safari 18.6. A temporary `LiveBrowserAudioSmoke.captureUntilBrowserCloses` test used the shipped page resources, the application controllers and loopback server, ScreenCaptureKit and the installed Whisper small model. TestCall used bundled phrases. Interviewer generated each WAV with macOS speech synthesis from a local fixture provider. The test supplied no spoken microphone answer.
+- The fault proxy dropped browser-to-app requests after playback advanced and restored them after buffered EOF. A native sample level written after the cut confirmed capture during the outage. Both pages showed lost connectivity, then accepted the completion exactly once for each of two played fragments. Interviewer reached the answer phase twice. TestCall advanced its queue. Browser close returned HTTP 200 and native listening returned to standby in all four runs.
+
+| Browser | Page | Capture route | Outage during playback | Measured level during outage | WER of two fragments |
+| --- | --- | --- | --- | --- | --- |
+| Chrome | TestCall | Chrome application | 1.41–4.59 s | -11.7 dBFS | 0%, 0% |
+| Chrome | Interviewer | Chrome application | 1.41–7.75 s | -10.9 dBFS | 0%, 0% |
+| Safari | TestCall | All system audio | 1.51–4.59 s | -14.0 dBFS | 0%, 0% |
+| Safari | Interviewer | All system audio | 1.52–7.75 s | -12.5 dBFS | 0%, 0% |
+
+- Chrome Interviewer initially reached speaking with a valid WAV at the server and no browser playback. A fresh session passed the full scenario. The cause of the initial failure was not established. A preliminary Chrome TestCall session was ended before playback while Parakeet was still loading. The four measured runs used Whisper.
+- Safari TestCall exercised its existing system-audio fallback by bypassing the installed Chrome preference in the test. Safari Interviewer used a test-only launcher and the same system-audio route. The production Interviewer launcher still selects Chrome. This stage covered loss of the local control connection across buffered EOF. Partial WAV range recovery remains covered by the earlier browser fixture.
+- `swift test --skip-build --filter LiveBrowserAudioSmoke.captureUntilBrowserCloses` passed the four measured runs. Removed the temporary test and launcher hooks. A fresh `swift test` passed 405 tests in 71 suites, and `codesign --verify --deep --strict dist/InterviewCopilot.app` passed on the signed bundle whose pages were used. The measured native runs used the Swift test host with local synthetic inputs.
+
 ## Next
 
-The browser recovery audit is ready for owner acceptance. The remaining audit areas include settings interactions, hardware-specific paths and large-library profiling. The next uncovered area is individual settings layouts and interactions. Standard tier.
+The native audio recovery audit is ready for owner acceptance. The next uncovered area is individual settings layouts and interactions. Standard tier.
