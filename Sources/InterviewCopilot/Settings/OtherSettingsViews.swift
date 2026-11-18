@@ -282,29 +282,44 @@ struct HotkeysSettingsView: View {
     @State private var recording: HotkeyAction?
     @State private var monitor: Any?
     @State private var problems: [HotkeyAction: String] = [:]
+    @State private var needsModifier = false
 
     var body: some View {
         Form {
-            ForEach(HotkeyAction.allCases, id: \.self) { action in
-                VStack(alignment: .leading, spacing: 2) {
-                    LabeledContent(action.title) {
+            Section {
+                ForEach(HotkeyAction.allCases, id: \.self) { action in
+                    let isRecording = recording == action
+                    let buttonTitle = isRecording ? "Отмена" : "Изменить"
+                    let value = isRecording ? L("Нажмите сочетание…") : model.settings.hotkey(action).displayString
+                    VStack(alignment: .leading, spacing: 2) {
                         HStack {
-                            Text(recording == action ? "Нажмите сочетание…" : model.settings.hotkey(action).displayString)
+                            Text(action.title)
+                                .accessibilityHidden(true)
+                            Spacer()
+                            Text(verbatim: value)
                                 .monospaced()
-                                .foregroundStyle(recording == action ? .orange : .primary)
-                            Button(recording == action ? "Отмена" : "Изменить") { toggleRecording(action) }
+                                .foregroundStyle(isRecording ? .orange : .primary)
+                                .accessibilityHidden(true)
+                            Button(buttonTitle) { toggleRecording(action) }
+                                .buttonStyle(.bordered)
+                                .accessibilityLabel(L("%@: %@", L(buttonTitle), L(action.title)))
+                                .accessibilityValue(Text(verbatim: value))
+                        }
+                        if let problem = isRecording && needsModifier ? "Нужен модификатор ⌃, ⌥ или ⌘" : problems[action] {
+                            Label(problem, systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
                         }
                     }
-                    if let problem = problems[action] {
-                        Label(problem, systemImage: "exclamationmark.triangle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
+                }
+                HStack {
+                    Spacer()
+                    Button("Сбросить на ⌃⌥") {
+                        stopRecording()
+                        model.settings.hotkeys = [:]
+                        refresh()
                     }
                 }
-            }
-            HStack {
-                Spacer()
-                Button("Сбросить на ⌃⌥") { model.settings.hotkeys = [:]; refresh() }
             }
         }
         .formStyle(.grouped)
@@ -340,7 +355,7 @@ struct HotkeysSettingsView: View {
                 stopRecording()
                 refresh()
             } else {
-                problems[action] = "Нужен модификатор ⌃, ⌥ или ⌘"
+                needsModifier = true
             }
             return nil
         }
@@ -350,6 +365,7 @@ struct HotkeysSettingsView: View {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         recording = nil
+        needsModifier = false
     }
 }
 
@@ -359,10 +375,11 @@ struct BudgetSettingsView: View {
 
     var body: some View {
         Form {
-            LabeledContent("Месячный лимит, $") {
-                TextField("", value: $model.settings.monthlyBudgetUSD, format: .number.precision(.fractionLength(2)))
-                    .frame(width: 90)
-                    .multilineTextAlignment(.trailing)
+            Section {
+                TextField(value: $model.settings.monthlyBudgetUSD, format: .number.precision(.fractionLength(2))) {
+                    Text(verbatim: L("Месячный лимит, $"))
+                }
+                .multilineTextAlignment(.trailing)
             }
             if model.settings.paidProvidersSuspended {
                 HStack {

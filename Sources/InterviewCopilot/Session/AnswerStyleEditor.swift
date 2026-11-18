@@ -134,12 +134,12 @@ struct AnswerStyleEditor: View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Text("Стиль ответа").font(.system(size: 22, weight: .bold))
+                    Text(verbatim: L("Стиль ответа")).font(.system(size: 22, weight: .bold))
                     Spacer()
                     Button { preview.cancel(); onCancel() } label: { Image(systemName: "xmark").frame(width: 14, height: 14) }
                         .buttonStyle(ICButtonStyle())
                         .keyboardShortcut(.cancelAction)
-                        .accessibilityLabel("Закрыть")
+                        .accessibilityLabel(Text(verbatim: L("Закрыть")))
                 }
                 optionCard(.format, icon: "doc.text", title: "Формат", value: preview.style.format.title) {
                     segmented($preview.style.format, AnswerStyle.Format.allCases) { $0.shortTitle }
@@ -151,16 +151,16 @@ struct AnswerStyleEditor: View {
                     segmented($preview.style.tone, AnswerStyle.Tone.allCases) { $0.title }
                 }
                 if preview.hasOwnerInstructions {
-                    Label("Ваши инструкции важнее этих настроек", systemImage: "info.circle")
+                    Label(L("Ваши инструкции важнее этих настроек"), systemImage: "info.circle")
                         .font(.system(size: 11)).foregroundStyle(IC.secondary)
                 }
                 Spacer()
                 Rectangle().fill(IC.line).frame(height: 1)
                 HStack(spacing: 10) {
                     if let onSaveDefault {
-                        Button { preview.cancel(); onSaveDefault(preview.style) } label: { Label("По умолчанию", systemImage: "arrow.clockwise") }
+                        Button { preview.cancel(); onSaveDefault(preview.style) } label: { Label(L("По умолчанию"), systemImage: "arrow.clockwise") }
                             .buttonStyle(ICButtonStyle())
-                            .help("Для этой и всех следующих сессий")
+                            .help(Text(verbatim: L("Для этой и всех следующих сессий")))
                     }
                     Button { preview.cancel(); onSave(preview.style) } label: {
                         Label(saveTitle, systemImage: "paperplane").lineLimit(1).frame(maxWidth: .infinity)
@@ -178,7 +178,7 @@ struct AnswerStyleEditor: View {
         .background(IC.background)
         .foregroundStyle(IC.ink)
         .tint(IC.accent)
-                .onAppear { preview.schedule(delay: .zero) }
+        .onAppear { preview.schedule(delay: .zero) }
         .onDisappear { preview.cancel() }
     }
 
@@ -231,48 +231,48 @@ struct AnswerStyleEditor: View {
 
     private var previewPane: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Тип вопроса").font(.system(size: 13)).foregroundStyle(IC.secondary)
+            Text(verbatim: L("Тип вопроса")).font(.system(size: 13)).foregroundStyle(IC.secondary)
             HStack(spacing: 10) {
-                Picker("Тип вопроса", selection: $preview.question) {
+                Picker(L("Тип вопроса"), selection: $preview.question) {
                     ForEach(StylePreviewQuestion.allCases) { Text($0.title).tag($0) }
                 }
                 .labelsHidden()
-                Picker("Язык", selection: $preview.language) {
-                    Text("Українська").tag("uk")
-                    Text("Русский").tag("ru")
-                    Text("English").tag("en")
+                Picker(L("Язык"), selection: $preview.language) {
+                    Text(verbatim: "Українська").tag("uk")
+                    Text(verbatim: "Русский").tag("ru")
+                    Text(verbatim: "English").tag("en")
                 }
                 .labelsHidden()
                 .frame(width: 130)
             }
             Rectangle().fill(IC.line).frame(height: 1)
             HStack(spacing: 6) {
-                Text("Предпросмотр").font(.system(size: 16, weight: .semibold))
-                Text("· по вашему профилю").font(.system(size: 13)).foregroundStyle(IC.secondary)
+                Text(verbatim: L("Предпросмотр")).font(.system(size: 16, weight: .semibold))
+                Text(verbatim: L("· по вашему профилю")).font(.system(size: 13)).foregroundStyle(IC.secondary)
                 Spacer()
                 if preview.status == .loading { ProgressView().controlSize(.small) }
                 Button { preview.refresh() } label: { Image(systemName: "arrow.clockwise") }
                     .buttonStyle(.borderless)
                     .disabled(preview.status == .loading)
-                    .help("Сгенерировать заново")
-                    .accessibilityLabel("Сгенерировать заново")
+                    .help(Text(verbatim: L("Сгенерировать заново")))
+                    .accessibilityLabel(Text(verbatim: L("Сгенерировать заново")))
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("Вопрос").font(.system(size: 13, weight: .medium))
-                Text(preview.questionText).font(.system(size: 13)).foregroundStyle(IC.ink2)
+                Text(verbatim: L("Вопрос")).font(.system(size: 13, weight: .medium))
+                Text(verbatim: preview.questionText).font(.system(size: 13)).foregroundStyle(IC.ink2)
             }
             .padding(14).frame(maxWidth: .infinity, alignment: .leading)
             .background(IC.card, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
             VStack(alignment: .leading, spacing: 8) {
-                Text("Предлагаемый ответ").font(.system(size: 13, weight: .medium)).foregroundStyle(IC.accent)
+                Text(verbatim: L("Предлагаемый ответ")).font(.system(size: 13, weight: .medium)).foregroundStyle(IC.accent)
                 ScrollView {
                     Group {
                         switch preview.status {
                         case .failed(let reason):
                             Label(reason, systemImage: "exclamationmark.triangle.fill").foregroundStyle(IC.amber)
                         case .loading where preview.text.isEmpty:
-                            Text("Готовлю ответ…").foregroundStyle(IC.secondary)
+                            Text(verbatim: L("Готовлю ответ…")).foregroundStyle(IC.secondary)
                         default:
                             MarkdownText(preview.text, fontSize: 14).textSelection(.enabled)
                         }
@@ -280,7 +280,8 @@ struct AnswerStyleEditor: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if preview.status == .done {
-                    Text("\(preview.source) · \(preview.words) слов").font(.system(size: 11)).foregroundStyle(IC.secondary)
+                    Text(verbatim: L("%@ · %lld слов", preview.source, preview.words))
+                        .font(.system(size: 11)).foregroundStyle(IC.secondary)
                 }
             }
             .padding(14)
@@ -288,7 +289,7 @@ struct AnswerStyleEditor: View {
             .background(IC.accent.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.accent.opacity(0.18)))
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Предпросмотр ответа")
+            .accessibilityLabel(Text(verbatim: L("Предпросмотр ответа")))
         }
     }
 }
