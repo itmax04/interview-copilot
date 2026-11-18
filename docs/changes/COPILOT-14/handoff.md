@@ -2,7 +2,7 @@
 
 ## Identity and scope
 
-Branch `feat/copilot-14-technical-audit`, based on `bc64695` (public main and COPILOT-13). Scope and baseline are recorded in `f6bcdba`. First audit implementation: `bad6051`. The audio lifecycle stage started from the clean handoff commit `180e72b`. Its verified implementation is `031d94a`. The previous task's handoff identifies the components it reviewed and the areas it left open. This pass examined the app's history and profile flows, model installation, offline evaluation entry points, progress updates, and synthetic UI checks. The follow-up traced rapid End → Start across the live session, browser controller and audio device.
+Branch `feat/copilot-14-technical-audit`, based on `bc64695` (public main and COPILOT-13). Scope and baseline are recorded in `f6bcdba`. First audit implementation: `bad6051`. The audio lifecycle stage started from the clean handoff commit `180e72b`. Its verified implementation is `031d94a`. The browser recovery stage started from `7dd55de` and its verified implementation is `8480f40`. The previous task's handoff identifies the components it reviewed and the areas it left open. This pass examined the app's history and profile flows, model installation, offline evaluation entry points, progress updates, and synthetic UI checks. The follow-up traced rapid End → Start across the live session, browser controller and audio device.
 
 ## Findings and changes
 
@@ -33,7 +33,7 @@ The store also checks that a loaded record ID agrees with its filename. The app-
 ## Executor decisions and remaining work
 
 - Used a separate local checkout at the public main commit. No deployment, push or merge. Verification used synthetic data and preinstalled models. Live calls with a real microphone, capture device changes and real provider prompts were not exercised.
-- Remaining audit coverage includes the rest of the COPILOT-13 open list, the layout and interaction of individual settings views, browser-page playback/connection recovery, hardware-specific paths and profiling with larger profile libraries. Synthetic snapshots confirm rendering, not every interaction. Inspect concurrent installer processes sharing a .part path and benchmark startup/main-thread model or document loading before making latency claims.
+- At that point, the remaining audit areas included the rest of the COPILOT-13 open list, individual settings views, browser playback and connection recovery, hardware-specific paths and profiling with larger profile libraries. Synthetic snapshots confirm rendering, not every interaction. Inspect concurrent installer processes sharing a .part path and benchmark startup/main-thread model or document loading before making latency claims.
 
 ## Audio lifecycle stage
 
@@ -50,6 +50,18 @@ The store also checks that a loaded record ID agrees with its filename. The app-
 - Independent standard and focused strong concurrency reviews approved the final changes after re-review. Findings addressed premature transcription during source restoration and cancellation of pending recognition on a phrase/route reset.
 - NOT RUN on physical hardware: live microphone capture, input-device changes and an OS-level stop failure. Microphone routing and stop were checked with a synthetic device. The hardware smoke used system audio only. No push or merge.
 
+## Browser playback and connection recovery
+
+- Reproduced on the pages at `7dd55de` in Chrome with a synthetic 520 Hz WAV on an isolated loopback HTTP fixture. When a disconnect crossed the end of buffered playback, Interviewer stayed in speaking and TestCall abandoned the active trial. A dropped response after the server accepted the end also prevented TestCall from finishing normally. Both pages reported a successful close when the close request failed. Chrome could exhaust a partial WAV without dispatching an audio error. TestCall attempted to begin the next phrase during a disconnect between results.
+- Both pages retry the end notification for the active playback after connectivity returns and preserve the outcome if the server already accepted it. Chrome can continue a partial media transfer via an HTTP range request. If the audio remains stalled after the state connection recovers, the user can replay the same question or phrase. Interviewer resets recognition for the current question and reuses its WAV. TestCall cancels the incomplete trial before enabling repeat and advances the queue after a successful state poll. Close waits for acknowledgement and allows another attempt after failure.
+
+### Verification at `8480f40`
+
+- `node scripts/check-browser-recovery.mjs dist/InterviewCopilot.app/Contents/Resources` and the same command with `--en` each passed 11 scenarios in Chrome 157.0.8103.79. The unmodified Russian pages passed 3 and failed 8 with the same fixture. Scenarios cover buffered EOF during an outage, a lost response after the server accepts EOF, close and retry, resumable and failed WAV range recovery, and TestCall advancement across a disconnect between phrases. TestCall kept exactly one result per completed trial.
+- `swift test` passed 405 tests in 71 suites. `scripts/run-evals.sh` passed all five default suites. `scripts/secret-scan.sh` reported zero findings, `scripts/check-localization.sh` passed, and the English runtime string keys and substitutions passed a direct check for both pages. `scripts/build-app.sh` and `codesign --verify --deep --strict dist/InterviewCopilot.app` passed. Both bundled pages and dictionaries matched their sources byte for byte.
+- Independent standard review found an Interviewer race where a playback error was suppressed while a Stop request was pending. The fix handles that error if Stop fails. Focused re-review approved the recovery code and verified the Stop, stall, EOF and queue transitions using the page scripts.
+- NOT RUN in this stage: Safari, real provider or microphone traffic, and end-to-end ScreenCaptureKit routing under fault injection. The browser scenarios use the real packaged pages and a synthetic HTTP counterpart. The native app was built and signed locally.
+
 ## Next
 
-Exercise browser playback and connection recovery for the bundled Interviewer and TestCall pages using synthetic audio. Check what the page shows after a disconnect during playback and whether it resumes or closes cleanly. Update this handoff with reproduced failures and their verification. Standard tier.
+The browser recovery audit is ready for owner acceptance. The remaining audit areas include settings interactions, hardware-specific paths and large-library profiling. The next uncovered area is individual settings layouts and interactions. Standard tier.
