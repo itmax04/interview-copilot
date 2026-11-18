@@ -398,6 +398,13 @@ final class InterviewerController {
                 begin(language: query["lang"] ?? "ru", count: Int(query["count"] ?? "") ?? 6,
                       autoFinish: Double(query["auto"] ?? "") ?? 3)
                 return state()
+            case "replay":
+                guard stage == .speaking, query["id"] == question?.id, let trial, !trial.playbackEnded else {
+                    return .error(409, "Вопрос уже изменился")
+                }
+                listening.resetTestCallPhrase()
+                self.trial = TestCallTrial(clip: trial.clip)
+                return state()
             case "ended":
                 guard stage == .speaking, query["id"] == question?.id else { return .error(409, "Вопрос уже изменился") }
                 trial?.endPlayback(at: Date().timeIntervalSinceReferenceDate)
