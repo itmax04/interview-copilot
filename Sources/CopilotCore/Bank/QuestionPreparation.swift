@@ -79,7 +79,7 @@ public enum QuestionPreparation {
 
     /// Черновики → только в карточки без ответа (статус «черновик»): ответ, написанный или поправленный владельцем
     /// за время подготовки, не трогается.
-    public static func applyDrafts(_ text: String, to cards: [BankCard]) -> [BankCard] {
+    public static func applyDrafts(_ text: String, to cards: [BankCard], requested: [String]? = nil) -> [BankCard] {
         var byID: [String: String] = [:]
         for item in JSONExtract.array(text) ?? [] {
             if let id = item["id"] as? String, let a = (item["answer"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -88,7 +88,7 @@ public enum QuestionPreparation {
             }
         }
         return cards.map { card in
-            guard !card.hasAnswer, let answer = byID[card.id] else { return card }
+            guard requested?.contains(card.id) != false, !card.hasAnswer, let answer = byID[card.id] else { return card }
             var c = card
             c.answer = answer
             c.status = .draft

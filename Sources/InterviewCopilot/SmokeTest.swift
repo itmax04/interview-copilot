@@ -164,7 +164,7 @@ enum SmokeTest {
             switch await ChainText.collect(chain, QuestionPreparation.draftsRequest(items, profile: profile, generalInstructions: "",
                                                                                     redactPII: true)) {
             case .success(let text):
-                cards = QuestionPreparation.applyDrafts(text, to: cards)
+                cards = QuestionPreparation.applyDrafts(text, to: cards, requested: items.map { $0.card.id })
                 check(cards[1].status == .draft && cards[2].status == .draft, "черновики: оба вопроса без ответа получили черновик")
                 check(cards[0].answer == own && cards[0].status == .own, "ваш ответ не изменён")
                 check(cards.dropFirst().allSatisfy { PromptScenarios.bullets($0.answer) == 0 }, "черновики: без списков по инструкции")

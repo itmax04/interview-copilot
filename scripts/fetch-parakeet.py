@@ -14,7 +14,10 @@ dest = models / 'parakeet-tdt-0.6b-v3'
 
 def checksum(path):
     with path.open('rb') as stream:
-        return hashlib.file_digest(stream, 'sha256').hexdigest()
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+        return digest.hexdigest()
 
 def fetch(entry):
     path = dest / entry['path']

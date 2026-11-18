@@ -59,7 +59,10 @@ struct SessionStoreTests {
         defer { try? FileManager.default.removeItem(at: dir) }
         let date = Date()
         let a = store.newSession(source: nil, at: date)
+        let concurrent = store.newSession(source: nil, at: date)
+        #expect(concurrent.id != a.id)
         try store.save(a)
+        try store.delete(a.id)
         let b = store.newSession(source: nil, at: date)
         #expect(a.id != b.id)
     }

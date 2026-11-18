@@ -28,7 +28,9 @@ public enum TurnEval {
                 guard case .text(let text)? = seg.first else { return nil }
                 let times = seg.dropFirst().compactMap { if case .time(let t) = $0 { t } else { nil } }
                 guard let first = times.first else { return nil }
-                return (text, first, times.count > 1 ? times[1] : first)
+                guard (2...3).contains(seg.count), times.count == seg.count - 1,
+                      first >= 0, let end = times.last, end >= first else { return nil }
+                return (text, first, end)
             }
         }
     }
@@ -60,12 +62,18 @@ public enum TurnEval {
         public var prematureRate: Double { cases == 0 ? 0 : Double(premature) / Double(cases) }
         public var missedRate: Double { withExpected == 0 ? 0 : Double(missed) / Double(withExpected) }
         /// Пороги evals/README.md: преждевременные ≤ 10%, пропущенные ≤ 5%.
-        public var passed: Bool { prematureRate <= 0.10 && missedRate <= 0.05 }
+        public var passed: Bool { cases > 0 && prematureRate <= 0.10 && missedRate <= 0.05 }
     }
 
     public static func load(_ url: URL) throws -> [Case] {
         try String(contentsOf: url, encoding: .utf8).split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-            .map { try JSONDecoder().decode(Case.self, from: Data($0.utf8)) }
+            .map { line in
+                let item = try JSONDecoder().decode(Case.self, from: Data(line.utf8))
+                guard item.phrases.count == item.segments.count,
+                      (item.owner ?? []).allSatisfy({ $0.count == 2 && $0[0] >= 0 && $0[1] >= $0[0] })
+                else { throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid timeline in " + item.id)) }
+                return item
+            }
     }
 
     public static func run(_ cases: [Case], config: TurnDetector.Config = .init(), finalDelayMs: Double = 500) -> Summary {

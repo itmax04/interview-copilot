@@ -85,6 +85,7 @@ struct QuestionPreparationTests {
                      BankCard(id: "q-2", questions: ["Чому ми?"], answer: "Мій ответ"),
                      BankCard(id: "q-3", questions: ["Хобі?"], answer: "")]
         let reply = #"[{"id": "q-1", "answer": "**Іноді надто прискіпливий.**"}, {"id": "q-2", "answer": "чужий"}, {"id": "q-3", "answer": "—"}]"#
+        #expect(QuestionPreparation.applyDrafts(reply, to: cards, requested: ["q-2"]) == cards)
         let out = QuestionPreparation.applyDrafts(reply, to: cards)
         #expect(out[0].answer == "**Іноді надто прискіпливий.**" && out[0].status == .draft)
         #expect(out[1] == cards[1])                // ваш ответ не меняется

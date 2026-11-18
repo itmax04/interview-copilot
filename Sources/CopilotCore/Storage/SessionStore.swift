@@ -83,6 +83,7 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
 public final class SessionStore: @unchecked Sendable {
     public let directory: URL
     private let lock = NSLock()
+    private var nextSuffix: [String: Int] = [:]
 
     public init(directory: URL) {
         self.directory = directory
@@ -109,18 +110,28 @@ public final class SessionStore: @unchecked Sendable {
     }()
 
     public func newSession(source: String?, at date: Date = Date()) -> SessionRecord {
-        var id = Self.fileFormatter.string(from: date)
-        var n = 2
-        while FileManager.default.fileExists(atPath: url(for: id).path) {
-            id = Self.fileFormatter.string(from: date) + "-\(n)"
-            n += 1
+        let base = Self.fileFormatter.string(from: date)
+        return lock.withLock {
+            // Keep issued IDs reserved while asynchronous reviews can still refer to them.
+            var n = nextSuffix[base] ?? 1
+            var id: String
+            repeat {
+                id = n == 1 ? base : base + "-" + String(n)
+                n += 1
+            } while FileManager.default.fileExists(atPath: url(for: id).path)
+            nextSuffix[base] = n
+            return SessionRecord(id: id, startedAt: date, source: source)
         }
-        return SessionRecord(id: id, startedAt: date, source: source)
+    }
+
+    private func validID(_ id: String) -> Bool {
+        !id.isEmpty && !id.contains("/") && !id.utf8.contains(0)
     }
 
     func url(for id: String) -> URL { directory.appendingPathComponent("\(id).json") }
 
     public func save(_ session: SessionRecord) throws {
+        guard validID(session.id) else { throw CocoaError(.fileWriteInvalidFileName) }
         try lock.withLock {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                     attributes: [.posixPermissions: 0o700])
@@ -149,16 +160,26 @@ public final class SessionStore: @unchecked Sendable {
         lock.withLock {
             let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
             return files.filter { $0.pathExtension == "json" }
-                .compactMap { try? Self.decoder.decode(SessionRecord.self, from: Data(contentsOf: $0)) }
+                .compactMap { file -> SessionRecord? in
+                    guard let record = try? Self.decoder.decode(SessionRecord.self, from: Data(contentsOf: file)),
+                          record.id == file.deletingPathExtension().lastPathComponent else { return nil }
+                    return record
+                }
                 .sorted { $0.startedAt > $1.startedAt }
         }
     }
 
     public func load(_ id: String) -> SessionRecord? {
-        lock.withLock { try? Self.decoder.decode(SessionRecord.self, from: Data(contentsOf: url(for: id))) }
+        guard validID(id) else { return nil }
+        return lock.withLock {
+            guard let record = try? Self.decoder.decode(SessionRecord.self, from: Data(contentsOf: url(for: id))),
+                  record.id == id else { return nil }
+            return record
+        }
     }
 
     public func delete(_ id: String) throws {
+        guard validID(id) else { throw CocoaError(.fileWriteInvalidFileName) }
         try lock.withLock {
             let u = url(for: id)
             if FileManager.default.fileExists(atPath: u.path) { try FileManager.default.removeItem(at: u) }
@@ -169,12 +190,14 @@ public final class SessionStore: @unchecked Sendable {
     /// «Удалить всю историю» не должно оставлять расшифровки на диске (COPILOT-12).
     public func deleteAll() throws {
         try lock.withLock {
-            let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+            let files: [URL]
+            do { files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) }
+            catch let error as CocoaError where error.code == .fileReadNoSuchFile { return }
             for f in files where f.pathExtension == "json" { try FileManager.default.removeItem(at: f) }
         }
     }
 
-    /// Время начала сессии из имени файла (`yyyy-MM-dd'T'HH-mm-ss` и, возможно, `-2`); nil — имя другого вида.
+    /// Время начала сессии из имени файла (`yyyy-MM-dd'T'HH-mm-ss` с необязательным суффиксом); nil — имя другого вида.
     static func startDate(fromFileName name: String) -> Date? {
         fileFormatter.date(from: String(name.prefix(19)))
     }

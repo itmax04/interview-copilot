@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 
 /// Модель из `models.sha256` (R-22).
@@ -35,13 +36,9 @@ public enum ModelDownloadError: Error, CustomStringConvertible, Equatable {
 }
 
 /// Загрузка моделей в `…/models/` с проверкой SHA256: при несовпадении файл удаляется и показывается ошибка (R-22).
-public final class ModelDownloader: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+public final class ModelDownloader: Sendable {
     public let directory: URL
     public let list: [ModelFile]
-    private var progressHandler: (@Sendable (Double) -> Void)?
-    private var continuation: CheckedContinuation<URL, Error>?
-    private let lock = NSLock()
-
     public init(directory: URL, list: [ModelFile]) {
         self.directory = directory
         self.list = list
@@ -78,48 +75,50 @@ public final class ModelDownloader: NSObject, URLSessionDownloadDelegate, @unche
     public func download(_ file: String, progress: @escaping @Sendable (Double) -> Void) async throws {
         guard let e = entry(file) else { throw ModelDownloadError.notInList(file) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        lock.withLock { progressHandler = progress }
-        let session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
-        defer { session.finishTasksAndInvalidate() }
-        let tmp = try await withCheckedThrowingContinuation { (c: CheckedContinuation<URL, Error>) in
-            lock.withLock { continuation = c }
+        let staged = directory.appendingPathComponent(".download-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: staged) }
+        try await withCheckedThrowingContinuation { (completion: CheckedContinuation<Void, Error>) in
+            let transfer = ModelTransfer(destination: staged, progress: progress, completion: completion)
+            let session = URLSession(configuration: .ephemeral, delegate: transfer, delegateQueue: nil)
             session.downloadTask(with: e.url).resume()
+            session.finishTasksAndInvalidate()
         }
-        defer { try? FileManager.default.removeItem(at: tmp) }
-        guard try Self.sha256(of: tmp) == e.sha256 else { throw ModelDownloadError.checksumMismatch(file) }
+        try Task.checkCancellation()
+        guard try Self.sha256(of: staged) == e.sha256 else { throw ModelDownloadError.checksumMismatch(file) }
         let target = directory.appendingPathComponent(file)
-        try? FileManager.default.removeItem(at: target)
-        try FileManager.default.moveItem(at: tmp, to: target)
+        guard rename(staged.path, target.path) == 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
+    }
+}
+
+// Each URLSession serializes its own delegate callbacks. Only didComplete resumes the caller.
+private final class ModelTransfer: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
+    let destination: URL
+    let progress: @Sendable (Double) -> Void
+    let completion: CheckedContinuation<Void, Error>
+    private var result: Result<Void, Error> = .failure(URLError(.cannotCreateFile))
+
+    init(destination: URL, progress: @escaping @Sendable (Double) -> Void, completion: CheckedContinuation<Void, Error>) {
+        self.destination = destination
+        self.progress = progress
+        self.completion = completion
     }
 
-    // MARK: URLSessionDownloadDelegate
-
-    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
-                           totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         guard totalBytesExpectedToWrite > 0 else { return }
-        let handler = lock.withLock { progressHandler }
-        handler?(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
+        progress(Double(totalBytesWritten) / Double(totalBytesExpectedToWrite))
     }
 
-    public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        let c = lock.withLock { () -> CheckedContinuation<URL, Error>? in defer { continuation = nil }; return continuation }
-        if let http = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            c?.resume(throwing: ModelDownloadError.http(http.statusCode))
-            return
-        }
-        // Файл во временной папке удаляется после возврата — переносим.
-        let keep = FileManager.default.temporaryDirectory.appendingPathComponent("model-\(UUID().uuidString)")
-        do {
-            try FileManager.default.moveItem(at: location, to: keep)
-            c?.resume(returning: keep)
-        } catch {
-            c?.resume(throwing: error)
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        result = Result {
+            if let http = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                throw ModelDownloadError.http(http.statusCode)
+            }
+            try FileManager.default.moveItem(at: location, to: destination)
         }
     }
 
-    public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let error else { return }
-        let c = lock.withLock { () -> CheckedContinuation<URL, Error>? in defer { continuation = nil }; return continuation }
-        c?.resume(throwing: error)
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error { completion.resume(throwing: error) } else { completion.resume(with: result) }
     }
 }

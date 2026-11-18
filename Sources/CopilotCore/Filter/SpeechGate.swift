@@ -50,8 +50,11 @@ public final class SileroSpeechGate: @unchecked Sendable {
     /// Речь — если её хотя бы 2 куска (≈ 0,5 с) или один кусок с уверенностью ≥ 0,9. Одиночный всплеск шума
     /// (живой лог 2026-10-23: короткие отрезки 0,66–1,2 с превращались в «Дякую!») — не речь.
     public func isSpeech(_ samples: [Float]) -> Bool {
-        let stats = speechStats(samples)
-        return stats.speechChunks >= 2 || stats.max >= 0.9
+        Self.isSpeech(speechStats(samples))
+    }
+
+    public static func isSpeech(_ stats: (max: Float, speechChunks: Int)) -> Bool {
+        stats.speechChunks >= 2 || stats.max >= 0.9
     }
 
     private func chunkProbabilities(_ samples: [Float]) -> [Float] {

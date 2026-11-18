@@ -314,11 +314,12 @@ final class BankController {
     // MARK: Вопросы (R-07)
 
     /// Сохранить вопросы активного профиля (таблица, импорт, подготовка) и перечитать базу.
-    func saveCards(_ new: [BankCard]) {
-        guard let url = questionsURL else { return }
+    @discardableResult
+    func saveCards(_ new: [BankCard]) -> Bool {
+        guard let url = questionsURL else { return false }
         guard !questionsUnreadable else {
             report(L("Вопросы: файл questions.yaml не читается — исправьте его, затем повторите"))
-            return
+            return false
         }
         var failure: String?
         do {
@@ -329,6 +330,7 @@ final class BankController {
         }
         reload()
         report(failure)
+        return failure == nil && !questionsUnreadable
     }
 
     /// Удалить все вопросы профиля сразу (COPILOT-11). Резюме, инструкции и материалы остаются.

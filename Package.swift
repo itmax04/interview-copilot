@@ -48,7 +48,7 @@ let package = Package(
         ),
         .testTarget(
             name: "CopilotCoreTests",
-            dependencies: ["CopilotCore", "CopilotEmbeddings"],
+            dependencies: ["CopilotCore", "CopilotEmbeddings", "InterviewCopilot"],
             resources: [.copy("Fixtures")]
         ),
     ]

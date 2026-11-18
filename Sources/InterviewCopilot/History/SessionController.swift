@@ -1,10 +1,26 @@
 import CopilotCore
 import Foundation
+import Observation
 
 /// Текущая сессия и история (R-19). Сессия начинается при старте слушания и закрывается при выходе.
 @MainActor
+@Observable
 final class SessionController {
-    let store = SessionStore(directory: AppPaths.sessions)
+    let store: SessionStore
+
+    init(store: SessionStore = SessionStore(directory: AppPaths.sessions)) {
+        self.store = store
+    }
+
+    func delete(_ id: String) throws {
+        try store.delete(id)
+        if current?.id == id { persist = false }
+    }
+
+    func deleteAll() throws {
+        persist = false
+        try store.deleteAll()
+    }
     private(set) var current: SessionRecord?
     private var saveTask: Task<Void, Never>?
     /// Текущий источник звука (имя приложения) — для сессии, начатой при запуске, когда источник ещё не выбран.
@@ -79,7 +95,7 @@ final class SessionController {
     /// изменениями: раньше каждое изменение переносило её ещё на 2 с, и в плотном разговоре (реплики обеих сторон,
     /// обмены, ответы) файл мог не обновляться минутами — при сбое терялось всё с последней паузы.
     private func scheduleSave() {
-        guard saveTask == nil else { return }
+        guard persist, saveTask == nil else { return }
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled, let self else { return }
@@ -89,7 +105,7 @@ final class SessionController {
     }
 
     func saveNow() {
-        guard persist, let s = current, !(s.utterances.isEmpty && s.turns.isEmpty && s.exchanges.isEmpty) else { return }
+        guard persist, let s = current, s.canBeReviewed else { return }
         do { try store.save(s) } catch { Log.app.error("session save failed: \(error.localizedDescription, privacy: .public)") }
     }
 

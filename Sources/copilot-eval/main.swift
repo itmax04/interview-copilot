@@ -41,7 +41,7 @@ case "stt", "stt-parakeet", "stt-hybrid":
     args.removeFirst()
     if hybridWhisper != nil { args.remove(at: 1) }
     let lang = option("--lang")
-    let repeats = Int(option("--repeat") ?? "1") ?? 1
+    guard let repeats = Int(option("--repeat") ?? "1"), repeats > 0 else { fail("--repeat must be a positive integer") }
     let fullContext = flag("--full-context")
     guard args.count >= 2 else { fail("usage: copilot-eval stt <model.bin> <file.wav>... [--lang xx] [--full-context] [--repeat N]") }
     let memBefore = ProcessMemory.footprintMB()
@@ -161,16 +161,17 @@ case "stt-stream":
 case "filter-text":
     // Eval `filter` по тексту (COPILOT-05 R-05): evals/filter/text-cases.jsonl → совпадение с ожиданием, без моделей.
     args.removeFirst()
+    let verbose = flag("--verbose")
     let path = args.first ?? "evals/filter/text-cases.jsonl"
     guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { fail("\(path): нет файла", code: 1) }
-    let verbose = flag("--verbose")
+    let terms = TermDictionary()
     var total = 0, ok = 0
     var byTag: [String: (ok: Int, total: Int)] = [:]
     for line in raw.split(separator: "\n") where !line.isEmpty {
         guard let c = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: String],
               let text = c["text"], let setting = c["setting"].flatMap(RecognitionLanguage.init(rawValue:)),
-              let channel = c["channel"].flatMap(LanguageGate.Channel.init(rawValue:)), let expect = c["expect"] else { continue }
-        let verdict = LanguageGate(setting: setting, terms: TermDictionary()).check(text, channel: channel)
+              let channel = c["channel"].flatMap(LanguageGate.Channel.init(rawValue:)), let expect = c["expect"] else { fail("Invalid evaluation case or missing fixture", code: 1) }
+        let verdict = LanguageGate(setting: setting, terms: terms).check(text, channel: channel)
         let got: String = if case .keep = verdict { "keep" } else { "drop" }
         total += 1
         let tag = c["tag"] ?? "-"
@@ -180,21 +181,21 @@ case "filter-text":
         byTag[tag] = t
     }
     for (tag, t) in byTag.sorted(by: { $0.key < $1.key }) { print("  \(tag): \(t.ok)/\(t.total)") }
-    let passed = ok == total
+    let passed = total > 0 && ok == total
     print("filter-text: cases=\(total) correct=\(ok) \(passed ? "PASS" : "FAIL")")
     finish(passed ? 0 : 1)
 case "filter":
     // Eval `filter` по звуку (COPILOT-05 AC-01, AC-02, AC-04): Silero → Parakeet → фильтр языка, по одному файлу.
     // Упрощение: файл — одна реплика (сегментация энергетическим детектором здесь не участвует).
     args.removeFirst()
-    let manifest = args.first ?? "evals/filter/audio-cases.json"
     let dir = URL(fileURLWithPath: option("--dir") ?? "evals/audio/filter")
     let useGate = !flag("--no-vad")
     let useLang = !flag("--no-lang")
     let threshold = Float(option("--vad-threshold") ?? "0.5") ?? 0.5
     let verbose = flag("--verbose")
+    let manifest = args.first ?? "evals/filter/audio-cases.json"
     guard let data = FileManager.default.contents(atPath: manifest),
-          let cases = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]] else { fail("\(manifest): нет манифеста (scripts/make-filter-fixtures.py)", code: 1) }
+          let cases = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]], !cases.isEmpty else { fail("\(manifest): empty or invalid filter manifest", code: 1) }
     let engine: ParakeetEngine
     do { engine = try await ParakeetEngine.load(from: AppPaths.parakeetModels) } catch { fail("Parakeet: \(error)", code: 1) }
     let gate: SileroSpeechGate? = useGate ? (try? SileroSpeechGate.load(from: AppPaths.models, threshold: threshold)) : nil
@@ -205,7 +206,7 @@ case "filter":
     var vadMs: [Double] = []
     for c in cases {
         guard let file = c["file"], let expect = c["expect"], let setting = c["setting"].flatMap(RecognitionLanguage.init(rawValue:)),
-              let channel = c["channel"].flatMap(LanguageGate.Channel.init(rawValue:)) else { continue }
+              let channel = c["channel"].flatMap(LanguageGate.Channel.init(rawValue:)) else { fail("Invalid evaluation case or missing fixture", code: 1) }
         let samples: [Float]
         do { samples = try AudioFileReader.read16kMono(dir.appendingPathComponent(file)) } catch { fail("\(file): \(error)", code: 1) }
         var outcome = "keep"
@@ -213,9 +214,10 @@ case "filter":
         var text = ""
         if let gate {
             let started = Date()
-            prob = gate.speechProbability(samples)
+            let stats = gate.speechStats(samples)
+            prob = stats.max
             vadMs.append(Date().timeIntervalSince(started) * 1000)
-            if !gate.isSpeech(samples) { outcome = "none" }
+            if !SileroSpeechGate.isSpeech(stats) { outcome = "none" }
         }
         if outcome != "none" {
             text = (try? engine.transcribe(samples, language: setting.whisperCode, prompt: nil, reducedContext: false).text) ?? ""
@@ -226,7 +228,8 @@ case "filter":
         switch expect {
         case "drop": foreign.total += 1; if outcome != "keep" { foreign.filtered += 1 }
         case "keep": wanted.total += 1; if outcome != "keep" { wanted.lost += 1 }
-        default: noise.total += 1; if outcome != "none" { noise.utterances += 1 }
+        case "none": noise.total += 1; if outcome != "none" { noise.utterances += 1 }
+        default: fail("Unknown filter expectation", code: 1)
         }
         if c["tag"] == "terms" {
             // AC-02 — фильтр не отбросил вопрос с терминами. Латиница в тексте — свойство распознавания (справочно).
@@ -250,8 +253,9 @@ case "filter":
 case "enhance":
     // Eval `enhance` (COPILOT-05 R-04): ошибки Parakeet по словам на шумных фразах с LocalVQE и без.
     args.removeFirst()
-    let manifest = args.first ?? "evals/filter/noisy-cases.json"
     let dir = URL(fileURLWithPath: option("--dir") ?? "evals/audio/noisy")
+    let verbose = flag("--verbose")
+    let manifest = args.first ?? "evals/filter/noisy-cases.json"
     guard let data = FileManager.default.contents(atPath: manifest),
           let cases = (try? JSONSerialization.jsonObject(with: data)) as? [[String: String]] else { fail("\(manifest): нет манифеста (scripts/make-noisy-fixtures.py)", code: 1) }
     let engine: ParakeetEngine
@@ -262,7 +266,7 @@ case "enhance":
     var msPerSecond: [Double] = []
     for c in cases {
         guard let file = c["file"], let text = c["text"], let noise = c["noise"], let lang = c["lang"],
-              let samples = try? AudioFileReader.read16kMono(dir.appendingPathComponent(file)) else { continue }
+              let samples = try? AudioFileReader.read16kMono(dir.appendingPathComponent(file)) else { fail("Invalid evaluation case or missing fixture", code: 1) }
         let started = Date()
         guard let enhanced = enhancer.enhance(samples) else { fail("\(file): LocalVQE не обработал", code: 1) }
         msPerSecond.append(Date().timeIntervalSince(started) * 1000 / (Double(samples.count) / 16_000))
@@ -271,7 +275,7 @@ case "enhance":
         let ca = TranscriptComparison(reference: text, recognized: a), cb = TranscriptComparison(reference: text, recognized: b)
         raw[noise, default: (0, 0)].errors += ca.errors; raw[noise, default: (0, 0)].words += ca.referenceWords
         clean[noise, default: (0, 0)].errors += cb.errors; clean[noise, default: (0, 0)].words += cb.referenceWords
-        if flag("--verbose") { print("\(file): raw=\(ca.errors) vqe=\(cb.errors) · \(a.prefix(50)) | \(b.prefix(50))") }
+        if verbose { print("\(file): raw=\(ca.errors) vqe=\(cb.errors) · \(a.prefix(50)) | \(b.prefix(50))") }
     }
     var totalRaw = (0, 0), totalClean = (0, 0)
     for noise in raw.keys.sorted() {
@@ -280,6 +284,7 @@ case "enhance":
         print(String(format: "  %-13@ без LocalVQE %5.1f%% (%d/%d) · с LocalVQE %5.1f%% (%d/%d)", noise as NSString,
                      Double(r.errors) * 100 / Double(max(r.words, 1)), r.errors, r.words, Double(e.errors) * 100 / Double(max(e.words, 1)), e.errors, e.words))
     }
+    guard !msPerSecond.isEmpty else { fail("Empty evaluation set", code: 1) }
     let better = totalClean.0 < totalRaw.0
     print(String(format: "enhance: WER без %.1f%% · с LocalVQE %.1f%% · %.0f мс на 1 с звука · %@",
                  Double(totalRaw.0) * 100 / Double(max(totalRaw.1, 1)), Double(totalClean.0) * 100 / Double(max(totalClean.1, 1)),
@@ -288,6 +293,7 @@ case "enhance":
 case "memory":
     // Eval `memory` (COPILOT-06): находит ли поиск по истории нужный старый обмен (bge-m3), и не тянет ли лишнее.
     args.removeFirst()
+    let verbose = flag("--verbose")
     let path = args.first ?? "evals/memory/session.json"
     guard let data = FileManager.default.contents(atPath: path),
           let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
@@ -297,10 +303,9 @@ case "memory":
     let embedder: LlamaEmbedder
     do { embedder = try LlamaEmbedder(modelPath: AppPaths.model(spec.file).path, prefix: spec.prefix) } catch { fail("\(error)", code: 1) }
     let embed: @Sendable (String) -> [Float]? = { text in (try? embedder.embed([text]))?.first }
-    let verbose = flag("--verbose")
     var hits = 0, refs = 0, falseOld = 0, unrelated = 0
     for q in queries {
-        guard let text = q["q"] as? String else { continue }
+        guard let text = q["q"] as? String else { fail("Invalid evaluation case or missing fixture", code: 1) }
         // История к моменту вопроса: все 14 обменов; последние 4 идут в короткую память, остальное — поиск.
         let memory = InterviewMemory()
         let start = Date().addingTimeInterval(-40 * 60)
@@ -312,6 +317,7 @@ case "memory":
         let found = context.earlier.map(\.question) + context.recent.map(\.question)
         if let expect = q["expect"] as? Int {
             refs += 1
+            guard expect > 0, expect <= exchanges.count else { fail("Invalid exchange reference", code: 1) }
             let target = exchanges[expect - 1]["q"] ?? ""
             if found.contains(target) { hits += 1 }
             if verbose || !found.contains(target) { print("\(found.contains(target) ? "ok  " : "MISS") [\(context.backReference ? "отсылка" : "без отсылки")] \(text.prefix(60)) → \(context.earlier.map { $0.question.prefix(30) })") }
@@ -321,7 +327,7 @@ case "memory":
             if verbose || !context.earlier.isEmpty { print("\(context.earlier.isEmpty ? "ok  " : "EXTRA") (новая тема) \(text.prefix(60)) → \(context.earlier.map { $0.question.prefix(30) })") }
         }
     }
-    let pass = hits == refs && falseOld <= 1
+    let pass = !queries.isEmpty && hits == refs && falseOld <= 1
     print("memory: возвраты к теме найдены \(hits)/\(refs) · новые темы с лишним старым \(falseOld)/\(unrelated) \(pass ? "PASS" : "FAIL")")
     finish(pass ? 0 : 1)
 case "voice-enroll":
@@ -344,16 +350,16 @@ case "voice-enroll":
 case "voice":
     // Eval `voice` (COPILOT-05 R-03, AC-03): отпечаток по образцу «владельца», сходство своих и чужих фраз.
     args.removeFirst()
-    let manifest = args.first ?? "evals/filter/voice-cases.json"
     let dir = URL(fileURLWithPath: option("--dir") ?? "evals/audio/voice")
     let fixedThreshold = option("--threshold").flatMap(Float.init)  // по умолчанию — персональный порог по образцу
+    let verbose = flag("--verbose")
+    let manifest = args.first ?? "evals/filter/voice-cases.json"
     guard let data = FileManager.default.contents(atPath: manifest),
           let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
           let owners = root["owners"] as? [String: String], let tests = root["tests"] as? [[String: String]]
     else { fail("\(manifest): нет манифеста (scripts/make-voice-fixtures.py)", code: 1) }
     let embedder: VoiceEmbedder
     do { embedder = try VoiceEmbedder.load(from: AppPaths.models) } catch { fail("CAM++: \(error) (scripts/fetch-filter-models.py)", code: 1) }
-    let verbose = flag("--verbose")
     var thresholds: [Float] = []
     var own: [Float] = [], other: [Float] = [], cross: [Float] = []
     var accepted = 0, ownTotal = 0, rejected = 0, otherTotal = 0
@@ -365,9 +371,9 @@ case "voice":
         thresholds.append(threshold)
         var line: [String] = []
         for t in tests {
-            guard let f = t["file"], let speaker = t["speaker"], let samples = try? AudioFileReader.read16kMono(dir.appendingPathComponent(f)) else { continue }
+            guard let f = t["file"], let speaker = t["speaker"], let samples = try? AudioFileReader.read16kMono(dir.appendingPathComponent(f)) else { fail("Invalid evaluation case or missing fixture", code: 1) }
             let started = Date()
-            guard let sim = embedder.similarity(of: samples, to: print_) else { continue }
+            guard let sim = embedder.similarity(of: samples, to: print_) else { fail("Invalid evaluation case or missing fixture", code: 1) }
             embedMs.append(Date().timeIntervalSince(started) * 1000)
             if speaker == owner {
                 if f.contains("cross") { cross.append(sim) } else { own.append(sim) }
@@ -401,12 +407,12 @@ case "turn":
     args.removeFirst()
     let threshold = Double(option("--threshold-ms") ?? "700") ?? 700
     let verbose = flag("--verbose")
-    let path = args.first ?? "evals/turn/cases.jsonl"
-    let cases: [TurnEval.Case]
-    do { cases = try TurnEval.load(URL(fileURLWithPath: path)) } catch { fail("\(path): \(error)", code: 1) }
     var config = TurnDetector.Config(thresholdMs: threshold)
     if let q = option("--question-ms").flatMap(Double.init) { config.questionThresholdMs = q }
     config.questionStarters = flag("--question-starters")
+    let path = args.first ?? "evals/turn/cases.jsonl"
+    let cases: [TurnEval.Case]
+    do { cases = try TurnEval.load(URL(fileURLWithPath: path)) } catch { fail("\(path): \(error)", code: 1) }
     let summary = TurnEval.run(cases, config: config)
     if verbose {
         for r in summary.results {
@@ -455,7 +461,7 @@ case "materials":
             .split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         var cases: [(q: String, expect: String?, vector: [Float])] = []
         for line in lines {
-            guard let obj = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any], let q = obj["q"] as? String else { continue }
+            guard let obj = try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any], let q = obj["q"] as? String else { fail("Invalid materials case", code: 1) }
             cases.append((q, obj["expect"] as? String, try embedder.embed([q])[0]))
         }
         func score(_ t: Double) -> (hits: Int, related: Int, extra: Int, unrelated: Int) {
@@ -483,7 +489,7 @@ case "materials":
             }
         }
         let r = score(threshold)
-        let pass = Double(r.hits) >= 0.9 * Double(r.related) && r.extra * 8 <= r.unrelated * 3
+        let pass = r.related > 0 && r.unrelated > 0 && Double(r.hits) >= 0.9 * Double(r.related) && r.extra * 8 <= r.unrelated * 3
         print(String(format: "materials: chunks=%d threshold=%.2f AC-05 found_in_top4=%d/%d (≥90%%) unrelated_with_fragments=%d/%d (≤3/8) index_ms=%.0f %@",
                      index.entries.count, threshold, r.hits, r.related, r.extra, r.unrelated, buildMs, pass ? "PASS" : "FAIL"))
         finish(pass ? 0 : 1)

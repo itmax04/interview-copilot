@@ -101,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Главное окно (COPILOT-09 этап 6, P12): «Сегодня», «Сессии», «Профили», «ИИ-собеседование», «Настройки».
     private let workspaceModel = WorkspaceModel()
     private lazy var workspace = WorkspaceWindowController(
-        workspace: workspaceModel, model: model, bank: bank, store: sessions.store, reviews: reviews,
+        workspace: workspaceModel, model: model, bank: bank, sessions: sessions, reviews: reviews,
         hotkeyFailures: { [weak self] in self?.hotkeys?.failures ?? [:] },
         stylePreviewContext: { [weak self] in
             guard let self else { return nil }
@@ -346,6 +346,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.verifyModelIDs()
         refreshUI()
         panel.show()
+        onboarding.state.onProgress = { [weak self] progress in
+            guard let self else { return }
+            if let progress { self.panelModel.state = .downloading(progress) }
+            else { self.updateListeningPanelState() }
+        }
         onboarding.state.refresh()
         if !model.settings.onboardingCompleted || !onboarding.state.allModelsPresent {
             // S-09: мастер первого запуска (разрешения → ключ → модели).
@@ -354,7 +359,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // AC-13: без разрешения — понятное состояние и инструкция, без падения.
             permissionsWindow.show()
         }
-        startDownloadProgressMirror()
+        reviews.activeSessionID = { [weak self] in self?.sessions.current?.id }
         setupWorkspace()
         if openInterviewer { handle(MenuAction.aiInterview) }
         if openSettings { workspace.show(.settings) }
@@ -470,6 +475,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.language = model.settings.language
         panelModel.sessionNotes = liveSession.notes
         // Ответы живут в истории панели и после конца сессии — общее состояние только про слушание.
+        if let progress = onboarding.state.overallProgress {
+            panelModel.state = .downloading(progress)
+        } else {
+            updateListeningPanelState()
+        }
+        updateLevels()
+    }
+
+    private func updateListeningPanelState() {
         switch listening.phase {
         case .noPermission: panelModel.state = .noPermission
         case .idle: panelModel.state = .idle
@@ -478,7 +492,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .error(let message): panelModel.state = .error(message)
         case .listening: panelModel.state = .listening
         }
-        updateLevels()
     }
 
     // MARK: Звук в оверлее (COPILOT-09 R-08)
@@ -753,21 +766,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func screenshotFailed(_ reason: String) {
         let ids = panelModel.history.begin(question: "Скриншот задачи", turnID: nil, kind: .screenshot)
         panelModel.history.update(entry: ids.entry, version: ids.version) { $0.status = .failed(reason) }
-    }
-
-    /// Прогресс загрузки моделей — в панель (состояние downloading, R-16).
-    private func startDownloadProgressMirror() {
-        Task { [weak self] in
-            while let self {
-                try? await Task.sleep(for: .milliseconds(300))
-                if let p = self.onboarding.state.overallProgress {
-                    self.panelModel.state = .downloading(p)
-                } else if case .downloading = self.panelModel.state {
-                    self.panelModel.state = .idle
-                    self.refreshUI()
-                }
-            }
-        }
     }
 
     private func togglePanel() {

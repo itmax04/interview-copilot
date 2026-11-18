@@ -111,6 +111,27 @@ struct ReviewTests {
         #expect(ReviewPrompt.transcriptText(old, redactPII: false) == "Interviewer: Q?\nCandidate: A")
     }
 
+    @Test func incompleteHistoricalReviewCanResume() {
+        var old = record(answers: 2)
+        old.review = SessionReview()
+        old.review?.status = .done
+        old.review?.summary = ReviewSummary(overview: "Previous summary")
+        old.review?.comments = [ReviewComment(exchangeID: 1, good: "Good", missing: "", better: "")]
+        guard case .failed = old.reviewStatus(running: false) else { Issue.record("Incomplete review must offer retry"); return }
+        #expect(ReviewPrompt.pendingBatches(old).flatMap { $0 }.map(\.id) == [2])
+        old.review?.status = .running(done: 1, total: 2)
+        #expect(old.reviewStatus(running: true) == .running(done: 1, total: 2))
+        #expect(old.reviewStatus(running: false) == .failed("Разбор прерван"))
+    }
+
+    @Test func oversizedLegacyExchangeKeepsRecentTextWithinBudget() {
+        var old = SessionRecord(id: "legacy", startedAt: start, source: nil)
+        old.exchanges = [SessionExchange(id: 1, question: "Q", answer: [String(repeating: "x", count: 500) + "END"], askedAt: start)]
+        let text = ReviewPrompt.transcriptText(old, redactPII: false, budget: 64)
+        #expect(text.count == 64 && text.hasSuffix("END"))
+        #expect(ReviewPrompt.transcriptText(old, redactPII: false, budget: 2) == "ND")
+    }
+
     @Test func askRequestCarriesSummaryAndRecentQuestions() {
         var r = record()
         var review = SessionReview()

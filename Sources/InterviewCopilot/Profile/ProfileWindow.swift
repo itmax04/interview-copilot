@@ -319,6 +319,7 @@ struct DocumentEditor: View {
     }
 
     private func load(_ url: URL) {
+        guard bank.activeID == profileID else { return }
         saveTask?.cancel()
         saveTask = nil
         switch bank.importFile(url, as: doc) {
@@ -461,7 +462,13 @@ struct MaterialsView: View {
     }
 
     private func drop(_ providers: [NSItemProvider]) -> Bool {
-        let box = URLCollector(expected: providers.count) { urls in Task { @MainActor in add(urls) } }
+        let profileID = bank.activeID
+        let box = URLCollector(expected: providers.count) { urls in
+            Task { @MainActor in
+                guard bank.activeID == profileID else { return }
+                add(urls)
+            }
+        }
         for p in providers { _ = p.loadObject(ofClass: URL.self) { url, _ in box.add(url) } }
         return !providers.isEmpty
     }

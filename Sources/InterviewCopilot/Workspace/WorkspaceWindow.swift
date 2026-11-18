@@ -54,18 +54,18 @@ final class WorkspaceWindowController {
     let workspace: WorkspaceModel
     private let model: AppModel
     private let bank: BankController
-    private let store: SessionStore
+    private let sessions: SessionController
     private let reviews: ReviewController
     private let preparer: QuestionPreparer
     private let hotkeyFailures: () -> [HotkeyAction: String]
     private let stylePreviewContext: () -> StylePreview.Context?
 
-    init(workspace: WorkspaceModel, model: AppModel, bank: BankController, store: SessionStore, reviews: ReviewController,
+    init(workspace: WorkspaceModel, model: AppModel, bank: BankController, sessions: SessionController, reviews: ReviewController,
          hotkeyFailures: @escaping () -> [HotkeyAction: String], stylePreviewContext: @escaping () -> StylePreview.Context?) {
         self.workspace = workspace
         self.model = model
         self.bank = bank
-        self.store = store
+        self.sessions = sessions
         self.reviews = reviews
         self.preparer = QuestionPreparer(bank: bank, model: model)
         self.hotkeyFailures = hotkeyFailures
@@ -79,7 +79,7 @@ final class WorkspaceWindowController {
         if let session { workspace.selectedSession = session }
         workspace.sessionsVersion += 1
         if window == nil {
-            let root = WorkspaceView(workspace: workspace, model: model, bank: bank, store: store, reviews: reviews, preparer: preparer,
+            let root = WorkspaceView(workspace: workspace, model: model, bank: bank, sessions: sessions, reviews: reviews, preparer: preparer,
                                      hotkeyFailures: hotkeyFailures, stylePreviewContext: stylePreviewContext)
             let w = NSWindow(contentViewController: NSHostingController(rootView: root.localizedRoot()))
             w.title = "Interview Copilot"
@@ -103,7 +103,7 @@ struct WorkspaceView: View {
     @Bindable var workspace: WorkspaceModel
     @Bindable var model: AppModel
     let bank: BankController
-    let store: SessionStore
+    let sessions: SessionController
     let reviews: ReviewController?
     let preparer: QuestionPreparer
     var hotkeyFailures: () -> [HotkeyAction: String] = { [:] }
@@ -177,9 +177,9 @@ struct WorkspaceView: View {
     @ViewBuilder private var content: some View {
         switch workspace.section {
         case .today:
-            TodayView(workspace: workspace, model: model, bank: bank, store: store)
+            TodayView(workspace: workspace, model: model, bank: bank, store: sessions.store, reviews: reviews)
         case .sessions:
-            SessionHistoryView(store: store, reviews: reviews, initialSelection: workspace.selectedSession,
+            SessionHistoryView(controller: sessions, reviews: reviews, initialSelection: workspace.selectedSession,
                                onSelect: { workspace.selectedSession = $0 })
                 .id(workspace.sessionsVersion)
         case .profiles:
@@ -199,6 +199,7 @@ struct TodayView: View {
     let model: AppModel
     let bank: BankController
     let store: SessionStore
+    var reviews: ReviewController?
     @State private var recent: [SessionRecord] = []
 
     var body: some View {
@@ -233,6 +234,7 @@ struct TodayView: View {
         }
         .onAppear { recent = Array(store.list().prefix(4)) }
         .onChange(of: workspace.sessionsVersion) { recent = Array(store.list().prefix(4)) }
+        .onChange(of: reviews?.version) { recent = recent.compactMap { store.load($0.id) } }
     }
 
     private var recognition: String {
@@ -379,7 +381,7 @@ struct TodayView: View {
     }
 
     @ViewBuilder private func reviewBadge(_ s: SessionRecord) -> some View {
-        switch s.review?.status {
+        switch s.reviewStatus(running: reviews?.running.contains(s.id) == true) {
         case .done: ICBadge(text: "Готов", color: IC.green, dot: true)
         case .failed: ICBadge(text: "Прерван", color: IC.amber, dot: true)
         case .running, .pending: ICBadge(text: "Идет", color: IC.accent, dot: true)

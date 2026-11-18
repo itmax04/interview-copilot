@@ -15,6 +15,7 @@ final class ReviewController {
     /// Ошибка последнего вопроса — показывается под полем и не сохраняется в разбор.
     private(set) var askError: [String: String] = [:]
 
+    var activeSessionID: () -> String? = { nil }
     private let store: SessionStore
     private let model: AppModel
     private let bank: BankController
@@ -50,6 +51,7 @@ final class ReviewController {
         record.review = review
         do { try store.save(record) } catch {
             Log.app.error("review save failed: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
         version += 1
         return record
@@ -57,7 +59,7 @@ final class ReviewController {
 
     /// Разобрать сессию (после End или «Сделать разбор» / «Повторить» в окне).
     func start(_ id: String) {
-        guard !running.contains(id), let record = store.load(id), record.canBeReviewed else { return }
+        guard activeSessionID() != id, !running.contains(id), let record = store.load(id), record.canBeReviewed else { return }
         running.insert(id)
         let redact = model.settings.piiFilterEnabled
         let type = record.config?.type ?? .interview
@@ -66,7 +68,7 @@ final class ReviewController {
             defer { running.remove(id); version += 1 }
             let chain = await chain(for: record)
             let total = record.reviewableExchanges.count
-            var current = update(id) { $0.status = .running(done: $0.comments.count, total: total) } ?? record
+            guard var current = update(id, { $0.status = .running(done: $0.comments.count, total: total) }) else { return }
             let started = Date()
             for batch in ReviewPrompt.pendingBatches(current) {
                 let request = ReviewPrompt.commentsRequest(batch, type: type, profile: profile, redactPII: redact)
@@ -78,10 +80,12 @@ final class ReviewController {
                         Log.app.error("review comments unparsable")
                         return
                     }
-                    current = update(id) { r in
+                    let complete = comments.count == batch.count
+                    guard let saved = update(id, { r in
                         r.comments.append(contentsOf: comments)
-                        r.status = .running(done: r.comments.count, total: total)
-                    } ?? current
+                        r.status = complete ? .running(done: r.comments.count, total: total) : .failed("Модель ответила не в формате разбора — повторите")
+                    }), complete else { return }
+                    current = saved
                 case .failure(let e):
                     _ = update(id) { $0.status = .failed(e.description) }
                     return
@@ -94,13 +98,13 @@ final class ReviewController {
                         _ = update(id) { $0.status = .failed("Сводка не в формате — повторите") }
                         return
                     }
-                    _ = update(id) { $0.summary = summary }
+                    guard update(id, { $0.summary = summary }) != nil else { return }
                 case .failure(let e):
                     _ = update(id) { $0.status = .failed(e.description) }
                     return
                 }
             }
-            _ = update(id) { $0.status = .done }
+            guard update(id, { $0.status = .done }) != nil else { return }
             Log.app.info("review done comments=\(total) seconds=\(Int(Date().timeIntervalSince(started)))")
         }
     }
@@ -108,7 +112,7 @@ final class ReviewController {
     /// «Спросить ИИ» о сессии; ответ сохраняется в разборе.
     func ask(_ id: String, question: String) {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty, !asking.contains(id), let record = store.load(id) else { return }
+        guard activeSessionID() != id, !q.isEmpty, !asking.contains(id), let record = store.load(id) else { return }
         asking.insert(id)
         let redact = model.settings.piiFilterEnabled
         Task {

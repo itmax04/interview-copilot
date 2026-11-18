@@ -29,8 +29,10 @@ enum UISnapshots {
         bank.start(embeddingModel: "absent-for-snapshots.gguf", activeProfileID: nil)
         fillProfile(bank)
         var count = 0
+        var expected = 0
         func shot<V: View>(_ name: String, _ size: NSSize, dark: Bool = false, _ view: V) {
             // Корень окна, как в приложении: язык интерфейса, а не системы (иначе литералы — из en.lproj на английской системе).
+            expected += 1
             if render(view.localizedRoot(), size: size, dark: dark, to: dir.appendingPathComponent("\(name).png")) { count += 1 }
         }
 
@@ -67,6 +69,7 @@ enum UISnapshots {
 
         // Страницы в браузере: ИИ-собеседование и тестовый звонок (начальное состояние, без локального сервера).
         for (name, path) in [("ai-interview", "Resources/Interviewer/index.html"), ("test-call", "Resources/TestCall/index.html")] {
+            expected += 1
             if renderWeb(URL(fileURLWithPath: path), size: NSSize(width: 1100, height: 760), to: dir.appendingPathComponent("\(name).png")) { count += 1 }
         }
 
@@ -104,7 +107,7 @@ enum UISnapshots {
         // История сессий.
         let store = SessionStore(directory: AppPaths.sessions)
         try? store.save(sampleSession(store))
-        shot("history", NSSize(width: 980, height: 680), SessionHistoryView(store: store))
+        shot("history", NSSize(width: 980, height: 680), SessionHistoryView(controller: SessionController(store: store)))
         // Разбор (COPILOT-09 R-13, R-14): вкладки окна сессии и разбор в работе.
         var reviewed = sampleSession(store)
         for (name, tab) in [("history-transcript", SessionDetail.Tab.transcript), ("history-ask", .ask)] {
@@ -128,7 +131,7 @@ enum UISnapshots {
             ws.section = section
             let name = ["Сегодня": "today", "Сессии": "sessions", "Профили": "profiles", "ИИ-собеседование": "mock", "Настройки": "settings"][section.rawValue]!
             shot("workspace-\(name)", NSSize(width: 1180, height: 780),
-                 WorkspaceView(workspace: ws, model: model, bank: bank, store: store, reviews: nil, preparer: preparer))
+                 WorkspaceView(workspace: ws, model: model, bank: bank, sessions: SessionController(store: store), reviews: nil, preparer: preparer))
         }
 
         // COPILOT-10: английский интерфейс (перевод — из en.lproj пакета или папки Resources проекта).
@@ -138,7 +141,7 @@ enum UISnapshots {
         for (name, section) in [("today", WorkspaceSection.today), ("sessions", .sessions), ("profiles", .profiles), ("mock", .mock)] {
             ws.section = section
             shot("en-workspace-\(name)", NSSize(width: 1180, height: 780),
-                 WorkspaceView(workspace: ws, model: model, bank: bank, store: store, reviews: nil, preparer: preparer).localizedRoot())
+                 WorkspaceView(workspace: ws, model: model, bank: bank, sessions: SessionController(store: store), reviews: nil, preparer: preparer).localizedRoot())
         }
         for t in [SettingsTab.general, .keys, .models] {
             shot("en-settings-\(t.rawValue.lowercased())", NSSize(width: 1000, height: 680),
@@ -163,6 +166,7 @@ enum UISnapshots {
         // Страницы в браузере — как их отдает локальный сервер в английском интерфейсе.
         for (name, folder) in [("en-ai-interview", "Resources/Interviewer"), ("en-test-call", "Resources/TestCall")] {
             let resources = URL(fileURLWithPath: folder)
+            expected += 1
             let page = home.appendingPathComponent("\(name).html")
             if let data = try? Data(contentsOf: resources.appendingPathComponent("index.html")),
                (try? localizedPage(data, resources: resources).write(to: page)) != nil,
@@ -175,10 +179,9 @@ enum UISnapshots {
         for (name, section) in [("today", WorkspaceSection.today), ("sessions", .sessions)] {
             ws.section = section
             shot("dark-workspace-\(name)", NSSize(width: 1180, height: 780), dark: true,
-                 WorkspaceView(workspace: ws, model: model, bank: bank, store: store, reviews: nil, preparer: preparer))
+                 WorkspaceView(workspace: ws, model: model, bank: bank, sessions: SessionController(store: store), reviews: nil, preparer: preparer))
         }
         shot("dark-settings-general", NSSize(width: 1000, height: 680), dark: true, SettingsView(model: model, hotkeyFailures: { [:] }, tab: .general))
-        shot("settings-general", NSSize(width: 1000, height: 680), SettingsView(model: model, hotkeyFailures: { [:] }, tab: .general))
         wizard.step = .settings
         shot("dark-wizard-2", NSSize(width: 900, height: 640), dark: true, SessionWizardView(state: wizard))
         shot("dark-profile-resume", NSSize(width: 1100, height: 720), dark: true, ProfileView(bank: bank, preparer: preparer, tab: .resume))
@@ -194,8 +197,8 @@ enum UISnapshots {
         }
         shot("permissions", NSSize(width: 600, height: 420), PermissionsView(listening: listening).padding(20))
 
-        print("ui-snapshots: \(count) PNG → \(dir.path)")
-        return count > 0 ? 0 : 1
+        print("ui-snapshots: \(count)/\(expected) PNG → \(dir.path)")
+        return count == expected && expected > 0 ? 0 : 1
     }
 
     // MARK: Отрисовка

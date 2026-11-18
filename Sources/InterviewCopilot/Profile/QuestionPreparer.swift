@@ -20,6 +20,7 @@ final class QuestionPreparer {
     private(set) var message: String?
     private(set) var failed = false
     /// Разобранные из файла вопросы — на проверку перед добавлением.
+    private var importProfileID: String?
     var pendingImport: [ImportedQuestion]?
 
     init(bank: BankController, model: AppModel) {
@@ -46,6 +47,7 @@ final class QuestionPreparer {
     /// Файл → вопросы: правила; не подошли — модель, по частям. Результат — `pendingImport` для проверки.
     func importFile(_ url: URL) {
         guard !running else { return }
+        importProfileID = bank.activeID
         let text: String
         do { text = try DocumentText.extract(from: url) } catch {
             fail((error as? DocumentTextError)?.description ?? error.localizedDescription)
@@ -60,11 +62,12 @@ final class QuestionPreparer {
         }
         // Вопросы, разобранные моделью для одного профиля, не должны попасть в другой после смены профиля (COPILOT-13).
         let profileID = bank.activeID
-        start(total: QuestionImport.chunks(text).count, label: "Разбираю файл моделью") { [weak self] run in
+        let chunks = QuestionImport.chunks(text)
+        start(total: chunks.count, label: "Разбираю файл моделью") { [weak self] run in
             guard let self else { return }
             var found: [ImportedQuestion] = []
             let chain = await self.chain()
-            for part in QuestionImport.chunks(text) {
+            for part in chunks {
                 guard self.isCurrent(run), self.sameProfile(profileID) else { return }
                 let result = await ChainText.collect(chain, QuestionImport.llmRequest(part))
                 guard self.isCurrent(run), self.sameProfile(profileID) else { return }
@@ -84,10 +87,18 @@ final class QuestionPreparer {
     }
 
     func acceptImport(_ items: [ImportedQuestion]) {
+        guard !items.isEmpty, sameProfile(importProfileID) else { pendingImport = nil; return }
+        guard save(QuestionImport.merge(items, into: bank.cards)) else { return }
         pendingImport = nil
-        guard !items.isEmpty else { return }
-        bank.saveCards(QuestionImport.merge(items, into: bank.cards))
         succeed(L("Добавлено вопросов: %lld. Нажмите «Подготовить», чтобы добавить формулировки и черновики.", items.count))
+    }
+
+    private func save(_ cards: [BankCard]) -> Bool {
+        guard bank.saveCards(cards) else {
+            fail(bank.error ?? L("Не удалось сохранить вопросы"))
+            return false
+        }
+        return true
     }
 
     // MARK: Подготовка
@@ -118,7 +129,7 @@ final class QuestionPreparer {
                 guard self.isCurrent(run), self.sameProfile(profileID) else { return }
                 switch result {
                 case .success(let text):
-                    self.bank.saveCards(QuestionPreparation.applyPhrasings(text, to: self.bank.cards, requested: ids))
+                    guard self.save(QuestionPreparation.applyPhrasings(text, to: self.bank.cards, requested: ids)) else { return }
                 case .failure(let e): self.fail(e.description); return
                 }
                 self.step()
@@ -137,7 +148,8 @@ final class QuestionPreparer {
                     let result = await ChainText.collect(chain, request)
                     guard self.isCurrent(run), self.sameProfile(profileID) else { return }
                     switch result {
-                    case .success(let text): self.bank.saveCards(QuestionPreparation.applyDrafts(text, to: self.bank.cards))
+                    case .success(let text):
+                        guard self.save(QuestionPreparation.applyDrafts(text, to: self.bank.cards, requested: items.map { $0.card.id })) else { return }
                     case .failure(let e): self.fail(e.description); return
                     }
                 }

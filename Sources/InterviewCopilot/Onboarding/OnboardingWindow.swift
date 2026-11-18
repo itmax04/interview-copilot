@@ -41,7 +41,10 @@ final class OnboardingState {
     let model: AppModel
     let listening: ListeningController
     let onFinish: () -> Void
-    var downloads: [String: Double] = [:]
+    var onProgress: ((Double?) -> Void)?
+    var downloads: [String: Double] = [:] {
+        didSet { onProgress?(overallProgress) }
+    }
     var errors: [String: String] = [:]
     var present: [String: Bool] = [:]
     let downloader: ModelDownloader

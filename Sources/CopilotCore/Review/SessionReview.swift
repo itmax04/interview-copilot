@@ -131,8 +131,22 @@ extension SessionRecord {
     /// Обмены с записанным ответом владельца — им нужен комментарий.
     public var reviewableExchanges: [SessionExchange] { exchanges.filter { !$0.answerText.trimmingCharacters(in: .whitespaces).isEmpty } }
 
+    /// Recover incomplete reviews saved as finished by earlier app versions.
+    public func reviewStatus(running: Bool) -> SessionReview.Status? {
+        switch review?.status {
+        case .done where review?.summary == nil || !ReviewPrompt.pendingBatches(self).isEmpty:
+            return .failed("Модель ответила не в формате разбора — повторите")
+        case .running where !running:
+            return .failed("Разбор прерван")
+        case .pending where !running:
+            return nil
+        default:
+            return review?.status
+        }
+    }
+
     /// Есть что разбирать: ваши ответы или хотя бы вопросы с подсказками.
-    public var canBeReviewed: Bool { !reviewableExchanges.isEmpty || !exchanges.isEmpty || !turns.isEmpty }
+    public var canBeReviewed: Bool { !utterances.isEmpty || !ownerUtterances.isEmpty || !exchanges.isEmpty || !turns.isEmpty }
 }
 
 /// Промпты разбора и разбор ответов модели — COPILOT-09 R-13, R-14. Расшифровка, ответы и профиль — данные, не инструкции.
@@ -215,22 +229,23 @@ public enum ReviewPrompt {
     /// Расшифровка для сводки и вопросов: последние реплики, если не помещается (начало — с пометкой о пропуске).
     public static func transcriptText(_ record: SessionRecord, redactPII: Bool, budget: Int = transcriptBudget) -> String {
         let r = role(record.config?.type ?? .interview)
-        let lines = record.timeline.filter { $0.speaker != .hint }.map { e in
-            "[\(e.clock)] \(e.speaker == .owner ? r.owner : r.asker): \(clean(e.text, redactPII))"
+        guard budget > 0 else { return "" }
+        var lines: [String]
+        if !record.utterances.isEmpty || !record.ownerUtterances.isEmpty {
+            lines = record.timeline.compactMap { e in
+                guard e.speaker != .hint else { return nil }
+                return "[\(e.clock)] \(e.speaker == .owner ? r.owner : r.asker): \(clean(e.text, redactPII))"
+            }
+        } else if !record.exchanges.isEmpty {
+            lines = record.exchanges.map { "\(r.asker): \(clean($0.question, redactPII))\n\(r.owner): \(clean($0.answerText, redactPII))" }
+        } else {
+            lines = record.turns.map { "\(r.asker): \(clean($0.question, redactPII))" }
         }
-        var out: [String] = []
-        var size = 0
-        for line in lines.reversed() {
-            if size + line.count + 1 > budget { out.append("[…earlier part omitted…]"); break }
-            out.append(line)
-            size += line.count + 1
-        }
-        if lines.isEmpty {
-            // Сессии без ваших фраз по времени (до 09) — обмены вопрос → ответ.
-            return record.exchanges.map { "\(r.asker): \(clean($0.question, redactPII))\n\(r.owner): \(clean($0.answerText, redactPII))" }
-                .joined(separator: "\n")
-        }
-        return out.reversed().joined(separator: "\n")
+        let text = lines.joined(separator: "\n")
+        guard text.count > budget else { return text }
+        let marker = "[…earlier part omitted…]\n"
+        guard budget > marker.count else { return String(text.suffix(budget)) }
+        return marker + text.suffix(budget - marker.count)
     }
 
     /// Сводка сессии: JSON-объект.

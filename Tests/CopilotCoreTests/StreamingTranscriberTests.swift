@@ -141,11 +141,8 @@ struct StreamingTranscriberTests {
             #expect(await sink.waitFor { events in events.filter { if case .final = $0 { true } else { false } }.count == i })
             if i == 2 { afterTwo = fake.detectedCount }
         }
-        // Детектор — только в первых двух репликах, дальше язык разговора. Сколько раз он сработал в первых двух,
-        // зависит от гонки: звук подаётся быстрее реального времени, и частичный прогон второй реплики может не успеть
-        // до её конца — тогда итог берёт язык прошлой реплики без детектора (1 вызов вместо 2). Проверяем суть:
-        // после закрепления детектор больше не вызывается.
-        #expect((1...2).contains(afterTwo))
+        // A partial and a final can both detect before the language is pinned.
+        #expect(afterTwo > 0)
         #expect(fake.detectedCount == afterTwo)
     }
 

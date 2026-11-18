@@ -16,7 +16,7 @@ final class SessionHistoryWindowController {
 
     func show(select: String? = nil) {
         sessions.saveNow()
-        let view = SessionHistoryView(store: sessions.store, reviews: reviews, initialSelection: select)
+        let view = SessionHistoryView(controller: sessions, reviews: reviews, initialSelection: select)
         if let window {
             window.contentViewController = NSHostingController(rootView: view.localizedRoot())
         } else {
@@ -37,7 +37,7 @@ private var ru: Locale { L10n.locale }
 
 /// «Сессии» (P15): список сессий → страница сессии с разбором. Разбор идет в фоне — запись перечитывается на каждом шаге.
 struct SessionHistoryView: View {
-    let store: SessionStore
+    let controller: SessionController
     var reviews: ReviewController?
     var initialSelection: String?
     /// Выбор сессии (и «К списку» — nil) — главное окно помнит его между разделами.
@@ -46,6 +46,7 @@ struct SessionHistoryView: View {
     @State private var selection: String?
     @State private var search = ""
     @State private var confirmDeleteAll = false
+    @State private var deletionError: String?
 
     var body: some View {
         Group {
@@ -61,17 +62,23 @@ struct SessionHistoryView: View {
         .foregroundStyle(IC.ink)
         .tint(IC.accent)
                 .onAppear {
-            sessions = store.list()
+            sessions = controller.store.list()
             if let initialSelection, sessions.contains(where: { $0.id == initialSelection }) { selection = initialSelection }
         }
-        .onChange(of: reviews?.version) { sessions = store.list() }
+        .onChange(of: reviews?.version) { sessions = controller.store.list() }
         .onChange(of: selection) { _, new in onSelect?(new) }
         .confirmationDialog("Удалить всю историю сессий вместе с разбором?", isPresented: $confirmDeleteAll) {
             Button("Удалить всё", role: .destructive) {
-                try? store.deleteAll()
-                sessions = store.list()
+                do {
+                    try controller.deleteAll()
+                    selection = nil
+                } catch { deletionError = error.localizedDescription }
+                sessions = controller.store.list()
             }
         }
+        .alert("Не удалось удалить сессию", isPresented: Binding(get: { deletionError != nil }, set: { if !$0 { deletionError = nil } })) {
+            Button("OK") { deletionError = nil }
+        } message: { Text(deletionError ?? "") }
     }
 
     private var filtered: [SessionRecord] {
@@ -105,7 +112,7 @@ struct SessionHistoryView: View {
                 ScrollView {
                     VStack(spacing: 8) {
                         ForEach(filtered) { s in
-                            Button { selection = s.id } label: { SessionRow(session: s) }
+                            Button { selection = s.id } label: { SessionRow(reviewRunning: reviews?.running.contains(s.id) == true, session: s) }
                                 .buttonStyle(.plain)
                                 .contextMenu { Button("Удалить", role: .destructive) { delete(s.id) } }
                         }
@@ -117,13 +124,16 @@ struct SessionHistoryView: View {
     }
 
     private func delete(_ id: String) {
-        try? store.delete(id)
-        if selection == id { selection = nil }
-        sessions = store.list()
+        do {
+            try controller.delete(id)
+            if selection == id { selection = nil }
+        } catch { deletionError = error.localizedDescription }
+        sessions = controller.store.list()
     }
 }
 
 private struct SessionRow: View {
+    let reviewRunning: Bool
     let session: SessionRecord
     var body: some View {
         HStack(spacing: 14) {
@@ -134,7 +144,7 @@ private struct SessionRow: View {
             }
             Spacer()
             ICBadge(text: session.config?.type.title ?? "Сессия")
-            ReviewStatusBadge(session: session)
+            ReviewStatusBadge(session: session, running: reviewRunning)
             Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(IC.secondary)
         }
         .padding(14)
@@ -169,8 +179,9 @@ struct CompanyAvatar: View {
 
 struct ReviewStatusBadge: View {
     let session: SessionRecord
+    let running: Bool
     var body: some View {
-        switch session.review?.status {
+        switch session.reviewStatus(running: running) {
         case .done: ICBadge(text: "Разбор готов", color: IC.green, dot: true)
         case .failed: ICBadge(text: "Разбор прерван", color: IC.amber, dot: true)
         case .running, .pending: ICBadge(text: "Разбор идет", color: IC.accent, dot: true)
@@ -217,6 +228,7 @@ struct SessionDetail: View {
 
     private var isRegular: Bool { session.config?.type == .regular }
     private var asker: String { isRegular ? "Собеседник" : "Интервьюер" }
+    private var isLive: Bool { reviews?.activeSessionID() == session.id }
     private var running: Bool { reviews?.running.contains(session.id) == true }
 
     var body: some View {
@@ -277,7 +289,7 @@ struct SessionDetail: View {
 
     /// P15: «Разбор готов» с полосой; в работе — «N из M», ошибка — причина и «Повторить».
     @ViewBuilder private var reviewProgress: some View {
-        switch session.review?.status {
+        switch session.reviewStatus(running: running) {
         case .done:
             progress(text: "Разбор готов", value: 1, color: IC.green, icon: "checkmark.circle.fill")
         case .running(let done, let total) where running:
@@ -289,11 +301,11 @@ struct SessionDetail: View {
             VStack(alignment: .trailing, spacing: 6) {
                 Label("Разбор не закончен", systemImage: "exclamationmark.triangle.fill").foregroundStyle(IC.amber)
                     .font(.system(size: 12, weight: .medium))
-                Text(reason).font(.system(size: 11)).foregroundStyle(IC.secondary).lineLimit(2).frame(maxWidth: 300, alignment: .trailing)
-                Button("Повторить") { reviews?.start(session.id) }.buttonStyle(ICButtonStyle(primary: true)).disabled(reviews == nil || running)
+                Text(L(reason)).font(.system(size: 11)).foregroundStyle(IC.secondary).lineLimit(2).frame(maxWidth: 300, alignment: .trailing)
+                Button("Повторить") { reviews?.start(session.id) }.buttonStyle(ICButtonStyle(primary: true)).disabled(isLive || reviews == nil || running)
             }
         default:
-            if session.canBeReviewed, reviews != nil {
+            if !isLive, session.canBeReviewed, reviews != nil {
                 Button(session.review == nil ? "Сделать разбор" : "Продолжить разбор") { reviews?.start(session.id) }
                     .buttonStyle(ICButtonStyle(primary: true)).disabled(running)
             }
@@ -523,7 +535,7 @@ struct SessionDetail: View {
                             .background(IC.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 10))
                     }
                     .buttonStyle(.plain)
-                    .disabled(reviews == nil || busy)
+                    .disabled(isLive || reviews == nil || busy)
                 }
             }
             ScrollView {
@@ -561,7 +573,7 @@ struct SessionDetail: View {
                     .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(IC.line))
                 Button { send(question) } label: { Image(systemName: "paperplane.fill").frame(width: 20, height: 20) }
                     .buttonStyle(ICButtonStyle(primary: true))
-                    .disabled(busy || reviews == nil || question.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(isLive || busy || reviews == nil || question.trimmingCharacters(in: .whitespaces).isEmpty)
                     .accessibilityLabel("Спросить")
             }
         }
@@ -574,7 +586,7 @@ struct SessionDetail: View {
     }
 
     private func send(_ text: String) {
-        guard let reviews, !reviews.asking.contains(session.id) else { return }
+        guard !isLive, let reviews, !reviews.asking.contains(session.id) else { return }
         reviews.ask(session.id, question: text)
         question = ""
     }
