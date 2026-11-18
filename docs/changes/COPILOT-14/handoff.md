@@ -2,7 +2,7 @@
 
 ## Identity and scope
 
-Branch `feat/copilot-14-technical-audit`, based on `bc64695` (public main and COPILOT-13). Scope and baseline are recorded in `f6bcdba`. Verified implementation commit: `bad6051`. The only subsequent change is this handoff reference. The previous task's handoff identifies the components it reviewed and the areas it left open. This pass examined the app's history and profile flows, model installation, offline evaluation entry points, progress updates, and synthetic UI checks. The concurrent audio-session lifecycle is the next stage.
+Branch `feat/copilot-14-technical-audit`, based on `bc64695` (public main and COPILOT-13). Scope and baseline are recorded in `f6bcdba`. First audit implementation: `bad6051`. The audio lifecycle stage started from the clean handoff commit `180e72b`. Its verified implementation is `031d94a`. The previous task's handoff identifies the components it reviewed and the areas it left open. This pass examined the app's history and profile flows, model installation, offline evaluation entry points, progress updates, and synthetic UI checks. The follow-up traced rapid End → Start across the live session, browser controller and audio device.
 
 ## Findings and changes
 
@@ -33,9 +33,23 @@ The store also checks that a loaded record ID agrees with its filename. The app-
 ## Executor decisions and remaining work
 
 - Used a separate local checkout at the public main commit. No deployment, push or merge. Verification used synthetic data and preinstalled models. Live calls with a real microphone, capture device changes and real provider prompts were not exercised.
-- **High priority, source-confirmed lifecycle race.** In App.swift, ending a mock session schedules InterviewerController.close asynchronously while LiveSessionController.end immediately re-enables Start. During teardown, InterviewerController.start reuses the still-active closing controller. Its delayed onEnd can then end the new mock session. The orchestration crosses the main actor, queued callbacks and audio capture restoration. Cover immediate End → Start, delayed capture startup, teardown failure and old callback delivery in controller-level tests. Check the related TestCallController capture restoration and LocalTestCallServer connection shutdown.
 - Remaining audit coverage includes the rest of the COPILOT-13 open list, the layout and interaction of individual settings views, browser-page playback/connection recovery, hardware-specific paths and profiling with larger profile libraries. Synthetic snapshots confirm rendering, not every interaction. Inspect concurrent installer processes sharing a .part path and benchmark startup/main-thread model or document loading before making latency claims.
+
+## Audio lifecycle stage
+
+- Reproduced on the original event path. With the queued mock-end callback extracted unchanged for testing, `swift test --filter lateMockEndCannotEndTheNextMock` failed because the second mock became inactive. The callback now captures its session ID. The first Start received during teardown is retained and runs once the browser and audio cleanup complete.
+- InterviewerController and TestCallController mark close synchronously and share its completion across callers. The existing browser token scopes asynchronous server and browser events. Ending an ordinary session during a test call also closes the temporary capture. The standalone test call now restores standby.
+- ListeningController serializes device updates and preserves requested stops across rapid restarts. Transcription resumes when the current source is listening. A second red test showed that a failed restoration could leave the temporary source recording. The error path stops that source, and the next start can recover. ScreenCaptureKit drops retired stream samples and drains callbacks already on the sample queue.
+- LocalTestCallServer closes idle connections on shutdown and gives in-flight responses a bounded interval to finish. A loopback test verified both the close acknowledgement and idle peer disconnect.
+
+### Verification at `031d94a`
+
+- `swift test` passed 405 tests in 71 suites. `swift test --skip-build --filter AudioSessionLifecycleTests` passed five additional consecutive runs. Coverage includes old browser success/failure and end callbacks, startup failure delivered after End, active/paused/standby restoration, failed source replacement and successful retry.
+- A one-off macOS test (`swift test --filter ToneRecoverySmoke` with a dedicated tone-generator app) exercised the real ListeningController and ScreenCaptureKit. The source filter selected only the fixture process. The test detected 520 Hz in fresh 16 kHz mono samples before switching, after leaving the temporary source, and after immediate standby → start. The final run observed 2,880, 7,040 and 960 fresh samples respectively, all in the listening phase. The first smoke attempt also counted samples during startup. The final probe waits for listening and takes a fresh buffer position before checking the tone. No audio was saved.
+- `scripts/run-evals.sh` passed all five default suites. `scripts/secret-scan.sh` reported zero findings. `scripts/check-localization.sh` checked 802 keys with zero missing translations or format mismatches. `scripts/build-app.sh` produced the signed release and `codesign --verify --deep --strict dist/InterviewCopilot.app` succeeded.
+- Independent standard and focused strong concurrency reviews approved the final changes after re-review. Findings addressed premature transcription during source restoration and cancellation of pending recognition on a phrase/route reset.
+- NOT RUN on physical hardware: live microphone capture, input-device changes and an OS-level stop failure. Microphone routing and stop were checked with a synthetic device. The hardware smoke used system audio only. No push or merge.
 
 ## Next
 
-Continue with the audio lifecycle stage, strong → gpt-6-astra high, in a new session. Start with the mock-session race above and use the application-target test seam added here.
+Exercise browser playback and connection recovery for the bundled Interviewer and TestCall pages using synthetic audio. Check what the page shows after a disconnect during playback and whether it resumes or closes cleanly. Update this handoff with reproduced failures and their verification. Standard tier.
