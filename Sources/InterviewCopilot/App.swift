@@ -219,24 +219,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         testCall.onEnd = { [weak self] in
             guard let self else { return }
-            if self.testCallOnly {
-                // Служебный локальный запуск не включает облачные ответы после закрытия теста.
-                self.listening.togglePause()
-            } else if self.liveSession.isActive, self.listening.phase != .paused { self.turns.start() }
+            if !self.testCallOnly, self.liveSession.isActive, self.listening.phase != .paused { self.turns.start() }
             self.refreshUI()
         }
         testCall.onPermissions = { [weak self] in self?.permissionsWindow.show() }
         listening.onOwnerTranscript = { [weak self] event in self?.interviewer.handleOwnerTranscript(event) }
-        interviewer.onEnd = { [weak self] in
-            // ИИ-собеседование — сессия типа Mock (COPILOT-09 R-06): закончилось оно — закончилась и сессия.
-            // Контроллер может вызвать onEnd синхронно внутри LiveSessionController.start (фаза ещё .starting,
-            // isActive == false): проверяем на следующем витке главного цикла, когда фаза уже .active.
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                if self.liveSession.isActive, self.liveSession.config.type == .mock { self.liveSession.end() }
-                self.refreshUI()
-            }
-        }
         interviewer.onOwnerAnswer = { [weak self] text in
             self?.memory.addAnswer(text)
             self?.saveMemory()
@@ -332,6 +319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.saveMemory()
         }
         if testCallOnly {
+            listening.enterStandby()
             testCall.start()
             refreshUI()
             return
@@ -546,7 +534,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Старт из мастера или из предложения «Начать сессию?».
     private func startSession(_ config: SessionConfig) {
-        guard !liveSession.isActive, !testCall.active else { return }
+        guard !liveSession.isActive, !testCall.active || liveSession.phase == .ending else { return }
         liveSession.start(config)
     }
 
@@ -570,6 +558,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if c.type == .mock {
             // ИИ-собеседование само управляет звуком (вопрос — звук браузера, ответ — микрофон).
             turns.start()
+            interviewer.onEnd = liveSession.mockEndHandler()
             interviewer.start()
         } else {
             listening.startSession()
@@ -579,7 +568,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshUI()
     }
 
-    private func sessionEnded(_ c: SessionConfig) {
+    private func sessionEnded(_ c: SessionConfig) -> Task<Void, Never> {
         hotkeys?.unregisterSession()
         panelModel.sessionHotkeysFailed = []
         answers.clearTask()
@@ -587,14 +576,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.detection = panelModel.detection.next(on: .reset)
         turns.stop()
         answers.cancel()
-        if c.type == .mock, interviewer.active { Task { await interviewer.close() } }
-        listening.enterStandby()
+        let browserCleanup = c.type == .mock ? interviewer.close() : testCall.close()
+        let standby = listening.enterStandby()
         let record = sessions.finish()
         refreshUI()
         // Разбор (R-13, Q15): сразу после End в фоне; окно открывается на этой сессии — расшифровка видна сразу.
         if c.reviewAfterEnd, c.saveTranscript, let record, record.canBeReviewed, sessions.store.load(record.id) != nil {
             reviews.start(record.id)
             workspace.show(.sessions, select: record.id)
+        }
+        return Task {
+            await browserCleanup?.value
+            await standby.value
         }
     }
 
@@ -790,11 +783,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if (testCall.active || testCallOnly) && [.answerNow, .screenshot].contains(action) { return }
         switch action {
         case .practice:
-            guard !interviewer.active else { return }
+            guard !interviewer.active, liveSession.phase != .ending,
+                  !(liveSession.isActive && liveSession.config.type == .mock) else { return }
             testCall.start()
         case .aiInterview:
             // ИИ-собеседование — сессия типа Mock с последними настройками (COPILOT-09 R-06).
-            guard !testCall.active, !liveSession.isActive else { return }
+            guard !liveSession.isActive, !testCall.active || liveSession.phase == .ending else { return }
             var c = wizard.defaultConfig()
             c.type = .mock
             startSession(c)

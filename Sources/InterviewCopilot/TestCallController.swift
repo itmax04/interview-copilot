@@ -17,7 +17,8 @@ final class TestCallController {
     private var results: [TestCallResult] = []
     private var lastContact = Date()
     private var opening = false
-    private var closing = false
+    private var closeTask: Task<Void, Never>?
+    private var closing: Bool { closeTask != nil }
     private var captureStarted = false
     private var captureTask: Task<Void, Never>?
     private var message = "Открываю тестовый звонок…"
@@ -34,7 +35,7 @@ final class TestCallController {
 
     func start() {
         if active {
-            if let browserURL { NSWorkspace.shared.open(browserURL) }
+            if !closing, let browserURL { NSWorkspace.shared.open(browserURL) }
             return
         }
         do {
@@ -45,14 +46,20 @@ final class TestCallController {
             }
             token = UUID().uuidString.lowercased()
             trial = nil; results = []; message = "Открываю тестовый звонок…"
-            active = true; opening = true; closing = false; lastContact = Date()
+            active = true; opening = true; browserURL = nil; lastContact = Date()
             onBegin?()
+            let token = self.token
             server = try LocalTestCallServer { [weak self] request in
-                guard let self else { return .error(410, "Тест закрыт") }
+                guard let self, self.accepts(token) else { return .error(410, "Тест закрыт") }
                 return await self.handle(request)
             }
-            server?.start(onReady: { [weak self] port in self?.openBrowser(port: port) },
-                          onError: { [weak self] error in self?.failedToStart(error) })
+            server?.start(onReady: { [weak self] port in
+                guard let self, self.accepts(token) else { return }
+                self.openBrowser(port: port)
+            }, onError: { [weak self] error in
+                guard let self, self.accepts(token) else { return }
+                self.failedToStart(error)
+            })
             timer = Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .milliseconds(200))
@@ -71,7 +78,12 @@ final class TestCallController {
         }
     }
 
+    private func accepts(_ token: String) -> Bool {
+        active && !closing && self.token == token
+    }
+
     private func openBrowser(port: UInt16) {
+        let token = self.token
         guard active else { return }
         self.port = port
         let url = URL(string: "http://127.0.0.1:\(port)/\(token)/")!
@@ -83,10 +95,10 @@ final class TestCallController {
         let source: AudioSourceSetting = chrome != nil ? .app(bundleID: "com.google.Chrome", name: "Chrome") : .allSystem
         workspace.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
             Task { @MainActor in
-                guard let self, self.active, !self.closing else { return }
+                guard let self, self.accepts(token) else { return }
                 if let error { self.failedToStart(L("Браузер не открылся: %@", "\(error.localizedDescription)")); return }
                 self.captureTask = Task { [weak self] in
-                    guard let self else { return }
+                    guard let self, self.accepts(token) else { return }
                     self.captureStarted = true
                     await self.listening.beginTestCallCapture(source)
                     guard self.active, !self.closing else { return }
@@ -104,8 +116,11 @@ final class TestCallController {
     }
 
     private func failedToStart(_ detail: String) {
+        let token = self.token
+        guard let cleanup = close() else { return }
         Task {
-            await close()
+            await cleanup.value
+            guard self.token == token else { return }
             let alert = NSAlert()
             alert.messageText = "Не удалось открыть тестовый звонок"
             alert.informativeText = detail
@@ -127,25 +142,32 @@ final class TestCallController {
     private func tick() {
         trial?.tick(at: Date().timeIntervalSinceReferenceDate)
         recordResult()
-        if Date().timeIntervalSince(lastContact) > 90 { Task { await close() } }
+        if Date().timeIntervalSince(lastContact) > 90 { close() }
     }
 
     private func recordResult() {
         if let result = trial?.result, !results.contains(where: { $0.trialID == result.trialID }) { results.append(result) }
     }
 
-    func close() async {
-        guard active, !closing else { return }
-        closing = true
+    @discardableResult
+    func close() -> Task<Void, Never>? {
+        if let closeTask { return closeTask }
+        guard active else { return nil }
         // Остаёмся active, пока старые события сбрасываются: они не попадут в генерацию ответов.
         server?.stop(); server = nil; timer?.cancel(); timer = nil
         trial = nil
-        await captureTask?.value
-        captureTask = nil
-        if captureStarted { await listening.endTestCallCapture() }
-        captureStarted = false
-        active = false
-        onEnd?()
+        captureTask?.cancel()
+        let notifyEnd = onEnd
+        closeTask = Task {
+            await captureTask?.value
+            captureTask = nil
+            if captureStarted { await listening.endTestCallCapture() }
+            captureStarted = false
+            active = false
+            closeTask = nil
+            notifyEnd?()
+        }
+        return closeTask
     }
 
     /// При выходе из приложения источник восстанавливать уже не нужно.
@@ -212,7 +234,7 @@ final class TestCallController {
                 return state()
             }
             if path == "cancel" { listening.resetTestCallPhrase(); trial = nil; return state() }
-            if path == "close" { await close(); return LocalHTTPResponse(body: Data("{}".utf8)) }
+            if path == "close" { await close()?.value; return LocalHTTPResponse(body: Data("{}".utf8)) }
         }
         return .error(404, "Не найдено")
     }

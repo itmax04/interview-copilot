@@ -67,7 +67,10 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
             self.stream = stream
             return old
         }
-        try? await previous?.stopCapture()
+        if let previous {
+            try? await previous.stopCapture()
+            await drainSampleQueue()
+        }
         Log.audio.info("capture started: \(source.displayName ?? "none", privacy: .public)")
     }
 
@@ -88,9 +91,22 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
             self.stream = nil
             return s
         }
-        guard let stream else { return }
-        try? await stream.stopCapture()
-        Log.audio.info("capture stopped")
+        if let stream {
+            do {
+                try await stream.stopCapture()
+                Log.audio.info("capture stopped")
+            } catch {
+                Log.audio.error("capture stop failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        await drainSampleQueue()
+    }
+
+    private func drainSampleQueue() async {
+        // A callback that already passed the stream identity check must finish before the next session starts.
+        await withCheckedContinuation { continuation in
+            queue.async { continuation.resume() }
+        }
     }
 
     static func makeFilter(for source: ResolvedAudioSource) async throws -> SCContentFilter {
@@ -118,7 +134,7 @@ public final class SystemAudioCapture: NSObject, SCStreamOutput, SCStreamDelegat
     // MARK: SCStreamOutput
 
     public func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
-        guard type == .audio, sampleBuffer.isValid else { return }
+        guard type == .audio, sampleBuffer.isValid, lock.withLock({ self.stream === stream }) else { return }
         let samples = converter.convert(sampleBuffer)
         stats.buffers += 1
         if samples.isEmpty { stats.empty += 1 } else { stats.samples += samples.count }

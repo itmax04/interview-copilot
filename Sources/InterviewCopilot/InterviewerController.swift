@@ -13,6 +13,7 @@ final class InterviewerController {
     private let listening: ListeningController
     private let model: AppModel
     private let profile: () -> Profile
+    private let launchChrome: @MainActor (URL, @escaping @MainActor (String?) -> Void) -> Void
     private let resources: URL
     private var server: LocalTestCallServer?
     private var timer: Task<Void, Never>?
@@ -22,7 +23,8 @@ final class InterviewerController {
     private var browserURL: URL?
     private var lastContact = Date()
     private var opening = false
-    private var closing = false
+    private var closeTask: Task<Void, Never>?
+    private var closing: Bool { closeTask != nil }
     private var captureStarted = false
     private var captureTask: Task<Void, Never>?
     private var message = "Открываю собеседование…"
@@ -49,11 +51,14 @@ final class InterviewerController {
     var onUsage: ((ProviderID, String, TokenUsage) -> Void)?
     var onProviderError: ((ProviderID, LLMError) -> Void)?
 
-    init(listening: ListeningController, model: AppModel, profile: @escaping () -> Profile) {
+    init(listening: ListeningController, model: AppModel, profile: @escaping () -> Profile,
+         resources: URL? = nil,
+         launchChrome: @escaping @MainActor (URL, @escaping @MainActor (String?) -> Void) -> Void = InterviewerController.launchChromePage) {
         self.listening = listening
         self.model = model
         self.profile = profile
-        resources = Bundle.main.resourceURL?.appendingPathComponent("Interviewer")
+        self.launchChrome = launchChrome
+        self.resources = resources ?? Bundle.main.resourceURL?.appendingPathComponent("Interviewer")
             ?? URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../Resources/Interviewer")
     }
 
@@ -61,7 +66,7 @@ final class InterviewerController {
 
     func start() {
         if active {
-            if let browserURL { NSWorkspace.shared.open(browserURL) }
+            if !closing, let browserURL { NSWorkspace.shared.open(browserURL) }
             return
         }
         guard FileManager.default.fileExists(atPath: resources.appendingPathComponent("index.html").path) else {
@@ -76,14 +81,20 @@ final class InterviewerController {
             token = UUID().uuidString.lowercased()
             resetSession()
             message = "Открываю собеседование…"
-            active = true; opening = true; closing = false; lastContact = Date()
+            active = true; opening = true; browserURL = nil; lastContact = Date()
             onBegin?()
+            let token = self.token
             server = try LocalTestCallServer { [weak self] request in
-                guard let self else { return .error(410, "Собеседование закрыто") }
+                guard let self, self.accepts(token) else { return .error(410, "Собеседование закрыто") }
                 return await self.handle(request)
             }
-            server?.start(onReady: { [weak self] port in self?.openBrowser(port: port) },
-                          onError: { [weak self] error in self?.failedToStart(error) })
+            server?.start(onReady: { [weak self] port in
+                guard let self, self.accepts(token) else { return }
+                self.openBrowser(port: port)
+            }, onError: { [weak self] error in
+                guard let self, self.accepts(token) else { return }
+                self.failedToStart(error)
+            })
             timer = Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .milliseconds(200))
@@ -103,32 +114,28 @@ final class InterviewerController {
         playbackStarted = false; errorText = nil
     }
 
+    private func accepts(_ token: String) -> Bool {
+        active && !closing && self.token == token
+    }
+
     private func openBrowser(port: UInt16) {
+        let token = self.token
         guard active else { return }
         self.port = port
         let url = URL(string: "http://127.0.0.1:\(port)/\(token)/")!
         browserURL = url
-        let workspace = NSWorkspace.shared
-        // Нужен браузер с отдельным процессом звука: так голос интервьюера идёт через захват приложения, как на созвоне.
-        guard let chrome = workspace.urlForApplication(withBundleIdentifier: "com.google.Chrome") else {
-            failedToStart("Для ИИ-собеседования нужен Google Chrome: его звук захватывается так же, как звук Meet.")
-            return
-        }
-        workspace.open([url], withApplicationAt: chrome, configuration: NSWorkspace.OpenConfiguration()) { [weak self] _, error in
-            Task { @MainActor in
-                guard let self, self.active, !self.closing else { return }
-                if let error { self.failedToStart(L("Chrome не открылся: %@", "\(error.localizedDescription)")); return }
-                self.captureTask = Task { [weak self] in
-                    guard let self else { return }
-                    self.captureStarted = true
-                    if let problem = await self.listening.beginInterviewCapture(.app(bundleID: "com.google.Chrome", name: "Chrome")) {
-                        self.errorText = problem
-                    }
-                    guard self.active, !self.closing else { return }
-                    self.opening = false
-                    self.message = "Захватываю звук Chrome и микрофон"
-                    if self.listening.phase == .noPermission { self.onPermissions?() }
-                }
+        launchChrome(url) { [weak self] problem in
+            guard let self, self.accepts(token) else { return }
+            if let problem { self.failedToStart(problem); return }
+            self.captureTask = Task {
+                guard self.accepts(token) else { return }
+                self.captureStarted = true
+                let problem = await self.listening.beginInterviewCapture(.app(bundleID: "com.google.Chrome", name: "Chrome"))
+                guard self.accepts(token) else { return }
+                self.errorText = problem
+                self.opening = false
+                self.message = "Захватываю звук Chrome и микрофон"
+                if self.listening.phase == .noPermission { self.onPermissions?() }
             }
         }
         if CommandLine.arguments.contains("--ai-interview") {
@@ -137,9 +144,25 @@ final class InterviewerController {
         }
     }
 
+    private static func launchChromePage(_ url: URL, completion: @escaping @MainActor (String?) -> Void) {
+        let workspace = NSWorkspace.shared
+        guard let chrome = workspace.urlForApplication(withBundleIdentifier: "com.google.Chrome") else {
+            completion("Для ИИ-собеседования нужен Google Chrome: его звук захватывается так же, как звук Meet.")
+            return
+        }
+        workspace.open([url], withApplicationAt: chrome, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            Task { @MainActor in
+                completion(error.map { L("Chrome не открылся: %@", "\($0.localizedDescription)") })
+            }
+        }
+    }
+
     private func failedToStart(_ detail: String) {
+        let token = self.token
+        guard let cleanup = close() else { return }
         Task {
-            await close()
+            await cleanup.value
+            guard self.token == token else { return }
             let alert = NSAlert()
             alert.messageText = "Не удалось открыть ИИ-собеседование"
             alert.informativeText = detail
@@ -184,7 +207,7 @@ final class InterviewerController {
         default:
             break
         }
-        if Date().timeIntervalSince(lastContact) > 90 { Task { await close() } }
+        if Date().timeIntervalSince(lastContact) > 90 { close() }
     }
 
     private func begin(language: String, count: Int, autoFinish: Double) {
@@ -285,18 +308,25 @@ final class InterviewerController {
         Log.app.error("interviewer failed: \(text, privacy: .public)")
     }
 
-    func close() async {
-        guard active, !closing else { return }
-        closing = true
+    @discardableResult
+    func close() -> Task<Void, Never>? {
+        if let closeTask { return closeTask }
+        guard active else { return nil }
         server?.stop(); server = nil; timer?.cancel(); timer = nil
         generation?.cancel(); generation = nil
         trial = nil; answer = nil
-        await captureTask?.value
-        captureTask = nil
-        if captureStarted { await listening.endInterviewCapture() }
-        captureStarted = false
-        active = false
-        onEnd?()
+        captureTask?.cancel()
+        let notifyEnd = onEnd
+        closeTask = Task {
+            await captureTask?.value
+            captureTask = nil
+            if captureStarted { await listening.endInterviewCapture() }
+            captureStarted = false
+            active = false
+            closeTask = nil
+            notifyEnd?()
+        }
+        return closeTask
     }
 
     /// При выходе из приложения источник восстанавливать уже не нужно.
@@ -394,7 +424,7 @@ final class InterviewerController {
                 stage = records.isEmpty ? .setup : .finished
                 return state()
             case "close":
-                await close()
+                await close()?.value
                 return LocalHTTPResponse(body: Data("{}".utf8))
             default:
                 break

@@ -54,6 +54,10 @@ public enum LocalHTTPParser {
 public final class LocalTestCallServer: @unchecked Sendable {
     private let listener: NWListener
     private let queue = DispatchQueue(label: "com.itmax04.interviewcopilot.test-call")
+    // Owned by queue. Requests already handed to the controller may finish their response (including POST close).
+    private var reading: [ObjectIdentifier: NWConnection] = [:]
+    private var responding: [ObjectIdentifier: NWConnection] = [:]
+    private var stopped = false
     private let handler: @MainActor @Sendable (LocalHTTPRequest) async -> LocalHTTPResponse
 
     public init(handler: @escaping @MainActor @Sendable (LocalHTTPRequest) async -> LocalHTTPResponse) throws {
@@ -74,27 +78,49 @@ public final class LocalTestCallServer: @unchecked Sendable {
             }
         }
         listener.newConnectionHandler = { [weak self] connection in
-            guard let self else { connection.cancel(); return }
+            guard let self, !self.stopped else { connection.cancel(); return }
+            self.reading[ObjectIdentifier(connection)] = connection
             connection.start(queue: self.queue)
             self.receive(connection, accumulated: Data())
         }
         listener.start(queue: queue)
     }
 
-    public func stop() { listener.cancel() }
+    public func stop() {
+        listener.cancel()
+        queue.async {
+            self.stopped = true
+            for connection in self.reading.values { connection.cancel() }
+            self.reading.removeAll()
+            // Allow the close acknowledgement to flush, then release any clients that stopped reading.
+            guard !self.responding.isEmpty else { return }
+            self.queue.asyncAfter(deadline: .now() + 5) {
+                for connection in self.responding.values { connection.cancel() }
+                self.responding.removeAll()
+            }
+        }
+    }
 
     private func receive(_ connection: NWConnection, accumulated: Data) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 8192) { [weak self] data, _, complete, error in
-            guard let self else { connection.cancel(); return }
+            let id = ObjectIdentifier(connection)
+            guard let self, self.reading[id] != nil else { connection.cancel(); return }
             var buffer = accumulated
             if let data { buffer.append(data) }
             switch LocalHTTPParser.parse(buffer) {
             case .request(let request):
+                self.responding[id] = self.reading.removeValue(forKey: id)
                 Task { @MainActor in self.send(await self.handler(request), on: connection) }
-            case .invalid: self.send(.error(400, "Неверный запрос"), on: connection)
+            case .invalid:
+                self.responding[id] = self.reading.removeValue(forKey: id)
+                self.send(.error(400, "Неверный запрос"), on: connection)
             case .incomplete:
-                if complete || error != nil { connection.cancel() }
-                else { self.receive(connection, accumulated: buffer) }
+                if complete || error != nil {
+                    self.reading.removeValue(forKey: id)
+                    connection.cancel()
+                } else {
+                    self.receive(connection, accumulated: buffer)
+                }
             }
         }
     }
@@ -104,6 +130,9 @@ public final class LocalTestCallServer: @unchecked Sendable {
         var header = "HTTP/1.1 \(response.status) \(reason)\r\nContent-Type: \(response.contentType)\r\nContent-Length: \(response.body.count)\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n"
         header += "Content-Security-Policy: default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'\r\n"
         for (key, value) in response.headers { header += "\(key): \(value)\r\n" }
-        connection.send(content: Data((header + "\r\n").utf8) + response.body, completion: .contentProcessed { _ in connection.cancel() })
+        connection.send(content: Data((header + "\r\n").utf8) + response.body, completion: .contentProcessed { [weak self] _ in
+            connection.cancel()
+            self?.responding.removeValue(forKey: ObjectIdentifier(connection))
+        })
     }
 }

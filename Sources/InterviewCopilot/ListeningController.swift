@@ -2,6 +2,25 @@ import AppKit
 import CopilotCore
 import Observation
 
+@MainActor
+protocol CallAudioCapture: Sendable {
+    var isRunning: Bool { get }
+    func start(_ source: ResolvedAudioSource) async throws
+    func switchSource(_ source: ResolvedAudioSource) async throws
+    func stop() async
+}
+
+extension SystemAudioCapture: CallAudioCapture {}
+
+@MainActor
+protocol MicrophoneInput: AnyObject {
+    var isRunning: Bool { get }
+    func start() throws
+    func stop()
+}
+
+extension MicrophoneCapture: MicrophoneInput {}
+
 /// Управление слушанием: разрешения, выбор источника, захват, пауза, микрофон владельца (R-01, R-02, R-04, S-08, AC-13).
 @MainActor
 @Observable
@@ -248,9 +267,14 @@ final class ListeningController {
 
     /// Буфер последних 30 с звука собеседника (R-04). Читает распознавание (P-04).
     let buffer = AudioRingBuffer(seconds: 30)
-    private var capture: SystemAudioCapture?
+    private var capture: (any CallAudioCapture)?
+    private var captureUpdate: Task<Void, Never>?
+    private let captureEpoch = DeliveryEpoch()
+    private var restartTask: Task<Void, Never>?
+    private let screenGranted: () -> Bool
+    private let micPermission: () -> Permissions.MicStatus
     /// Микрофон как источник (режим самопроверки, запрос владельца 2026-10-07).
-    private var micSource: MicrophoneCapture?
+    private var micSource: (any MicrophoneInput)?
     private var testSource: AudioSourceSetting?
     private var effectiveSource: AudioSourceSetting { testSource ?? model.settings.audioSource }
     private var usesMicrophone: Bool { effectiveSource == .microphone }
@@ -258,7 +282,7 @@ final class ListeningController {
     private var pausedBeforeTest = false
     private var standbyBeforeTest = false
     private var transcriptBeforeTest: [TranscriptLine] = []
-    private let deliveryEpoch = TranscriptDeliveryEpoch()
+    private let deliveryEpoch = DeliveryEpoch()
     /// Какой источник сейчас идёт в распознавание во время ИИ-собеседования; nil — обычная работа.
     private let route = AudioRouteBox()
     private(set) var interviewRoute: AudioRoute?
@@ -266,11 +290,12 @@ final class ListeningController {
     /// ИИ-собеседование (COPILOT-03): звук браузера — вопрос интервьюера, как на созвоне;
     /// микрофон — ответ владельца. В распознавание одновременно идёт только один источник.
     func beginInterviewCapture(_ source: AudioSourceSetting) async -> String? {
-        if Permissions.microphone == .notDetermined { _ = await Permissions.requestMicrophone() }
-        guard Permissions.microphone == .granted else { return "Нет разрешения на микрофон для Interview Copilot" }
+        if micPermission() == .notDetermined { _ = await Permissions.requestMicrophone() }
+        guard !Task.isCancelled, micPermission() == .granted else { return "Нет разрешения на микрофон для Interview Copilot" }
         route.set(.call)
         interviewRoute = .call
         await beginTestCallCapture(source)
+        guard !Task.isCancelled else { return nil }
         let micSource = self.micSource ?? makeMicSource()
         self.micSource = micSource
         do { try micSource.start() } catch { return L("Микрофон: %@", "\(error)") }
@@ -307,27 +332,25 @@ final class ListeningController {
         }
         deliveryEpoch.advance()
         captureWanted = true
-        transcriber?.setPaused(true)
         testSource = source
         mic?.stop()
         ownerSpeaking = false
-        transcriber?.setPaused(false)
+        setPhase(.idle)
         transcriber?.setLanguage(nil)
         transcriber?.setPromptProvider(nil)
         loadRecognizer()
         startLevelReporting()
-        await applySource(restart: true)
+        await updateCapture(restart: true).value
     }
 
     func resetTestCallPhrase() {
-        deliveryEpoch.advance()
         transcriber?.setPaused(true)
-        transcriber?.setPaused(false)
+        deliveryEpoch.advance()
+        if phase == .listening { transcriber?.setPaused(false) }
     }
 
     func endTestCallCapture() async {
         deliveryEpoch.advance()
-        transcriber?.setPaused(true)
         testSource = nil
         transcriber?.setLanguage(model.settings.language.whisperCode)
         transcriber?.setPromptProvider(promptProvider)
@@ -335,22 +358,17 @@ final class ListeningController {
         transcriptBeforeTest = []
         partialText = nil
         captureWanted = !standbyBeforeTest && !pausedBeforeTest
-        if standbyBeforeTest {
-            // Тест или ИИ-собеседование без сессии — после них снова не слушаем (COPILOT-09 R-02).
-            await capture?.stop()
-            micSource?.stop()
-            setPhase(.standby)
-        } else if pausedBeforeTest {
-            await capture?.stop()
-            micSource?.stop()
+        if standbyBeforeTest || pausedBeforeTest {
             source = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
-            setPhase(.paused)
+            setPhase(standbyBeforeTest ? .standby : .paused)
+            await updateCapture(restart: false).value
         } else {
-            if !usesMicrophone { startMic() }
-            await applySource(restart: true)
-            transcriber?.setPaused(false)
+            // The browser stream may still deliver audio while its replacement is starting.
+            setPhase(.idle)
+            await updateCapture(restart: true).value
         }
     }
+
     private var mic: MicActivityDetector?
     private let model: AppModel
     private var observers: [NSObjectProtocol] = []
@@ -360,7 +378,13 @@ final class ListeningController {
     /// Вызывается при смене состояния (перестройка меню и панели).
     var onChange: (() -> Void)?
 
-    init(model: AppModel) {
+    init(model: AppModel, capture: (any CallAudioCapture)? = nil, micSource: (any MicrophoneInput)? = nil,
+         screenGranted: @escaping () -> Bool = { Permissions.screenCaptureGranted },
+         micPermission: @escaping () -> Permissions.MicStatus = { Permissions.microphone }) {
+        self.capture = capture
+        self.screenGranted = screenGranted
+        self.micPermission = micPermission
+        self.micSource = micSource
         self.model = model
         let center = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didLaunchApplicationNotification, NSWorkspace.didTerminateApplicationNotification] {
@@ -389,23 +413,18 @@ final class ListeningController {
     }
 
     /// Без сессии: всё остановлено, распознавание загружено заранее — старт сессии не ждёт модель (COPILOT-09 R-02).
-    func enterStandby() {
+    @discardableResult
+    func enterStandby() -> Task<Void, Never> {
+        if testSource != nil { standbyBeforeTest = true }
+        deliveryEpoch.advance()
         stopping = false
         captureWanted = false
-        transcriber?.setPaused(true)
         callSpeaking = false
         partialText = nil
         ownerAnswering = false
         setPhase(.standby)
         loadRecognizer()
-        Task {
-            await capture?.stop()
-            micSource?.stop()
-            mic?.stop()
-            buffer.clear()
-            // Пока шла остановка, могла начаться новая сессия — тогда захват нужен снова.
-            if captureWanted { await applySource(restart: true) }
-        }
+        return updateCapture(restart: false)
     }
 
     /// Clear в оверлее (COPILOT-09 Q13): расшифровка на экране и «последние реплики» для следующего ответа.
@@ -420,6 +439,8 @@ final class ListeningController {
 
     /// Начало сессии: расшифровка с чистого листа, захват по источнику из настроек.
     func startSession() {
+        deliveryEpoch.advance()
+        ownerFastText.removeAll()
         transcript = []
         partialText = nil
         callSpeaking = false
@@ -430,40 +451,32 @@ final class ListeningController {
     func start() {
         stopping = false
         captureWanted = true
-        transcriber?.setPaused(false)
+        setPhase(.idle)
         // Микрофону разрешение «Запись экрана» не нужно.
-        guard usesMicrophone || Permissions.screenCaptureGranted else {
+        guard usesMicrophone || screenGranted() else {
+            captureWanted = false
+            updateCapture(restart: false)
             setPhase(.noPermission)
             Log.audio.notice("no screen capture permission")
             return
         }
         loadRecognizer()
-        if !usesMicrophone { startMic() }
         startLevelReporting()
-        Task { await applySource(restart: true) }
+        updateCapture(restart: true)
     }
 
     func togglePause() {
         switch phase {
         case .listening:
             captureWanted = false
-            transcriber?.setPaused(true)
             // Пауза глотает «собеседник замолчал»: без сброса фразы владельца считались бы эхом до следующей реплики звонка.
             callSpeaking = false
             partialText = nil
-            Task {
-                await capture?.stop()
-                micSource?.stop()
-                mic?.stop()
-                buffer.clear()
-                // Пока шла остановка, пауза могла смениться продолжением или концом сессии — фаза по последнему решению.
-                if captureWanted { await applySource(restart: true) } else if phase == .listening { setPhase(.paused) }
-            }
+            setPhase(.paused)
+            updateCapture(restart: false)
         case .paused:
             captureWanted = true
-            if !usesMicrophone { startMic() }
-            transcriber?.setPaused(false)
-            Task { await applySource(restart: true) }
+            updateCapture(restart: true)
         default:
             break
         }
@@ -472,14 +485,41 @@ final class ListeningController {
     /// Смена источника из меню или настроек — без перезапуска приложения (R-01).
     func sourceSettingChanged() {
         guard phase != .paused, phase != .standby else { return }
-        if phase == .noPermission && !usesMicrophone { return }
-        Task { await applySource(restart: false) }
+        if phase == .noPermission {
+            if usesMicrophone { start() }
+            return
+        }
+        updateCapture(restart: false)
     }
 
     private func runningAppsChanged() {
         guard phase != .paused, phase != .noPermission, phase != .standby else { return }
         let resolved = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
-        if resolved != source { Task { await applySource(restart: false) } }
+        if resolved != source { updateCapture(restart: false) }
+    }
+
+    /// A system stream can finish starting after cancellation. Drain that operation before touching the next stream.
+    @discardableResult
+    private func updateCapture(restart: Bool) -> Task<Void, Never> {
+        captureEpoch.advance()
+        restartTask?.cancel()
+        let wantsAudio = captureWanted
+        let previous = captureUpdate
+        previous?.cancel()
+        let update = Task {
+            await previous?.value
+            if wantsAudio {
+                guard !Task.isCancelled else { return }
+                await applySource(restart: restart)
+            } else {
+                micSource?.stop()
+                mic?.stop()
+                await capture?.stop()
+                buffer.clear()
+            }
+        }
+        captureUpdate = update
+        return update
     }
 
     private func applySource(restart: Bool, attempt: Int = 0) async {
@@ -488,6 +528,7 @@ final class ListeningController {
         if resolved == .microphone {
             // Режим самопроверки: системный звук не нужен, микрофон — «собеседник»; определение речи владельца выключено.
             await capture?.stop()
+            guard !Task.isCancelled else { return }
             mic?.stop()
             ownerSpeaking = false
             onOwnerSpeaking?(false, Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
@@ -505,20 +546,20 @@ final class ListeningController {
             return
         }
         // Вернулись к созвону: микрофон снова только для определения речи владельца.
-        if micSource?.isRunning == true {
-            micSource?.stop()
-            startMic()
-        }
-        guard Permissions.screenCaptureGranted else {
+        if interviewRoute == nil, micSource?.isRunning == true { micSource?.stop() }
+        guard screenGranted() else {
+            await capture?.stop()
+            guard !Task.isCancelled else { return }
             setPhase(.noPermission)
             return
         }
+        startMic()
         source = resolved
         if resolved != .microphone { ownerAnswering = false }
         applyVADConfig()
         if resolved == .none {
             await capture?.stop()
-            setPhase(.idle)
+            if !Task.isCancelled { setPhase(.idle) }
             return
         }
         let capture = self.capture ?? makeCapture()
@@ -530,20 +571,24 @@ final class ListeningController {
                 try await capture.switchSource(resolved)
             }
             // Сессию закончили или поставили на паузу, пока захват запускался, — не слушаем.
-            guard captureWanted else { await capture.stop(); return }
+            guard !Task.isCancelled, captureWanted else { await capture.stop(); return }
             setPhase(.listening)
-        } catch AudioCaptureError.noPermission {
-            setPhase(.noPermission)
-        } catch AudioCaptureError.sourceNotRunning(_) where attempt < 8 {
-            // Только что запущенное приложение (Chrome для теста) ScreenCaptureKit видит с задержкой — повторяем.
-            try? await Task.sleep(for: .milliseconds(500))
-            guard !stopping else { return }
-            await applySource(restart: restart, attempt: attempt + 1)
         } catch {
-            // Источник не найден: запуск приложения позже снова вызовет захват (runningAppsChanged).
-            if case AudioCaptureError.sourceNotRunning = error { source = .none }
-            Log.audio.error("capture start failed: \(String(describing: error), privacy: .public)")
-            setPhase(.error(String(describing: error)))
+            // A failed switch or replacement can leave the previous (temporary) source recording.
+            await capture.stop()
+            guard !Task.isCancelled else { return }
+            switch error {
+            case AudioCaptureError.noPermission:
+                setPhase(.noPermission)
+            case AudioCaptureError.sourceNotRunning where attempt < 8:
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !stopping, !Task.isCancelled else { return }
+                await applySource(restart: restart, attempt: attempt + 1)
+            default:
+                if case AudioCaptureError.sourceNotRunning = error { source = .none }
+                Log.audio.error("capture start failed: \(String(describing: error), privacy: .public)")
+                setPhase(.error(String(describing: error)))
+            }
         }
     }
 
@@ -587,8 +632,7 @@ final class ListeningController {
         ownerTranscriber = nil
         micSource?.stop()
         mic?.stop()
-        let capture = self.capture
-        Task { await capture?.stop() }
+        updateCapture(restart: false)
     }
 
     /// Подсказка распознаванию из базы (настройка Audio → «Подсказывать словарь базы»).
@@ -682,7 +726,7 @@ final class ListeningController {
             t.setVoiceGate { samples in voiceGate.check(samples) }
             let enhancerBox = self.enhancerBox
             t.setAudioEnhancer { samples in enhancerBox.enhance(samples) }
-            t.setPaused(phase == .paused || phase == .standby)
+            t.setPaused(phase != .listening)
             transcriberBox.set(t)
             transcriber = t
             var ownerConfig = StreamingTranscriber.Config()
@@ -690,8 +734,9 @@ final class ListeningController {
             ownerConfig.allowRevision = false
             ownerConfig.vad = StreamingTranscriber.microphoneVAD
             let ot = StreamingTranscriber(recognizer: engine, buffer: ownerBuffer, config: ownerConfig) { [weak self] event in
+                let epoch = deliveryEpoch.current()
                 Task { @MainActor in
-                    guard let self, self.recognizerGeneration == generation else { return }
+                    guard let self, self.recognizerGeneration == generation, deliveryEpoch.current() == epoch else { return }
                     self.handleOwner(event)
                 }
             }
@@ -796,13 +841,18 @@ final class ListeningController {
         let meter = levelMeter
         let box = transcriberBox
         let route = self.route
+        let captureEpoch = self.captureEpoch
         return SystemAudioCapture(onSamples: { samples in
             guard route.accepts(.call) else { return }
             buffer.append(samples)
             meter.add(samples)
             box.get()?.process(samples)
         }, onStop: { [weak self] error in
-            Task { @MainActor in self?.captureStopped(error) }
+            let epoch = captureEpoch.current()
+            Task { @MainActor in
+                guard captureEpoch.current() == epoch else { return }
+                self?.captureStopped(error)
+            }
         })
     }
 
@@ -824,10 +874,11 @@ final class ListeningController {
         captureRestarts.append(now)
         Log.audio.notice("capture_restart attempt=\(self.captureRestarts.count) reason=\(reason, privacy: .public)")
         setPhase(.error("Захват звука остановлен — перезапускаю…"))
-        Task { [weak self] in
+        restartTask?.cancel()
+        restartTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1))
-            guard let self, !self.stopping, self.phase != .paused, self.phase != .standby else { return }
-            await self.applySource(restart: true)
+            guard !Task.isCancelled, let self, !self.stopping, self.phase != .paused, self.phase != .standby else { return }
+            self.updateCapture(restart: true)
         }
     }
 
@@ -845,7 +896,7 @@ final class ListeningController {
     }
 
     private func startMic() {
-        guard testSource == nil, Permissions.microphone == .granted else { return }
+        guard testSource == nil, micPermission() == .granted else { return }
         if mic == nil {
             mic = MicActivityDetector { [weak self] speaking in
                 let t = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
@@ -916,6 +967,7 @@ final class ListeningController {
     private func setPhase(_ new: Phase) {
         guard phase != new else { return }
         phase = new
+        transcriber?.setPaused(new != .listening)
         // Гасим до `onChange`: он перерисовывает и скрытую панель, а отдельный кадр уровней скрытая панель пропускает —
         // иначе после паузы при скрытой панели волны застывали бы на последнем значении.
         if !reportsLevels {
@@ -978,7 +1030,7 @@ final class LevelMeter: @unchecked Sendable {
 }
 
 /// Не допускает доставки событий старой фразы после сброса или выхода из теста.
-final class TranscriptDeliveryEpoch: @unchecked Sendable {
+final class DeliveryEpoch: @unchecked Sendable {
     private let lock = NSLock()
     private var value = 0
     func advance() { lock.withLock { value += 1 } }

@@ -34,7 +34,9 @@ final class LiveSessionController {
     func setAutoGenerate(_ on: Bool) { config.autoGenerate = on }
 
     var onStart: ((SessionConfig) -> Void)?
-    var onEnd: ((SessionConfig) -> Void)?
+    var onEnd: ((SessionConfig) -> Task<Void, Never>?)?
+    private var sessionID = UUID()
+    private var pendingStart: SessionConfig?
     /// Раз в секунду — для таймера панели и меню.
     var onTick: (() -> Void)?
     /// Определять звонок, только когда это уместно (нет теста, ИИ-собеседования, записи образца голоса).
@@ -58,7 +60,12 @@ final class LiveSessionController {
     }
 
     func start(_ c: SessionConfig) {
+        if phase == .ending {
+            if pendingStart == nil { pendingStart = c }
+            return
+        }
         guard phase.canStart else { return }
+        sessionID = UUID()
         phase = .starting
         config = c
         notes = []
@@ -71,15 +78,41 @@ final class LiveSessionController {
         onTick?()
     }
 
+    func mockEndHandler() -> () -> Void {
+        let id = sessionID
+        return { [weak self] in
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.sessionID == id, self.isActive, self.config.type == .mock else { return }
+                self.end()
+            }
+        }
+    }
+
     func end() {
         guard phase.canEnd else { return }
         phase = .ending
-        onEnd?(config)
+        let cleanup = onEnd?(config)
         let minutes = clock.map { Int(Date().timeIntervalSince($0.startedAt) / 60) } ?? 0
         clock = nil
-        phase = .none
         Log.app.info("session end minutes=\(minutes)")
-        onTick?()
+        if let cleanup {
+            Task {
+                await cleanup.value
+                finishEnding()
+            }
+        } else {
+            finishEnding()
+        }
+    }
+
+    private func finishEnding() {
+        phase = .none
+        if let next = pendingStart {
+            pendingStart = nil
+            start(next)
+        } else {
+            onTick?()
+        }
     }
 
     func fail(_ message: String) {
