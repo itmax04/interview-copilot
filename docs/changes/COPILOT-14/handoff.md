@@ -112,6 +112,23 @@ The starting checkout was clean on `feat/copilot-14-technical-audit`. On macOS 1
 - PASS: `swift test` on the restored source, 405 tests in 71 suites. The focused run `swift test --filter 'SettingsStoreTests|StorageAndUsageTests|KeychainStoreTests'` passed 27 tests in 4 suites, including Keychain round-trips in dedicated test services. `scripts/check-localization.sh` passed (802 keys, zero missing or mismatched format specifiers). `dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --ui-snapshots "$snapshotDir"` rendered 92/92 PNGs. `codesign --verify --deep --strict` passed for the existing release bundle and the fixture copy.
 - NOT RUN: standalone Settings window interactions, real microphone or voice enrollment, provider key verification or live style preview, Carbon registration/conflicts, automatic history purge and paid-provider enforcement through the full app lifecycle. The fixture exercised form bindings and saved values. Runtime effects need their own tests.
 
+## Settings localization and accessibility follow-up
+
+The checkout was clean at `0048985` on `feat/copilot-14-technical-audit`. The implementation is `a069ec1`.
+
+- `Sources/InterviewCopilot/Session/AnswerStyleEditor.swift` translates the sheet's labels, help text and preview status using the app language. The preview language selector controls the language of the sample question and answer. The original fixture reproduced English title, question type, Close and Regenerate labels with Russian selected.
+- `Sources/InterviewCopilot/Settings/OtherSettingsViews.swift` gives the native numeric budget input a localized field label. The 11 native shortcut buttons expose their action and current binding in the macOS accessibility tree. Temporary modifier validation clears on cancellation. Registration errors are tracked separately. Reset also ends active capture.
+
+### Verification
+
+- Rebuilt with the temporary fixture patch and packaging commands above, then reversed the patch. The fixture used a fresh UserDefaults suite, an isolated data root and an in-memory secret store. Added `-AppleLanguages '(en)'` to the fixture launch and repeated the Settings checks in Russian and English. Restarted with the same suite and `--audit-standalone` to exercise the separate Settings window.
+- The sheet exposed labels in the selected app language in both passes. Saving Short, selecting Detailed and pressing Escape left Short selected after reopening the sheet. Both languages exposed a named editable budget field before focus and all 11 action-specific shortcut buttons with their bindings.
+- In the fixture, Tab selected the budget input in the standalone window. Entering `12,50` and pressing Return saved the first edit. Entering `17,25` and switching tabs saved the second. The field used a decimal comma in both languages on this Mac. An unmodified key displayed a warning in the shortcut recorder. Escape removed it, cancelling via the button kept the binding, and Reset during capture ended it and restored the default. Ctrl+Option+J was accepted on reassignment.
+- A fixture restart restored the selected language, Short style, the numeric budget 17.25 and Answer now bound to Ctrl+Option+J. The four corresponding checks on the isolated `settings.v1` export passed.
+- PASS: `swift test` (405 tests in 71 suites), `scripts/run-evals.sh` (five suites), `scripts/secret-scan.sh` (zero findings), `scripts/check-localization.sh` (802 translations, zero missing keys or format mismatches), `scripts/build-app.sh`, `codesign --verify --deep --strict dist/InterviewCopilot.app` and `git diff --check`. The signed app rendered 92/92 PNGs with `INTERVIEWCOPILOT_HOME="$auditRoot" dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --ui-snapshots "$snapshotDir"`. Inspected the Budget, Hotkeys and style editor renders.
+- Independent standard review and focused re-review of the native button styling and Reset placement passed with no actionable findings.
+- NOT VERIFIED: Tab/Space activation of shortcut buttons with the host keyboard navigation configuration, VoiceOver speech, global Carbon registration and conflicts, live generation in the style editor, and the Session Wizard sheet interaction. The fixture exercised activation through the macOS accessibility tree.
+
 ## Next
 
-Fix the mixed-locale answer-style sheet and the missing Budget and Hotkeys accessibility controls. Start in `Sources/InterviewCopilot/Settings/OtherSettingsViews.swift`, `Sources/InterviewCopilot/Design/Localization.swift` and `Sources/InterviewCopilot/Session/AnswerStyleEditor.swift`. Recheck Russian and English in the fixture, keyboard and accessibility navigation, and persistence across restart. Run the repository gates and an independent review for any behavior change.
+Owner acceptance of the Settings follow-up. The Question Bank subtitle finding and the earlier audit's unverified runtime checks remain open.
