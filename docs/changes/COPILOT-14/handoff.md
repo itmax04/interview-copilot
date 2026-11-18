@@ -78,6 +78,8 @@ The store also checks that a loaded record ID agrees with its filename. The app-
 - Safari TestCall exercised its existing system-audio fallback by bypassing the installed Chrome preference in the test. Safari Interviewer used a test-only launcher and the same system-audio route. The production Interviewer launcher still selects Chrome. This stage covered loss of the local control connection across buffered EOF. Partial WAV range recovery remains covered by the earlier browser fixture.
 - `swift test --skip-build --filter LiveBrowserAudioSmoke.captureUntilBrowserCloses` passed the four measured runs. Removed the temporary test and launcher hooks. A fresh `swift test` passed 405 tests in 71 suites, and `codesign --verify --deep --strict dist/InterviewCopilot.app` passed on the signed bundle whose pages were used. The measured native runs used the Swift test host with local synthetic inputs.
 
+- The four measured runs are recorded in the [native audio recovery report](/Users/macbook/Downloads/2026-11-18/copilot-14-handoff-interviewer-testcall/outputs/COPILOT-14-live-audio-recovery.txt). Handoff commit `38dc81d` recorded the measured results and the first Chrome Interviewer attempt.
+
 ## Next
 
-The native audio recovery audit is ready for owner acceptance. The next uncovered area is individual settings layouts and interactions. Standard tier.
+Audit the macOS Settings screens and interactions at standard tier. Start with `Sources/InterviewCopilot/SettingsWindow.swift` and the views under `Sources/InterviewCopilot/Settings/`. Use isolated settings and synthetic data to check layout, control behavior and persistence. Record reproducible findings and checks in this handoff.
