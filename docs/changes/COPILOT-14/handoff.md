@@ -207,10 +207,26 @@ Medians across three fresh processes per cell. Empty and populated refer to the 
 
 - Moved native model creation and the bank's JSON cache decode to a serial utility queue. The main actor immediately loads the profile and question list. When it accepts the current model, it indexes the active cards and materials, including edits or profile switches made during loading. The material worker also decodes its own plist cache.
 - Each request has its own operation identity. A superseded success or failure cannot replace the selected model. A download notification during a failed load schedules one retry. Shutdown cancels the pending load, drops its result and waits for any native initialization already in progress.
-- `swift test --filter BankModelLoadTests` passed four tests. A gated loader allowed profile A to switch to B before publication. An exact search then returned only B's card and material. Separate cases covered superseded success and failure, a retry during a missing-file result and native-resource ownership at shutdown using a test embedder.
+- `swift test --filter BankModelLoadTests` passed four tests. A gated loader allowed profile A to switch to B before publication. A lookup then returned only B's card and material. Separate cases covered superseded success and failure, a retry during a missing-file result and native-resource ownership at shutdown using a test embedder.
 - Standard review and a focused concurrency review covered model and index publication. The latter found that Foundation can retain a finished operation while running its completion block. A standalone Swift probe reproduced this on macOS. Cancellation now explicitly discards a stored result and prevents the worker from storing a late one. Focused re-review passed.
 - `swift test` passed 410 tests in 73 suites. An earlier run during a parallel Release compilation exceeded the two-second limits in two provider tests. Both passed on a focused rerun and in the full suite. All five `scripts/run-evals.sh` suites passed. `scripts/secret-scan.sh` reported zero findings and `scripts/check-localization.sh` reported 803 translations with zero missing keys or format mismatches. `scripts/build-app.sh`, strict deep signature verification and `git diff --check` passed.
 
+## Large-profile benchmark after background loading
+
+Measured Release code at `3d79553` on the same Apple M1, 8 GiB, macOS 15.7.2 and Swift 6.2.4. Used the previous fixture generator, bge-m3 Q8 model, app callbacks and timing boundaries. Ran three fresh processes per cache condition. Startup ends when `BankController.start` returns. Readiness includes startup and ends after both indexes publish. First-window presentation remains outside the benchmark.
+
+| Large profile, median | Empty before | Empty after | Populated before | Populated after |
+| --- | ---: | ---: | ---: | ---: |
+| Main-thread profile startup | 800 ms | 134 ms | 1,054 ms | 146 ms |
+| Both indexes usable | 41.35 s | 41.46 s | 1.20 s | 2.02 s |
+| Main-thread PDF import | 240 ms | 324 ms | 205 ms | 291 ms |
+| Whole-process peak footprint | 523 MiB | 524 MiB | 238 MiB | 257 MiB |
+
+- On the populated cache, model creation and bank cache initialization took median 1,141 ms and 578 ms on the utility operation. The probe asserted that this synchronous block ran off the main thread. The first empty launch took 23.01 s to load the model and 62.60 s to publish both indexes. Its main-thread startup still returned in 130 ms.
+- Because populated-index readiness differed from the earlier baseline, repeated three paired launches per binary against the same populated cache on this Mac. With the original and new binaries in AB, BA, AB order, median main-thread startup fell from 1,789 to 130 ms and median readiness from 2.17 to 1.77 s. Both binaries had one model initialization of about 19 s. With three samples per binary and uncontrolled OS caching, the main-thread improvement held across both comparisons. The direction of the readiness difference varied by run series.
+- All six primary runs and six additional paired launches exited successfully with 100 profiles, 1,200 cards, 64 materials, 128 chunks, the expected exact-match card, and 4,800 pending PDF questions. The primary driver also verified one 1,024-dimensional cached vector per card and a persisted material cache. `python3 validate.py` matched the six primary CSV rows to process logs and memory high-water marks. The paired CSV was checked against its six logs as well.
+- [Primary runs](large-profile-after.csv), [paired populated-cache runs](large-profile-paired-warm.csv), and [local reproduction bundle](/Users/macbook/Downloads/2026-11-19/docs-changes-copilot-14-handoff-md-2/outputs/large-profile-reproducer.zip). The bundle contains the timing patch, fixture generator, runners and validation commands.
+
 ## Next
 
-Repeat the large-profile Release benchmark with the baseline fixture and compare synchronous startup and both-index readiness for empty and populated caches. PDF import, the second physical input and external provider checks remain separate items.
+Owner acceptance of background embedding loading. The measured PDF import cost, second physical input and external provider checks remain open as separate work.
