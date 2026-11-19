@@ -135,6 +135,11 @@ The checkout was clean at `0048985` on `feat/copilot-14-technical-audit`. The im
 - Started VoiceOver and confirmed with AppKit that VoiceOver and macOS keyboard navigation were active. Tab reached all 11 Change buttons in row order, from Answer now to Next answer. Space started recording on the first and last buttons, and Escape restored the previous value and focus on each. Shift+Tab from Next answer moved focus back to Previous answer. The fixture data contained no saved override after cancellation.
 - VoiceOver speech and VoiceOver-specific activation remain unverified. The UI driver could send Tab and Space to the fixture, but VO-Space did not activate the focused button and VO-Shift-C did not place the last spoken phrase on the clipboard. The macOS accessibility tree showed the button label and current binding at keyboard focus. Turned VoiceOver off and confirmed that AppKit reported both VoiceOver and keyboard navigation back in their original off state.
 
+### Physical keyboard recheck preparation at `68baf29`
+
+- Created a detached worktree at `68baf29`, applied the existing Settings fixture patch there and ran `swift build --product InterviewCopilot` successfully. Copied the existing release bundle, replaced its executable with that debug fixture, changed its bundle identifier and ad-hoc signed it. `codesign --verify --deep --strict` passed. Launched it with a dedicated UserDefaults suite and isolated data root; the fixture uses an in-memory secret store.
+- NOT RUN: physical keyboard VoiceOver speech and VO-Space activation. The fixture is running, and the owner has been asked to perform the physical input and report the spoken phrase and activation result. No result is inferred from the accessibility tree or synthetic keyboard input.
+
 ## Next
 
 Confirm the spoken label and binding and VO-Space activation with physical keyboard input in the isolated Settings fixture. Owner acceptance, the Question Bank subtitle finding and the earlier audit's unverified runtime checks remain open.
