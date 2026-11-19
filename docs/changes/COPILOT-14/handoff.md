@@ -227,6 +227,30 @@ Measured Release code at `3d79553` on the same Apple M1, 8 GiB, macOS 15.7.2 and
 - All six primary runs and six additional paired launches exited successfully with 100 profiles, 1,200 cards, 64 materials, 128 chunks, the expected exact-match card, and 4,800 pending PDF questions. The primary driver also verified one 1,024-dimensional cached vector per card and a persisted material cache. `python3 validate.py` matched the six primary CSV rows to process logs and memory high-water marks. The paired CSV was checked against its six logs as well.
 - [Primary runs](large-profile-after.csv), [paired populated-cache runs](large-profile-paired-warm.csv), and [local reproduction bundle](/Users/macbook/Downloads/2026-11-19/docs-changes-copilot-14-handoff-md-2/outputs/large-profile-reproducer.zip). The bundle contains the timing patch, fixture generator, runners and validation commands.
 
+## Background question-bank PDF import
+
+Implemented at `d63c46f` on `feat/copilot-14-technical-audit`. PDFKit extraction, rule parsing, fallback chunking and parsing of model replies run off the main actor. The main actor starts the import, updates progress and publishes the review. The AppKit reader handles Word and RTF on the main actor.
+
+- Import checks the run and the active profile revision after background work and before publishing or accepting questions. A switch from A to B invalidates the import, including when the user returns to A before reading completes. The revision also hides a completed review after a switch. PDFKit's current synchronous read may finish after cancellation. Its result is discarded.
+- `swift test --filter QuestionPDFImportTests` passed both parameterized cases. The test blocked the injected PDF reader on a worker, switched profiles, then released the reader. Neither profile received stale results or writes. It also rejected a previously completed review after a switch and accepted a fresh import into the active profile. The large-file benchmark used the real PDFKit reader. Interactive profile switching through the macOS UI was not run.
+- The standard independent review found that a completed review could remain visible after a profile switch. The revision filter and regression check cover this case. The focused concurrency re-review passed with no findings.
+- `swift test` passed 411 tests in 74 suites. Five eval suites passed. The secret scan had zero findings. Localization had 805 keys, zero missing translations and zero format mismatches. The Release build, strict deep signature verification and `git diff --check` passed.
+
+## 240-page PDF benchmark
+
+Compared the previously instrumented Release at `3d79553` with an instrumented Release of `d63c46f` on Apple M1, macOS 15.7.2 and Swift 6.2.4. Reused the byte-identical 240-page synthetic PDF from the previous benchmarks (SHA-256 `615390c485ce01d11a8ca3b06dece2bcf28f75806bc86ebb8ee821e22aaf1a6b`). Launched three fresh processes per build in AB, BA, AB order. All used the same populated large fixture and imported after both indexes were ready. The OS file cache was uncontrolled.
+
+| Median | Before | After |
+| --- | ---: | ---: |
+| Main-actor import call, entry to return | 259.052 ms | 0.305 ms |
+| Import entry to questions ready for review | 259.052 ms | 247.589 ms |
+| PDF text extraction | 232.945 ms | 217.531 ms |
+| Local rule parsing | 25.661 ms | 26.092 ms |
+
+All six processes ended with 4,800 questions pending review. The after probe asserted that both extraction and rules ran on a worker. The readiness measurement includes observing `running` turn false in a task that polls every millisecond. The main-actor measurement covers the initiating call, and the readiness measurement covers the full import path through publication.
+
+[Raw timings](pdf-import-timings.csv), [local runner](/Users/macbook/Downloads/2026-11-19/docs-changes-copilot-14-handoff-md-2/work/pdf-import/measure.py), and [local instrumentation patch](/Users/macbook/Downloads/2026-11-19/docs-changes-copilot-14-handoff-md-2/work/pdf-import/timing.patch).
+
 ## Next
 
-Owner acceptance of background embedding loading. The measured PDF import cost, second physical input and external provider checks remain open as separate work.
+Owner acceptance of the PDF import follow-up. The second physical audio input and external provider runtime checks remain open.

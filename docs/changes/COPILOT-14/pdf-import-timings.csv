@@ -1,0 +1,7 @@
+run,version,submit_main_ms,review_ready_ms,extract_ms,rules_ms,questions,extraction_and_rules_thread
+1,before,263.468,263.468,241.926,21.09,4800,main
+2,after,0.608,241.008,217.531,21.379,4800,background
+3,after,0.305,248.142,220.247,26.092,4800,background
+4,before,259.052,259.052,232.945,25.661,4800,main
+5,before,250.449,250.449,222.29,27.711,4800,main
+6,after,0.284,247.589,214.339,31.978,4800,background
