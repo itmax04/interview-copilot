@@ -11,6 +11,8 @@ mkdir -p "$DEST"
 
 want=("$@")
 failed=0
+partial=''
+trap 'if [[ -n "$partial" ]]; then rm -f -- "$partial"; fi' EXIT
 while read -r sha file size url; do
   [[ -z "${sha:-}" || "$sha" == \#* ]] && continue
   if [ ${#want[@]} -gt 0 ] && [[ ! " ${want[*]} " == *" $file "* ]]; then continue; fi
@@ -20,15 +22,18 @@ while read -r sha file size url; do
     continue
   fi
   echo "==> $file ($((size / 1024 / 1024)) МБ)"
-  curl -fL --retry 3 --progress-bar -o "$target.part" "$url"
-  actual="$(shasum -a 256 "$target.part" | cut -d' ' -f1)"
+  partial="$(mktemp "$target.part.XXXXXXXX")"
+  curl -fL --retry 3 --progress-bar -o "$partial" "$url"
+  actual="$(shasum -a 256 "$partial" | cut -d' ' -f1)"
   if [ "$actual" != "$sha" ]; then
     echo "ОШИБКА: SHA256 не совпадает для $file (ожидалось $sha, получено $actual). Файл удалён." >&2
-    rm -f "$target.part"
+    rm -f -- "$partial"
+    partial=''
     failed=1
     continue
   fi
-  mv "$target.part" "$target"
+  mv "$partial" "$target"
+  partial=''
   echo "OK: $file, SHA256 совпадает"
 done < "$ROOT/models.sha256"
 exit $failed

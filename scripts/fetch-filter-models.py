@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from tempfile import TemporaryDirectory
 
 root = Path(__file__).resolve().parent.parent
 manifest = json.loads((root / 'filter-models.json').read_text())
@@ -25,11 +26,11 @@ for model in manifest['models']:
         if path.is_file() and path.stat().st_size == entry['size'] and checksum(path) == entry['sha256']:
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
-        partial = path.with_name(path.name + '.part')
-        url = f"https://huggingface.co/{model['repo']}/resolve/{model['revision']}/{entry['path']}"
-        subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--retry', '3', '--output', str(partial), url], check=True)
-        if partial.stat().st_size != entry['size'] or checksum(partial) != entry['sha256']:
-            partial.unlink()
-            raise RuntimeError(f"SHA256 mismatch: {model['repo']}/{entry['path']}")
-        partial.replace(path)
+        with TemporaryDirectory(dir=path.parent) as staging:
+            partial = Path(staging) / (path.name + '.part')
+            url = f"https://huggingface.co/{model['repo']}/resolve/{model['revision']}/{entry['path']}"
+            subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--retry', '3', '--output', str(partial), url], check=True)
+            if partial.stat().st_size != entry['size'] or checksum(partial) != entry['sha256']:
+                raise RuntimeError(f"SHA256 mismatch: {model['repo']}/{entry['path']}")
+            partial.replace(path)
     print(f"{model['repo']}: {len(model['files'])} files verified, revision {model['revision'][:12]}")

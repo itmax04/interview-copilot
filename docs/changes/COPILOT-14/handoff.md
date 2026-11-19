@@ -161,6 +161,15 @@ The owner accepted the Question Bank fix on 2026-11-19. The recheck used macOS 1
 | Browser recovery and clean checkout | PASS. `node scripts/check-browser-recovery.mjs dist/InterviewCopilot.app/Contents/Resources` and the `--en` run each passed 11 Chrome scenarios. The first attempt timed out waiting for Chrome DevTools before running a scenario. `swift test` passed 405 tests in 71 suites and strict bundle signature verification passed. |
 | Parallel model installers | **FAIL** for concurrent runs of `scripts/fetch-parakeet.py`, `scripts/fetch-filter-models.py` and `scripts/fetch-models.sh`. Two processes using the same synthetic manifest and destination reached the same `.part` file before verification. One exited 1 after the other renamed the file. The final file had the correct checksum in both repetitions for all three scripts. Run `python3 <reproducer> <checkout>` using the [two-process reproducer](/Users/macbook/Downloads/2026-11-19/voiceover-vo-space-docs-changes-copilot/work/installer-race.py). |
 
+## Parallel installer fix on `feat/copilot-14-technical-audit`
+
+- Reproduced at `877d820` using the two-process reproducer linked above. All three installers returned one success and one missing-file error while the installed checksum was correct.
+- Each Python download now creates a private temporary directory under the target's parent. The Bash installer uses `mktemp` next to the target and cleans up its own temporary file on exit. Each installer verifies its own bytes and publishes them by same-filesystem rename. Concurrent requests may both download the same model.
+- Ran `python3 scripts/check-model-installer-race.py` twice on the fix. The check uses the original synthetic manifests and curl barrier. In all six pairs, the downloads used distinct paths, both processes exited 0, the installed SHA256 matched and the destination contained only the model. The new check failed against the baseline as expected. No external model download was needed.
+- Injected a checksum mismatch and a curl error into one process in separate runs for each installer. Only the affected process failed. The verified model survived and no staging files remained.
+- PASS on the modified checkout: `swift test` (405 tests in 71 suites), `scripts/run-evals.sh` (five suites), `scripts/secret-scan.sh` (zero findings), `scripts/check-localization.sh` (802 keys, zero missing or mismatched formats), `scripts/build-app.sh`, `codesign --verify --deep --strict dist/InterviewCopilot.app` and `git diff --check`.
+- Independent standard review of the three installers and regression check passed. A focused strong concurrency review also passed, including a Parakeet run with two processes and two threads per process fetching the same file.
+
 ## Next
 
-Fix the three installer scripts' shared `.part` paths and rerun the two-process reproducer. Carbon conflict reporting, a second physical input, external provider calls and large-profile profiling remain open.
+Owner acceptance of the installer fix. Carbon conflict reporting, a second physical input, external provider calls and large-profile profiling remain open.

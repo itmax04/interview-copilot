@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+from tempfile import TemporaryDirectory
 
 root = Path(__file__).resolve().parent.parent
 manifest = json.loads((root / 'parakeet-models.json').read_text())
@@ -24,13 +25,13 @@ def fetch(entry):
     if path.is_file() and checksum(path) == entry['sha256']:
         return entry['path']
     path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_name(path.name + '.part')
-    url = f"https://huggingface.co/{manifest['repo']}/resolve/{manifest['revision']}/{entry['path']}"
-    subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--retry', '3', '--output', str(partial), url], check=True)
-    if partial.stat().st_size != entry['size'] or checksum(partial) != entry['sha256']:
-        partial.unlink()
-        raise RuntimeError(f"SHA256 mismatch: {entry['path']}")
-    partial.replace(path)
+    with TemporaryDirectory(dir=path.parent) as staging:
+        partial = Path(staging) / (path.name + '.part')
+        url = f"https://huggingface.co/{manifest['repo']}/resolve/{manifest['revision']}/{entry['path']}"
+        subprocess.run(['curl', '--fail', '--location', '--silent', '--show-error', '--retry', '3', '--output', str(partial), url], check=True)
+        if partial.stat().st_size != entry['size'] or checksum(partial) != entry['sha256']:
+            raise RuntimeError(f"SHA256 mismatch: {entry['path']}")
+        partial.replace(path)
     return entry['path']
 
 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
