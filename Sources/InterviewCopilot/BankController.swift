@@ -3,6 +3,36 @@ import CopilotCore
 import CopilotEmbeddings
 import Foundation
 import Observation
+import Synchronization
+
+/// The operation owns the result until the main actor accepts it. Cancelled or superseded
+/// operations can release their native model without waiting for the main actor during shutdown.
+private final class EmbeddingModelLoad: Operation, @unchecked Sendable {
+    typealias Prepared = (embedder: any TextEmbedder, builder: BankIndexBuilder)
+    private let prepare: @Sendable () throws -> Prepared
+    private let result = Mutex<Result<Prepared, Error>?>(nil)
+    @MainActor var retryIfFailed = false
+
+    init(prepare: @escaping @Sendable () throws -> Prepared) { self.prepare = prepare }
+
+    override func main() {
+        guard !isCancelled else { return }
+        let prepared = Result(catching: prepare)
+        result.withLock { if !isCancelled { $0 = prepared } }
+    }
+
+    override func cancel() {
+        super.cancel()
+        result.withLock { $0 = nil }
+    }
+
+    func takeResult() -> Result<Prepared, Error>? {
+        result.withLock { stored in
+            defer { stored = nil }
+            return stored
+        }
+    }
+}
 
 /// Профили и база вопросов в приложении (COPILOT-08 R-01): перенос старой папки `profile/`, активный профиль, загрузка,
 /// наблюдение за `questions.yaml` с перечитыванием и пересчётом эмбеддингов в фоне (S-10), поиск по ходу (R-07).
@@ -17,7 +47,23 @@ final class BankController {
     private(set) var questionsUnreadable = false
     private(set) var status = "База не загружена"
 
-    let library = ProfileLibrary()
+    let library: ProfileLibrary
+    private let makeEmbedder: @Sendable (String) throws -> any TextEmbedder
+    private let cacheDirectory: URL
+    private let modelQueue = OperationQueue()
+    private var modelLoad: EmbeddingModelLoad?
+
+    init(library: ProfileLibrary = ProfileLibrary(), cacheDirectory: URL = AppPaths.cache,
+         makeEmbedder: @escaping @Sendable (String) throws -> any TextEmbedder = { file in
+             try LlamaEmbedder(modelPath: AppPaths.model(file).path, prefix: EmbeddingModels.spec(for: file).prefix)
+         }) {
+        self.library = library
+        self.cacheDirectory = cacheDirectory
+        self.makeEmbedder = makeEmbedder
+        modelQueue.maxConcurrentOperationCount = 1
+        modelQueue.qualityOfService = .utility
+    }
+
     private(set) var profiles: [ProfileInfo] = []
     private(set) var activeID: String?
     /// Общие инструкции владельца — для всех профилей и «Без профиля» (R-04).
@@ -30,7 +76,8 @@ final class BankController {
     private(set) var materialIndex = MaterialIndex.empty
     private(set) var materialStatus = ""
     private var embedder: TextEmbedder?
-    private var materialTask: Task<Void, Never>?
+    private var materialGeneration = 0
+    private var materialTask: Task<Result<MaterialIndex, Error>, Never>?
     /// Фоновые построения индексов, держащие эмбеддер: `shutdown()` ждёт их, чтобы модель не освобождалась под ними (L2).
     private let buildGroup = DispatchGroup()
 
@@ -187,6 +234,11 @@ final class BankController {
     /// Освобождение моделей до выхода (ggml-metal падает, если ресурсы живы во время статических деструкторов).
     func shutdown() {
         watcher?.stop()
+        modelLoad?.cancel()
+        modelLoad = nil
+        modelQueue.waitUntilAllOperationsAreFinished()
+        indexGeneration += 1
+        materialGeneration += 1
         materialTask?.cancel()
         materialTask = nil
         // Построения уже отменены или скоро закончатся; ждём недолго, чтобы не повесить выход.
@@ -197,33 +249,44 @@ final class BankController {
     }
 
     private func loadEmbedder(_ file: String) {
-        // Та же модель грузится повторно, только если прошлая попытка не удалась: файл могли докачать уже после запуска.
-        guard embedderModel != file || builder == nil else { return }
-        // Смена модели: индекс и индекс материалов построены другой моделью, их векторы несравнимы с запросами новой;
-        // незавершённое построение прежней модели не должно перезаписать статус и индекс (L1).
-        if embedderModel != file {
-            index = nil
-            indexGeneration += 1
-            materialIndex = .empty
-        }
+        guard embedderModel != file || (builder == nil && modelLoad == nil) else { return }
+        modelLoad?.cancel()
         embedderModel = file
-        let path = AppPaths.model(file).path
-        guard FileManager.default.fileExists(atPath: path) else {
-            status = L("Нет модели эмбеддингов: %@ (scripts/fetch-models.sh)", "\(file)")
-            builder = nil
-            embedder = nil
-            return
+        indexGeneration += 1
+        index = nil
+        builder = nil
+        embedder = nil
+        materialIndex = .empty
+        status = L("Загружаю модель…")
+
+        let load = EmbeddingModelLoad { [makeEmbedder, cacheDirectory] in
+            let embedder = try makeEmbedder(file)
+            let builder = BankIndexBuilder(embedder: embedder, cacheDirectory: cacheDirectory)
+            return (embedder, builder)
         }
-        let spec = EmbeddingModels.spec(for: file)
-        do {
-            let embedder = try LlamaEmbedder(modelPath: path, prefix: spec.prefix)
-            builder = BankIndexBuilder(embedder: embedder, cacheDirectory: AppPaths.cache)
-            self.embedder = embedder
-        } catch {
-            status = L("Ошибка модели эмбеддингов: %@", "\(error)")
-            builder = nil
-            embedder = nil
+        modelLoad = load
+        load.completionBlock = { [weak self, weak load] in
+            Task { @MainActor [weak self, weak load] in
+                guard let self, let load, self.modelLoad === load, let result = load.takeResult() else { return }
+                self.modelLoad = nil
+                switch result {
+                case .success(let prepared):
+                    self.embedder = prepared.embedder
+                    self.builder = prepared.builder
+                    self.buildBankIndex()
+                case .failure where load.retryIfFailed:
+                    self.loadEmbedder(file)
+                    return
+                case .failure(EmbedderError.modelNotFound):
+                    self.status = L("Нет модели эмбеддингов: %@ (scripts/fetch-models.sh)", file)
+                case .failure(let error):
+                    self.status = L("Ошибка модели эмбеддингов: %@", "\(error)")
+                }
+                self.reloadMaterials()
+                self.onChange?()
+            }
         }
+        modelQueue.addOperation(load)
     }
 
     func embeddingModelChanged(_ file: String) {
@@ -236,8 +299,8 @@ final class BankController {
     /// загрузить его сейчас. Раньше база и поиск по материалам не работали до перезапуска приложения (COPILOT-13).
     func retryEmbedderIfMissing() {
         guard builder == nil, let file = embedderModel else { return }
-        embeddingModelChanged(file)
-        if builder != nil { Log.app.info("embedding model loaded after download") }
+        // A missing-file result may already be on its way to the main actor when the download finishes.
+        if let modelLoad { modelLoad.retryIfFailed = true } else { loadEmbedder(file) }
     }
 
     // MARK: Материалы (R-06)
@@ -245,34 +308,40 @@ final class BankController {
     /// Перечитать список и перестроить индекс в фоне (новые фрагменты считаются, старые — из кэша профиля).
     func reloadMaterials() {
         materialTask?.cancel()
+        materialTask = nil
+        materialGeneration += 1
+        let generation = materialGeneration
         guard let id = activeID else { materials = []; materialIndex = .empty; return }
         materials = library.listMaterials(id)
         guard let embedder else {
-            materialStatus = materials.isEmpty ? "" : "Нет модели эмбеддингов — поиск по материалам выключен"
+            materialStatus = materials.isEmpty ? "" : (modelLoad != nil ? L("Загружаю модель…") : "Нет модели эмбеддингов — поиск по материалам выключен")
             materialIndex = .empty
             return
         }
         if materials.isEmpty { materialIndex = .empty; materialStatus = ""; onChange?(); return }
         let files = library.materialTexts(id)
-        let builder = MaterialIndexBuilder(embedder: embedder, cacheURL: library.materialsCacheURL(id))
+        let cacheURL = library.materialsCacheURL(id)
         materialStatus = "Индексирую материалы…"
         onChange?()
         let started = Date()
         let report: @Sendable (Int, Int) -> Void = { [weak self] done, total in
             guard total > 0 else { return }
-            Task { @MainActor in self?.materialProgress(done, of: total, profile: id) }
+            Task { @MainActor in self?.materialProgress(done, of: total, generation: generation) }
         }
         let group = buildGroup
-        materialTask = Task { [weak self] in
-            // Отмена `materialTask` сама до отдельной задачи не доходит: раньше прежняя индексация досчитывала
-            // все фрагменты и занимала эмбеддер, хотя её результат уже никому не был нужен (COPILOT-13).
-            group.enter()
-            let work = Task.detached(priority: .utility) { () -> Result<MaterialIndex, Error> in
-                defer { group.leave() }
-                return Result { try builder.build(files, progress: report, isCancelled: { Task.isCancelled }) }
+        group.enter()
+        let work = Task.detached(priority: .utility) { () -> Result<MaterialIndex, Error> in
+            defer { group.leave() }
+            return Result {
+                try Task.checkCancellation()
+                let builder = MaterialIndexBuilder(embedder: embedder, cacheURL: cacheURL)
+                return try builder.build(files, progress: report, isCancelled: { Task.isCancelled })
             }
-            let result = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
-            guard let self, !Task.isCancelled, self.activeID == id else { return }
+        }
+        materialTask = work
+        Task { [weak self] in
+            let result = await work.value
+            guard let self, self.materialGeneration == generation else { return }
             self.materialTask = nil
             switch result {
             case .success(let index):
@@ -286,8 +355,8 @@ final class BankController {
         }
     }
 
-    private func materialProgress(_ done: Int, of total: Int, profile id: String) {
-        guard activeID == id, materialTask != nil else { return }
+    private func materialProgress(_ done: Int, of total: Int, generation: Int) {
+        guard materialGeneration == generation, materialTask != nil else { return }
         materialStatus = L("Индексирую материалы: %@ из %@ новых фрагментов", "\(done)", "\(total)")
     }
 
@@ -376,7 +445,12 @@ final class BankController {
         }
         cards = parsed
         onChange?()
-        guard let builder else { return }
+        buildBankIndex()
+    }
+
+    private func buildBankIndex() {
+        guard let builder, let id = activeID else { return }
+        let parsed = cards
         status = "Пересчитываю эмбеддинги…"
         indexGeneration += 1
         let generation = indexGeneration
