@@ -65,7 +65,10 @@ final class BankController {
     }
 
     private(set) var profiles: [ProfileInfo] = []
-    private(set) var activeID: String?
+    private(set) var activeID: String? {
+        didSet { if oldValue != activeID { profileRevision += 1 } }
+    }
+    private(set) var profileRevision = 0
     /// Общие инструкции владельца — для всех профилей и «Без профиля» (R-04).
     private(set) var generalInstructions = ""
     /// Активный профиль сменился (сохранить в настройки).

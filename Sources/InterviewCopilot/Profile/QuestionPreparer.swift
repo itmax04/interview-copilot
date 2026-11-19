@@ -8,6 +8,7 @@ import Observation
 final class QuestionPreparer {
     private let bank: BankController
     private let model: AppModel
+    private let extract: @Sendable (URL) throws -> String
     private let providers = ChainFactory.providers()
     private var task: Task<Void, Never>?
     /// Номер запущенной работы. Остановленная или прежняя работа ещё доходит до ближайшего `await` и не должна менять
@@ -20,12 +21,17 @@ final class QuestionPreparer {
     private(set) var message: String?
     private(set) var failed = false
     /// Разобранные из файла вопросы — на проверку перед добавлением.
-    private var importProfileID: String?
-    var pendingImport: [ImportedQuestion]?
+    private var importProfileRevision: Int?
+    private var importedQuestions: [ImportedQuestion]?
+    var pendingImport: [ImportedQuestion]? {
+        get { bank.profileRevision == importProfileRevision ? importedQuestions : nil }
+        set { importedQuestions = newValue }
+    }
 
-    init(bank: BankController, model: AppModel) {
+    init(bank: BankController, model: AppModel, extract: @escaping @Sendable (URL) throws -> String = DocumentText.extract) {
         self.bank = bank
         self.model = model
+        self.extract = extract
     }
 
     private func chain() async -> ProviderChain {
@@ -44,53 +50,94 @@ final class QuestionPreparer {
 
     // MARK: Импорт
 
+    private enum ParsedImport {
+        case questions([ImportedQuestion])
+        case chunks([String])
+    }
+
+    // PDFKit works on a document local to this task. AppKit document import for Word and RTF stays on the main actor.
+    @concurrent private static func readPDF(_ url: URL, extract: @Sendable (URL) throws -> String) async throws -> String {
+        try Task.checkCancellation()
+        return try extract(url)
+    }
+
+    @concurrent private static func parseImport(_ text: String) async throws -> ParsedImport {
+        try Task.checkCancellation()
+        let questions = QuestionImport.parseByRules(text)
+        return questions.isEmpty ? .chunks(QuestionImport.chunks(text)) : .questions(questions)
+    }
+
+    @concurrent private static func parseModelResponse(_ text: String) async -> [ImportedQuestion] {
+        QuestionImport.parseLLM(text)
+    }
+
     /// Файл → вопросы: правила; не подошли — модель, по частям. Результат — `pendingImport` для проверки.
     func importFile(_ url: URL) {
         guard !running else { return }
-        importProfileID = bank.activeID
-        let text: String
-        do { text = try DocumentText.extract(from: url) } catch {
-            fail((error as? DocumentTextError)?.description ?? error.localizedDescription)
-            return
-        }
-        let byRules = QuestionImport.parseByRules(text)
-        if !byRules.isEmpty {
-            pendingImport = byRules
-            succeed(L("В файле найдено вопросов: %lld. Проверьте и добавьте.", byRules.count))
-            Log.app.info("questions import rules=\(byRules.count)")
-            return
-        }
-        // Вопросы, разобранные моделью для одного профиля, не должны попасть в другой после смены профиля (COPILOT-13).
-        let profileID = bank.activeID
-        let chunks = QuestionImport.chunks(text)
-        start(total: chunks.count, label: "Разбираю файл моделью") { [weak self] run in
-            guard let self else { return }
-            var found: [ImportedQuestion] = []
-            let chain = await self.chain()
-            for part in chunks {
-                guard self.isCurrent(run), self.sameProfile(profileID) else { return }
-                let result = await ChainText.collect(chain, QuestionImport.llmRequest(part))
-                guard self.isCurrent(run), self.sameProfile(profileID) else { return }
-                switch result {
-                case .success(let answer): found += QuestionImport.parseLLM(answer)
-                case .failure(let e): self.fail(e.description); return
-                }
-                self.step()
+        let revision = bank.profileRevision
+        importProfileRevision = revision
+        pendingImport = nil
+        start(total: 1, label: L("Читаю файл")) { [weak self] run in
+            guard let self, self.isCurrent(run), self.sameImportProfile(revision) else { return }
+            let parsed: ParsedImport
+            do {
+                let text = url.pathExtension.lowercased() == "pdf" ? try await Self.readPDF(url, extract: self.extract) : try self.extract(url)
+                guard self.isCurrent(run), self.sameImportProfile(revision) else { return }
+                parsed = try await Self.parseImport(text)
+            } catch {
+                guard self.isCurrent(run), self.sameImportProfile(revision) else { return }
+                self.fail((error as? DocumentTextError)?.description ?? error.localizedDescription)
+                return
             }
-            guard self.isCurrent(run), self.sameProfile(profileID) else { return }
-            Log.app.info("questions import llm=\(found.count)")
-            if found.isEmpty { self.fail("Вопросов в файле не найдено. Добавьте их в таблицу вручную.") } else {
-                self.pendingImport = found
-                self.succeed(L("Модель нашла вопросов: %lld. Проверьте и добавьте.", found.count))
+            guard self.isCurrent(run), self.sameImportProfile(revision) else { return }
+            switch parsed {
+            case .questions(let questions):
+                self.pendingImport = questions
+                self.succeed(L("В файле найдено вопросов: %lld. Проверьте и добавьте.", questions.count))
+                Log.app.info("questions import rules=\(questions.count)")
+            case .chunks(let chunks):
+                await self.importWithModel(chunks, run: run, revision: revision)
             }
         }
     }
 
+    private func importWithModel(_ chunks: [String], run: Int, revision: Int) async {
+        progress = (0, chunks.count)
+        message = L("Разбираю файл моделью…")
+        var found: [ImportedQuestion] = []
+        let chain = await chain()
+        for part in chunks {
+            guard isCurrent(run), sameImportProfile(revision) else { return }
+            let result = await ChainText.collect(chain, QuestionImport.llmRequest(part))
+            guard isCurrent(run), sameImportProfile(revision) else { return }
+            switch result {
+            case .success(let answer):
+                let questions = await Self.parseModelResponse(answer)
+                guard isCurrent(run), sameImportProfile(revision) else { return }
+                found += questions
+            case .failure(let error): fail(error.description); return
+            }
+            step()
+        }
+        guard isCurrent(run), sameImportProfile(revision) else { return }
+        Log.app.info("questions import llm=\(found.count)")
+        if found.isEmpty { fail("Вопросов в файле не найдено. Добавьте их в таблицу вручную.") } else {
+            pendingImport = found
+            succeed(L("Модель нашла вопросов: %lld. Проверьте и добавьте.", found.count))
+        }
+    }
+
     func acceptImport(_ items: [ImportedQuestion]) {
-        guard !items.isEmpty, sameProfile(importProfileID) else { pendingImport = nil; return }
+        guard !items.isEmpty, sameImportProfile(importProfileRevision), pendingImport != nil else { pendingImport = nil; return }
         guard save(QuestionImport.merge(items, into: bank.cards)) else { return }
         pendingImport = nil
         succeed(L("Добавлено вопросов: %lld. Нажмите «Подготовить», чтобы добавить формулировки и черновики.", items.count))
+    }
+
+    private func sameImportProfile(_ revision: Int?) -> Bool {
+        guard bank.profileRevision != revision else { return true }
+        fail(L("Профиль сменили — импорт остановлен."))
+        return false
     }
 
     private func save(_ cards: [BankCard]) -> Bool {

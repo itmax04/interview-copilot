@@ -591,7 +591,9 @@
 "Готово." = "Done.";
 "Готово %lld из %lld частей…" = "Done %lld of %lld parts…";
 "Остановлено. Готовое сохранено." = "Stopped. Finished parts are saved.";
-"Разбираю файл моделью" = "Parsing the file with a model";
+"Читаю файл" = "Reading the file";
+"Разбираю файл моделью…" = "Parsing the file with a model…";
+"Профиль сменили — импорт остановлен." = "The profile changed. Import stopped.";
 "Вопросов в файле не найдено. Добавьте их в таблицу вручную." = "No questions found in the file. Add them to the table manually.";
 "Всё уже подготовлено." = "Everything is already prepared.";
 "Готовлю формулировки и черновики" = "Preparing phrasings and drafts";
