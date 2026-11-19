@@ -89,7 +89,7 @@ The starting checkout was clean on `feat/copilot-14-technical-audit`. On macOS 1
 - Inspected the nine Russian light-mode Settings snapshots at 1000 × 680 pt (Audio at 1000 × 1240 pt). Opened all nine tabs in the live Workspace at 1180 × 780 pt in Russian dark mode. Reduced the window by dragging its bottom-right corner to 991 × 615 pt as recorded by AppKit's frame autosave. Both sidebars and the page headings remained visible. The small workspace tagline was ellipsized. The Keys and Audio forms scrolled to the Gemini tier and voice/draft controls respectively, and the budget input remained in view.
 - **Mixed language in the answer-style sheet.** On a Mac running in English, select Russian in Settings → General, then open Models & answers → Configure. The sheet exposes `Answer style`, `Question type`, `Close` and `Regenerate` in its accessibility tree alongside Russian style options and Save. The parent Settings page is Russian. Recheck the sheet's SwiftUI locale propagation.
 - **Budget and Hotkeys accessibility.** Inspect both tabs with no control focused. Budget exposes a merged static row and no editable field until the visible number is clicked. Hotkeys exposes the action names as one static element and the reset button separately, with no per-row edit button or current binding in the tree. Clicking the visible number or Edit button worked. After an invalid unmodified key, Escape ended capture but left the modifier warning in the tree until a valid combination was entered.
-- **Question bank copy.** The subtitle mentions the search model. The form exposes the match threshold and its explanatory text, with no search-model control.
+- **Question bank copy.** The subtitle mentioned a search model setting. The form exposed a match threshold and explanatory text. Fixed in `39fc279`.
 
 ### Control and persistence results
 
@@ -140,6 +140,12 @@ The checkout was clean at `0048985` on `feat/copilot-14-technical-audit`. The im
 - Created a detached worktree at `68baf29`, applied the existing Settings fixture patch there and ran `swift build --product InterviewCopilot` successfully. Copied the existing release bundle, replaced its executable with that debug fixture, changed its bundle identifier and ad-hoc signed it. `codesign --verify --deep --strict` passed. Launched it with a dedicated UserDefaults suite and isolated data root; the fixture uses an in-memory secret store.
 - PASS (owner-reported, 2026-11-19). In the isolated Settings fixture, VoiceOver announced the action and current shortcut for the focused Change button in Hotkeys. Pressing VO+Space on the physical keyboard started recording a new shortcut. The report gave an overall result without specifying the tested row or exact spoken wording.
 
+### Question bank subtitle follow-up
+
+- Reproduced the stale search-model reference in the isolated English Workspace Settings fixture at `68baf29`. Implementation `39fc279` updated the subtitle in `Sources/InterviewCopilot/SettingsWindow.swift` and its English translation in `Resources/en.lproj/Localizable.strings`. Workspace and standalone Settings use the same `SettingsView`.
+- PASS: rebuilt and signed the isolated fixture, then verified both subtitles visually and in the Workspace accessibility tree. Incrementing the slider changed 74% to 75%, and switching from English to Russian kept the selected tab and the 75% value. Standalone UI interaction was not run in this follow-up.
+- PASS: `swift test` (405 tests in 71 suites), `scripts/run-evals.sh` (five suites), `scripts/secret-scan.sh` (zero findings), `scripts/check-localization.sh` (802 keys, zero missing keys or format mismatches), `scripts/build-app.sh`, `codesign --verify --deep --strict dist/InterviewCopilot.app` and `git diff --check`. One independent standard review approved the shared view and both strings with no findings.
+
 ## Next
 
-Owner acceptance, the Question Bank subtitle finding and the earlier audit's unverified runtime checks remain open.
+Owner acceptance is the next checkpoint. The earlier audit's unverified runtime checks remain open.
