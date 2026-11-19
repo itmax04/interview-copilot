@@ -833,7 +833,7 @@
 "Для старта достаточно одного бесплатного ключа Groq. Можно добавить еще ключи: кончился лимит у одного — ответ идет со следующего." = "One free Groq key is enough to start. You can add more keys: when one hits its limit, the answer comes from the next.";
 "Порядок моделей, запасные, стиль ответа по умолчанию и таймауты." = "Model order, fallbacks, default answer style and timeouts.";
 "Источник звука, язык, распознавание, фильтры речи и ваш голос." = "Audio source, language, recognition, speech filters and your voice.";
-"Порог совпадения с вашими ответами и модель поиска." = "Match threshold for your answers and the search model.";
+"Настройте, насколько близко вопрос должен совпадать с карточкой." = "Set how closely a question must match a card.";
 "Фильтр личных данных и срок хранения истории на этом Mac." = "Personal data filter and how long history is kept on this Mac.";
 "Прозрачность, размер текста и ширина оверлея." = "Opacity, text size and overlay width.";
 "⌃⌥ работают всегда; ⌘-клавиши — только во время сессии." = "⌃⌥ shortcuts always work; ⌘ shortcuts only during a session.";
