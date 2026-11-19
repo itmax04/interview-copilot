@@ -127,8 +127,14 @@ The checkout was clean at `0048985` on `feat/copilot-14-technical-audit`. The im
 - A fixture restart restored the selected language, Short style, the numeric budget 17.25 and Answer now bound to Ctrl+Option+J. The four corresponding checks on the isolated `settings.v1` export passed.
 - PASS: `swift test` (405 tests in 71 suites), `scripts/run-evals.sh` (five suites), `scripts/secret-scan.sh` (zero findings), `scripts/check-localization.sh` (802 translations, zero missing keys or format mismatches), `scripts/build-app.sh`, `codesign --verify --deep --strict dist/InterviewCopilot.app` and `git diff --check`. The signed app rendered 92/92 PNGs with `INTERVIEWCOPILOT_HOME="$auditRoot" dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --ui-snapshots "$snapshotDir"`. Inspected the Budget, Hotkeys and style editor renders.
 - Independent standard review and focused re-review of the native button styling and Reset placement passed with no actionable findings.
-- NOT VERIFIED: Tab/Space activation of shortcut buttons with the host keyboard navigation configuration, VoiceOver speech, global Carbon registration and conflicts, live generation in the style editor, and the Session Wizard sheet interaction. The fixture exercised activation through the macOS accessibility tree.
+- The fixture exercised activation through the macOS accessibility tree. Global Carbon registration and conflicts, live generation in the style editor, and the Session Wizard sheet interaction remain unverified.
+
+### Keyboard and VoiceOver recheck at `3c55898`
+
+- Reused the signed Settings fixture on macOS 15.7.2 with a fresh UserDefaults suite, isolated data root and in-memory secret store. Ran the keyboard check in the English Workspace Settings window. The fixture passed `codesign --verify --deep --strict "$app"`. The app source matched `a069ec1`.
+- Started VoiceOver and confirmed with AppKit that VoiceOver and macOS keyboard navigation were active. Tab reached all 11 Change buttons in row order, from Answer now to Next answer. Space started recording on the first and last buttons, and Escape restored the previous value and focus on each. Shift+Tab from Next answer moved focus back to Previous answer. The fixture data contained no saved override after cancellation.
+- VoiceOver speech and VoiceOver-specific activation remain unverified. The UI driver could send Tab and Space to the fixture, but VO-Space did not activate the focused button and VO-Shift-C did not place the last spoken phrase on the clipboard. The macOS accessibility tree showed the button label and current binding at keyboard focus. Turned VoiceOver off and confirmed that AppKit reported both VoiceOver and keyboard navigation back in their original off state.
 
 ## Next
 
-Owner acceptance of the Settings follow-up. The Question Bank subtitle finding and the earlier audit's unverified runtime checks remain open.
+Confirm the spoken label and binding and VO-Space activation with physical keyboard input in the isolated Settings fixture. Owner acceptance, the Question Bank subtitle finding and the earlier audit's unverified runtime checks remain open.
