@@ -181,6 +181,8 @@ The owner accepted the parallel installer fix at `c9c2f7b` on 2026-11-19.
 - The first full run timed out in the loopback browser-close test while the fixture startup blocked the main actor. Moved the fixture wait off the main actor. The focused rerun and `IC_TEST_CARBON_HOTKEYS=1 swift test` then passed (406 tests in 72 suites on macOS 15.7.2).
 - PASS: `scripts/run-evals.sh` (five suites), `scripts/secret-scan.sh` (zero findings), `scripts/check-localization.sh` (803 translations, zero missing keys or format mismatches), `scripts/build-app.sh`, `codesign --verify --deep --strict dist/InterviewCopilot.app` and `git diff --check`. Independent standard review and focused re-review approved the change.
 
+The owner accepted the Carbon hotkey conflict fix at `0754c33` on 2026-11-19.
+
 ## Next
 
-Owner acceptance of the Carbon conflict fix. A second physical input, external provider calls and large-profile profiling remain open.
+Profile startup and main-thread loading with a large synthetic profile. A second physical input and external provider calls remain open.
