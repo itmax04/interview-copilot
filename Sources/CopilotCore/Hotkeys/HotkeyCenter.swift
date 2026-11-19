@@ -120,6 +120,8 @@ public final class HotkeyCenter {
     private var refs: [HotkeyAction: EventHotKeyRef] = [:]
     /// ⌘-сочетания сессии — отдельные регистрации (номера с `sessionBase`).
     private var sessionRefs: [HotkeyAction: EventHotKeyRef] = [:]
+    private var sessionBindings: [HotkeyAction: HotkeyBinding]?
+    public private(set) var sessionFailures: [HotkeyAction] = []
     static let sessionBase: UInt32 = 100
     private var handlerRef: EventHandlerRef?
     private let onPress: (HotkeyAction) -> Void
@@ -133,7 +135,11 @@ public final class HotkeyCenter {
     /// Перерегистрирует все сочетания; возвращает действия, которые зарегистрировать не удалось (занято).
     @discardableResult
     public func register(_ bindings: [HotkeyAction: HotkeyBinding]) -> [HotkeyAction: String] {
+        // Apply global assignments first, including when preferences change mid-session.
+        let activeSessionBindings = sessionBindings
+        unregisterSession()
         unregisterAll()
+        var assigned: [HotkeyBinding: HotkeyAction] = [:]
         failures = [:]
         for action in HotkeyAction.allCases {
             guard let b = bindings[action] ?? HotkeyBinding.defaults[action] else { continue }
@@ -141,9 +147,14 @@ public final class HotkeyCenter {
                 failures[action] = L10n.t("нужен модификатор ⌃, ⌥ или ⌘")
                 continue
             }
+            if let owner = assigned[b] {
+                failures[action] = L10n.f("сочетание уже назначено действию «%@»", owner.title)
+                continue
+            }
+            assigned[b] = action
             var ref: EventHotKeyRef?
             let id = EventHotKeyID(signature: Self.signature, id: UInt32(HotkeyAction.allCases.firstIndex(of: action)! + 1))
-            let status = RegisterEventHotKey(b.keyCode, b.modifiers, id, GetApplicationEventTarget(), 0, &ref)
+            let status = RegisterEventHotKey(b.keyCode, b.modifiers, id, GetApplicationEventTarget(), UInt32(kEventHotKeyExclusive), &ref)
             if status == noErr, let ref {
                 refs[action] = ref
             } else {
@@ -151,6 +162,7 @@ public final class HotkeyCenter {
                 Log.app.error("hotkey \(action.rawValue, privacy: .public) \(b.displayString, privacy: .public) failed: \(status)")
             }
         }
+        if let activeSessionBindings { registerSession(activeSessionBindings) }
         return failures
     }
 
@@ -163,24 +175,27 @@ public final class HotkeyCenter {
     @discardableResult
     public func registerSession(_ bindings: [HotkeyAction: HotkeyBinding] = HotkeyBinding.sessionDefaults) -> [HotkeyAction] {
         unregisterSession()
-        var failed: [HotkeyAction] = []
-        for (action, b) in bindings {
+        sessionBindings = bindings
+        for action in HotkeyAction.allCases {
+            guard let b = bindings[action] else { continue }
             var ref: EventHotKeyRef?
             let id = EventHotKeyID(signature: Self.signature,
                                    id: Self.sessionBase + UInt32(HotkeyAction.allCases.firstIndex(of: action)! + 1))
-            if RegisterEventHotKey(b.keyCode, b.modifiers, id, GetApplicationEventTarget(), 0, &ref) == noErr, let ref {
+            if RegisterEventHotKey(b.keyCode, b.modifiers, id, GetApplicationEventTarget(), UInt32(kEventHotKeyExclusive), &ref) == noErr, let ref {
                 sessionRefs[action] = ref
             } else {
-                failed.append(action)
+                sessionFailures.append(action)
                 Log.app.error("session hotkey \(action.rawValue, privacy: .public) \(b.displayString, privacy: .public) failed")
             }
         }
-        return failed
+        return sessionFailures
     }
 
     public func unregisterSession() {
         for ref in sessionRefs.values { UnregisterEventHotKey(ref) }
         sessionRefs.removeAll()
+        sessionBindings = nil
+        sessionFailures.removeAll()
     }
 
     public var sessionActive: Bool { !sessionRefs.isEmpty }

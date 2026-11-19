@@ -388,6 +388,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let old = lastSettings ?? s
         if force || s.hotkeys != old.hotkeys {
             hotkeys?.register(Dictionary(uniqueKeysWithValues: HotkeyAction.allCases.map { ($0, s.hotkey($0)) }))
+            panelModel.sessionHotkeysFailed = Set(hotkeys?.sessionFailures ?? [])
         }
         if !force && s.audioSource != old.audioSource { listening.sourceSettingChanged() }
         if !force && (s.recognitionBackend != old.recognitionBackend || s.whisperModel != old.whisperModel || s.recognitionAccuracy != old.recognitionAccuracy || s.ukrainianWhisperFinal != old.ukrainianWhisperFinal

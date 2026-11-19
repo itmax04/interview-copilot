@@ -170,6 +170,17 @@ The owner accepted the Question Bank fix on 2026-11-19. The recheck used macOS 1
 - PASS on the modified checkout: `swift test` (405 tests in 71 suites), `scripts/run-evals.sh` (five suites), `scripts/secret-scan.sh` (zero findings), `scripts/check-localization.sh` (802 keys, zero missing or mismatched formats), `scripts/build-app.sh`, `codesign --verify --deep --strict dist/InterviewCopilot.app` and `git diff --check`.
 - Independent standard review of the three installers and regression check passed. A focused strong concurrency review also passed, including a Parakeet run with two processes and two threads per process fetching the same file.
 
+## Carbon hotkey conflict follow-up
+
+The owner accepted the parallel installer fix at `c9c2f7b` on 2026-11-19.
+
+- Reproduced both audit findings at that commit on macOS. A separate Swift process reserved Control+Option+Shift+L with `kEventHotKeyExclusive`. The production `HotkeyCenter` silently accepted the held combination in both registration paths. Assigning a free combination to two global actions produced the external-app warning.
+- Global and session registrations now request exclusive delivery. Global actions take precedence over session aliases, including after a settings change during a session. For two global actions with the same binding, the first in Settings order gets the registration attempt and the second gets a localized warning naming the first action.
+- Run `IC_TEST_CARBON_HOTKEYS=1 swift test --filter CarbonHotkeyTests` in a logged-in macOS session. The opt-in test uses a separate process with a ready signal and explicit release. It checks the external warning, the session fallback, the local duplicate's action name, registration after release, and session alias recovery when a global binding moves away. The holder and the test release their registrations.
+- The check exercises the actual Carbon API and the registration results consumed by Settings and the panel. Physical keystroke delivery and an end-to-end Settings UI pass were not repeated in this follow-up.
+- The first full run timed out in the loopback browser-close test while the fixture startup blocked the main actor. Moved the fixture wait off the main actor. The focused rerun and `IC_TEST_CARBON_HOTKEYS=1 swift test` then passed (406 tests in 72 suites on macOS 15.7.2).
+- PASS: `scripts/run-evals.sh` (five suites), `scripts/secret-scan.sh` (zero findings), `scripts/check-localization.sh` (803 translations, zero missing keys or format mismatches), `scripts/build-app.sh`, `codesign --verify --deep --strict dist/InterviewCopilot.app` and `git diff --check`. Independent standard review and focused re-review approved the change.
+
 ## Next
 
-Owner acceptance of the installer fix. Carbon conflict reporting, a second physical input, external provider calls and large-profile profiling remain open.
+Owner acceptance of the Carbon conflict fix. A second physical input, external provider calls and large-profile profiling remain open.

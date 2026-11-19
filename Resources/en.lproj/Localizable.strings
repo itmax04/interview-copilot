@@ -66,6 +66,7 @@
 "Очистить расшифровку" = "Clear transcript";
 "Следующий ответ" = "Next answer";
 "нужен модификатор ⌃, ⌥ или ⌘" = "needs a ⌃, ⌥ or ⌘ modifier";
+"сочетание уже назначено действию «%@»" = "shortcut is already assigned to “%@”";
 "сочетание занято другим приложением" = "shortcut is taken by another app";
 "ошибка %lld" = "error %lld";
 
