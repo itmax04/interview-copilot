@@ -183,6 +183,26 @@ The owner accepted the parallel installer fix at `c9c2f7b` on 2026-11-19.
 
 The owner accepted the Carbon hotkey conflict fix at `0754c33` on 2026-11-19.
 
+## Large-profile profiling on 2026-11-19
+
+Measured an instrumented Release build of `62fa2cc` on an Apple M1 with 8 GiB, macOS 15.7.2 and Swift 6.2.4. The fixture launched the app delegate with isolated profile directories, a dedicated preferences suite, an in-memory secret store and the installed bge-m3 Q8 model. It kept the bank's normal startup callbacks. It ended the launch path before standby and window presentation. Timings cover the profile portion of startup. Time to the first visible window was not measured.
+
+The small library had one profile, 12 answered cards and two materials. The large library had 100 profile headers, with 1,200 answered cards and 64 materials in the active profile. Each card had one unique phrasing. The corresponding text-layer PDFs contained 100 questions on 5 pages and 4,800 questions on 240 pages. Inputs were synthetic.
+
+Medians across three fresh processes per cell. Empty and populated refer to the application's bank and material caches. The OS file cache was uncontrolled. The index timer starts at entry to `BankController.start` and includes the synchronous startup interval. Peak physical footprint, reported by macOS `time -l`, covers the whole run through PDF import.
+
+| Measurement | Small, empty | Small, populated | Large, empty | Large, populated |
+| --- | ---: | ---: | ---: | ---: |
+| Main-thread profile startup | 1.04 s | 0.60 s | 0.80 s | 1.05 s |
+| Both indexes usable | 1.92 s | 0.66 s | 41.35 s | 1.20 s |
+| Main-thread PDF import | 27 ms | 6 ms | 240 ms | 205 ms |
+| Process peak footprint | 411 MiB | 184 MiB | 523 MiB | 238 MiB |
+
+- Large populated-cache starts ranged from 1.02 to 1.21 s. Initializing the bank index builder, including reading and decoding its 14.7 MiB JSON cache, took 439–465 ms (median 450 ms). Loading the embedding model took 404–566 ms (median 419 ms). Both calls run synchronously on the main actor. Large empty-cache index readiness ranged from 39.0 to 43.4 s and includes background embedding work. The first small process spent 20.27 s in model initialization, versus 0.84–1.00 s on its other empty-cache runs. The cause of the outlier was not isolated.
+- The 240-page PDF import held the main actor for 202–283 ms across all six large runs. On populated-cache runs, text extraction took a median 181 ms and rule parsing 24 ms. The check ended with all questions pending for review.
+- All 12 processes exited successfully. In every run the harness verified profile/card/material counts, a 1,024-dimensional cached vector per card, a persisted material cache, the expected card for an exact lookup and the expected pending-import count. The two indexes held 4 or 128 material chunks for the small or large profiles respectively. No application behavior change was committed in this profiling step.
+- [Raw measurements](large-profile-timings.csv) and [local reproduction bundle](/Users/macbook/Downloads/2026-11-19/docs-changes-copilot-14-handoff-md/outputs/large-profile-reproducer.zip). The bundle contains the timing patch, fixture generator and runner. Run `python3 measure.py` followed by `python3 measure.py --repeat-empty` after the Release build. Verified the CSV against the timing output and OS memory high-water marks from all 12 process logs.
+
 ## Next
 
-Profile startup and main-thread loading with a large synthetic profile. A second physical input and external provider calls remain open.
+Prioritize moving model initialization and bank cache decoding off the main actor, preserving profile/model changes during loading, then repeat the same benchmark. PDF import is a second measured main-thread cost. The second physical input and external provider checks remain open.
