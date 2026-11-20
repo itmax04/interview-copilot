@@ -280,11 +280,12 @@ Started from clean `feat/copilot-14-technical-audit` at `67b5d2d`. The signed re
 - The control changed only `INTERVIEWCOPILOT_SMOKE_GEMINI_MODEL` to `gemini-3.5-flash-lite` and used the same signed probe, synthetic hint, Keychain credential, timeout and request settings. Upload finished at 63 ms, first response bytes arrived at 823 ms, HTTP 200 headers at 830 ms and the first SSE data line at 831 ms. The chain reported the first text at 887 ms and completion at 1,134 ms. The command exited 0. This was one live measurement of the alternative model.
 - The probe recorded only statuses, times and counts. The temporary source instrumentation was removed and the release signature was reverified.
 
-## Next
+## Owner acceptance and closure on 2026-11-20
 
-The owner chose to skip the Flash-Lite evaluation. The signed release at `dist/InterviewCopilot.app` passed strict signature verification. The benchmark's synthetic PDF still matches the SHA-256 above.
+The owner accepted the physical input fix and PDF import follow-up based on the recorded verification at `d71309f`. The signed release passed strict signature verification. The benchmark's synthetic PDF matched the recorded SHA-256.
 
-- **Audio UI acceptance.** In a signed release session using “Mac microphone (self-check)”, speak a different synthetic phrase on each leg of MacBook Air → iPhone → MacBook Air via macOS Sound Input. The input meter and new transcription should resume on each leg in the same session. End the session and confirm capture stops. The two hardware capture runs in the SwiftPM host already passed.
-- **PDF UI acceptance.** Use two disposable profiles. In A, open Questions → Import file and select the [synthetic 240-page PDF](/Users/macbook/Downloads/2026-11-19/docs-changes-copilot-14-handoff-md-2/work/pdf-import/profile/questions.pdf). Confirm the review lists 4,800 questions. Cancel the review, switch to B and confirm no questions or stale review appear. Import again into A, accept a small selection and verify exactly those questions appear only in A. If the profile switch is possible during the import, also check that the outstanding result is discarded. The deterministic in-flight switch is already covered by `QuestionPDFImportTests`.
+- **Audio accepted.** Both physical input switching runs passed in the SwiftPM host. The packaged app's live input meter and transcription check was NOT RUN.
+- **PDF import accepted.** The PDFKit benchmark produced 4,800 questions for review and `QuestionPDFImportTests` covered profile changes and acceptance. The interactive import and profile-switch check was NOT RUN.
+- **Flash-Lite evaluation skipped.** The owner deferred the additional evaluation after the Gemini timing investigation.
 
-Record the owner's acceptance of both items before closing COPILOT-14. The owner can accept the existing automated evidence and explicitly waive either remaining UI check.
+COPILOT-14 is closed.
