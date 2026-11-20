@@ -292,4 +292,10 @@ COPILOT-14 is closed.
 
 ## Delivery
 
-Owner acceptance is recorded in `8414649` on the local `feat/copilot-14-technical-audit` branch. On 2026-11-20, GitHub `main` was at `bc64695`, and the repository had zero open issues and pull requests. The next proposed step is to publish the accepted branch and open a pull request to `main` after owner authorization. The project plan ends at COPILOT-14.
+Owner acceptance is recorded in `8414649`. On 2026-11-20, published `feat/copilot-14-technical-audit` and opened [PR #2](https://github.com/itmax04/interview-copilot/pull/2) against `main` at `bc64695`. The merge decision remains with the owner.
+
+- Built a clean Release bundle from `17a4463` with Xcode 26.3 on macOS 15.7.2. Delivered `InterviewCopilot-0.15.1-COPILOT-14-macOS-arm64.zip` to the owner. The archive contains Interview Copilot 0.15.1 (37) for Apple Silicon on macOS 15 or later, signed with the project's local `InterviewCopilot` certificate. SHA-256 `126593bca11dc010aa25e5201cd8028fb0883ed14a59ccb7edcf40eb1eade2c5`.
+- PASS at `17a4463`: `GGML_METAL_DEVICES=0 swift test` (412 reported in 75 suites), `IC_TEST_CARBON_HOTKEYS=1 GGML_METAL_DEVICES=0 swift test --skip-build --filter CarbonHotkeyTests`, `GGML_METAL_DEVICES=0 scripts/run-evals.sh` (five suites), `scripts/secret-scan.sh` (worktree, index and history, zero findings), `scripts/check-localization.sh` (805 translations), and `python3 scripts/check-model-installer-race.py` (all three installers).
+- PASS: `node scripts/check-browser-recovery.mjs Resources` and the same command with `--en` (11 scenarios per language). Both packaged HTML pages and English dictionaries matched the tested sources byte for byte.
+- PASS: `scripts/build-app.sh`, `unzip -tq`, and `codesign --verify --deep --strict` on both the build and the extracted bundle. The extracted app passed all nine `--smoke-panel-resize` cases and rendered 92 of 92 PNGs with `--ui-snapshots`.
+- NOT RUN in delivery: physical input switching and live provider smoke tests. See the earlier audit sections for those results.
