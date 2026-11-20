@@ -271,6 +271,15 @@ The work started from clean `feat/copilot-14-technical-audit` at `d7cf267` on ma
 - The default `swift test` and `scripts/run-evals.sh` runs were interrupted after process samples showed Whisper and llama.cpp waiting on Metal command buffers. `GGML_METAL_DEVICES=0 swift test` passed 412 tests in 75 suites. `GGML_METAL_DEVICES=0 scripts/run-evals.sh` passed all five suites. The environment override was limited to the verification runs.
 - `scripts/secret-scan.sh` passed with zero findings. `scripts/check-localization.sh` passed with 805 translations and zero missing keys or format mismatches. `scripts/build-app.sh` and `codesign --verify --deep --strict dist/InterviewCopilot.app` passed.
 
+## Gemini first-token timing on 2026-11-20
+
+Started from clean `feat/copilot-14-technical-audit` at `67b5d2d`. The signed release contains the application code at `1f6931a`.
+
+- `codesign --verify --deep --strict dist/InterviewCopilot.app` passed. `INTERVIEWCOPILOT_SMOKE_TIMEOUT=20 dist/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-llm` reproduced the Gemini first-token watchdog and exited 1. Listing returned 66 models and included the configured `gemini-3.8-flash`. Groq's control returned text with a 500 ms first token.
+- A temporary instrumented app with the same signing requirement repeated `--smoke-llm` for `gemini-3.8-flash` with the same timeout. URLSession reported that the HTTP/2 request finished uploading at 75 ms. The watchdog cancelled it at 20,026 ms. URLSession recorded no response start and zero body bytes, and the instrumented client received no HTTP headers or SSE lines. The delay occurred after request upload and before a response reached the SSE parser. This measurement leaves the provider and upstream network contributions unresolved.
+- The control changed only `INTERVIEWCOPILOT_SMOKE_GEMINI_MODEL` to `gemini-3.5-flash-lite` and used the same signed probe, synthetic hint, Keychain credential, timeout and request settings. Upload finished at 63 ms, first response bytes arrived at 823 ms, HTTP 200 headers at 830 ms and the first SSE data line at 831 ms. The chain reported the first text at 887 ms and completion at 1,134 ms. The command exited 0. This was one live measurement of the alternative model.
+- The probe recorded only statuses, times and counts. The temporary source instrumentation was removed and the release signature was reverified.
+
 ## Next
 
-Owner acceptance of the physical input fix and PDF import follow-up is pending. The next engineering step is to reproduce the Gemini first-token timeout with the signed app's `--smoke-llm` command and isolate the stage that stalls. Use synthetic prompts and report timings without recording keys or personal data.
+Owner acceptance of the physical input fix and PDF import follow-up is pending. Gemini was the last open engineering item in this audit before the timing check. If the owner wants a Gemini configuration change, compare Flash-Lite's first-token latency and hint quality across representative synthetic prompts before recommending a default.
