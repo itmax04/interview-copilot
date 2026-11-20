@@ -282,4 +282,4 @@ Started from clean `feat/copilot-14-technical-audit` at `67b5d2d`. The signed re
 
 ## Next
 
-Owner acceptance of the physical input fix and PDF import follow-up is pending. Gemini was the last open engineering item in this audit before the timing check. If the owner wants a Gemini configuration change, compare Flash-Lite's first-token latency and hint quality across representative synthetic prompts before recommending a default.
+The owner chose to skip the Flash-Lite evaluation. Owner acceptance of the physical input fix and PDF import follow-up is pending.
