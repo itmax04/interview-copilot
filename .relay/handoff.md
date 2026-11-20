@@ -49,7 +49,8 @@ Fix two issues from the owner's live self-test ("Mac microphone" source, 15:40�
 - `swift test` — PASS, 427 tests in 77 suites (HEAD 9296fa1); `SpeakerRoutingTests` 12/12 after 0eb485c.
 - `scripts/run-evals.sh` — PASS at 0eb485c (turn 0%/0%, bank top1 94.9%, filter-text 214/214, memory 8/8,
   materials 23/24). First run exited 1 with no output while `swift test` was building concurrently; rerun alone passed.
-- secret-scan / check-localization / build-app — running in background at handoff time; record results.
+- `scripts/secret-scan.sh` — PASS, 0 findings. `scripts/check-localization.sh` — PASS, 807/807 keys, 0 format mismatches.
+- `scripts/build-app.sh` — PASS, `dist/InterviewCopilot.app` signed (started at 4625e5a; 0eb485c changes only router logic).
 - Independent review (Sonnet, fresh subagent): no OFF-mode behavior change; 2 low findings fixed in 0eb485c
   (route pinned at `.revising` via `SpeakerRouter.decide`; router reset when rehearsal mode/source changes);
   2 tiny epoch-race notes accepted (self-healing).
