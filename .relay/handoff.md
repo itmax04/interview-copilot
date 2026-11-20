@@ -34,7 +34,9 @@ Brief rule: if problem 2 is "setting vs bug" ambiguous — ask the owner, do not
   voice counts as questions"), answers via ⌃⌥A (COPILOT-06 R-08). Gate classified correctly (rejected median 0.40,
   accepted 0.66). Question sent to the parent session with options: (A) no code change, turn off "Only my voice" for
   rehearsals with a second voice; (B) route by speaker (other voice → question, owner → answer, no ⌃⌥A) — changes Q13;
-  (C) (B) as a separate setting, (A) default. **Waiting for the owner's answer.**
+  (C) (B) as a separate setting, (A) default. **Waiting for the owner's answer.** Executor recommends (C): keeps the
+  Q13 self-test (owner reads questions, TV filtered) and adds a "rehearsal with a second voice" mode; ⌃⌥A stays as a
+  manual override; phrases without a verdict (< 1 s or model not loaded) follow the ⌃⌥A state.
 - Refuted for this session: ring buffer overwrite (audio copied at phrase close), id mismatch in
   `SessionController.reviseUtterance`, engine race (Parakeet `inferenceLock`; owner channel paused in mic mode).
 - Minor: `SessionController.reviseOwnerUtterance` matches by exact text — may swap revisions of two identical drafts.
