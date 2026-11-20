@@ -18,6 +18,8 @@ public struct SpeakerRouter: Sendable {
     public var rehearsal = false
     /// Вердикт по номеру реплики: `TranscriptEvent.speaker` приходит раньше `revising` и `final`.
     private var owners: [Int: Bool] = [:]
+    /// Решение, принятое на `revising`: итог той же реплики идёт тем же путём, даже если ⌃⌥A переключили между ними.
+    private var decided: [Int: MicPhraseRoute] = [:]
     static let capacity = 20
 
     public init(rehearsal: Bool = false) { self.rehearsal = rehearsal }
@@ -29,13 +31,29 @@ public struct SpeakerRouter: Sendable {
 
     /// Маршрут реплики; вердикт не забывается (по нему же решается `revising`), см. `forget`.
     public func route(utterance: Int, ownerAnswering: Bool) -> MicPhraseRoute {
+        if let decided = decided[utterance] { return decided }
         if ownerAnswering { return .ownerAnswer }
         guard rehearsal, let owner = owners[utterance] else { return .question }
         return owner ? .ownerAnswer : .question
     }
 
-    /// Итог реплики обработан.
-    public mutating func forget(utterance: Int) { owners.removeValue(forKey: utterance) }
+    /// Закрепить маршрут реплики до её итога (на `revising`).
+    @discardableResult
+    public mutating func decide(utterance: Int, ownerAnswering: Bool) -> MicPhraseRoute {
+        let route = route(utterance: utterance, ownerAnswering: ownerAnswering)
+        decided[utterance] = route
+        if decided.count > Self.capacity, let oldest = decided.keys.min() { decided.removeValue(forKey: oldest) }
+        return route
+    }
 
-    public mutating func reset() { owners.removeAll() }
+    /// Итог реплики обработан.
+    public mutating func forget(utterance: Int) {
+        owners.removeValue(forKey: utterance)
+        decided.removeValue(forKey: utterance)
+    }
+
+    public mutating func reset() {
+        owners.removeAll()
+        decided.removeAll()
+    }
 }

@@ -112,6 +112,8 @@ final class ListeningController {
             $0.active = (model.settings.ownerVoiceOnly || rehearsal) && micChannel
             $0.routeBySpeaker = rehearsal
         }
+        // Вердикты прошлого режима или источника не должны решать судьбу новых реплик.
+        if speakerRouter.rehearsal != rehearsal { speakerRouter.reset() }
         speakerRouter.rehearsal = rehearsal
         enhancerBox.update { $0.active = model.settings.micNoiseSuppression && micChannel }
         updateOwnerChannel()
@@ -788,7 +790,7 @@ final class ListeningController {
         // Самопроверка: ответ владельца (⌃⌥A или его голос в репетиции с собеседником) — в память; для хода — как шум.
         if source == .microphone {
             switch event {
-            case .revising(let u) where speakerRouter.route(utterance: u, ownerAnswering: ownerAnswering) == .ownerAnswer:
+            case .revising(let u) where speakerRouter.decide(utterance: u, ownerAnswering: ownerAnswering) == .ownerAnswer:
                 return   // уточнение придёт в onOwnerRevised, ход его не ждёт
             case .final(let u, let text, _, let phraseEnd, _):
                 let route = speakerRouter.route(utterance: u, ownerAnswering: ownerAnswering)

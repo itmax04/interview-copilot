@@ -121,6 +121,15 @@ struct SpeakerRoutingTests {
         #expect(router.route(utterance: 1, ownerAnswering: true) == .ownerAnswer)
     }
 
+    @Test func finalFollowsRouteDecidedAtRevising() {
+        // ⌃⌥A выключили между `revising` и `final`: итог идёт ответом, как и решено, — уточнение не теряется.
+        var router = SpeakerRouter(rehearsal: true)
+        #expect(router.decide(utterance: 4, ownerAnswering: true) == .ownerAnswer)
+        #expect(router.route(utterance: 4, ownerAnswering: false) == .ownerAnswer)
+        router.forget(utterance: 4)
+        #expect(router.route(utterance: 4, ownerAnswering: false) == .question)
+    }
+
     @Test func verdictIsForgottenAndBounded() {
         var router = SpeakerRouter(rehearsal: true)
         router.noteSpeaker(utterance: 1, owner: true)
