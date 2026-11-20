@@ -261,7 +261,7 @@ Starting tree: clean branch `feat/copilot-14-technical-audit` at `3dbefba`; macO
 
 ## Physical input switching fix on 2026-11-20
 
-The work started from clean `feat/copilot-14-technical-audit` at `d7cf267` on macOS 15.7.2.
+The work started from clean `feat/copilot-14-technical-audit` at `d7cf267` on macOS 15.7.2. The verified fix and hardware regression test are in `1f6931a`.
 
 - The old `swift test --filter PhysicalInputAudit` probe reproduced signal 6 at `installTap` after 33,536 samples from the MacBook Air microphone. A nil tap format avoided the abort but left only 3,264 samples in six seconds on switching to iPhone and 1,486 in five seconds on return. Rebuilding only on the engine configuration notification recovered the built-in microphone and delivered zero steady-state samples on iPhone. The engine log recorded a restart only when switching back.
 - `MicrophoneTap` now observes the CoreAudio default input as well as engine configuration changes. Each restart releases the old engine and installs a tap on a new engine using the native format. The shared lifecycle for microphone capture and owner-speech detection is main-actor isolated. Audio buffers still arrive on the audio thread. Engine generation checks discard queued work after a stop or replacement.
@@ -273,4 +273,4 @@ The work started from clean `feat/copilot-14-technical-audit` at `d7cf267` on ma
 
 ## Next
 
-Owner acceptance of the physical input fix and PDF import follow-up is pending. Gemini first-token timeouts remain a separate issue to investigate without recording keys or personal data.
+Owner acceptance of the physical input fix and PDF import follow-up is pending. The next engineering step is to reproduce the Gemini first-token timeout with the signed app's `--smoke-llm` command and isolate the stage that stalls. Use synthetic prompts and report timings without recording keys or personal data.
