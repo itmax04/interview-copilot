@@ -40,3 +40,4 @@ __pycache__/
 /evals/audio/filter/
 /evals/audio/voice/
 /evals/audio/noisy/
+/evals/audio/stt-dense/
