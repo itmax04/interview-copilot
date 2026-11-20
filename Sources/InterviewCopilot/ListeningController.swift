@@ -103,9 +103,16 @@ final class ListeningController {
     }
 
     /// Голос проверяется в режиме «Микрофон Mac» и в ответе владельца на ИИ-собеседовании (R-01, Q13).
+    /// Репетиция с собеседником — только в «Микрофон Mac» вне ИИ-собеседования: проверка включена и без «Только мой голос».
     private func updateVoiceGateActive() {
-        let micChannel = (testSource == nil && source == .microphone) || interviewRoute == .owner
-        voiceGate.update { $0.active = model.settings.ownerVoiceOnly && micChannel }
+        let selfTestMic = testSource == nil && source == .microphone
+        let micChannel = selfTestMic || interviewRoute == .owner
+        let rehearsal = model.settings.rehearsalWithInterviewer && selfTestMic && interviewRoute == nil
+        voiceGate.update {
+            $0.active = (model.settings.ownerVoiceOnly || rehearsal) && micChannel
+            $0.routeBySpeaker = rehearsal
+        }
+        speakerRouter.rehearsal = rehearsal
         enhancerBox.update { $0.active = model.settings.micNoiseSuppression && micChannel }
         updateOwnerChannel()
     }
@@ -126,6 +133,8 @@ final class ListeningController {
     var onOwnerRevised: ((String, String) -> Void)?
     /// Черновой текст ответов владельца по номеру реплики — до уточнения.
     private var ownerFastText: [Int: String] = [:]
+    /// Вопрос или ответ владельца по говорящему (репетиция с собеседником) и ⌃⌥A.
+    private var speakerRouter = SpeakerRouter()
 
     /// Самопроверка: «сейчас отвечаю я» (⌃⌥A, COPILOT-06) — речь с микрофона идёт ответом в память, а не вопросом.
     private(set) var ownerAnswering = false
@@ -441,6 +450,7 @@ final class ListeningController {
     func startSession() {
         deliveryEpoch.advance()
         ownerFastText.removeAll()
+        speakerRouter.reset()
         transcript = []
         partialText = nil
         callSpeaking = false
@@ -743,7 +753,7 @@ final class ListeningController {
             ot.setLanguage(model.settings.language.whisperCode)
             ot.setSpeechGate(gate.map { g in { @Sendable samples in g.isSpeech(samples) } })
             // Эхо интервьюера из динамиков и чужие голоса отсекает отпечаток голоса (решение исполнителя, этап 4).
-            ot.setVoiceGate { samples in voiceGate.check(samples, ignoringActive: true) }
+            ot.setVoiceGate { samples in voiceGate.check(samples, ignoringActive: true, allowRouting: false) }
             ot.setPaused(!ownerActive.value)
             ownerBox.set(ot)
             ownerTranscriber = ot
@@ -771,21 +781,31 @@ final class ListeningController {
             onOwnerRevised?(fast, text)
             return
         }
-        // Самопроверка, режим ответа (⌃⌥A): итог — ответ владельца в память; для хода — как шум, вопросов нет.
-        if ownerAnswering, source == .microphone {
-            switch event {
-            case .final(let u, let text, _, let phraseEnd, _):
-                ownerFastText[u] = text
-                if ownerFastText.count > 20, let oldest = ownerFastText.keys.min() { ownerFastText.removeValue(forKey: oldest) }
-                onOwnerSaid?(text)
-                Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=self-test")
-                onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))
-            case .foreignVoice(_, _, _, let phraseEnd):
-                onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))
-            default:
-                break   // промежуточный текст ответа не показываем как реплику интервьюера
-            }
+        if case .speaker(let u, let owner, _) = event {
+            speakerRouter.noteSpeaker(utterance: u, owner: owner)
             return
+        }
+        // Самопроверка: ответ владельца (⌃⌥A или его голос в репетиции с собеседником) — в память; для хода — как шум.
+        if source == .microphone {
+            switch event {
+            case .revising(let u) where speakerRouter.route(utterance: u, ownerAnswering: ownerAnswering) == .ownerAnswer:
+                return   // уточнение придёт в onOwnerRevised, ход его не ждёт
+            case .final(let u, let text, _, let phraseEnd, _):
+                let route = speakerRouter.route(utterance: u, ownerAnswering: ownerAnswering)
+                speakerRouter.forget(utterance: u)
+                if route == .ownerAnswer {
+                    recordOwnerAnswer(utterance: u, text: text, phraseEnd: phraseEnd)
+                    return
+                }
+            case .discarded(let u, _), .foreignVoice(let u, _, _, _):
+                speakerRouter.forget(utterance: u)
+            default:
+                break
+            }
+        }
+        if ownerAnswering, source == .microphone {
+            if case .foreignVoice(_, _, _, let phraseEnd) = event { onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd)) }
+            return   // промежуточный текст ответа не показываем как реплику интервьюера
         }
         switch event {
         case .speechStarted:
@@ -810,7 +830,7 @@ final class ListeningController {
             transcript.append(TranscriptLine(id: u, text: text, language: language))
             if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
             onChange?()
-        case .revising, .discarded:
+        case .revising, .discarded, .speaker:
             break
         case .foreignVoice(let u, let text, let similarity, let phraseEnd):
             // R-03, R-06: чужой голос — серой строкой; для хода — как шум.
@@ -831,6 +851,19 @@ final class ListeningController {
             }
         }
         onTranscript?(event)
+    }
+
+    /// Ответ владельца в самопроверке: в память интервью; для хода — как шум, вопросов нет.
+    private func recordOwnerAnswer(utterance u: Int, text: String, phraseEnd: UInt64) {
+        ownerFastText[u] = text
+        if ownerFastText.count > 20, let oldest = ownerFastText.keys.min() { ownerFastText.removeValue(forKey: oldest) }
+        onOwnerSaid?(text)
+        Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=\(self.ownerAnswering ? "self-test" : "rehearsal", privacy: .public)")
+        if partialText != nil {
+            partialText = nil
+            onChange?()
+        }
+        onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))
     }
 
     /// Ссылка на распознаватель, доступная из очереди захвата.

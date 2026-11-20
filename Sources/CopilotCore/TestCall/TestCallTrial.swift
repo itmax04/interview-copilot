@@ -65,6 +65,8 @@ public struct TestCallTrial: Sendable {
         case .discarded(let u, _), .foreignVoice(let u, _, _, _):
             pending.remove(u)
             revising.remove(u)
+        case .speaker:
+            break   // говорящий важен только самопроверке «Микрофон Mac»
         case .revised(let u, let value, _):
             guard seen.contains(u) else { return }
             finals[u] = value

@@ -19,6 +19,9 @@ public enum TranscriptEvent: Sendable, Equatable {
     case discarded(utterance: Int, phraseEnd: UInt64)
     /// Реплика сказана не владельцем (отпечаток голоса, COPILOT-05 R-03): вместо `final`, показывается серым.
     case foreignVoice(utterance: Int, text: String, similarity: Float, phraseEnd: UInt64)
+    /// Кто сказал реплику — режим «Репетиция с собеседником» (`VoiceVerdict.routeBySpeaker`): `owner` — голос владельца,
+    /// иначе чужой. Приходит до `revising` и `final` этой реплики, только если проверка голоса дала вердикт.
+    case speaker(utterance: Int, owner: Bool, similarity: Float)
 }
 
 /// Потоковое распознавание: VAD режет поток собеседника на реплики, пока человек говорит — частичный текст,
@@ -148,7 +151,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
 
     /// Проверка голоса владельца (COPILOT-05 R-03): сходство с отпечатком и решение; nil — реплика не проверяется
     /// (короче 1 с или ошибка модели). Без проверки — nil.
-    public typealias VoiceCheck = @Sendable ([Float]) -> (similarity: Float, accepted: Bool)?
+    public typealias VoiceCheck = @Sendable ([Float]) -> VoiceVerdict?
 
     public func setVoiceGate(_ check: VoiceCheck?) {
         lock.withLock { voiceGate = check }
@@ -451,15 +454,21 @@ public final class StreamingTranscriber: @unchecked Sendable {
                 return
             }
             guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
-            // R-03: чужой голос — серой строкой, без хода и подсказки.
+            // R-03: чужой голос — серой строкой, без хода и подсказки. В репетиции с собеседником — обычным итогом
+            // с пометкой говорящего: вопрос или ответ выбирает приложение.
+            var speaker: (owner: Bool, similarity: Float)?
             if let check = lock.withLock({ voiceGate }), let verdict = check(audio) {
-                guard verdict.accepted else {
+                if verdict.routeBySpeaker {
+                    speaker = (verdict.accepted, verdict.similarity)
+                    Log.metrics.notice("voice_speaker utt=\(u) owner=\(verdict.accepted) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
+                } else if !verdict.accepted {
                     Log.metrics.notice("filtered reason=voice utt=\(u) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
                     onEvent(.foreignVoice(utterance: u, text: result.text, similarity: verdict.similarity, phraseEnd: phraseEnd))
                     return
+                } else {
+                    // Сходство принятых реплик — чтобы видеть обе стороны порога на живом голосе.
+                    Log.metrics.notice("voice_ok utt=\(u) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
                 }
-                // Сходство принятых реплик — чтобы видеть обе стороны порога на живом голосе.
-                Log.metrics.notice("voice_ok utt=\(u) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
             }
             lock.withLock {
                 recentFinals.append((result.language, result.text))
@@ -469,6 +478,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             Log.metrics.notice("transcript_final utt=\(u) lang=\(result.language, privacy: .public) audio_ms=\(Int(result.audioSeconds * 1000)) stt_ms=\(Int(result.elapsedMs)) phrase_end_to_final_ms=\(Int((emitted - phraseEnd) / 1_000_000))")
             // Двухэтапный итог (R-37): быстрый текст сразу — ход и подсказка не ждут; уточнённый — следом.
             let revise = config.allowRevision && recognizer.revisionNeeded(result, language: lang)
+            if let speaker { onEvent(.speaker(utterance: u, owner: speaker.owner, similarity: speaker.similarity)) }
             if revise { onEvent(.revising(utterance: u)) }
             onEvent(.final(utterance: u, text: result.text, language: result.language, phraseEnd: phraseEnd, emittedAt: emitted))
             if revise { scheduleRevision(utterance: u, audio: audio, language: lang, first: result, epoch: scheduledEpoch, phraseEnd: phraseEnd) }

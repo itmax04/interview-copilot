@@ -55,6 +55,8 @@ public struct AnswerCapture: Sendable {
             // Чужой голос в ответе владельца (COPILOT-05 R-01) — как шум.
             pending.remove(u)
             revising.remove(u)
+        case .speaker:
+            break   // репетиция с собеседником — только «Микрофон Mac»; в ответе ИИ-собеседования событие не приходит
         case .revised(let u, let value, _):
             guard revising.remove(u) != nil else { return }
             finals[u] = value

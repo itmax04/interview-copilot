@@ -151,6 +151,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var neuralSpeechGate = true
     /// Только голос владельца в микрофоне (COPILOT-05 R-03): нужен записанный образец голоса.
     public var ownerVoiceOnly = true
+    /// Репетиция с собеседником в «Микрофон Mac»: чужой голос — вопросы и подсказки, голос владельца — ответы без ⌃⌥A.
+    /// Выключено: по умолчанию вопросы читает сам владелец, чужие голоса — серым (COPILOT-05 Q13). Нужен образец голоса.
+    public var rehearsalWithInterviewer = false
     /// Порог сходства с отпечатком голоса; 0 — персональный по образцу (`VoicePrint.recommendedThreshold`).
     public var ownerVoiceThreshold: Double = 0
     /// Шумоподавление реплики микрофона LocalVQE (COPILOT-05 R-04). Выключено: на eval `enhance` Parakeet с ним
@@ -304,6 +307,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         languageFilter = v(.languageFilter, d.languageFilter)
         neuralSpeechGate = v(.neuralSpeechGate, d.neuralSpeechGate)
         ownerVoiceOnly = v(.ownerVoiceOnly, d.ownerVoiceOnly)
+        rehearsalWithInterviewer = v(.rehearsalWithInterviewer, d.rehearsalWithInterviewer)
         ownerVoiceThreshold = v(.ownerVoiceThreshold, d.ownerVoiceThreshold)
         micNoiseSuppression = v(.micNoiseSuppression, d.micNoiseSuppression)
         ownerSpeechContext = v(.ownerSpeechContext, d.ownerSpeechContext)

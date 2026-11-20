@@ -145,6 +145,9 @@ struct VoiceSettingsSection: View {
             Toggle("Только мой голос в микрофоне: чужие голоса, ТВ и видео — серым", isOn: $model.settings.ownerVoiceOnly)
             Text("Действует в режиме «Микрофон Mac» и в ответах на ИИ-собеседовании. Нужен образец голоса и модель CAM++.")
                 .font(.footnote).foregroundStyle(.secondary)
+            Toggle("Репетиция с собеседником: чужой голос — вопросы, мой — ответы", isOn: $model.settings.rehearsalWithInterviewer)
+            Text("Только в режиме «Микрофон Mac». Ваши фразы сами идут ответами; «Сейчас отвечаю я» по-прежнему делает ответом любую речь, по нему же идут короткие фразы без проверки голоса. Нужен образец голоса.")
+                .font(.footnote).foregroundStyle(.secondary)
             statusView
             switch enrollment.state {
             case .recording(let elapsed):
