@@ -160,6 +160,7 @@ redacted (`SSE.redactIdentifiers`).
 | COPILOT-11 | fixes after the test interview: chain "last resort", hedge to another provider, screenshots only to image-capable providers, Gemini timeout floor, "have you worked with X?" rule, interviewer monologue is not a question, overlay resizing, "Delete all" questions (0.15) | `feat/copilot-11-test-call-fixes` |
 | COPILOT-12 | final review: capture start/stop race, history wipe, error redaction, Groq token budget, repository hygiene, English documentation and `AGENTS.md`, `main` fast-forwarded (0.15.1) | `feat/copilot-12-final-review` |
 | COPILOT-13 | technical audit: finals lost to a stray cancel, microphone restart on device change, retention of unreadable sessions, save throttle, shared URLSession, job page decoding (in progress) | `feat/copilot-13-audit-fixes` |
+| COPILOT-15 | accurate turns: whole-question Parakeet re-decode, provisional partials, one background Whisper pass per question, pause 1000/600 ms, understood-question line in the hint, gated drafts (spec stage) | `feat/copilot-15-accurate-turns` |
 
 Branches form a chain (each from the previous one). `main` is fast-forwarded to the latest reviewed task by the owner's decision.
 
