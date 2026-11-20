@@ -202,7 +202,7 @@ struct VoicePrintTests {
         config.partialInterval = 10
         let t = StreamingTranscriber(recognizer: fake, buffer: buffer, config: config) { sink.add($0) }
         t.setLanguage("uk")
-        t.setVoiceGate { _ in (similarity: 0.41, accepted: false) }
+        t.setVoiceGate { _ in VoiceVerdict(similarity: 0.41, accepted: false) }
         for chunk in [EnergyVADTests.noise(ms: 300, amplitude: 0.001), EnergyVADTests.tone(ms: 1500, amplitude: 0.3),
                       EnergyVADTests.noise(ms: 700, amplitude: 0.001)] {
             var i = 0
