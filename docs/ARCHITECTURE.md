@@ -25,7 +25,9 @@ owner mic ─► MicActivityDetector (is the owner speaking) ─► TurnDetector
                                                                                           ▼
 StreamingTranscriber: EnergyVAD splits phrases → [LocalVQE, off] → Silero "is it speech" →
   Parakeet (final ~0.1 s) → HallucinationFilter → CAM++ voiceprint (microphone mode) →
-  events .partial / .final / .revised (Whisper turbo refine, ~3 s) / .foreignVoice / .discarded
+  events .partial / .final / .revised (Whisper turbo refine, ~3 s) / .foreignVoice / .discarded;
+  "Rehearsal with an interviewer" (mic mode): the verdict comes as .speaker before .final instead of .foreignVoice,
+  `SpeakerRouter` sends the owner's voice to answers and other voices to questions
                                                                                           │
 ListeningController.handle: language filter (LanguageGate + term dictionary) → overlay line or a gray line
                                                                                           ▼

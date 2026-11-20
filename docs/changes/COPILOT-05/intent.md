@@ -30,7 +30,7 @@ In addition, speech in other languages gets into the transcript (for example, Ge
 | Q10 | Speed | Everything on by default, separate toggles in Settings → Audio |
 | Q11 | Headphones | Varies — echo cancellation is needed |
 | Q12 | Language "Auto" | Let only uk / ru / en through, the rest — gray |
-| Q13 | Self-check "Mac microphone" | Only the owner's voice counts as questions |
+| Q13 | Self-check "Mac microphone" | Only the owner's voice counts as questions. **Added 2026-11-20 (owner, option C after the live self-test):** a separate setting "Rehearsal with an interviewer" (off by default) — another voice counts as questions, the owner's voice as answers |
 | Q14 | Call channel | A neural speech detector + the language filter, no noise suppression (questions are not slowed down) |
 | Q15 | Verification | Synthetic mixes + a live test by the owner (~10 min) |
 | Q16 | Order | Task → stages with separate builds |

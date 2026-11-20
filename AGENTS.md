@@ -119,6 +119,7 @@ owner mic ─► MicActivityDetector (is the owner speaking) ─► TurnDetector
                                                                                            ▼
 StreamingTranscriber: EnergyVAD segments → Silero "is it speech" → Parakeet final (~0.1 s) → HallucinationFilter →
   voiceprint (mic mode) → events .partial / .final / .revised (Whisper turbo refine) / .foreignVoice / .discarded
+  (+ .speaker before .final in "Rehearsal with an interviewer": SpeakerRouter → question or owner answer)
                                                                                            ▼
 ListeningController: language filter (LanguageGate + term dictionary) → transcript line or a gray "filtered" line
                                                                                            ▼
