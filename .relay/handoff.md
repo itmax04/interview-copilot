@@ -45,9 +45,14 @@ Fix two issues from the owner's live self-test ("Mac microphone" source, 15:40�
 - Owner auto-answers log `mode=rehearsal` (⌃⌥A answers keep `mode=self-test`); no script parses the field.
 - Footnote names the menu action «Сейчас отвечаю я» instead of "⌃⌥A" (the hotkey is reassignable).
 
-## Verified (HEAD 9296fa1)
-- `swift test` — PASS, 427 tests in 77 suites.
-- run-evals / secret-scan / check-localization / build-app — see "Checks" below.
+## Verified
+- `swift test` — PASS, 427 tests in 77 suites (HEAD 9296fa1); `SpeakerRoutingTests` 12/12 after 0eb485c.
+- `scripts/run-evals.sh` — PASS at 0eb485c (turn 0%/0%, bank top1 94.9%, filter-text 214/214, memory 8/8,
+  materials 23/24). First run exited 1 with no output while `swift test` was building concurrently; rerun alone passed.
+- secret-scan / check-localization / build-app — running in background at handoff time; record results.
+- Independent review (Sonnet, fresh subagent): no OFF-mode behavior change; 2 low findings fixed in 0eb485c
+  (route pinned at `.revising` via `SpeakerRouter.decide`; router reset when rehearsal mode/source changes);
+  2 tiny epoch-race notes accepted (self-healing).
 - Live app check of rehearsal mode — NOT RUN (needs the owner: mic + second voice + voice sample).
 - `ListeningController.handle` (executable target) has no unit tests; its decisions are in `SpeakerRouter`, tested.
 
