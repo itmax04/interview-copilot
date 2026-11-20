@@ -206,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if case .revised(let u, let text, let lang) = event {
                 self.sessions.reviseUtterance(id: u, text: text, language: lang)
                 // COPILOT-06: уточнённый текст — и в память интервью (живой тест: туда попадал черновой Parakeet).
-                if let fast = self.fastText.removeValue(forKey: u) { self.memory.reviseText(fast, to: text); self.saveMemory() }
+                if let fast = self.fastText.removeValue(forKey: u) { self.memory.reviseText(fast, to: text, scope: .questions); self.saveMemory() }
             }
         }
         listening.onOwnerSpeaking = { [weak self] speaking, t in
@@ -314,7 +314,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.saveMemory()
         }
         listening.onOwnerRevised = { [weak self] fast, text in
-            self?.memory.reviseText(fast, to: text)
+            self?.memory.reviseText(fast, to: text, scope: .answers)
             self?.sessions.reviseOwnerUtterance(fast, to: text)
             self?.saveMemory()
         }

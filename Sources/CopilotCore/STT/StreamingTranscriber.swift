@@ -40,6 +40,9 @@ public final class StreamingTranscriber: @unchecked Sendable {
         /// Уточнение итога Whisper (R-37). Канал микрофона владельца (COPILOT-05 R-07) его не просит: текст нужен
         /// только как контекст подсказки, а Whisper занял бы процессор, нужный для вопросов интервьюера.
         public var allowRevision = true
+        /// Уточнение, ждавшее в очереди дольше этого (от конца фразы), не запускается: остаётся быстрый текст.
+        /// Живая сессия 2026-11-20: в плотной речи очередь Whisper росла без предела (phrase_end_to_revised_ms до 107 с).
+        public var revisionMaxQueueDelay: Double = 8
         /// С какой длины реплики определять язык, с.
         public var languageDetectAfter: Double = 1.2
         /// Уточнять язык, пока уверенность ниже порога, каждые `languageRefineStep` с звука, но не дольше `languageRefineUntil`.
@@ -506,7 +509,13 @@ public final class StreamingTranscriber: @unchecked Sendable {
         revisionWork.async { [weak self] in
             guard let self else { return }
             var revised = first
-            if self.lock.withLock({ self.epoch == scheduledEpoch && !self.paused }),
+            let waitedMs = Int((DispatchTime.now().uptimeNanoseconds - phraseEnd) / 1_000_000)
+            // Отстали: Whisper медленнее потока фраз. Уточнять поздно — ход и подсказка давно ушли, а ожидание
+            // только растит очередь. Быстрый текст остаётся, очередь догоняет поток.
+            let stale = Double(waitedMs) / 1000 > self.config.revisionMaxQueueDelay
+            if stale {
+                Log.metrics.notice("transcript_revision_skipped utt=\(u) reason=stale waited_ms=\(waitedMs)")
+            } else if self.lock.withLock({ self.epoch == scheduledEpoch && !self.paused }),
                let r = try? self.recognizer.revise(audio, language: HybridRecognizer.revisionLanguage(language: language, text: first.text),
                                                    prompt: self.prompt(for: language)), !r.text.isEmpty {
                 revised = r

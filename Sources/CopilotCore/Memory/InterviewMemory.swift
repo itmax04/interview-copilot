@@ -126,25 +126,45 @@ public final class InterviewMemory: @unchecked Sendable {
     }
 
     /// Уточнённый текст реплики (Whisper, R-37) заменяет быстрый в вопросах и ответах последних обменов, где он встречается.
-    public func reviseText(_ old: String, to new: String) {
+    public enum ReviseScope: Sendable { case questions, answers, all }
+
+    public func reviseText(_ old: String, to new: String, scope: ReviseScope = .all) {
         let old = old.trimmingCharacters(in: .whitespacesAndNewlines)
         let new = new.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !old.isEmpty, !new.isEmpty, old != new else { return }
+        // Одна реплика — одна замена: самое новое вхождение, целыми словами. Раньше заменялись все вхождения
+        // подстроки в трёх последних вопросах: короткий черновик («да») менял буквы внутри чужих слов («когда»),
+        // и в плотной речи вопросы становились неразборчивыми (живая сессия 2026-11-20).
         lock.withLock {
             for i in exchanges.indices.reversed().prefix(3) {
-                var changed = false
-                if exchanges[i].question.contains(old) {
-                    exchanges[i].question = exchanges[i].question.replacingOccurrences(of: old, with: new)
-                    changed = true
-                }
                 // Ответ владельца в самопроверке (⌃⌥A) — тоже черновик Parakeet до уточнения (COPILOT-07).
-                if let j = exchanges[i].answer.lastIndex(of: old) {
+                if scope != .questions, let j = exchanges[i].answer.lastIndex(of: old) {
                     exchanges[i].answer[j] = new
-                    changed = true
+                    embeddings[exchanges[i].id] = nil
+                    return
                 }
-                if changed { embeddings[exchanges[i].id] = nil }
+                if scope != .answers, let r = Self.lastWholeWordRange(of: old, in: exchanges[i].question) {
+                    exchanges[i].question.replaceSubrange(r, with: new)
+                    embeddings[exchanges[i].id] = nil
+                    return
+                }
             }
         }
+    }
+
+    /// Последнее вхождение `needle`, не начинающееся и не кончающееся посреди слова.
+    static func lastWholeWordRange(of needle: String, in text: String) -> Range<String.Index>? {
+        func isWordChar(_ c: Character) -> Bool { c.isLetter || c.isNumber }
+        var searchEnd = text.endIndex
+        while let r = text.range(of: needle, options: .backwards, range: text.startIndex..<searchEnd) {
+            let startOK = r.lowerBound == text.startIndex || !isWordChar(text[text.index(before: r.lowerBound)])
+                || !isWordChar(needle.first!)
+            let endOK = r.upperBound == text.endIndex || !isWordChar(text[r.upperBound]) || !isWordChar(needle.last!)
+            if startOK && endOK { return r }
+            guard r.upperBound > text.startIndex else { return nil }
+            searchEnd = text.index(before: r.upperBound)
+        }
+        return nil
     }
 
     /// Подсказка, показанная на ход. По номеру хода, а не по тексту: уточнение Whisper (~3 с) приходит раньше конца
