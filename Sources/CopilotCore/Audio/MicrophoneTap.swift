@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+import CoreAudio
 import Foundation
 
 /// Вход микрофона через `AVAudioEngine`: общий код для `MicActivityDetector` и `MicrophoneCapture`.
@@ -6,23 +7,20 @@ import Foundation
 /// Две вещи, которых не было, пока каждый класс ставил tap сам:
 /// - при ошибке запуска движка tap снимается — повторная установка tap на ту же шину бросает исключение AVFoundation,
 ///   и следующий `start()` ронял приложение;
-/// - смена устройства ввода (подключили наушники или AirPods посреди созвона) останавливает движок и присылает
-///   `AVAudioEngineConfigurationChange`. Без перезапуска tap со старым форматом молчал до конца сессии, а «владелец
-///   говорит» застывало в последнем значении — при `true` автоответы блокировались (S-07).
+/// - перезапуск при смене системного входа или формата движка. Без него tap мог замолчать до конца сессии,
+///   а «владелец говорит» застывало в последнем значении и блокировало автоответы (S-07).
 final class MicrophoneTap: @unchecked Sendable {
-    private let engine = AVAudioEngine()
+    @MainActor private var engine: AVAudioEngine?
     private let label: String
     private let onBuffer: @Sendable (AVAudioPCMBuffer) -> Void
     /// Движок остановлен сменой устройства: вызывающий сбрасывает своё состояние (VAD, «говорит»).
     private let onInterruption: @Sendable () -> Void
-    private let lock = NSLock()
-    private var running = false
+    @MainActor private(set) var isRunning = false
     private var observer: NSObjectProtocol?
-    /// Номер запуска (растёт в `start`/`stop`) и номер цепочки перезапуска (растёт с каждым уведомлением). Отложенная
-    /// попытка сверяет оба: иначе повтор из старой цепочки пережил бы `stop()` + `start()` и остановил здоровый движок,
-    /// а два уведомления подряд вели бы две цепочки сразу.
-    private var session = 0
-    private var chain = 0
+    private var inputObserver: AudioObjectPropertyListenerBlock?
+    @MainActor private var inputDeviceAtStart: AudioDeviceID?
+    /// Отсекает уведомления старого движка и отложенные попытки после `stop()`.
+    @MainActor private var generation = 0
     /// Сколько раз пробовать перезапуск: Bluetooth-гарнитура отдаёт рабочий формат входа не сразу.
     static let restartAttempts = 4
 
@@ -35,83 +33,123 @@ final class MicrophoneTap: @unchecked Sendable {
 
     deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
+        if let inputObserver { Self.removeDefaultInputObserver(inputObserver) }
     }
 
-    var isRunning: Bool { lock.withLock { running } }
-
     /// Запуск. `false` — входного устройства нет (формат без частоты); ошибка — движок не запустился.
-    @discardableResult
+    @MainActor @discardableResult
     func start() throws -> Bool {
         guard !isRunning else { return true }
         guard try startEngine() else { return false }
-        let session = lock.withLock { () -> Int in
-            self.session += 1
-            return self.session
-        }
-        let observer = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine,
-                                                              queue: nil) { [weak self] _ in
-            // Уведомление приходит из потока движка: его методы отсюда вызывать нельзя — уходим на главный поток,
-            // там же, где `start`/`stop`.
-            DispatchQueue.main.async { self?.configurationChanged(session: session) }
-        }
-        lock.withLock {
-            running = true
-            self.observer = observer
-        }
+        isRunning = true
+        observeDefaultInput()
+        defaultInputChanged()
         return true
     }
 
-    func stop() {
-        let observer = lock.withLock { () -> NSObjectProtocol? in
-            guard running else { return nil }
-            running = false
-            session += 1
-            defer { self.observer = nil }
-            return self.observer
+    @MainActor func stop() {
+        isRunning = false
+        generation += 1
+        if let inputObserver {
+            Self.removeDefaultInputObserver(inputObserver)
+            self.inputObserver = nil
         }
-        guard let observer else { return }
-        NotificationCenter.default.removeObserver(observer)
-        engine.inputNode.removeTap(onBus: 0)
-        engine.stop()
+        stopEngine()
     }
 
-    private func startEngine() throws -> Bool {
+    @MainActor private func stopEngine() {
+        if let observer { NotificationCenter.default.removeObserver(observer) }
+        observer = nil
+        engine?.inputNode.removeTap(onBus: 0)
+        engine?.stop()
+        engine = nil
+    }
+
+    @MainActor private func startEngine() throws -> Bool {
+        generation += 1
+        let generation = self.generation
+        // AVAudioEngine keeps its previous node formats after a device change.
+        let device = Self.defaultInputDevice()
+        let engine = AVAudioEngine()
         let input = engine.inputNode
-        let format = input.outputFormat(forBus: 0)
+        let format = input.inputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { return false }
-        input.removeTap(onBus: 0)
         let onBuffer = self.onBuffer
-        input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in onBuffer(buffer) }
+        input.installTap(onBus: 0, bufferSize: 1024, format: nil) { @Sendable buffer, _ in onBuffer(buffer) }
+        let observer = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine,
+                                                              queue: nil) { @Sendable [weak self] _ in
+            // Retire the engine on the main queue, outside AVAudioEngine's notification handler.
+            DispatchQueue.main.async { self?.configurationChanged(generation: generation) }
+        }
         engine.prepare()
         do {
             try engine.start()
         } catch {
+            NotificationCenter.default.removeObserver(observer)
             input.removeTap(onBus: 0)
             throw error
         }
+        self.engine = engine
+        self.observer = observer
+        inputDeviceAtStart = device
         return true
     }
 
-    private func configurationChanged(session: Int) {
-        let chain = lock.withLock { () -> Int? in
-            guard running, self.session == session else { return nil }
-            self.chain += 1
-            return self.chain
-        }
-        guard let chain else { return }
-        onInterruption()
-        restart(attempt: 1, session: session, chain: chain)
+    private static let systemAudioObject = AudioObjectID(kAudioObjectSystemObject)
+    private static func defaultInputProperty() -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                                   mScope: kAudioObjectPropertyScopeGlobal,
+                                   mElement: kAudioObjectPropertyElementMain)
     }
 
-    private func restart(attempt: Int, session: Int, chain: Int) {
-        guard lock.withLock({ running && self.session == session && self.chain == chain }) else { return }
-        engine.stop()
+    private static func defaultInputDevice() -> AudioDeviceID? {
+        var property = defaultInputProperty()
+        var device = AudioDeviceID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(systemAudioObject, &property, 0, nil, &size, &device)
+        return status == noErr ? device : nil
+    }
+
+    @MainActor private func observeDefaultInput() {
+        // An input change with the same format may not post AVAudioEngineConfigurationChange.
+        let listener: AudioObjectPropertyListenerBlock = { @Sendable [weak self] _, _ in
+            DispatchQueue.main.async { self?.defaultInputChanged() }
+        }
+        var property = Self.defaultInputProperty()
+        let status = AudioObjectAddPropertyListenerBlock(Self.systemAudioObject, &property, .main, listener)
+        if status == noErr {
+            inputObserver = listener
+        } else {
+            Log.audio.error("could not observe default input changes status=\(status)")
+        }
+    }
+
+    private static func removeDefaultInputObserver(_ observer: @escaping AudioObjectPropertyListenerBlock) {
+        var property = defaultInputProperty()
+        AudioObjectRemovePropertyListenerBlock(systemAudioObject, &property, .main, observer)
+    }
+
+    @MainActor private func defaultInputChanged() {
+        guard let device = Self.defaultInputDevice(), device != inputDeviceAtStart else { return }
+        configurationChanged(generation: generation)
+    }
+
+    @MainActor private func configurationChanged(generation: Int) {
+        guard isRunning, self.generation == generation, engine != nil else { return }
+        stopEngine()
+        onInterruption()
+        restart(attempt: 1, generation: generation)
+    }
+
+    @MainActor private func restart(attempt: Int, generation: Int) {
+        guard isRunning, self.generation == generation else { return }
         let started = (try? startEngine()) ?? false
         if started {
             Log.audio.notice("\(self.label, privacy: .public) restarted after audio configuration change attempt=\(attempt)")
         } else if attempt < Self.restartAttempts {
+            let nextGeneration = self.generation
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
-                self?.restart(attempt: attempt + 1, session: session, chain: chain)
+                self?.restart(attempt: attempt + 1, generation: nextGeneration)
             }
         } else {
             // Вход так и не вернулся: снимаем tap и считаем себя остановленными, чтобы следующий `start()` (новая

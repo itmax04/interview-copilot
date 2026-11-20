@@ -5,7 +5,7 @@ import Foundation
 /// не сохраняется и никуда не отправляется: в памяти только текущий кадр для VAD.
 public final class MicActivityDetector: @unchecked Sendable {
     /// Tap микрофона с перезапуском при смене устройства ввода (`MicrophoneTap`).
-    private lazy var tap = MicrophoneTap(label: "mic VAD", onBuffer: { [weak self] buffer in
+    @MainActor private lazy var tap = MicrophoneTap(label: "mic VAD", onBuffer: { [weak self] buffer in
         self?.handle(buffer)
     }, onInterruption: { [weak self] in
         self?.resetSpeaking()
@@ -49,7 +49,7 @@ public final class MicActivityDetector: @unchecked Sendable {
         }
     }
 
-    public func start() throws {
+    @MainActor public func start() throws {
         guard Permissions.microphone == .granted else { return }
         // Состояние «работает» берём у tap, а не храним у себя: после отказа перезапуска tap остановлен сам,
         // и свой флаг заставил бы следующий start() молча вернуться на мёртвом движке (COPILOT-13 M2).
@@ -58,7 +58,7 @@ public final class MicActivityDetector: @unchecked Sendable {
         Log.audio.info("mic VAD started")
     }
 
-    public func stop() {
+    @MainActor public func stop() {
         tap.stop()
         lock.withLock {
             speaking = false
