@@ -282,4 +282,9 @@ Started from clean `feat/copilot-14-technical-audit` at `67b5d2d`. The signed re
 
 ## Next
 
-The owner chose to skip the Flash-Lite evaluation. Owner acceptance of the physical input fix and PDF import follow-up is pending.
+The owner chose to skip the Flash-Lite evaluation. The signed release at `dist/InterviewCopilot.app` passed strict signature verification. The benchmark's synthetic PDF still matches the SHA-256 above.
+
+- **Audio UI acceptance.** In a signed release session using “Mac microphone (self-check)”, speak a different synthetic phrase on each leg of MacBook Air → iPhone → MacBook Air via macOS Sound Input. The input meter and new transcription should resume on each leg in the same session. End the session and confirm capture stops. The two hardware capture runs in the SwiftPM host already passed.
+- **PDF UI acceptance.** Use two disposable profiles. In A, open Questions → Import file and select the [synthetic 240-page PDF](/Users/macbook/Downloads/2026-11-19/docs-changes-copilot-14-handoff-md-2/work/pdf-import/profile/questions.pdf). Confirm the review lists 4,800 questions. Cancel the review, switch to B and confirm no questions or stale review appear. Import again into A, accept a small selection and verify exactly those questions appear only in A. If the profile switch is possible during the import, also check that the outstanding result is discarded. The deterministic in-flight switch is already covered by `QuestionPDFImportTests`.
+
+Record the owner's acceptance of both items before closing COPILOT-14. The owner can accept the existing automated evidence and explicitly waive either remaining UI check.
