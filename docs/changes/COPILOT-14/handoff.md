@@ -298,4 +298,11 @@ Owner acceptance is recorded in `8414649`. On 2026-11-20, published `feat/copilo
 - PASS at `17a4463`: `GGML_METAL_DEVICES=0 swift test` (412 reported in 75 suites), `IC_TEST_CARBON_HOTKEYS=1 GGML_METAL_DEVICES=0 swift test --skip-build --filter CarbonHotkeyTests`, `GGML_METAL_DEVICES=0 scripts/run-evals.sh` (five suites), `scripts/secret-scan.sh` (worktree, index and history, zero findings), `scripts/check-localization.sh` (805 translations), and `python3 scripts/check-model-installer-race.py` (all three installers).
 - PASS: `node scripts/check-browser-recovery.mjs Resources` and the same command with `--en` (11 scenarios per language). Both packaged HTML pages and English dictionaries matched the tested sources byte for byte.
 - PASS: `scripts/build-app.sh`, `unzip -tq`, and `codesign --verify --deep --strict` on both the build and the extracted bundle. The extracted app passed all nine `--smoke-panel-resize` cases and rendered 92 of 92 PNGs with `--ui-snapshots`.
-- NOT RUN in delivery: physical input switching and live provider smoke tests. See the earlier audit sections for those results.
+- Physical input switching and live provider smoke tests were completed after installation, as recorded below.
+
+### Installed build verification
+
+- Installed the verified 0.15.1 (37) archive at `/Applications/InterviewCopilot.app` on macOS 15.7.2. The installed bundle passed `codesign --verify --deep --strict` and opened its workspace.
+- PASS: switched the system default from the MacBook Air microphone to the iPhone microphone and back during one session in the installed release. An external CoreAudio probe verified that the chosen device was the application's sole active input for at least four seconds in each phase. The app reported 4, 3 and 4 live meter readings, with peaks of −46.9, −40.7 and −45.1 dB. Both engine restarts were observed. The original default was restored, and the app returned to standby. The test session had transcript saving and automatic answers disabled.
+- PASS: `INTERVIEWCOPILOT_SMOKE_ONLY='факт из резюме' /Applications/InterviewCopilot.app/Contents/MacOS/InterviewCopilot --smoke-memory 1` returned the expected fact through the configured chain via Groq `openai/gpt-oss-120b` (1/1). The fixture uses synthetic data. The earlier Gemini direct-provider result was outside this chain check.
+- The owner authorized merging [PR #2](https://github.com/itmax04/interview-copilot/pull/2) once both checks passed. The application code and resources match the verified release revision.
