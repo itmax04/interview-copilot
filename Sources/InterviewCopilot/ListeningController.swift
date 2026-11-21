@@ -195,21 +195,71 @@ final class ListeningController {
     static let echoWindowMs: Double = 1500
 
     private func handleOwner(_ event: TranscriptEvent) {
-        guard case .final(_, let text, _, let phraseEnd, _) = event else { return }
+        guard case .final(let u, let text, _, let phraseEnd, _) = event else { return }
         // Без образца голоса эхо интервьюера из динамиков неотличимо по языку: фраза микрофона, закончившаяся,
         // пока в звонке шла речь или в пределах 1,5 с после неё, считается эхом (как правило эха TurnDetector, S-07).
         if voiceGate.current.print == nil {
             let end = Double(phraseEnd) / 1e6
             if callSpeaking || end - callSpeechEndedAt < Self.echoWindowMs {
+                ownerTranscriber?.questionRanges.drop(utterance: u)
                 Log.metrics.notice("filtered reason=echo channel=mic")
                 return
             }
         }
         // Без образца голоса — хотя бы фильтр языка микрофона: ТВ на другом языке не станет «ответом владельца».
         if voiceGate.current.print == nil, model.settings.languageFilter,
-           case .drop = LanguageGate(setting: model.settings.language, terms: terms).check(text, channel: .mic) { return }
-        onOwnerSaid?(text)
-        Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text))")
+           case .drop = LanguageGate(setting: model.settings.language, terms: terms).check(text, channel: .mic) { 
+            ownerTranscriber?.questionRanges.drop(utterance: u)
+            return
+        }
+        // COPILOT-15 R-11: фразы владельца предварительные; ответ целиком распознаётся заново, когда владелец замолчал.
+        ownerAssembler.phraseFinal(text: text, utterance: u, speechEnd: Double(phraseEnd) / 1e6)
+        startOwnerTick()
+    }
+
+    /// Фразы ответа владельца копятся до паузы (R-11).
+    private var ownerAssembler = OwnerAnswerAssembler()
+    private var ownerTickTask: Task<Void, Never>?
+    private var ownerFinishTask: Task<Void, Never>?
+
+    private func startOwnerTick() {
+        guard ownerTickTask == nil else { return }
+        ownerTickTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard let self else { return }
+                let now = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
+                if let answer = self.ownerAssembler.tick(at: now, speaking: self.ownerSpeaking) { self.finishOwnerAnswer(answer) }
+                if !self.ownerAssembler.hasPending { break }
+            }
+            self?.ownerTickTask = nil
+        }
+    }
+
+    /// Ответ закончен: звук его фраз распознаётся целиком, без Whisper; не получилось — текст фраз.
+    /// Ответы идут по очереди, чтобы порядок в памяти не нарушался.
+    private func finishOwnerAnswer(_ answer: OwnerAnswer) {
+        let previous = ownerFinishTask
+        let generation = ownerGeneration
+        let transcriber = ownerTranscriber
+        ownerFinishTask = Task { [weak self] in
+            await previous?.value
+            let redecoded = await transcriber?.redecodeQuestion(utterances: answer.utterances, turn: -1,
+                                                                provisional: answer.provisionalText, release: true)?.text
+            guard let self, self.ownerGeneration == generation else { return }
+            let text = redecoded ?? answer.provisionalText
+            self.onOwnerSaid?(text)
+            Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) phrases=\(answer.utterances.count) redecoded=\(redecoded != nil, privacy: .public)")
+        }
+    }
+
+    /// Пауза, очистка, смена распознавателя: накопленное и ещё не готовое отбрасывается.
+    private var ownerGeneration = 0
+    private func resetOwnerAnswer() {
+        ownerGeneration += 1
+        ownerAssembler.reset()
+        ownerTickTask?.cancel()
+        ownerTickTask = nil
     }
 
     /// Шумоподавление микрофона LocalVQE (R-04, по умолчанию выключено): модель загружается при включении.
@@ -661,6 +711,7 @@ final class ListeningController {
         ownerBox.set(nil)
         ownerTranscriber?.setPaused(true)
         ownerTranscriber = nil
+        resetOwnerAnswer()
         micSource?.stop()
         mic?.stop()
         updateCapture(restart: false)
@@ -689,6 +740,7 @@ final class ListeningController {
         ownerBox.set(nil)
         ownerTranscriber?.setPaused(true)
         ownerTranscriber = nil
+        resetOwnerAnswer()
         partialText = nil
         loadRecognizer()
     }
@@ -1010,6 +1062,7 @@ final class ListeningController {
         guard phase != new else { return }
         phase = new
         transcriber?.setPaused(new != .listening)
+        if new != .listening { resetOwnerAnswer() }
         // Гасим до `onChange`: он перерисовывает и скрытую панель, а отдельный кадр уровней скрытая панель пропускает —
         // иначе после паузы при скрытой панели волны застывали бы на последнем значении.
         if !reportsLevels {

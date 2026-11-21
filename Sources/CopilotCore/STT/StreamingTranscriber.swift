@@ -50,6 +50,8 @@ public final class StreamingTranscriber: @unchecked Sendable {
         public var ukRuTie: Float = 0.02
         /// Сколько звука брать до начала речи (VAD срабатывает с задержкой «атаки»), с.
         public var preRoll: Double = 0.3
+        /// COPILOT-15 R-14, вариант B (по умолчанию выключен): вопрос хода ждёт Whisper turbo целиком.
+        public var hintWaitsForWhisper = false
         /// Предельная длина реплики: whisper работает окнами по 30 с, буфер — 30 с (R-04).
         public var maxUtterance: Double = 25
         /// VAD собеседника: звук Meet бывает очень тихим (живой созвон H-4: речь −47…−53 dBFS при фоне −85…−90),
@@ -72,7 +74,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
     private let lock = NSLock()
     /// Границы и звук закрытых фраз: из них строится звук хода для повторного распознавания (COPILOT-15 R-02).
     public let questionRanges = QuestionAudioRange()
-    private lazy var redecoder = QuestionRedecoder(recognizer: recognizer)
+    private lazy var redecoder = QuestionRedecoder(recognizer: recognizer, config: QuestionRedecoder.Config(waitsForWhisper: config.hintWaitsForWhisper))
     private var redecodeCache: [(utterances: [Int], result: QuestionRedecode)] = []
     /// Звук последних вопросов для фонового прохода Whisper по истории (R-07): живёт дольше `release` хода, не больше трёх.
     private var historyAudio: [(utterances: [Int], audio: QuestionAudio)] = []

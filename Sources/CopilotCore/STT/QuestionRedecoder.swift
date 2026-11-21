@@ -15,7 +15,14 @@ public struct QuestionRedecode: Sendable, Equatable {
 public final class QuestionRedecoder: @unchecked Sendable {
     public struct Config: Sendable {
         public var budget: Double = 2
-        public init() {}
+        /// Запасной вариант B (COPILOT-15 R-14, выключен): после Parakeet вопрос распознаётся Whisper turbo целиком и его
+        /// текст заменяет текст Parakeet; бюджет выше (+2,2–2,4 с на M1). Включается одной строкой после живой проверки.
+        public var waitsForWhisper = false
+        public static let whisperBudget: Double = 6
+        public init(waitsForWhisper: Bool = false) {
+            self.waitsForWhisper = waitsForWhisper
+            if waitsForWhisper { budget = Self.whisperBudget }
+        }
     }
 
     private let recognizer: SpeechRecognizer
@@ -35,11 +42,15 @@ public final class QuestionRedecoder: @unchecked Sendable {
         let audioMs = Int(audio.seconds * 1000)
         let outcome: Result<Transcription, Error>? = await withCheckedContinuation { continuation in
             let once = Once(continuation)
-            queue.async { [recognizer] in
+            queue.async { [recognizer, config] in
                 var attempt = 0
                 while true {
                     do {
-                        let r = try recognizer.transcribe(audio.samples, language: language, prompt: nil, reducedContext: false)
+                        var r = try recognizer.transcribe(audio.samples, language: language, prompt: nil, reducedContext: false)
+                        if config.waitsForWhisper, recognizer.revisionNeeded(r, language: language),
+                           let second = try? recognizer.revise(audio.samples, language: HybridRecognizer.revisionLanguage(language: language, text: r.text), prompt: nil) {
+                            r = second
+                        }
                         once.resume(.success(r))
                         return
                     } catch {
