@@ -49,7 +49,31 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 - `.relay/handoff.md` of the previous session exists in the worktree history; the task's own handoff is this file.
 
 ## Executor decisions
-(none yet)
+### Extra step H-1b — fixes after the synthetic H-1 run (before the owner's live part; outside P-13, which only applies the H-1 decision)
+Commits: `ad06216` (parser, prompt, metric), `f924503` (test for the reworded rule), `89dbf12` (in-flight coalescing), `6a5f642` (metrics.py).
+1. **Understood line (R-10, AC-08).** `UnderstoodLine.split` compared `hasPrefix("❓")`, false in Swift for `❓` + U+FE0F and for `**❓ …**`. Now it checks the first Unicode scalar,
+   tolerates leading whitespace, U+FE0F, and leading/trailing `*`/`_`; it returns a clean `❓ text` line (so `AnswerCardView` keeps working). New `UnderstoodLine.state` →
+   `present|absent|malformed` (marker without text); `AnswerController` logs `understood_line turn=… state=…` per finished hint (no question or answer text).
+   Prompt: the experience-question "Begin with a clear Yes" now applies to the first line of the answer after the `❓` line; `understoodLineRule` forbids taking topics, projects, terms from earlier turns,
+   history or profile into the line. `ExperienceRuleTests` assertion adjusted to the new wording. Hypothesis "❓ missing = memory/multi-turn" is not confirmed (Part B had 8/10); the parser was the most likely cause — to be confirmed by `understood_line state=` counts in the live run.
+2. **In-flight coalescing.** `StreamingTranscriber.redecodeQuestion` keeps `redecodeInFlight` (≤ 4 entries, keyed by the `[Int]` list); cache check, in-flight check and registration happen under one lock, the shared unstructured `Task`
+   writes the cache and removes its entry in one locked block. `release` is applied only by the caller that asked for it, after the result (the task has already read the audio). Cleared in `setPaused(true)`.
+   Tests: one decode for two concurrent calls with the same list (release only after the turn's call), two decodes for different lists. Independent review (fresh subagent, Opus 5.5 high): **approve, no findings ≥ medium**;
+   low notes left as is: the `redecode` metric of a joined call carries the draft's turn / `words_provisional=0`; the coalescing test relies on a 100 ms / 0.3 s timing margin; no test for pause-clearing or a retry after nil.
+   **`DraftGate.turnFired()` is unchanged.** The lost draft on "?" turns is structural, not a race: the final arrives ~500 ms after speech end, the "?" threshold is 600 ms, the decode takes ~130 ms, so the turn fires before the gate can adopt the draft.
+3. **`scripts/metrics.py`.** Rows now carry median and p90 limits: `C15-AC-03 speech_end → first_token` median ≤ 3000 and p90 ≤ 5000, `C15 redecode decode_ms` median ≤ 500 (spec AC-03); the old `C4-AC-01` row (≤ 1000) is kept, marked superseded, informational, not affecting the exit code. Other exit code semantics unchanged (1 if any counted row FAILs).
+
+### H-1b checks
+| Check | Result |
+|---|---|
+| `swift build` | PASS |
+| `swift test` | PASS — 475 tests (≥ 470) |
+| `scripts/run-evals.sh memory bank` (AC-08) | PASS — memory returns 8/8, new topics with stale content 0/2; bank top1 94.9%, top3 100%, false 0/12 |
+| `scripts/run-evals.sh turn` (AC-04) | PASS — premature 0, missed 0/26, mean latency 791 ms |
+| `scripts/check-localization.sh` | PASS — 808 keys, 0 missing |
+| `scripts/metrics.py` on a synthetic log | PASS as designed (FAIL on p90 > 5000, exit 1) |
+| Full check (`secret-scan.sh`, `build-app.sh`) | NOT RUN (belongs to P-12/P-13) |
+| Live effect of fixes (❓ presence, redecode count per turn) | NOT RUN — owner's live session |
 
 ## P-02 state
 - Added: `evals/stt-dense/texts.json` (6 questions from the experiment + 2 English), `scripts/make-dense-fixtures.py`
@@ -150,6 +174,8 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
   (`swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`), version bump, `build-app.sh`.
 
 ## Next
+**Next step (after H-1b):** the owner's short live session — AC-10 on the owner's voice with the language set to `Українська` (≥ 9/10), Fallback B decision, B.3, B.5, visual A.2.1. In the logs check `understood_line state=` (expect `present` on ≥ 9/10) and the number of `redecode` lines per turn (expect ≈ 1). Then P-12 rest and P-13.
+
 H-1 Fallback B decision: **pending** (owner asked to measure Part B without them — default remains **B off**; synthetic `Lesya` run showed 0/12 `uk → ru` drift and 0 `filtered reason=lang` events, but real-voice AC-10 / B.2 / B.3 / B.5 remain NOT RUN). See `h1-report.md` for P-13 problems (`❓` line omitted on 0/8 in A.2 & 2/10 in B and rewriting/hallucinating garbled terms; duplicate in-flight `redecode` on 600 ms `?` turns; legacy `C4-AC-01` threshold in `metrics.py`).
 Input for H-1 from the research (section 4 of the gap analysis): the owner's past failures predate this build; check on Meet whether
 interviewer phrases still become gray "язык …" lines (`filtered reason=lang channel=call lang=…` in `Log.metrics`) — hypothesis: `LanguageGate`
