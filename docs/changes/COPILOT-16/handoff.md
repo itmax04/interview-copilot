@@ -38,7 +38,8 @@ session is uk/ru, and "auto" settles on the interview language; (2) silent-mic d
 (3) call-only capture by default, "All system audio" warning, Discord in the auto list.
 
 ## Open
-- Meet browser (Chrome / Safari / Arc) — unknown; ask at an H-checkpoint.
+- Meet runs in **Google Chrome** (owner, 2026-11-21). Capturing Chrome takes every Chrome tab: consider a preflight note
+  about other audible Chrome tabs if it can be detected; otherwise document it.
 - Cause of the silent microphone (`mic_db=-120.0` all session, owner answered into the Mac during a Telegram call) is
   unknown; suspected the call app holding the input or a different input device. Needs a device check with the owner.
 - Pseudo-English from German: the text detector says `en`; check on synthetic samples (`evals/`) that the stricter rule

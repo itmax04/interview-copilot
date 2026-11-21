@@ -54,10 +54,9 @@ candidate side — the owner answered into the Mac. The questions were asked fro
 | O3 | Do interviewers switch to English? | **No**, only separate words (IT terms) |
 | O4 | Setup of the test | Telegram call with himself: Mac = candidate (answers), iPhone + wired AirPods = interviewer |
 | O5 | How many interviewers | Varies (matters for the later voice-anchoring task) |
+| O6 | Browser for Meet | **Google Chrome** (already first-class in `AudioSourceResolver.autoPriority`; capturing Chrome captures all its tabs — another audible tab leaks in) |
 
 ## Open (for the spec stage)
-- Which browser runs Meet (Chrome is in the auto list; Safari / Arc are not)? Default: support Chrome and Safari, ask at an
-  H-checkpoint if more is needed.
 - Why the Mac microphone gave digital zero during the Telegram call (investigate on the device; H-checkpoint with the owner).
 
 ## Out of scope
