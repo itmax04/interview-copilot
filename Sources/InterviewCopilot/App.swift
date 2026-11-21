@@ -229,9 +229,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         turns.onTurn = { [weak self] turn in self?.turnCompleted(turn) }
         turns.onDraft = { [weak self] text in self?.draftReady(text) }
+        turns.onDraftCancel = { [weak self] in self?.answers.cancelDraft() }
         // COPILOT-15: вопрос хода — повторное распознавание звука целиком; текст фраз только предварительный.
         turns.redecode = { [weak self] utterances, turn, provisional in
             await self?.listening.redecodeQuestion(utterances: utterances, turn: turn, provisional: provisional)
+        }
+        turns.draftRedecode = { [weak self] utterances, turn in
+            await self?.listening.redecodeQuestion(utterances: utterances, turn: turn, provisional: "", release: false)
         }
         turns.onQuestionText = { [weak self] utterances, text in self?.listening.replaceQuestionLines(utterances: utterances, with: text) }
         listening.onFiltered = { [weak self] text in self?.turns.filtered(text) }

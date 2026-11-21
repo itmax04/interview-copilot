@@ -185,6 +185,13 @@ public struct TurnDetector: Sendable {
         return text
     }
 
+    /// Черновик вместе с номерами фраз (COPILOT-15 R-08): по ним звук уходит на повторное распознавание.
+    /// nil — как у `draft(at:)`, либо у накопленных фраз нет номеров (тогда звука для повторного распознавания нет).
+    public func draftSnapshot(at t: Double) -> (text: String, utterances: [Int])? {
+        guard let text = draft(at: t), !pendingUtterances.isEmpty else { return nil }
+        return (text, pendingUtterances)
+    }
+
     /// ⌃⌥↩: немедленный ход по последней реплике, даже если условия не выполнены (R-05).
     /// Если собеседник говорит или его фраза ещё распознаётся — ход будет сразу по приходе итогового текста.
     public mutating func force(at t: Double) -> Turn? {

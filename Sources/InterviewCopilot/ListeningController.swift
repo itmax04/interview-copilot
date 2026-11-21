@@ -69,10 +69,10 @@ final class ListeningController {
         var provisional = false
     }
 
-    /// Повторное распознавание вопроса целиком по звуку фраз хода (COPILOT-15 R-01); освобождает звук фраз.
-    func redecodeQuestion(utterances: [Int], turn: Int, provisional: String) async -> String? {
+    /// Повторное распознавание вопроса целиком по звуку фраз хода (COPILOT-15 R-01); освобождает звук фраз (кроме опережающего запроса: звук ещё нужен ходу).
+    func redecodeQuestion(utterances: [Int], turn: Int, provisional: String, release: Bool = true) async -> String? {
         guard let transcriber else { return nil }
-        return await transcriber.redecodeQuestion(utterances: utterances, turn: turn, provisional: provisional, release: true)?.text
+        return await transcriber.redecodeQuestion(utterances: utterances, turn: turn, provisional: provisional, release: release)?.text
     }
 
     /// Итоговый текст хода заменяет строки его фраз: первая строка получает весь вопрос, остальные убираются (R-04).

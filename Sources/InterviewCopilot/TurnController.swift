@@ -11,15 +11,40 @@ final class TurnController {
     /// Повторное распознавание вопроса целиком (COPILOT-15 R-01): фразы хода, номер хода, предварительный текст →
     /// итоговый текст; nil — не вышло, остаётся текст фраз (R-05). Не задан — ход сразу по тексту фраз.
     var redecode: (([Int], Int, String) async -> String?)?
+    /// Черновик строится только из повторного распознавания звука фраз на текущий момент (COPILOT-15 R-08).
+    private var gate: DraftGate?
     /// Итоговый текст хода пришёл: заменить строки фраз в расшифровке (R-04).
     var onQuestionText: (([Int], String) -> Void)?
     /// Опережающий запрос (COPILOT-04 R-01): текст законченной реплики до истечения паузы T.
-    var onDraft: ((String) -> Void)?
+    /// То же для опережающего запроса: звук фраз не освобождается, текст кэшируется для хода (COPILOT-15 R-08).
+    var draftRedecode: (([Int], Int) async -> String?)? { didSet { rebuildGate() } }
+    var onDraft: ((String) -> Void)? { didSet { rebuildGate() } }
+    /// Собеседник продолжил или ход сорван — начатый опережающий ответ отменяется (COPILOT-15 R-08).
+    var onDraftCancel: (() -> Void)? { didSet { rebuildGate() } }
     /// Выключено в настройках — `onDraft` не вызывается.
     var draftsEnabled = true
     /// Auto Generate (COPILOT-09 Q4): выключено — ход только вручную (⌃⌥↩ / Answer), реплики копятся до нажатия.
     var autoEnabled = true
     private(set) var lastTurn: Turn?
+    private func rebuildGate() {
+        guard let draftRedecode else { gate = nil; return }
+        gate = DraftGate(
+            redecode: { [weak self] utterances in
+                await draftRedecode(utterances, (self?.lastTurn?.id ?? 0) + 1)
+            },
+            onDraft: { [weak self] text in self?.startDraft(text) },
+            onCancel: { [weak self] in
+                self?.lastDraft = nil
+                self?.onDraftCancel?()
+            })
+    }
+
+    private func startDraft(_ text: String) {
+        lastDraft = text
+        Log.metrics.notice("draft_start words=\(TurnDetectorWords.count(text)) at_ms=\(Int(Self.now()))")
+        onDraft?(text)
+    }
+
     private var lastDraft: String?
     /// Последняя отфильтрованная реплика (COPILOT-05 S-08): ⌃⌥↩ в течение 15 с отвечает на неё.
     private var lastFiltered: (text: String, at: Double)?
@@ -52,6 +77,7 @@ final class TurnController {
         timer = nil
         detector.reset()
         lastDraft = nil
+        gate?.cancel()
         generation += 1
     }
 
@@ -59,6 +85,7 @@ final class TurnController {
         guard timer != nil else { return } // пауза: события не копятся (S-08)
         switch event {
         case .speechStarted:
+            gate?.cancel()
             detector.interviewerStartedSpeaking(at: Self.now())
         case .speechEnded(_, let at):
             detector.interviewerStoppedSpeaking(at: Double(at) / 1e6)
@@ -96,6 +123,7 @@ final class TurnController {
         generation += 1
         detector.reset()
         lastDraft = nil
+        gate?.cancel()
         lastFiltered = nil
     }
 
@@ -122,10 +150,11 @@ final class TurnController {
             return
         }
         // Опережающий запрос — только если ход ещё не наступил: итог, пришедший после паузы, сразу даёт ход.
-        if draftsEnabled, let text = detector.draft(at: now), text != lastDraft {
-            lastDraft = text
-            Log.metrics.notice("draft_start words=\(TurnDetectorWords.count(text)) at_ms=\(Int(now))")
-            onDraft?(text)
+        if draftsEnabled {
+            if let snap = detector.draftSnapshot(at: now) {
+                if let gate { gate.offer(utterances: snap.utterances) }
+                else if snap.text != lastDraft { startDraft(snap.text) }   // без повторного распознавания — текст фраз
+            }
         }
         // Диагностика (R-38): итоги идут, а ходов нет — раз в минуту пишем, на каком условии стоит.
         if finalsSinceTurn >= 5, now - lastStallLog > 60_000 {
@@ -140,6 +169,7 @@ final class TurnController {
     private var emitChain: Task<Void, Never>?
 
     private func emit(_ turn: Turn) {
+        gate?.turnFired()
         lastDraft = nil
         finalsSinceTurn = 0
         Log.metrics.notice("turn_end turn=\(turn.id) speech_end_ms=\(Int(turn.speechEndedAt)) fired_ms=\(Int(turn.firedAt)) forced=\(turn.forced) words=\(TurnDetectorWords.count(turn.text))")

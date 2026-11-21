@@ -97,6 +97,17 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
   Tests updated: `TurnDetectorTests` (timings), `SettingsStoreTests` (+ `pauseDefaultsMigrate`).
 - Draft hit count rose (11 → 23) because the turn now fires later than the phrase final; real adoption still waits for P-09.
 
+## P-09 state
+- `DraftGate` (`Turns/DraftGate.swift`, `@MainActor`): `offer(utterances:)` requests a re-decode of the audio so far, starts the draft only with
+  that text; same list requested once; `cancel()` (speaker continues / pause / Clear) drops the pending request and cancels a started draft;
+  `turnFired()` drops a late request but leaves a started draft for the turn. `TurnDetector.draftSnapshot(at:)` adds phrase numbers (no numbers → no draft).
+- `TurnController.tick` offers the snapshot to the gate; draft re-decode uses `ListeningController.redecodeQuestion(release: false)` (audio stays
+  for the turn); result is cached per utterance list, so the turn's re-decode returns identical text → `AnswerController` adopts (`draft.text == turn.text`).
+  `speechStarted` cancels via `onDraftCancel` → `answers.cancelDraft()`. With `speculativeAnswers` off nothing is offered. Without a `draftRedecode` closure
+  (tests/eval) the old phrase-text draft path remains.
+- Tests: `DraftGatingTests` (7). `swift build && swift test` PASS (459); `run-evals.sh turn` PASS (T=1000, premature 0%, missed 0%, mean latency 791 ms; drafts hit=23).
+- Not run: live check that drafts are adopted on a real call (H-1). The "Known intermediate regression" above is resolved in code.
+
 ## Next
 P-09 (gated drafts —
 restores draft adoption), P-10, P-11, P-12 per plan.md. Original design notes for P-03…P-05 (now implemented): store per-utterance span (start/end positions, audio, route) inside `StreamingTranscriber`
