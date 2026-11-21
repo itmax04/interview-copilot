@@ -144,7 +144,7 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
   (`swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`), version bump, `build-app.sh`.
 
 ## Next
-H-1 (owner live check), then P-12 rest and P-13 per plan.md. (Old note: P-11, P-12 per plan.md.) Original design notes for P-03…P-05 (now implemented): store per-utterance span (start/end positions, audio, route) inside `StreamingTranscriber`
+H-1 (owner live check; checklist `h1-live-check.md`, agent prompt `h1-agent-prompt.md`), then P-12 rest and P-13 per plan.md. (Old note: P-11, P-12 per plan.md.) Original design notes for P-03…P-05 (now implemented): store per-utterance span (start/end positions, audio, route) inside `StreamingTranscriber`
 (recorded in `process.finish` and `runFinal`); `TurnDetector.phraseFinal` gets the utterance id and `Turn` gets
 `utterances: [Int]`; `TurnController.emit` awaits an async `redecode` closure off the main actor (2 s budget, fallback to
 phrase finals, serialize turns), caches the result per utterance list so the draft and the turn get the same text.
