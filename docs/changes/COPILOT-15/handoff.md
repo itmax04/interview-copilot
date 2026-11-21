@@ -16,7 +16,8 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 | P-05 turn flow | done (code), see P-05 state | (P-05 commit) | `swift build` PASS; `swift test` PASS (447 tests, 80 suites); `scripts/run-evals.sh turn` PASS T=700 unchanged (premature 0, missed 0/26, 596 ms); `check-localization.sh` PASS (no new strings) |
 | P-06 per-phrase revision removed | done | (P-06 commit) | `swift build` PASS; `swift test` PASS (444 tests, 79 suites); grep: no `phrase_end_to_revised_ms`/`allowRevision`/`revisionMaxQueueDelay` in Sources/Tests/scripts |
 | P-07 history pass | done (code), live check at H-1 | (P-07 commit) | `swift build` PASS; `swift test` PASS x2 (451 tests, 80 suites); `HistoryPassSchedulerTests` 7 PASS (AC-02) |
-| P-08 … P-13 | not started | | |
+| P-08 thresholds | done | (P-08 commit) | `swift build` PASS; `swift test` PASS (452 tests, 80 suites); `scripts/run-evals.sh turn` PASS T=1000: premature 0, missed 0/26, mean latency 791 ms; draft: hits 23, wasted 3 (question_ms=600) |
+| P-09 … P-13 | not started | | |
 
 ## Findings of P-01 (what the plan builds on)
 - Turn text = `TurnDetector.pending` (concatenated phrase finals); `Turn` has no audio reference. `phraseFinal(text, speechEnd:)`
@@ -89,8 +90,15 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 - Executor decisions: owner-channel history pass (R-11 "only when idle") NOT done — owner answers keep provisional text; dead
   `reviseOwnerUtterance` removed. Not run: live replay of a dense call (needs a live session; H-1).
 
+## P-08 state
+- `TurnDetector.Config` 1000/600; `AppSettings.pauseThresholdMs` 1000, `questionPauseMs` 600; schema 7 migrates saved 700 → 1000 and
+  350 → 600 only (owner-chosen values and schema ≥ 7 stay). `copilot-eval turn` default `--threshold-ms` 1000. `TurnEval` limit formula
+  already follows `config` (no code change); `evals/turn/cases.jsonl` expectations are speech-end-relative, unchanged.
+  Tests updated: `TurnDetectorTests` (timings), `SettingsStoreTests` (+ `pauseDefaultsMigrate`).
+- Draft hit count rose (11 → 23) because the turn now fires later than the phrase final; real adoption still waits for P-09.
+
 ## Next
-P-06 + P-07 together (remove per-phrase Whisper revision, background history pass), P-08 (thresholds, independent), then P-09 (gated drafts —
+P-09 (gated drafts —
 restores draft adoption), P-10, P-11, P-12 per plan.md. Original design notes for P-03…P-05 (now implemented): store per-utterance span (start/end positions, audio, route) inside `StreamingTranscriber`
 (recorded in `process.finish` and `runFinal`); `TurnDetector.phraseFinal` gets the utterance id and `Turn` gets
 `utterances: [Int]`; `TurnController.emit` awaits an async `redecode` closure off the main actor (2 s budget, fallback to

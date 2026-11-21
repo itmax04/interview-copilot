@@ -138,10 +138,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// результат смешанный (одни фразы точнее, другие переводятся/повторяются) — выключено по умолчанию.
     public var recognitionPromptFromBank = false
     public var language: RecognitionLanguage = .auto
-    /// Порог паузы T, мс (R-05: 700, диапазон 400–1500).
-    public var pauseThresholdMs: Int = 700
+    /// Порог паузы T, мс (R-05, COPILOT-15 R-09: 1000, было 700; диапазон 400–1500).
+    public var pauseThresholdMs: Int = 1000
     /// Пауза после явного вопроса (фраза кончается «?»), мс; не больше T (COPILOT-04 R-02).
-    public var questionPauseMs: Int = 350
+    public var questionPauseMs: Int = 600
     /// Опережающий запрос (COPILOT-04 R-01): модель начинает отвечать, как только готов текст законченной фразы,
     /// не дожидаясь паузы T. Если собеседник продолжил, запрос отменяется — лишние запросы к модели.
     public var speculativeAnswers = true
@@ -214,7 +214,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     /// Версия схемы настроек: при чтении старых значений по умолчанию они обновляются (см. `migrated()`).
     public var schemaVersion = AppSettings.currentSchema
-    public static let currentSchema = 6
+    public static let currentSchema = 7
 
     public init() {}
 
@@ -241,6 +241,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
             // Быстрые провайдеры (R-36) — в начало сохранённой цепочки.
             s.chain = [.groq, .cerebras] + s.chain.filter { $0 != .groq && $0 != .cerebras }
             s.schemaVersion = 6
+        }
+        if s.schemaVersion < 7 {
+            // COPILOT-15 R-09: пороги паузы выросли (700 → 1000, 350 → 600). Значения, выбранные владельцем, не трогаем.
+            if s.pauseThresholdMs == 700 { s.pauseThresholdMs = AppSettings().pauseThresholdMs }
+            if s.questionPauseMs == 350 { s.questionPauseMs = AppSettings().questionPauseMs }
+            s.schemaVersion = 7
         }
         return s
     }

@@ -36,7 +36,7 @@ public struct Turn: Sendable, Equatable {
 /// собеседник, скорее всего, продолжит («Расскажите о проекте, который… сделали в прошлом году»).
 public struct TurnDetector: Sendable {
     public struct Config: Sendable {
-        public var thresholdMs: Double = 700
+        public var thresholdMs: Double = 1000
         public var minWords = 3
         public var continuationExtraMs: Double = 1300
         /// Без наушников микрофон слышит динамики: начало «речи владельца» во время речи собеседника и в течение
@@ -50,13 +50,14 @@ public struct TurnDetector: Sendable {
         public var staleFinalMs: Double = 8000
         /// «Собеседник говорит» дольше этого — событие конца речи потерялось (R-38).
         public var staleSpeechMs: Double = 30000
-        /// Явный вопрос (COPILOT-04 R-02): пауза короче T. Не больше T.
-        public var questionThresholdMs: Double = 350
+        /// Явный вопрос (COPILOT-04 R-02): пауза короче T. Не больше T. COPILOT-15 R-09: 600 мс (было 350) — звук вопроса
+        /// должен быть полным, прежде чем он уйдёт на повторное распознавание.
+        public var questionThresholdMs: Double = 600
         /// Считать явным вопросом и фразу, начатую вопросительным словом («как», «почему», «how»…), а не только «?».
         /// Выключено: на eval `turn` выигрыша не дало (те же 596 мс), а риск хода на оборванной фразе выше (handoff COPILOT-04).
         public var questionStarters = false
 
-        public init(thresholdMs: Double = 700) {
+        public init(thresholdMs: Double = 1000) {
             self.thresholdMs = thresholdMs
         }
     }

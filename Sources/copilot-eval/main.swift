@@ -460,7 +460,7 @@ case "stt-dense":
 case "turn":
     // Eval `turn` (R-05): evals/turn/cases.jsonl → преждевременные/пропущенные ходы, задержка.
     args.removeFirst()
-    let threshold = Double(option("--threshold-ms") ?? "700") ?? 700
+    let threshold = Double(option("--threshold-ms") ?? "1000") ?? 1000
     let verbose = flag("--verbose")
     var config = TurnDetector.Config(thresholdMs: threshold)
     if let q = option("--question-ms").flatMap(Double.init) { config.questionThresholdMs = q }

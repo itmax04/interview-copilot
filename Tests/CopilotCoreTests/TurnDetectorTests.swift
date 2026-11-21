@@ -22,19 +22,19 @@ struct TurnDetectorTests {
         #expect(d.tick(at: 2600) == nil)
         let turn = run(&d, from: 2600, until: 5000)
         #expect(turn?.text == "Расскажите о себе, пожалуйста.")
-        #expect(turn?.firedAt == 2700)
+        #expect(turn?.firedAt == 3000)   // T = 1000 мс (COPILOT-15 R-09)
         #expect(turn?.speechEndedAt == 2000)
         #expect(turn?.forced == false)
     }
 
     @Test func questionMarkShortensPause() {
-        // COPILOT-04 R-02: «?» в конце — ждём 350 мс вместо T.
+        // COPILOT-04 R-02: «?» в конце — ждём 600 мс вместо T (COPILOT-15 R-09).
         var d = TurnDetector()
         d.interviewerStartedSpeaking(at: 0)
         d.interviewerStoppedSpeaking(at: 2000)
         d.phraseFinal("Почему вы уходите с текущего места?", speechEnd: 2000)
-        #expect(d.tick(at: 2300) == nil)
-        #expect(run(&d, from: 2350, until: 5000)?.firedAt == 2350)
+        #expect(d.tick(at: 2500) == nil)
+        #expect(run(&d, from: 2550, until: 5000)?.firedAt == 2600)
     }
 
     @Test func questionPauseNeverExceedsT() {
@@ -49,9 +49,9 @@ struct TurnDetectorTests {
     @Test func questionStartersAreOffByDefault() {
         var d = TurnDetector()
         d.phraseFinal("Как вы организуете работу команды.", speechEnd: 1000)
-        #expect(d.waitMs(for: d.pendingText) == 700)
+        #expect(d.waitMs(for: d.pendingText) == 1000)
         d.config.questionStarters = true
-        #expect(d.waitMs(for: d.pendingText) == 350)
+        #expect(d.waitMs(for: d.pendingText) == 600)
     }
 
     @Test func draftIsReadyBeforeTheTurn() {
@@ -89,11 +89,11 @@ struct TurnDetectorTests {
         let cases = try lines.map { try JSONDecoder().decode(TurnEval.Case.self, from: Data($0.utf8)) }
         let summary = TurnEval.run(cases)
         #expect(summary.premature == 0 && summary.missed == 0)
-        // «?»: ход наступает сразу по итогу (500 мс) — опережающий запрос не нужен; gap: запрос на 200 мс раньше хода.
-        #expect(summary.draftHits == 1)
+        // «?»: ход через 600 мс, итог пришёл на 500-й — запрос на 100 мс раньше хода; gap: на 500 мс раньше.
+        #expect(summary.draftHits == 2)
         #expect(summary.meanDraftLatencyMs == 500)   // итог Parakeet через 500 мс после конца речи
         #expect(summary.draftWasted == 1)            // первая фраза gap-случая ходом не стала
-        #expect(summary.results.first?.firedAt == 2500)
+        #expect(summary.results.first?.firedAt == 2600)
     }
 
     @Test func shortRepliesAreNotTurns() {
@@ -107,13 +107,13 @@ struct TurnDetectorTests {
         var d = TurnDetector()
         d.interviewerStartedSpeaking(at: 0)
         d.phraseFinal("Расскажите о проекте, который", speechEnd: 1500)
-        // Через T=700 мс хода нет: фраза оборвана на «который».
+        // Через T=1000 мс хода нет: фраза оборвана на «который».
         #expect(run(&d, from: 1500, until: 2600) == nil)
         d.interviewerStartedSpeaking(at: 2700)
         d.phraseFinal("вы сделали в прошлом году.", speechEnd: 4000)
         let turn = run(&d, from: 4000, until: 6000)
         #expect(turn?.text == "Расскажите о проекте, который вы сделали в прошлом году.")
-        #expect(turn?.firedAt == 4700)
+        #expect(turn?.firedAt == 5000)
     }
 
     @Test func waitsForFinalOfSecondPhrase() {
@@ -128,7 +128,7 @@ struct TurnDetectorTests {
         d.phraseFinal("вы сделали в прошлом году.", speechEnd: 4200)
         let turn = run(&d, from: 4700, until: 6000)
         #expect(turn?.text == "Расскажите о проекте, который вы сделали в прошлом году.")
-        #expect(turn?.firedAt == 4900)
+        #expect(turn?.firedAt == 5200)
     }
 
     @Test func multiPhraseQuestionAccumulates() {
@@ -164,8 +164,8 @@ struct TurnDetectorTests {
         d.interviewerStoppedSpeaking(at: 2500)
         d.setOwnerSpeaking(false, at: 2800)
         d.phraseFinal("Как вы решаете конфликты в команде?", speechEnd: 2500)
-        // Вопрос со знаком «?» — пауза 350 мс (COPILOT-04 R-02); эхо ход не блокирует.
-        #expect(run(&d, from: 2500, until: 5000)?.firedAt == 2850)
+        // Вопрос со знаком «?» — пауза 600 мс (COPILOT-04 R-02, COPILOT-15 R-09); эхо ход не блокирует.
+        #expect(run(&d, from: 2500, until: 5000)?.firedAt == 3100)
     }
 
     @Test func echoDetectedByMicFirstIsIgnored() {
@@ -175,7 +175,7 @@ struct TurnDetectorTests {
         d.interviewerStartedSpeaking(at: 1000)
         d.interviewerStoppedSpeaking(at: 3000)
         d.phraseFinal("Tell me about yourself and your background.", speechEnd: 3000)
-        #expect(run(&d, from: 3000, until: 5000)?.firedAt == 3700)
+        #expect(run(&d, from: 3000, until: 5000)?.firedAt == 4000)
     }
 
     @Test func realOwnerSpeechBeforeQuestionStillCounts() {

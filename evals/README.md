@@ -42,7 +42,8 @@ A run is mandatory when the embedding model, the Whisper model, thresholds or th
   short interjections, the owner speaking, speaker echo in the microphone, a forced turn; uk / ru / en.
 - Run: `scripts/run-evals.sh turn` (or `copilot-eval turn --threshold-ms N --verbose`).
 - Choosing T (P-05): 400 and 500 ms — 3 premature turns of 34 (8.8%), 600 ms — 1 (2.9%), **700 ms — 0**, 1000 ms — 0.
-  The default stays 700 ms (R-05): the smallest threshold without premature turns on the set.
+  The default was 700 ms (R-05): the smallest threshold without premature turns on the set. COPILOT-15 R-09 raises the defaults to
+  T = 1000 ms and question pause 600 ms (whole-question re-decode needs the full audio): 0 premature, 0 missed, mean latency 791 ms.
 
 ## Audio fixtures (P-04)
 - `evals/audio/*.wav` — phrases generated with `say` (uk / ru / en), 16 kHz mono. Used for Whisper measurements and
