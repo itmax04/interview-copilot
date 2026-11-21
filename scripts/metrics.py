@@ -9,9 +9,11 @@
 В логах только числа и ID (R-24), текста реплик там нет.
   AC-01  phrase_end → transcript_final   (phrase_end_to_final_ms)     порог ≤ 1000 мс (медиана)
   AC-02  turn_end → card_shown           (card_shown ms_from_turn_end) порог ≤ 500 мс (медиана)
-  AC-03  turn_end → first_token          (first_token ms_from_turn_end) порог ≤ 2500 мс (медиана)
-  C4-AC-01  speech_end → first_token      (first_token ms_from_speech_end) порог ≤ 1000 мс (медиана, COPILOT-04):
-            время от конца вопроса до первых слов подсказки на экране
+  AC-03  turn_end → first_token          (first_token ms_from_turn_end) порог ≤ 2500 мс (медиана, COPILOT-03)
+  C15-AC-03 speech_end → first_token      (first_token ms_from_speech_end) медиана ≤ 3000 мс и p90 ≤ 5000 мс (COPILOT-15 spec AC-03)
+  C15 redecode decode_ms                  медиана ≤ 500 мс для вопроса ≤ 15 с (COPILOT-15 spec AC-03)
+  C4-AC-01  speech_end → first_token      ≤ 1000 мс (COPILOT-04) — УСТАРЕЛО: заменено C15-AC-03 (порог 1000 мс не достижим
+            при T = 1000 мс и повторном распознавании); строка справочная, на код возврата не влияет
 Опережающие запросы (COPILOT-04 R-01): draft_start / draft_used / draft_cancelled.
 """
 import argparse
@@ -20,14 +22,18 @@ import statistics
 import subprocess
 import sys
 
+# имя: (regex, порог медианы, порог p90 или None, влияет на код возврата)
 PATTERNS = {
-    "AC-01 phrase_end → transcript_final": (re.compile(r"transcript_final .*phrase_end_to_final_ms=(\d+)"), 1000),
-    "AC-02 turn_end → card_shown": (re.compile(r"card_shown .*ms_from_turn_end=(\d+)"), 500),
+    "AC-01 phrase_end → transcript_final": (re.compile(r"transcript_final .*phrase_end_to_final_ms=(\d+)"), 1000, None, True),
+    "AC-02 turn_end → card_shown": (re.compile(r"card_shown .*ms_from_turn_end=(\d+)"), 500, None, True),
     # Только подсказки на ход (kind=hint): ручные запросы к сильной модели и скриншоты в AC-03 не входят.
-    "AC-03 turn_end → first_token": (re.compile(r"first_token turn=\d+ kind=hint .*ms_from_turn_end=(\d+)"), 2500),
-    # COPILOT-15: повторное распознавание вопроса целиком (бюджет 2 с); decode_ms включает ожидание очереди движка.
-    "C15 redecode decode_ms": (re.compile(r"redecode turn=-?\d+ .*decode_ms=(\d+)"), 2000),
-    "C4-AC-01 speech_end → first_token": (re.compile(r"first_token turn=\d+ kind=hint .*ms_from_speech_end=(\d+)"), 1000),
+    "AC-03 turn_end → first_token": (re.compile(r"first_token turn=\d+ kind=hint .*ms_from_turn_end=(\d+)"), 2500, None, True),
+    # COPILOT-15 AC-03: от конца речи до первых слов подсказки.
+    "C15-AC-03 speech_end → first_token": (re.compile(r"first_token turn=\d+ kind=hint .*ms_from_speech_end=(\d+)"), 3000, 5000, True),
+    # COPILOT-15 AC-03: повторное распознавание вопроса целиком; decode_ms включает ожидание очереди движка.
+    "C15 redecode decode_ms": (re.compile(r"redecode turn=-?\d+ .*decode_ms=(\d+)"), 500, None, True),
+    # Устарело (COPILOT-04), заменено строкой C15-AC-03: только для справки.
+    "C4-AC-01 speech_end → first_token (устарело)": (re.compile(r"first_token turn=\d+ kind=hint .*ms_from_speech_end=(\d+)"), 1000, None, False),
 }
 
 
@@ -59,17 +65,23 @@ def main():
     args = ap.parse_args()
     text = read_log(args)
     ok = True
-    print("| Метрика | n | медиана, мс | p90, мс | порог (медиана) | результат |")
+    print("| Метрика | n | медиана, мс | p90, мс | порог (медиана / p90) | результат |")
     print("|---|---|---|---|---|---|")
-    for name, (rx, limit) in PATTERNS.items():
+    for name, (rx, limit, limit90, counts) in PATTERNS.items():
+        shown = f"≤ {limit}" + (f" / ≤ {limit90}" if limit90 else "")
         values = [int(m.group(1)) for m in rx.finditer(text)]
         if not values:
-            print(f"| {name} | 0 | — | — | ≤ {limit} | NOT RUN |")
+            print(f"| {name} | 0 | — | — | {shown} | NOT RUN |")
             continue
         med = statistics.median(values)
-        verdict = "PASS" if med <= limit else "FAIL"
-        ok = ok and verdict == "PASS"
-        print(f"| {name} | {len(values)} | {med:.0f} | {p90(values)} | ≤ {limit} | {verdict} |")
+        high = p90(values)
+        passed = med <= limit and (limit90 is None or high <= limit90)
+        verdict = "PASS" if passed else "FAIL"
+        if not counts:
+            verdict += " (справочно)" if passed else " (справочно, не влияет)"
+        else:
+            ok = ok and passed
+        print(f"| {name} | {len(values)} | {med:.0f} | {high} | {shown} | {verdict} |")
     drafts = len(re.findall(r"draft_start ", text))
     if drafts:
         used = len(re.findall(r"draft_used ", text))
