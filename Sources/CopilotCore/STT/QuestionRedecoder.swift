@@ -21,6 +21,8 @@ public final class QuestionRedecoder: @unchecked Sendable {
     private let recognizer: SpeechRecognizer
     private let config: Config
     private let queue = DispatchQueue(label: "com.itmax04.interviewcopilot.stt-redecode", qos: .userInitiated)
+    /// Отдельная очередь для таймера бюджета: общий пул GCD может быть занят блокирующими прогонами.
+    private let timer = DispatchQueue(label: "com.itmax04.interviewcopilot.stt-redecode-budget", qos: .userInitiated)
 
     public init(recognizer: SpeechRecognizer, config: Config = Config()) {
         self.recognizer = recognizer
@@ -50,7 +52,7 @@ public final class QuestionRedecoder: @unchecked Sendable {
                     }
                 }
             }
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + config.budget) { once.resume(nil) }
+            timer.asyncAfter(deadline: .now() + config.budget) { once.resume(nil) }
         }
         let elapsedMs = Int((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)
         switch outcome {

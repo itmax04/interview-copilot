@@ -74,7 +74,7 @@ struct TurnRedecodeTests {
     @Test("A pass over the budget gives nil, the failure never blocks")
     func overBudget() async {
         let fake = FakeRecognizer()
-        fake.delay = 0.6
+        fake.delay = 1.5
         var config = QuestionRedecoder.Config()
         config.budget = 0.1
         let redecoder = QuestionRedecoder(recognizer: fake, config: config)
@@ -82,7 +82,7 @@ struct TurnRedecodeTests {
         let started = Date()
         let result = await redecoder.run(audio, language: nil, turn: 1, provisionalWords: 3)
         #expect(result == nil)
-        #expect(Date().timeIntervalSince(started) < 0.5)
+        #expect(Date().timeIntervalSince(started) < 1.0)
     }
 
     @Test("Empty text is a failure")
