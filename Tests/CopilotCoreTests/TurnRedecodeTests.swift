@@ -56,6 +56,33 @@ struct TurnRedecodeTests {
         #expect(fake.transcribeCalls.count == calls)
     }
 
+    @Test("Two concurrent calls with the same phrase list run Parakeet once; release only after the turn's call")
+    func coalescesInFlight() async {
+        let (t, _, fake) = await twoPhrases()
+        fake.delay = 0.3
+        fake.text = "один прогон"
+        let before = fake.transcribeCalls.count
+        async let draft = t.redecodeQuestion(utterances: [1, 2], turn: 1, provisional: "x", release: false)
+        try? await Task.sleep(nanoseconds: 100_000_000) // прогон уже идёт
+        async let turn = t.redecodeQuestion(utterances: [1, 2], turn: 1, provisional: "x", release: true)
+        let (d, r) = await (draft, turn)
+        #expect(d?.text == "один прогон" && d == r)
+        #expect(fake.transcribeCalls.count == before + 1)
+        #expect(t.questionRanges.storedCount == 0)
+    }
+
+    @Test("Different phrase lists are not coalesced: two decodes")
+    func differentListsNotCoalesced() async {
+        let (t, _, fake) = await twoPhrases()
+        fake.delay = 0.2
+        let before = fake.transcribeCalls.count
+        async let a = t.redecodeQuestion(utterances: [1], turn: 1, provisional: "x")
+        async let b = t.redecodeQuestion(utterances: [1, 2], turn: 1, provisional: "x")
+        let (ra, rb) = await (a, b)
+        #expect(ra != nil && rb != nil)
+        #expect(fake.transcribeCalls.count == before + 2)
+    }
+
     @Test("Unknown phrases (no audio) fall back: nil")
     func noAudio() async {
         let (t, _, _) = await twoPhrases()

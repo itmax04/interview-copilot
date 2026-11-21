@@ -78,6 +78,8 @@ public final class StreamingTranscriber: @unchecked Sendable {
     private var redecodeCache: [(utterances: [Int], result: QuestionRedecode)] = []
     /// Звук последних вопросов для фонового прохода Whisper по истории (R-07): живёт дольше `release` хода, не больше трёх.
     private var historyAudio: [(utterances: [Int], audio: QuestionAudio)] = []
+    /// Идущие повторные распознавания по списку фраз (не больше четырёх); очищается на паузе вместе с эпохой.
+    private var redecodeInFlight: [(id: UUID, utterances: [Int], task: Task<QuestionRedecode?, Never>)] = []
     private var historyPass: HistoryPassScheduler!
     private var onHistoryText: (@Sendable (_ turn: Int, _ oldText: String, _ result: Transcription) -> Void)?
 
@@ -220,7 +222,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             paused = value
             utteranceStart = nil
             vad.reset()
-            if value { epoch += 1 }
+            if value { epoch += 1; redecodeInFlight.removeAll() }
             return value
         }
         if cancel {
@@ -423,10 +425,33 @@ public final class StreamingTranscriber: @unchecked Sendable {
     /// не уложились в бюджет или ошибка: вызывающий берёт текст фраз. Результат кэшируется по списку фраз, чтобы
     /// опережающий запрос и ход получили один и тот же текст. `release` — после хода звук фраз освобождается (R-02).
     public func redecodeQuestion(utterances: [Int], turn: Int, provisional: String, release: Bool = false) async -> QuestionRedecode? {
-        if let hit = lock.withLock({ redecodeCache.first { $0.utterances == utterances }?.result }) {
-            if release { questionRanges.release(utterances: utterances) }
-            return hit
+        // Кэш и «уже идёт» проверяются под одним lock: второй вызов с тем же списком фраз (ход во время опережающего
+        // прогона) ждёт идущий, а не запускает Parakeet второй раз. Звук освобождает только вызов с `release`, и только
+        // после результата: прогон забрал звук при старте. Общий `Task` не наследует отмену ожидающего.
+        let work: Task<QuestionRedecode?, Never> = lock.withLock {
+            if let hit = redecodeCache.first(where: { $0.utterances == utterances })?.result { return Task { hit } }
+            if let flight = redecodeInFlight.first(where: { $0.utterances == utterances }) { return flight.task }
+            let id = UUID()
+            let task = Task<QuestionRedecode?, Never> { [self] in
+                let r = await runRedecode(utterances: utterances, turn: turn, provisional: provisional)
+                lock.withLock {
+                    if let r {
+                        redecodeCache.append((utterances, r))
+                        if redecodeCache.count > 4 { redecodeCache.removeFirst() }
+                    }
+                    redecodeInFlight.removeAll { $0.id == id }
+                }
+                return r
+            }
+            if redecodeInFlight.count < 4 { redecodeInFlight.append((id, utterances, task)) } // предел: сверх него не склеиваем
+            return task
         }
+        let result = await work.value
+        if release { questionRanges.release(utterances: utterances) }
+        return result
+    }
+
+    private func runRedecode(utterances: [Int], turn: Int, provisional: String) async -> QuestionRedecode? {
         guard let audio = questionRanges.audio(for: utterances, ring: buffer) else {
             Log.metrics.notice("redecode_failed turn=\(turn) reason=no_audio")
             return nil
@@ -436,16 +461,8 @@ public final class StreamingTranscriber: @unchecked Sendable {
             if historyAudio.count > 3 { historyAudio.removeFirst() }
         }
         let language = recognizer.nativeMultilingual ? nil : lock.withLock { lastLanguage }
-        let result = await redecoder.run(audio, language: language, turn: turn,
-                                         provisionalWords: provisional.split { $0.isWhitespace }.count)
-        if let result {
-            lock.withLock {
-                redecodeCache.append((utterances, result))
-                if redecodeCache.count > 4 { redecodeCache.removeFirst() }
-            }
-        }
-        if release { questionRanges.release(utterances: utterances) }
-        return result
+        return await redecoder.run(audio, language: language, turn: turn,
+                                   provisionalWords: provisional.split { $0.isWhitespace }.count)
     }
 
     private func runFinal(_ request: FinalRequest) {
