@@ -25,7 +25,7 @@ owner mic ─► MicActivityDetector (is the owner speaking) ─► TurnDetector
                                                                                           ▼
 StreamingTranscriber: EnergyVAD splits phrases → [LocalVQE, off] → Silero "is it speech" →
   Parakeet (final ~0.1 s) → HallucinationFilter → CAM++ voiceprint (microphone mode) →
-  events .partial / .final / .revised (Whisper turbo refine, ~3 s) / .foreignVoice / .discarded;
+  events .partial / .final / .foreignVoice / .discarded;
   "Rehearsal with an interviewer" (mic mode): the verdict comes as .speaker before .final instead of .foreignVoice,
   `SpeakerRouter` sends the owner's voice to answers and other voices to questions
                                                                                           │
@@ -131,7 +131,7 @@ Eval thresholds — `evals/README.md`. Live checks run from the signed `.app`: o
 
 ## 7. Log and debugging
 `log show --predicate 'subsystem == "com.itmax04.interviewcopilot"' --info --last 30m` (in zsh — `/usr/bin/log`).
-Categories: `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Important events: `transcript_final`, `transcript_revised`,
+Categories: `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Important events: `transcript_final`, `redecode`, `whisper_history`,
 `filtered reason=lang|vad|voice|echo|hallucination`, `voice_ok similarity=…`, `turn_end`, `draft_start/used/cancelled`,
 `bank_match`, `no_match`, `first_token … ms_from_speech_end=…`, `not_a_question`, `last resort: …`,
 `owner answering on/off`, `owner_final`, `capture_restart`.

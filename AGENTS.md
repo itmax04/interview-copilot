@@ -118,7 +118,7 @@ owner mic ─► MicActivityDetector (is the owner speaking) ─► TurnDetector
           └► second StreamingTranscriber (owner answers) ─► InterviewMemory.addAnswer      │
                                                                                            ▼
 StreamingTranscriber: EnergyVAD segments → Silero "is it speech" → Parakeet final (~0.1 s) → HallucinationFilter →
-  voiceprint (mic mode) → events .partial / .final / .revised (Whisper turbo refine) / .foreignVoice / .discarded
+  voiceprint (mic mode) → events .partial / .final / .foreignVoice / .discarded
   (+ .speaker before .final in "Rehearsal with an interviewer": SpeakerRouter → question or owner answer)
                                                                                            ▼
 ListeningController: language filter (LanguageGate + term dictionary) → transcript line or a gray "filtered" line
@@ -233,7 +233,7 @@ baselines: `evals/README.md`. If a command does not exist yet for your step, wri
 /usr/bin/log show --predicate 'subsystem == "com.itmax04.interviewcopilot"' --info --last 30m
 ```
 
-Categories `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Useful events: `transcript_final`, `transcript_revised`,
+Categories `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Useful events: `transcript_final`, `redecode`, `whisper_history`,
 `filtered reason=lang|vad|voice|echo|hallucination`, `turn_end`, `draft_start/used/cancelled`, `bank_match`, `no_match`,
 `first_token … ms_from_speech_end=…`, `not_a_question`, `provider … failed: …`, `last resort: …`, `capture_restart`.
 Session files in `sessions/*.json` contain per-turn `source`, `model`, `firstTokenMs`, `inputTokens` — useful for
