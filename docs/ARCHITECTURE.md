@@ -21,7 +21,8 @@ Languages: Ukrainian, Russian, English. One user — the owner. No audio is writ
 ```
 call app audio ─► SystemAudioCapture ─► AudioRingBuffer (30 s) ─► StreamingTranscriber ─┐
 owner mic ─► MicActivityDetector (is the owner speaking) ─► TurnDetector                  │
-          └► second StreamingTranscriber (owner answers) ─► InterviewMemory.addAnswer     │
+          └► second StreamingTranscriber (owner answers) ─► OwnerAnswerAssembler ─►       │
+             re-decode of the answer's own audio ─► InterviewMemory.addAnswer             │
                                                                                           ▼
 StreamingTranscriber: EnergyVAD splits phrases → [LocalVQE, off] → Silero "is it speech" →
   Parakeet (final ~0.1 s) → HallucinationFilter → CAM++ voiceprint (microphone mode) →
@@ -31,8 +32,9 @@ StreamingTranscriber: EnergyVAD splits phrases → [LocalVQE, off] → Silero "i
                                                                                           │
 ListeningController.handle: language filter (LanguageGate + term dictionary) → overlay line or a gray line
                                                                                           ▼
-TurnController → TurnDetector: pause T (700 ms; 350 ms after "?"), owner speech, echo → Turn
-  + speculative request (draft) for a finished phrase before the pause expires
+TurnController → TurnDetector: pause T (1000 ms; 600 ms after "?"), owner speech, echo → Turn (phrase texts are
+  provisional) → QuestionRedecoder: one Parakeet pass over the whole question audio (≤ 2 s, else phrase text) = Turn.text
+  + speculative request (draft) only after the same re-decode of the audio so far (DraftGate), adopted when texts are equal
                                                                                           ▼
 AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerController.handle(turn)
   AnswerController: BankController.lookup (one bge-m3 embedding: bank cards + material chunks) →
@@ -134,7 +136,7 @@ Eval thresholds — `evals/README.md`. Live checks run from the signed `.app`: o
 Categories: `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Important events: `transcript_final`, `redecode`, `whisper_history`,
 `filtered reason=lang|vad|voice|echo|hallucination`, `voice_ok similarity=…`, `turn_end`, `draft_start/used/cancelled`,
 `bank_match`, `no_match`, `first_token … ms_from_speech_end=…`, `not_a_question`, `last resort: …`,
-`owner answering on/off`, `owner_final`, `capture_restart`.
+`owner answering on/off`, `owner_final … redecoded=`, `redecode`/`redecode_failed`, `capture_restart`.
 **Utterance texts, answers and keys are never logged** — only events, numbers and model IDs; provider error messages are
 redacted (`SSE.redactIdentifiers`).
 
@@ -160,7 +162,7 @@ redacted (`SSE.redactIdentifiers`).
 | COPILOT-11 | fixes after the test interview: chain "last resort", hedge to another provider, screenshots only to image-capable providers, Gemini timeout floor, "have you worked with X?" rule, interviewer monologue is not a question, overlay resizing, "Delete all" questions (0.15) | `feat/copilot-11-test-call-fixes` |
 | COPILOT-12 | final review: capture start/stop race, history wipe, error redaction, Groq token budget, repository hygiene, English documentation and `AGENTS.md`, `main` fast-forwarded (0.15.1) | `feat/copilot-12-final-review` |
 | COPILOT-13 | technical audit: finals lost to a stray cancel, microphone restart on device change, retention of unreadable sessions, save throttle, shared URLSession, job page decoding (in progress) | `feat/copilot-13-audit-fixes` |
-| COPILOT-15 | accurate turns: whole-question Parakeet re-decode, provisional partials, one background Whisper pass per question, pause 1000/600 ms, understood-question line in the hint, gated drafts (spec stage) | `feat/copilot-15-accurate-turns` |
+| COPILOT-15 | accurate turns: whole-question Parakeet re-decode (`QuestionAudioRange`, `QuestionRedecoder`), provisional partials, one background Whisper pass per question (`HistoryPassScheduler`, history/memory only), pause 1000/600 ms, understood-question line in the hint, gated drafts (`DraftGate`), owner answers re-decoded as a whole (`OwnerAnswerAssembler`), prepared fallback B `StreamingTranscriber.Config.hintWaitsForWhisper` (off) (in progress) | `feat/copilot-15-accurate-turns` |
 
 Branches form a chain (each from the previous one). `main` is fast-forwarded to the latest reviewed task by the owner's decision.
 

@@ -25,6 +25,8 @@ PATTERNS = {
     "AC-02 turn_end → card_shown": (re.compile(r"card_shown .*ms_from_turn_end=(\d+)"), 500),
     # Только подсказки на ход (kind=hint): ручные запросы к сильной модели и скриншоты в AC-03 не входят.
     "AC-03 turn_end → first_token": (re.compile(r"first_token turn=\d+ kind=hint .*ms_from_turn_end=(\d+)"), 2500),
+    # COPILOT-15: повторное распознавание вопроса целиком (бюджет 2 с); decode_ms включает ожидание очереди движка.
+    "C15 redecode decode_ms": (re.compile(r"redecode turn=-?\d+ .*decode_ms=(\d+)"), 2000),
     "C4-AC-01 speech_end → first_token": (re.compile(r"first_token turn=\d+ kind=hint .*ms_from_speech_end=(\d+)"), 1000),
 }
 
@@ -79,6 +81,9 @@ def main():
             print(f"  первые слова с опережающим запросом: медиана {statistics.median(spec):.0f} мс (n={len(spec)})")
         if plain:
             print(f"  первые слова без него: медиана {statistics.median(plain):.0f} мс (n={len(plain)})")
+    failed = re.findall(r"redecode_failed turn=-?\d+ reason=(\w+)", text)
+    if failed:
+        print(f"\nredecode_failed: {len(failed)} ({ {r: failed.count(r) for r in sorted(set(failed))} })")
     langs = re.findall(r"transcript_final .*lang=(\w+)", text)
     if langs:
         counts = {l: langs.count(l) for l in sorted(set(langs))}

@@ -123,7 +123,7 @@ StreamingTranscriber: EnergyVAD segments → Silero "is it speech" → Parakeet 
                                                                                            ▼
 ListeningController: language filter (LanguageGate + term dictionary) → transcript line or a gray "filtered" line
                                                                                            ▼
-TurnController → TurnDetector: pause T (700 ms; 350 ms after "?"), owner speech, echo → Turn
+TurnController → TurnDetector: pause T (1000 ms; 600 ms after "?"; question re-decoded from its whole audio), owner speech, echo → Turn
   + speculative draft request for a finished phrase before the pause expires
                                                                                            ▼
 AppDelegate.turnCompleted → InterviewMemory.addQuestion → AnswerController.handle(turn)

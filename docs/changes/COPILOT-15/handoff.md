@@ -17,7 +17,11 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 | P-06 per-phrase revision removed | done | (P-06 commit) | `swift build` PASS; `swift test` PASS (444 tests, 79 suites); grep: no `phrase_end_to_revised_ms`/`allowRevision`/`revisionMaxQueueDelay` in Sources/Tests/scripts |
 | P-07 history pass | done (code), live check at H-1 | (P-07 commit) | `swift build` PASS; `swift test` PASS x2 (451 tests, 80 suites); `HistoryPassSchedulerTests` 7 PASS (AC-02) |
 | P-08 thresholds | done | (P-08 commit) | `swift build` PASS; `swift test` PASS (452 tests, 80 suites); `scripts/run-evals.sh turn` PASS T=1000: premature 0, missed 0/26, mean latency 791 ms; draft: hits 23, wasted 3 (question_ms=600) |
-| P-09 … P-13 | not started | | |
+| P-09 | done | 48a353e | `DraftGatingTests` 7; `swift test` PASS (459) |
+| P-10 | done | 251542e | `swift test` PASS (464); `check-localization.sh` PASS |
+| P-11 | done (code), live check at H-1 | 7292227 | `swift build` PASS; `swift test` PASS (470 tests, 83 suites); `OwnerAnswerRedecodeTests` 6 PASS (AC-09, AC-07 range part); `check-localization.sh` PASS (808 keys) |
+| P-12 prep | documents + metrics done; replay NOT RUN; review/full check/version bump pending | (P-12 prep commit) | `scripts/metrics.py` redecode row verified on a synthetic log |
+| P-12 rest, P-13 | not started | | |
 
 ## Findings of P-01 (what the plan builds on)
 - Turn text = `TurnDetector.pending` (concatenated phrase finals); `Turn` has no audio reference. `phraseFinal(text, speechEnd:)`
@@ -119,8 +123,28 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 - Checks: `swift build && swift test` PASS (464); `scripts/run-evals.sh memory bank` PASS (offline — they do not call the LLM, so "line vs re-decoded question" is NOT RUN, needs Groq key / H-1);
   `scripts/check-localization.sh` PASS (808 keys).
 
+## P-11 state
+- `OwnerAnswerAssembler` (`Turns/`): owner phrases (after echo/language filters in `ListeningController.handleOwner`) collect until the owner is silent
+  ≥ 1000 ms and the mic VAD says not speaking; `finishOwnerAnswer` calls the owner transcriber's `redecodeQuestion(release: true)` (own ring `ownerBuffer`, own
+  `questionRanges`), falls back to the phrase text, answers are delivered in order, then `onOwnerSaid` (memory + history) — one answer per pause instead of per phrase.
+  Pause / recognizer change drop a pending answer (`resetOwnerAnswer`). Filtered phrases are dropped from `questionRanges`.
+- No Whisper on the owner channel: the owner transcriber never gets `setHistoryHandler`, and `QuestionRedecoder` uses `transcribe` only (test counts `revise` = 0).
+- Fallback B: `StreamingTranscriber.Config.hintWaitsForWhisper` (default false) → `QuestionRedecoder.Config(waitsForWhisper:)`: after the Parakeet pass `revise` (Whisper turbo)
+  text replaces it when available; budget 6 s. To enable at H-1/P-13: set `config.hintWaitsForWhisper = true` where the interviewer `StreamingTranscriber.Config()` is built in
+  `ListeningController` (not exposed in the UI, R-13). It is NOT wired to any setting yet; one-line change.
+- Executor decisions: rehearsal / ⌃⌥A self-test answers (owner voice on the interviewer transcriber) keep provisional phrase text — their spans are marked owner and excluded from
+  question audio by design (R-03), so no own-range re-decode there. AC-07 covered at the range level (`rehearsalQuestionExcludesOwner`) plus existing `SpeakerRoutingTests`.
+- Not run: live owner channel (H-1).
+
+## P-12 prep state
+- Docs updated: `docs/ARCHITECTURE.md` (flow diagram, §7 events, §9 row), `AGENTS.md` (flow thresholds), `evals/README.md` (replay section, live only).
+- `scripts/metrics.py`: new row `C15 redecode decode_ms` (≤ 2000) and `redecode_failed` count.
+- Replay of the dense fixture as a continuous call: NOT RUN (needs the app with live audio; offline numbers are in P-02). Do it at H-1 together with the live check.
+- Still for P-12 after H-1 prep: independent review of the diff (fresh subagent, strong tier: concurrency in transcriber/scheduler/owner tasks), full check
+  (`swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`), version bump, `build-app.sh`.
+
 ## Next
-P-11, P-12 (P-09 and P-10 done) per plan.md. Original design notes for P-03…P-05 (now implemented): store per-utterance span (start/end positions, audio, route) inside `StreamingTranscriber`
+H-1 (owner live check), then P-12 rest and P-13 per plan.md. (Old note: P-11, P-12 per plan.md.) Original design notes for P-03…P-05 (now implemented): store per-utterance span (start/end positions, audio, route) inside `StreamingTranscriber`
 (recorded in `process.finish` and `runFinal`); `TurnDetector.phraseFinal` gets the utterance id and `Turn` gets
 `utterances: [Int]`; `TurnController.emit` awaits an async `redecode` closure off the main actor (2 s budget, fallback to
 phrase finals, serialize turns), caches the result per utterance list so the draft and the turn get the same text.

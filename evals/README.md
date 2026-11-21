@@ -108,6 +108,10 @@ live voice also varies more — so the threshold is personal and checked on the 
 |---|---:|---:|---:|---|
 | 2026-11-20 | 28.2% (uk 26.3 / ru 16.7 / en 40.9) | 4.5% (uk 5.3 / ru 2.8 / en 4.5) | 7.1% | 1557 / 266 / 171 ms |
 
+### Replay of a dense call (COPILOT-15 P-12, AC-02/AC-03) — live only
+Play the `stt-dense` audio (or `evals/audio/test-call`) through the app as a call, then `scripts/metrics.py --last 15m`:
+`redecode_ms` (median ≤ 2000, AC-05 budget) and `turn_end → first_token` (≤ 2500, includes the re-decode). NOT RUN without a live session.
+
 ## `enhance` set (COPILOT-05 R-04)
 - `scripts/make-noisy-fixtures.py`: 10 questions (Milena ru, Lesya uk, Samantha en), clean and over a background —
   "street" (pink noise, SNR 5 dB), music 5 dB, keyboard 5 dB, German "TV" speech 10 dB. Audio — `evals/audio/noisy/`
