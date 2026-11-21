@@ -108,9 +108,19 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 - Tests: `DraftGatingTests` (7). `swift build && swift test` PASS (459); `run-evals.sh turn` PASS (T=1000, premature 0%, missed 0%, mean latency 791 ms; drafts hit=23).
 - Not run: live check that drafts are adopted on a real call (H-1). The "Known intermediate regression" above is resolved in code.
 
+## P-10 state
+- `PromptBuilder.system(..., understoodLine:)` appends `understoodLineRule` (first line "❓ <question as understood>", restate only, no correction/invention, then
+  the answer in the usual format; "—" replies carry no line) before the owner's instructions; only `hintRequest` sets it (interview and regular calls).
+  `strongRequest`, `screenshotRequest` (coding), bank cards (no LLM) unchanged. `UnderstoodLine.split/answer` (CopilotCore).
+- UI: `AnswerCardView` shows the line dimmed above the answer (fontSize-3, 55% white, accessibility label); previous-answer preview, copy button,
+  `onComplete` and `AnswerRecord.text` (memory/history) use the answer without the line; mouse selection still takes the line.
+  New string `"Понятый вопрос: %@"` + English. `PromptScenarios.firstLine` skips the line so eval checks look at the answer.
+- Executor decisions: `refine` (chips) works on the answer text without the line (the rewritten version has no line unless the model keeps it); the line adds ~30 output tokens, `maxTokens` not raised.
+- Checks: `swift build && swift test` PASS (464); `scripts/run-evals.sh memory bank` PASS (offline — they do not call the LLM, so "line vs re-decoded question" is NOT RUN, needs Groq key / H-1);
+  `scripts/check-localization.sh` PASS (808 keys).
+
 ## Next
-P-09 (gated drafts —
-restores draft adoption), P-10, P-11, P-12 per plan.md. Original design notes for P-03…P-05 (now implemented): store per-utterance span (start/end positions, audio, route) inside `StreamingTranscriber`
+P-11, P-12 (P-09 and P-10 done) per plan.md. Original design notes for P-03…P-05 (now implemented): store per-utterance span (start/end positions, audio, route) inside `StreamingTranscriber`
 (recorded in `process.finish` and `runFinal`); `TurnDetector.phraseFinal` gets the utterance id and `Turn` gets
 `utterances: [Int]`; `TurnController.emit` awaits an async `redecode` closure off the main actor (2 s budget, fallback to
 phrase finals, serialize turns), caches the result per utterance list so the draft and the turn get the same text.

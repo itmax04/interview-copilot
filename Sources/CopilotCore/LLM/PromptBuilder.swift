@@ -26,7 +26,33 @@ public struct FollowUpContext: Equatable, Sendable {
 }
 
 /// Сборка промпта — R-11, S-11, мини-модель угроз (профиль и реплики — данные, а не инструкции; инструментов нет).
+/// Строка «понял вопрос» (COPILOT-15 R-10): первая строка подсказки — «❓ …» — пересказ вопроса так, как он понят.
+public enum UnderstoodLine {
+    public static let marker = "❓"
+
+    /// Строка пересказа и остальной ответ. Строки нет — `line == nil`, `rest` — весь текст.
+    public static func split(_ text: String) -> (line: String?, rest: String) {
+        guard text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix(marker) else { return (nil, text) }
+        let t = text.drop { $0.isWhitespace }
+        guard let nl = t.firstIndex(where: \.isNewline) else { return (String(t), "") }
+        let line = String(t[..<nl]).trimmingCharacters(in: .whitespaces)
+        let rest = String(t[nl...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return (line, rest)
+    }
+
+    /// Ответ без строки пересказа — для буфера обмена, памяти и истории (строка нужна только владельцу на панели).
+    public static func answer(_ text: String) -> String { split(text).rest }
+}
+
 public enum PromptBuilder {
+    /// COPILOT-15 R-10: подсказка начинается строкой «❓ …» — вопрос, как он понят. Только пересказ: без исправлений и домыслов.
+    static let understoodLineRule = """
+        Output format of the hint: the first line is "\(UnderstoodLine.marker) " followed by the interviewer's question restated as \
+        you understood it — one short sentence in the language of the question. Only restate: do not correct the wording and do not add \
+        any term, name, number or fact that is not in the question. Then a line break and the answer, formatted exactly as the rules above \
+        describe. When you reply with exactly "\(noAnswerMarker)", write only that, without the "\(UnderstoodLine.marker)" line.
+        """
+
     /// Ответ модели «не вопрос» — панель не меняется (R-11).
     public static let noAnswerMarker = "—"
 
@@ -34,7 +60,7 @@ public enum PromptBuilder {
     /// `profile == nil` — режим «Без профиля» (R-40): модель отвечает сама на любой вопрос.
     /// `generalInstructions` и `profile.instructions` — инструкции владельца (COPILOT-08 R-04), действуют и без профиля.
     public static func system(profile: Profile?, redactPII: Bool, generalInstructions: String = "",
-                              session: SessionPrompt? = nil) -> String {
+                              session: SessionPrompt? = nil, understoodLine: Bool = false) -> String {
         func clean(_ s: String) -> String {
             let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
             return redactPII ? PIIFilter.redact(t) : t
@@ -75,8 +101,9 @@ public enum PromptBuilder {
         statement as if it were a question, never introduce the candidate in reply to it and never thank the interviewer \
         for it. If a statement ends with a question or a request to the candidate, answer only that question or request.
         """
-        let instructions = ownerInstructions(general: clean(generalInstructions), profile: clean(profile?.instructions ?? ""),
-                                             session: clean(session?.instructions ?? ""))
+        let instructions = (understoodLine ? "\n\n" + understoodLineRule : "")
+            + ownerInstructions(general: clean(generalInstructions), profile: clean(profile?.instructions ?? ""),
+                                session: clean(session?.instructions ?? ""))
         if session?.type == .regular { return regularSystem(redactPII: redactPII, style: style) + instructions }
         guard let profile else {
             return common + """
@@ -273,7 +300,7 @@ public enum PromptBuilder {
         let instructed = hasInstructions(profile: profile, general: generalInstructions + (session?.instructions ?? ""))
         // Инструкция «отвечай развёрнуто», «Подробный» и ответ про задачу с кодом не должны обрываться на 400 токенах.
         let tokens = instructed || followUp.activeTask != nil ? 800 : (session?.style ?? .standard).maxTokens
-        return LLMRequest(system: system(profile: profile, redactPII: redactPII, generalInstructions: generalInstructions, session: session),
+        return LLMRequest(system: system(profile: profile, redactPII: redactPII, generalInstructions: generalInstructions, session: session, understoodLine: true),
                           messages: [LLMMessage(role: .user, text: user(question: question, transcript: transcript, cards: cards, baseCard: baseCard, redactPII: redactPII, answerLanguage: answerLanguage, memory: memory, ownerInstructions: instructed, materials: materials, regularCall: session?.type == .regular, followUp: followUp))],
                           maxTokens: tokens, purpose: .hint)
     }

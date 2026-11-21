@@ -105,7 +105,7 @@ struct AnswerCard: View {
             // P02 №4: статус «Готовлю ответ…» — в пилюле над карточкой, здесь — полоса ожидания.
             ProgressView().progressViewStyle(.linear).tint(IC.accent).accessibilityLabel("Готовлю ответ")
             // R-08: прежний ответ виден, но не выдаёт себя за новый.
-            if entry.versions.count == 1, let previous = model.history.previous, let text = previous.current?.text, !text.isEmpty {
+            if entry.versions.count == 1, let previous = model.history.previous, let text = previous.current.map({ UnderstoodLine.answer($0.text) }), !text.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Предыдущий ответ · \(previous.title)").font(.system(size: model.fontSize - 4, weight: .semibold))
                     MarkdownText(text, fontSize: model.fontSize - 2).lineLimit(4)
@@ -117,7 +117,16 @@ struct AnswerCard: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
-                        MarkdownText(version.text, fontSize: model.fontSize, emphasizeLead: true)
+                        let parts = UnderstoodLine.split(version.text)
+                        if let understood = parts.line {
+                            // COPILOT-15 R-10: как понят вопрос — приглушённая строка над ответом.
+                            Text(understood)
+                                .font(.system(size: model.fontSize - 3, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.55))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityLabel(Text("Понятый вопрос: \(understood.dropFirst(UnderstoodLine.marker.count).trimmingCharacters(in: .whitespaces))"))
+                        }
+                        MarkdownText(parts.rest, fontSize: model.fontSize, emphasizeLead: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                         if version.status == .streaming { Text("▍").foregroundStyle(.white.opacity(0.6)) }

@@ -307,9 +307,11 @@ final class AnswerController {
                     self.onNotAQuestion?(turn)
                 } else {
                     self.panel.history.update(entry: slot.entry, version: slot.version) { $0.status = .complete }
-                    onComplete?(text)
+                    // Строка «понял вопрос» (COPILOT-15 R-10) — только для владельца на панели: в память и историю идёт ответ.
+                    let answer = UnderstoodLine.answer(text)
+                    onComplete?(answer)
                     self.onAnswer?(AnswerRecord(turn: turn, source: provider?.rawValue ?? "?", model: actualModel, cardID: nil,
-                                                text: text, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
+                                                text: answer, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
                 }
             case .exhausted(let reason):
                 // S-04: понятная ошибка и «Повторить»; ближайшие карточки — в «нет в базе».
@@ -583,7 +585,10 @@ final class AnswerController {
     }
 
     private func copyAnswer() {
-        guard let text = panel.history.current?.current?.text, !text.isEmpty else { return }
+        guard let raw = panel.history.current?.current?.text, !raw.isEmpty else { return }
+        // Копируется ответ без строки «понял вопрос» (COPILOT-15 R-10); выделив мышью, владелец возьмёт и её.
+        let text = UnderstoodLine.answer(raw)
+        guard !text.isEmpty else { return }
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)

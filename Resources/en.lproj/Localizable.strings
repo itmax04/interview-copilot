@@ -435,6 +435,7 @@
 "Показать новый ответ" = "Show the new answer";
 "Готовлю ответ" = "Preparing an answer";
 "Предыдущий ответ" = "Previous answer";
+"Понятый вопрос: %@" = "Understood question: %@";
 "Прервано новым вопросом" = "Interrupted by a new question";
 "Новый ответ" = "New answer";
 "Вопрос: " = "Question: ";
