@@ -236,6 +236,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         turns.onTurn = { [weak self] turn in self?.turnCompleted(turn) }
         turns.onDraft = { [weak self] text in self?.draftReady(text) }
+        // COPILOT-15: вопрос хода — повторное распознавание звука целиком; текст фраз только предварительный.
+        turns.redecode = { [weak self] utterances, turn, provisional in
+            await self?.listening.redecodeQuestion(utterances: utterances, turn: turn, provisional: provisional)
+        }
+        turns.onQuestionText = { [weak self] utterances, text in self?.listening.replaceQuestionLines(utterances: utterances, with: text) }
         listening.onFiltered = { [weak self] text in self?.turns.filtered(text) }
         // Образец голоса записан или удалён в настройках (COPILOT-05 R-03).
         NotificationCenter.default.addObserver(forName: ListeningController.voicePrintChanged, object: nil, queue: .main) { [weak self] _ in

@@ -33,6 +33,8 @@ final class PanelModel {
         let text: String
         /// Отфильтровано (COPILOT-05 R-06): «язык de» — серым, по клику — ответ.
         var filtered: String? = nil
+        /// Предварительный текст фразы (COPILOT-15 R-04): приглушённый стиль до итогового текста вопроса.
+        var provisional = false
     }
 
     var state: State = .idle
@@ -66,7 +68,7 @@ final class PanelModel {
     }
 
     func setTranscript(_ finals: [ListeningController.TranscriptLine], partial: String?) {
-        lines = finals.suffix(6).map { Line(id: $0.id, text: $0.text, filtered: $0.filtered) }
+        lines = finals.suffix(6).map { Line(id: $0.id, text: $0.text, filtered: $0.filtered, provisional: $0.provisional) }
         self.partial = partial
     }
 

@@ -464,7 +464,8 @@ private struct TranscriptLineView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Игнорировано, \(reason): \(line.text). Ответить")
         } else {
-            Text(line.text).foregroundStyle(.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
+            // Предварительный текст (COPILOT-15 R-04) — приглушённо; без анимации, Reduce Motion не затрагивается.
+            Text(line.text).foregroundStyle(.white.opacity(line.provisional ? 0.5 : 0.7)).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

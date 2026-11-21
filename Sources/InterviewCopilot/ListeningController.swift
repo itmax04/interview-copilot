@@ -65,6 +65,23 @@ final class ListeningController {
         let language: String
         /// Причина фильтра («язык de») — строка серым, в подсказки не идёт (COPILOT-05 R-06).
         var filtered: String? = nil
+        /// Текст фразы ещё предварительный (COPILOT-15 R-04): вопрос хода заменит его повторным распознаванием.
+        var provisional = false
+    }
+
+    /// Повторное распознавание вопроса целиком по звуку фраз хода (COPILOT-15 R-01); освобождает звук фраз.
+    func redecodeQuestion(utterances: [Int], turn: Int, provisional: String) async -> String? {
+        guard let transcriber else { return nil }
+        return await transcriber.redecodeQuestion(utterances: utterances, turn: turn, provisional: provisional, release: true)?.text
+    }
+
+    /// Итоговый текст хода заменяет строки его фраз: первая строка получает весь вопрос, остальные убираются (R-04).
+    func replaceQuestionLines(utterances: [Int], with text: String) {
+        guard let first = utterances.first, let i = transcript.lastIndex(where: { $0.id == first && $0.filtered == nil }) else { return }
+        transcript[i] = TranscriptLine(id: first, text: text, language: transcript[i].language)
+        let rest = Set(utterances.dropFirst())
+        transcript.removeAll { rest.contains($0.id) && $0.filtered == nil }
+        onChange?()
     }
 
     /// Фильтр отбросил реплику (COPILOT-05 R-06) — текст для ⌃⌥↩ «ответить всё равно».
@@ -829,7 +846,7 @@ final class ListeningController {
                 onTranscript?(.discarded(utterance: u, phraseEnd: phraseEnd))
                 return
             }
-            transcript.append(TranscriptLine(id: u, text: text, language: language))
+            transcript.append(TranscriptLine(id: u, text: text, language: language, provisional: true))
             if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
             onChange?()
         case .revising, .discarded, .speaker:
@@ -846,7 +863,7 @@ final class ListeningController {
         case .revised(let u, let text, let language):
             // Уточнённый итог (R-37) подменяет строку реплики в расшифровке.
             if let i = transcript.lastIndex(where: { $0.id == u }) {
-                transcript[i] = TranscriptLine(id: u, text: text, language: language, filtered: transcript[i].filtered)
+                transcript[i] = TranscriptLine(id: u, text: text, language: language, filtered: transcript[i].filtered, provisional: transcript[i].provisional)
                 onChange?()
                 // Отфильтрованная реплика остаётся отфильтрованной: ход по ней уже не ждут.
                 if transcript[i].filtered != nil { return }

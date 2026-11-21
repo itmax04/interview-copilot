@@ -10,10 +10,18 @@ public struct Turn: Sendable, Equatable {
     public var firedAt: Double
     /// ⌃⌥↩ «Answer now» — ход по команде владельца.
     public var forced: Bool
+    /// Номера фраз хода (`TranscriptEvent.utterance`): по ним строится звук для повторного распознавания (COPILOT-15).
+    public var utterances: [Int]
+    /// Склейка текстов фраз — предварительный текст (R-04): годится для эвристик конца хода и как запасной,
+    /// если повторное распознавание не удалось. `text` после повторного распознавания — итоговый вопрос.
+    public var provisionalText: String
 
-    public init(id: Int, text: String, speechEndedAt: Double, firedAt: Double, forced: Bool) {
+    public init(id: Int, text: String, speechEndedAt: Double, firedAt: Double, forced: Bool,
+                utterances: [Int] = [], provisionalText: String? = nil) {
         self.id = id
         self.text = text
+        self.utterances = utterances
+        self.provisionalText = provisionalText ?? text
         self.speechEndedAt = speechEndedAt
         self.firedAt = firedAt
         self.forced = forced
@@ -55,6 +63,8 @@ public struct TurnDetector: Sendable {
 
     public var config: Config
     private var pending: [String] = []
+    private var pendingUtterances: [Int] = []
+    private var lastUtterances: [Int] = []
     private var lastSpeechEnd: Double?
     private var interviewerSpeaking = false
     private var interviewerStartedAt: Double?
@@ -93,12 +103,13 @@ public struct TurnDetector: Sendable {
     }
 
     /// Итоговый текст фразы. `speechEnd` — момент конца речи.
-    public mutating func phraseFinal(_ text: String, speechEnd: Double) {
+    public mutating func phraseFinal(_ text: String, speechEnd: Double, utterance: Int? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         interviewerSpeaking = false
         interviewerStoppedAt = max(interviewerStoppedAt ?? speechEnd, speechEnd)
         guard !trimmed.isEmpty else { return }
         pending.append(trimmed)
+        if let utterance { pendingUtterances.append(utterance) }
         lastFinalText = trimmed
         lastSpeechEnd = speechEnd
     }
@@ -183,18 +194,20 @@ public struct TurnDetector: Sendable {
         }
         let text = pending.isEmpty ? (lastFinalText ?? lastTurnText ?? "") : pendingText
         guard !text.isEmpty else { return nil }
-        return fire(text: text, speechEnd: lastSpeechEnd ?? t, at: t, forced: true)
+        return fire(text: text, speechEnd: lastSpeechEnd ?? t, at: t, forced: true,
+                    utterances: pending.isEmpty ? lastUtterances : pendingUtterances)
     }
 
     /// Ход по тексту, который отбросил фильтр (COPILOT-05 S-08): владелец решил ответить на него сам.
     public mutating func forceText(_ text: String, at t: Double) -> Turn {
-        fire(text: text, speechEnd: t, at: t, forced: true)
+        fire(text: text, speechEnd: t, at: t, forced: true, utterances: [])
     }
 
     /// Сброс (пауза S-08).
     public mutating func reset() {
         forceRequested = false
         pending.removeAll()
+        pendingUtterances.removeAll()
         lastSpeechEnd = nil
         interviewerSpeaking = false
         interviewerStoppedAt = nil
@@ -203,11 +216,14 @@ public struct TurnDetector: Sendable {
         suppressed = false
     }
 
-    private mutating func fire(text: String, speechEnd: Double, at t: Double, forced: Bool) -> Turn {
-        let turn = Turn(id: nextID, text: text, speechEndedAt: speechEnd, firedAt: t, forced: forced)
+    private mutating func fire(text: String, speechEnd: Double, at t: Double, forced: Bool, utterances: [Int]? = nil) -> Turn {
+        let used = utterances ?? pendingUtterances
+        let turn = Turn(id: nextID, text: text, speechEndedAt: speechEnd, firedAt: t, forced: forced, utterances: used)
         nextID += 1
         lastTurnText = text
+        if !used.isEmpty { lastUtterances = used }
         pending.removeAll()
+        pendingUtterances.removeAll()
         suppressed = false
         return turn
     }

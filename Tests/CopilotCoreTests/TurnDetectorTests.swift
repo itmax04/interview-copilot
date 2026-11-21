@@ -239,4 +239,27 @@ struct TurnDetectorTests {
         #expect(!TurnDetector.looksUnfinished("Why?"))
         #expect(TurnDetector.wordCount("Ну, э — так") == 3)
     }
+
+    @Test("COPILOT-15: the turn carries the utterance ids of its phrases and the provisional text")
+    func turnCarriesUtterances() {
+        var d = TurnDetector()
+        d.interviewerStartedSpeaking(at: 0)
+        d.phraseFinal("Tell me about", speechEnd: 1000, utterance: 4)
+        d.interviewerStartedSpeaking(at: 1200)
+        d.phraseFinal("your last project.", speechEnd: 2500, utterance: 5)
+        let turn = run(&d, from: 2500, until: 5000)
+        #expect(turn?.utterances == [4, 5])
+        #expect(turn?.provisionalText == "Tell me about your last project.")
+        #expect(turn?.text == turn?.provisionalText)
+        // Следующий ход начинается с чистого списка.
+        d.phraseFinal("Why did you leave that job?", speechEnd: 8000, utterance: 6)
+        #expect(run(&d, from: 8000, until: 10_000)?.utterances == [6])
+    }
+
+    @Test("COPILOT-15: a forced turn on a filtered text has no audio to re-decode")
+    func forcedTextHasNoUtterances() {
+        var d = TurnDetector()
+        d.phraseFinal("Tell me about it", speechEnd: 1000, utterance: 9)
+        #expect(d.forceText("Other text", at: 2000).utterances.isEmpty)
+    }
 }

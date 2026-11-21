@@ -8,6 +8,11 @@ final class TurnController {
     private var timer: Timer?
     /// Вызывается при завершённом ходе (дальше — поиск по базе и генерация, P-06…P-08).
     var onTurn: ((Turn) -> Void)?
+    /// Повторное распознавание вопроса целиком (COPILOT-15 R-01): фразы хода, номер хода, предварительный текст →
+    /// итоговый текст; nil — не вышло, остаётся текст фраз (R-05). Не задан — ход сразу по тексту фраз.
+    var redecode: (([Int], Int, String) async -> String?)?
+    /// Итоговый текст хода пришёл: заменить строки фраз в расшифровке (R-04).
+    var onQuestionText: (([Int], String) -> Void)?
     /// Опережающий запрос (COPILOT-04 R-01): текст законченной реплики до истечения паузы T.
     var onDraft: ((String) -> Void)?
     /// Выключено в настройках — `onDraft` не вызывается.
@@ -47,6 +52,7 @@ final class TurnController {
         timer = nil
         detector.reset()
         lastDraft = nil
+        generation += 1
     }
 
     func handle(_ event: TranscriptEvent) {
@@ -61,10 +67,10 @@ final class TurnController {
         case .partial, .revising, .revised, .speaker:
             // Ход — по быстрому итогу (R-37): уточнённый украинский текст подсказку не задерживает.
             break
-        case .final(_, let text, _, let phraseEnd, _):
+        case .final(let utterance, let text, _, let phraseEnd, _):
             finalsSinceTurn += 1
             lastFinalAt = Self.now()
-            detector.phraseFinal(text, speechEnd: Double(phraseEnd) / 1e6)
+            detector.phraseFinal(text, speechEnd: Double(phraseEnd) / 1e6, utterance: utterance)
             if let turn = detector.takeRequestedForce(at: Self.now()) { emit(turn) }
         }
     }
@@ -87,6 +93,7 @@ final class TurnController {
 
     /// Clear (COPILOT-09 Q13): накопленные реплики не войдут в следующий ход.
     func clearPending() {
+        generation += 1
         detector.reset()
         lastDraft = nil
         lastFiltered = nil
@@ -127,12 +134,38 @@ final class TurnController {
         }
     }
 
+    /// Растёт при паузе и Clear: ход, ждавший повторного распознавания, после них не выдаётся.
+    private var generation = 0
+    /// Ходы выдаются по очереди: следующий ждёт повторного распознавания предыдущего.
+    private var emitChain: Task<Void, Never>?
+
     private func emit(_ turn: Turn) {
-        lastTurn = turn
         lastDraft = nil
-        finalsSinceTurn = 0   // на любом ходе, и на ⌃⌥↩ тоже: иначе turn_stall срабатывал ложно
-        // Метрика для AC-02/AC-03: отсчёт от конца речи (`turn_end`), текст не логируется (R-24).
+        finalsSinceTurn = 0
         Log.metrics.notice("turn_end turn=\(turn.id) speech_end_ms=\(Int(turn.speechEndedAt)) fired_ms=\(Int(turn.firedAt)) forced=\(turn.forced) words=\(TurnDetectorWords.count(turn.text))")
+        guard let redecode, !turn.utterances.isEmpty else {
+            deliver(turn)
+            return
+        }
+        let previous = emitChain
+        let gen = generation
+        emitChain = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self, gen == self.generation else { return }
+            var final = turn
+            let text = await redecode(turn.utterances, turn.id, turn.provisionalText)
+            if gen == self.generation {
+                // Не вышло (R-05) — остаётся текст фраз; строки расшифровки всё равно сливаются в одну и перестают быть черновыми.
+                final.text = text ?? turn.provisionalText
+                self.onQuestionText?(turn.utterances, final.text)
+            }
+            guard gen == self.generation else { return }
+            self.deliver(final)
+        }
+    }
+
+    private func deliver(_ turn: Turn) {
+        lastTurn = turn
         onTurn?(turn)
     }
 }
