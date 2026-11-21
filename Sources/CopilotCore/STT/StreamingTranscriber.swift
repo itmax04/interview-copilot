@@ -82,6 +82,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
     /// Уточнение итога (Whisper) идёт параллельно: следующая реплика не ждёт его (R-37).
     private let revisionWork = DispatchQueue(label: "com.itmax04.interviewcopilot.stt-revision", qos: .userInitiated)
     private let lock = NSLock()
+    /// Границы и звук закрытых фраз: из них строится звук хода для повторного распознавания (COPILOT-15 R-02).
+    public let questionRanges = QuestionAudioRange()
+    private lazy var redecoder = QuestionRedecoder(recognizer: recognizer)
+    private var redecodeCache: [(utterances: [Int], result: QuestionRedecode)] = []
 
     // Состояние под lock.
     private var vad: EnergyVAD
@@ -228,7 +232,9 @@ public final class StreamingTranscriber: @unchecked Sendable {
             let lagNs = UInt64(max(0, lag) * 1_000_000_000)
             let phraseEnd = now > lagNs ? now - lagNs : now
             // Сохраняем звук и язык сейчас: очередь может ждать дольше срока кольцевого буфера.
-            finals.append(FinalRequest(utterance: utterance, audio: buffer.read(from: start, to: boundary),
+            let phraseAudio = buffer.read(from: start, to: boundary)
+            questionRanges.record(utterance: utterance, start: start, end: boundary, audio: phraseAudio)
+            finals.append(FinalRequest(utterance: utterance, audio: phraseAudio,
                                        language: language ?? utteranceLanguage, languageWasExplicit: language != nil,
                                        usesSessionLanguage: utteranceUsesSessionLanguage,
                                        phraseEnd: phraseEnd, epoch: epoch))
@@ -383,6 +389,36 @@ public final class StreamingTranscriber: @unchecked Sendable {
                              ukMinusRu: uk.averageTokenProbability - ru.averageTokenProbability, transcription: winner)
     }
 
+    private func discard(_ u: Int, _ phraseEnd: UInt64) {
+        questionRanges.drop(utterance: u)
+        onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+    }
+
+    /// Повторное распознавание вопроса целиком по звуку фраз `utterances` (COPILOT-15 R-01…R-05). nil — звука нет,
+    /// не уложились в бюджет или ошибка: вызывающий берёт текст фраз. Результат кэшируется по списку фраз, чтобы
+    /// опережающий запрос и ход получили один и тот же текст. `release` — после хода звук фраз освобождается (R-02).
+    public func redecodeQuestion(utterances: [Int], turn: Int, provisional: String, release: Bool = false) async -> QuestionRedecode? {
+        if let hit = lock.withLock({ redecodeCache.first { $0.utterances == utterances }?.result }) {
+            if release { questionRanges.release(utterances: utterances) }
+            return hit
+        }
+        guard let audio = questionRanges.audio(for: utterances, ring: buffer) else {
+            Log.metrics.notice("redecode_failed turn=\(turn) reason=no_audio")
+            return nil
+        }
+        let language = recognizer.nativeMultilingual ? nil : lock.withLock { lastLanguage }
+        let result = await redecoder.run(audio, language: language, turn: turn,
+                                         provisionalWords: provisional.split { $0.isWhitespace }.count)
+        if let result {
+            lock.withLock {
+                redecodeCache.append((utterances, result))
+                if redecodeCache.count > 4 { redecodeCache.removeFirst() }
+            }
+        }
+        if release { questionRanges.release(utterances: utterances) }
+        return result
+    }
+
     private func runFinal(_ request: FinalRequest) {
         let u = request.utterance
         let scheduledEpoch = request.epoch
@@ -391,13 +427,13 @@ public final class StreamingTranscriber: @unchecked Sendable {
         var audio = request.audio
         if !audio.isEmpty, let enhance = lock.withLock({ audioEnhancer }), let cleaned = enhance(audio) { audio = cleaned }
         guard !audio.isEmpty else {
-            onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+            discard(u, phraseEnd)
             return
         }
         // COPILOT-05 R-02: нейросетевая проверка — шум без речи не распознаётся и не становится репликой.
         if let gate = lock.withLock({ speechGate }), !gate(audio) {
             Log.metrics.notice("filtered reason=vad utt=\(u) audio_ms=\(audio.count / 16)")
-            onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+            discard(u, phraseEnd)
             return
         }
         var lang = recognizer.nativeMultilingual && !request.languageWasExplicit ? nil : request.language
@@ -421,7 +457,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             // Выдумки Whisper на тишине и шуме («Дякую!», «Спасибо за просмотр») — как отброшенный шум (COPILOT-05).
             if HallucinationFilter.isLikely(result.text, audioSeconds: seconds) {
                 Log.metrics.notice("filtered reason=hallucination utt=\(u) audio_ms=\(Int(seconds * 1000))")
-                onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+                discard(u, phraseEnd)
                 return
             }
             lock.withLock {
@@ -450,7 +486,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
             // Тишина и шум: whisper иногда «слышит» речь там, где её нет.
             guard !result.text.isEmpty, result.noSpeechProbability < 0.8 else {
                 // Без этого события определение хода ждало бы итог шума до следующей фразы (R-38).
-                onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+                discard(u, phraseEnd)
                 return
             }
             guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
@@ -463,6 +499,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
                     Log.metrics.notice("voice_speaker utt=\(u) owner=\(verdict.accepted) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
                 } else if !verdict.accepted {
                     Log.metrics.notice("filtered reason=voice utt=\(u) similarity=\(verdict.similarity, format: .fixed(precision: 2)) audio_ms=\(Int(seconds * 1000))")
+                    questionRanges.drop(utterance: u)
                     onEvent(.foreignVoice(utterance: u, text: result.text, similarity: verdict.similarity, phraseEnd: phraseEnd))
                     return
                 } else {
@@ -478,13 +515,14 @@ public final class StreamingTranscriber: @unchecked Sendable {
             Log.metrics.notice("transcript_final utt=\(u) lang=\(result.language, privacy: .public) audio_ms=\(Int(result.audioSeconds * 1000)) stt_ms=\(Int(result.elapsedMs)) phrase_end_to_final_ms=\(Int((emitted - phraseEnd) / 1_000_000))")
             // Двухэтапный итог (R-37): быстрый текст сразу — ход и подсказка не ждут; уточнённый — следом.
             let revise = config.allowRevision && recognizer.revisionNeeded(result, language: lang)
+            if let speaker { questionRanges.setRoute(utterance: u, owner: speaker.owner) }
             if let speaker { onEvent(.speaker(utterance: u, owner: speaker.owner, similarity: speaker.similarity)) }
             if revise { onEvent(.revising(utterance: u)) }
             onEvent(.final(utterance: u, text: result.text, language: result.language, phraseEnd: phraseEnd, emittedAt: emitted))
             if revise { scheduleRevision(utterance: u, audio: audio, language: lang, first: result, epoch: scheduledEpoch, phraseEnd: phraseEnd) }
         } catch {
             Log.stt.error("final transcription failed: \(String(describing: error), privacy: .public)")
-            onEvent(.discarded(utterance: u, phraseEnd: phraseEnd))
+            discard(u, phraseEnd)
         }
     }
 
