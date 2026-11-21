@@ -26,6 +26,7 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 | P-10 | done | 251542e | `swift test` PASS (464); `check-localization.sh` PASS |
 | P-11 | done (code), live check at H-1 | 7292227 | `swift build` PASS; `swift test` PASS (470 tests, 83 suites); `OwnerAnswerRedecodeTests` 6 PASS (AC-09, AC-07 range part); `check-localization.sh` PASS (808 keys) |
 | P-12 prep | documents + metrics done; replay NOT RUN; review/full check/version bump pending | (P-12 prep commit) | `scripts/metrics.py` redecode row verified on a synthetic log |
+| H-1 | done (agent; Part B synthetic dry run — owner skipped live Part B) | e8fcd2a | see h1-report.md |
 | P-12 rest, P-13 | not started | | |
 
 ## Findings of P-01 (what the plan builds on)
@@ -149,6 +150,7 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
   (`swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`), version bump, `build-app.sh`.
 
 ## Next
+H-1 Fallback B decision: **pending** (owner asked to measure Part B without them — default remains **B off**; synthetic `Lesya` run showed 0/12 `uk → ru` drift and 0 `filtered reason=lang` events, but real-voice AC-10 / B.2 / B.3 / B.5 remain NOT RUN). See `h1-report.md` for P-13 problems (`❓` line omitted on 0/8 in A.2 & 2/10 in B and rewriting/hallucinating garbled terms; duplicate in-flight `redecode` on 600 ms `?` turns; legacy `C4-AC-01` threshold in `metrics.py`).
 Input for H-1 from the research (section 4 of the gap analysis): the owner's past failures predate this build; check on Meet whether
 interviewer phrases still become gray "язык …" lines (`filtered reason=lang channel=call lang=…` in `Log.metrics`) — hypothesis: `LanguageGate`
 drops garbled Latin-script Ukrainian on provisional phrase text before the re-decode (candidate COPILOT-16). Unconfirmed.
