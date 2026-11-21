@@ -6,6 +6,8 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 ## Identity
 - Branch `feat/copilot-15-accurate-turns` (from `claude/stt-revision-voice-gate-193912`). Not pushed.
 - HEAD at 2026-11-21: H-1 checklist commit (after `fcd0d21`); tree clean. P-11 `7292227`, P-12 prep `27692b1`.
+- 2026-11-21: research commit `332cf39` adds `docs/research/parakeetai-gap-analysis.md` (ParakeetAI gap table, owner brainstorm,
+  ranked COPILOT-16+ candidates). Documents only; no code change. Not pushed.
 - H-1 materials: `h1-live-check.md` (checklist for a computer-use agent, Part A alone / Part B with the owner),
   `h1-agent-prompt.md` (prompt). Not run yet.
 
@@ -147,6 +149,9 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
   (`swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh`), version bump, `build-app.sh`.
 
 ## Next
+Input for H-1 from the research (section 4 of the gap analysis): the owner's past failures predate this build; check on Meet whether
+interviewer phrases still become gray "язык …" lines (`filtered reason=lang channel=call lang=…` in `Log.metrics`) — hypothesis: `LanguageGate`
+drops garbled Latin-script Ukrainian on provisional phrase text before the re-decode (candidate COPILOT-16). Unconfirmed.
 H-1 (owner live check; checklist `h1-live-check.md`, agent prompt `h1-agent-prompt.md`), then P-12 rest and P-13 per plan.md. (Old note: P-11, P-12 per plan.md.) Original design notes for P-03…P-05 (now implemented): store per-utterance span (start/end positions, audio, route) inside `StreamingTranscriber`
 (recorded in `process.finish` and `runFinal`); `TurnDetector.phraseFinal` gets the utterance id and `Turn` gets
 `utterances: [Int]`; `TurnController.emit` awaits an async `redecode` closure off the main actor (2 s budget, fallback to
