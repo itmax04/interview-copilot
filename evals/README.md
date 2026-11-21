@@ -94,6 +94,19 @@ Filled in by the executor in P-06 and P-12: date, commit, models, thresholds, re
 Apple's synthetic voices are similar to each other (Milena↔Lesya up to 0.89); live voices differ more, but the owner's
 live voice also varies more — so the threshold is personal and checked on the live voice (H-2).
 
+## `stt-dense` set (COPILOT-15 P-02, AC-01)
+- Why: phrase-by-phrase recognition of dense speech loses words at the chunk cuts; one pass over the whole question does not.
+- `scripts/make-dense-fixtures.py`: 8 questions (6 uk/ru from the experiment + 2 English), texts and cut points in
+  `evals/stt-dense/texts.json`. Audio — `evals/audio/stt-dense/` (not in Git).
+- Run: `scripts/run-evals.sh stt-dense` or `copilot-eval stt-dense [parakeet-dir] [fixtures-dir] [--verbose]` (needs the
+  Parakeet model; exit 2 = NOT RUN when fixtures or model are missing).
+- Modes: `chunks` (each phrase decoded separately), `whole` (one pass over the question), `joined` (phrases joined with gaps).
+  Thresholds: whole ≤ 8%, joined ≤ 12%, whole ≤ chunks / 2.
+
+| Date | chunks WER | whole WER | joined WER | Decode per question (as printed by the eval) |
+|---|---:|---:|---:|---|
+| 2026-11-20 | 28.2% (uk 26.3 / ru 16.7 / en 40.9) | 4.5% (uk 5.3 / ru 2.8 / en 4.5) | 7.1% | 1557 / 266 / 171 ms |
+
 ## `enhance` set (COPILOT-05 R-04)
 - `scripts/make-noisy-fixtures.py`: 10 questions (Milena ru, Lesya uk, Samantha en), clean and over a background —
   "street" (pink noise, SNR 5 dB), music 5 dB, keyboard 5 dB, German "TV" speech 10 dB. Audio — `evals/audio/noisy/`

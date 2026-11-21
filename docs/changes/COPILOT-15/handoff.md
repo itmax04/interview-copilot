@@ -10,7 +10,7 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 | Step | Status | Commit | Checks |
 |---|---|---|---|
 | P-01 baseline and code reading | done | (this commit) | `swift build` PASS; `swift test` PASS (428 tests, 77 suites); `scripts/run-evals.sh turn` PASS T=700: premature 0, missed 0/26, mean latency 596 ms; draft: hits 11, wasted 3 |
-| P-02 stt-dense eval | measured, PASS; README/run-evals note and `swift test` still to do | (this commit, WIP) | `swift build -c release --product copilot-eval` PASS; `copilot-eval stt-dense` PASS (8 questions, 156 words): chunks WER 28.2% (uk 26.3 / ru 16.7 / en 40.9), whole 4.5% (uk 5.3 / ru 2.8 / en 4.5), joined 7.1%; decode per question 1557 / 266 / 171 ms; `swift test` NOT RUN after P-02 |
+| P-02 stt-dense eval | done | (P-02 final commit) | `swift build -c release --product copilot-eval` PASS; `copilot-eval stt-dense` PASS (8 questions, 156 words): chunks WER 28.2% (uk 26.3 / ru 16.7 / en 40.9), whole 4.5% (uk 5.3 / ru 2.8 / en 4.5), joined 7.1%; decode per question 1557 / 266 / 171 ms; `swift test` PASS (432 tests, 78 suites) |
 | P-03 … P-13 | not started | | |
 
 ## Findings of P-01 (what the plan builds on)
