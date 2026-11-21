@@ -5,6 +5,9 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 
 ## Identity
 - Branch `feat/copilot-15-accurate-turns` (from `claude/stt-revision-voice-gate-193912`). Not pushed.
+- HEAD at 2026-11-21: H-1 checklist commit (after `fcd0d21`); tree clean. P-11 `7292227`, P-12 prep `27692b1`.
+- H-1 materials: `h1-live-check.md` (checklist for a computer-use agent, Part A alone / Part B with the owner),
+  `h1-agent-prompt.md` (prompt). Not run yet.
 
 ## Progress
 | Step | Status | Commit | Checks |
