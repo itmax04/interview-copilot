@@ -200,8 +200,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             if case .final(let u, let text, let lang, _, _) = event {
                 self.sessions.addUtterance(id: u, text: text, language: lang)
-                self.fastText[u] = text
-                if self.fastText.count > 50, let oldest = self.fastText.keys.min() { self.fastText.removeValue(forKey: oldest) }
             }
         }
         listening.onOwnerSpeaking = { [weak self] speaking, t in
@@ -237,6 +235,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         turns.onQuestionText = { [weak self] utterances, text in self?.listening.replaceQuestionLines(utterances: utterances, with: text) }
         listening.onFiltered = { [weak self] text in self?.turns.filtered(text) }
+        // R-07: Whisper по звуку вопроса уточняет только память, историю и отчёт; показанная подсказка не меняется.
+        listening.onHistoryText = { [weak self] turn, old, new, language in
+            guard let self else { return }
+            self.memory.reviseText(old, to: new, scope: .questions)
+            if let ids = self.historyUtterances.removeValue(forKey: turn) { self.sessions.reviseQuestion(utterances: ids, text: new, language: language) }
+            self.saveMemory()
+        }
         // Образец голоса записан или удалён в настройках (COPILOT-05 R-03).
         NotificationCenter.default.addObserver(forName: ListeningController.voicePrintChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.listening.voiceSettingsChanged() }
@@ -509,14 +514,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.detection = panelModel.detection.next(on: .turnCompleted)
         memory.addQuestion(turn.text, turnID: turn.id)
         saveMemory()
+        if !turn.utterances.isEmpty {
+            historyUtterances[turn.id] = turn.utterances
+            if historyUtterances.count > 10, let oldest = historyUtterances.keys.min() { historyUtterances.removeValue(forKey: oldest) }
+            listening.submitHistoryPass(utterances: turn.utterances, turn: turn.id, text: turn.text)
+        }
         answers.handle(turn)
     }
 
     // MARK: Память интервью (COPILOT-06)
 
     let memory = InterviewMemory()
-    /// Быстрый текст реплик до уточнения (R-37): по нему находим вопрос в памяти.
-    private var fastText: [Int: String] = [:]
+    /// Номера фраз ходов, ждущих фонового прохода Whisper по истории (COPILOT-15 R-07).
+    private var historyUtterances: [Int: [Int]] = [:]
 
     private func saveMemory() {
         sessions.updateExchanges(memory.all)
@@ -543,7 +553,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if model.settings.language != c.language { model.settings.language = c.language }
         model.settings.lastSessionConfig = c.defaultsForNext()
         memory.reset()
-        fastText = [:]
+        historyUtterances = [:]
         answers.cancel()
         sessions.start(source: listening.source.displayName, retentionDays: model.settings.historyRetentionDays, config: c)
         turns.autoEnabled = c.autoGenerate

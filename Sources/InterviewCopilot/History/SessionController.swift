@@ -52,10 +52,12 @@ final class SessionController {
         scheduleSave()
     }
 
-    /// Уточнённый итог реплики (R-37) заменяет её быстрый текст.
-    func reviseUtterance(id: Int, text: String, language: String) {
-        guard let i = current?.utterances.lastIndex(where: { $0.id == id }), let at = current?.utterances[i].at else { return }
-        current?.utterances[i] = .init(id: id, text: text, language: language, at: at)
+    /// Вопрос хода целиком (фоновый проход Whisper, COPILOT-15 R-07): первая фраза получает весь текст, остальные убираются.
+    func reviseQuestion(utterances ids: [Int], text: String, language: String) {
+        guard let first = ids.first, let i = current?.utterances.lastIndex(where: { $0.id == first }), let at = current?.utterances[i].at else { return }
+        current?.utterances[i] = .init(id: first, text: text, language: language, at: at)
+        let rest = Set(ids.dropFirst())
+        current?.utterances.removeAll { rest.contains($0.id) }
         scheduleSave()
     }
 
@@ -64,13 +66,6 @@ final class SessionController {
         guard current != nil else { return }
         let id = (current?.ownerUtterances.last?.id ?? 0) + 1
         current?.ownerUtterances.append(.init(id: id, text: text, language: "", at: Date()))
-        scheduleSave()
-    }
-
-    /// Уточненный текст вашей фразы (самопроверка) заменяет черновой — последнее совпадение.
-    func reviseOwnerUtterance(_ fast: String, to text: String) {
-        guard let i = current?.ownerUtterances.lastIndex(where: { $0.text == fast }), let u = current?.ownerUtterances[i] else { return }
-        current?.ownerUtterances[i] = .init(id: u.id, text: text, language: u.language, at: u.at)
         scheduleSave()
     }
 

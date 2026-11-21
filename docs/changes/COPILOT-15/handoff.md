@@ -15,7 +15,8 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 | P-04 QuestionRedecoder | done | 8e6493e + de-flake commit | `TurnRedecodeTests` 6 PASS (AC-05 re-decode/fallback); budget timer on its own queue (global pool starved under full suite) |
 | P-05 turn flow | done (code), see P-05 state | (P-05 commit) | `swift build` PASS; `swift test` PASS (447 tests, 80 suites); `scripts/run-evals.sh turn` PASS T=700 unchanged (premature 0, missed 0/26, 596 ms); `check-localization.sh` PASS (no new strings) |
 | P-06 per-phrase revision removed | done | (P-06 commit) | `swift build` PASS; `swift test` PASS (444 tests, 79 suites); grep: no `phrase_end_to_revised_ms`/`allowRevision`/`revisionMaxQueueDelay` in Sources/Tests/scripts |
-| P-07 … P-13 | not started | | |
+| P-07 history pass | done (code), live check at H-1 | (P-07 commit) | `swift build` PASS; `swift test` PASS x2 (451 tests, 80 suites); `HistoryPassSchedulerTests` 7 PASS (AC-02) |
+| P-08 … P-13 | not started | | |
 
 ## Findings of P-01 (what the plan builds on)
 - Turn text = `TurnDetector.pending` (concatenated phrase finals); `Turn` has no audio reference. `phraseFinal(text, speechEnd:)`
@@ -75,6 +76,18 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
   `reviseOwnerUtterance` stay for P-07 (history pass). Tests: removed `RevisionBacklogTests`, `ownerChannelSkipsWhisperRevision`,
   `finalFollowsRouteDecidedAtRevising`; `trialAndAnswerUsePhraseFinals` replaces the revised-text one.
 - `HybridRecognizer.revise` remains (used by P-07).
+
+## P-07 state
+- `HistoryPassScheduler` (`STT/HistoryPassScheduler.swift`): one in flight, newest waiting replaces older (`replaced`), job queued > 8 s is dropped
+  unrun (`droppedStale`; "result older than 8 s of queue" is read as queue wait, measured at start), waits while `isBusy` (utterance in
+  progress; resumed by `kick()` at the end of every `runFinal`), `reset()` on pause drops waiting job and in-flight result. Metric
+  `whisper_history turn= outcome=applied|replaced|stale|unchanged|reset`.
+- `StreamingTranscriber.submitHistoryPass(utterances:turn:text:)` uses question audio stashed by `redecodeQuestion` (last 3, ≤ ~2 MB each);
+  runs `recognizer.revise` only if `revisionNeeded` (hybrid: uk). Called from `App.turnCompleted` after `memory.addQuestion`.
+- Result → `App.onHistoryText` → `memory.reviseText(old,to:new,scope:.questions)` (whole-word) + `SessionController.reviseQuestion`
+  (first phrase gets the whole text, others removed) + `saveMemory`. Never touches the hint or the displayed transcript.
+- Executor decisions: owner-channel history pass (R-11 "only when idle") NOT done — owner answers keep provisional text; dead
+  `reviseOwnerUtterance` removed. Not run: live replay of a dense call (needs a live session; H-1).
 
 ## Next
 P-06 + P-07 together (remove per-phrase Whisper revision, background history pass), P-08 (thresholds, independent), then P-09 (gated drafts —

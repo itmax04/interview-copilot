@@ -74,6 +74,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
     public let questionRanges = QuestionAudioRange()
     private lazy var redecoder = QuestionRedecoder(recognizer: recognizer)
     private var redecodeCache: [(utterances: [Int], result: QuestionRedecode)] = []
+    /// Звук последних вопросов для фонового прохода Whisper по истории (R-07): живёт дольше `release` хода, не больше трёх.
+    private var historyAudio: [(utterances: [Int], audio: QuestionAudio)] = []
+    private var historyPass: HistoryPassScheduler!
+    private var onHistoryText: (@Sendable (_ turn: Int, _ oldText: String, _ result: Transcription) -> Void)?
 
     // Состояние под lock.
     private var vad: EnergyVAD
@@ -107,7 +111,37 @@ public final class StreamingTranscriber: @unchecked Sendable {
         self.config = config
         self.onEvent = onEvent
         self.vad = EnergyVAD(config: config.vad)
+        self.historyPass = HistoryPassScheduler(
+            isBusy: { [weak self] in self?.lock.withLock { self?.utteranceStart != nil } ?? true },
+            run: { [weak self] job in
+                guard let self else { return nil }
+                let language = HybridRecognizer.revisionLanguage(language: job.language, text: job.oldText)
+                return try? self.recognizer.revise(job.audio.samples, language: job.language ?? language, prompt: nil)
+            },
+            apply: { [weak self] job, result in
+                guard let handler = self?.lock.withLock({ self?.onHistoryText }) else { return }
+                handler(job.turn, job.oldText, result)
+            })
     }
+
+    /// Результат фонового прохода по истории: (номер хода, текст вопроса в памяти, уточнённый текст). Только память,
+    /// история и отчёт; подсказку и ход он не меняет (COPILOT-15 R-07).
+    public func setHistoryHandler(_ handler: (@Sendable (_ turn: Int, _ oldText: String, _ result: Transcription) -> Void)?) {
+        lock.withLock { onHistoryText = handler }
+    }
+
+    /// После хода: поставить проход Whisper по звуку вопроса. Нет звука или распознаватель не уточняет — ничего не делает.
+    public func submitHistoryPass(utterances: [Int], turn: Int, text: String) {
+        let audio = lock.withLock { historyAudio.first { $0.utterances == utterances }?.audio }
+        guard let audio else { return }
+        let language = lock.withLock { lastLanguage }
+        let probe = Transcription(text: text, language: language ?? "", languageProbabilities: [:], audioSeconds: audio.seconds,
+                                  elapsedMs: 0, noSpeechProbability: 0)
+        guard recognizer.revisionNeeded(probe, language: language) else { return }
+        historyPass.submit(turn: turn, audio: audio, language: language, oldText: text)
+    }
+
+    public var historyPassStats: HistoryPassScheduler.Stats { historyPass.stats }
 
     /// Язык из настроек (R-03): "uk" / "ru" / "en" или nil — Auto.
     /// Подсказка распознаванию (initial prompt whisper) для языка: словарь из базы вопросов и предыдущие реплики.
@@ -190,6 +224,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
         if cancel {
             recognizer.cancel()
             recognizer.cancelRevision()
+            historyPass.reset()
         }
     }
 
@@ -394,6 +429,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
             Log.metrics.notice("redecode_failed turn=\(turn) reason=no_audio")
             return nil
         }
+        lock.withLock {
+            historyAudio.append((utterances, audio))
+            if historyAudio.count > 3 { historyAudio.removeFirst() }
+        }
         let language = recognizer.nativeMultilingual ? nil : lock.withLock { lastLanguage }
         let result = await redecoder.run(audio, language: language, turn: turn,
                                          provisionalWords: provisional.split { $0.isWhitespace }.count)
@@ -411,6 +450,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
         let u = request.utterance
         let scheduledEpoch = request.epoch
         let phraseEnd = request.phraseEnd
+        defer { historyPass.kick() }   // движок свободен: ожидающий проход по истории может стартовать
         guard lock.withLock({ epoch == scheduledEpoch && !paused }) else { return }
         var audio = request.audio
         if !audio.isEmpty, let enhance = lock.withLock({ audioEnhancer }), let cleaned = enhance(audio) { audio = cleaned }

@@ -86,6 +86,13 @@ final class ListeningController {
 
     /// Фильтр отбросил реплику (COPILOT-05 R-06) — текст для ⌃⌥↩ «ответить всё равно».
     var onFiltered: ((String) -> Void)?
+    /// Фоновый проход Whisper по истории закончил вопрос хода (COPILOT-15 R-07): (номер хода, прежний текст, уточнённый, язык).
+    var onHistoryText: ((Int, String, String, String) -> Void)?
+
+    /// После хода: поставить проход Whisper по звуку вопроса (только история и память, не подсказка).
+    func submitHistoryPass(utterances: [Int], turn: Int, text: String) {
+        transcriber?.submitHistoryPass(utterances: utterances, turn: turn, text: text)
+    }
     /// Словарь терминов для фильтра языка: встроенный + резюме, вакансия, база (R-05).
     private var terms = TermDictionary()
     /// Silero (R-02): загружается один раз, применяется к распознаванию по настройке.
@@ -751,6 +758,12 @@ final class ListeningController {
             let enhancerBox = self.enhancerBox
             t.setAudioEnhancer { samples in enhancerBox.enhance(samples) }
             t.setPaused(phase != .listening)
+            t.setHistoryHandler { [weak self] turn, old, result in
+                Task { @MainActor in
+                    guard let self, self.recognizerGeneration == generation else { return }
+                    self.onHistoryText?(turn, old, result.text, result.language)
+                }
+            }
             transcriberBox.set(t)
             transcriber = t
             var ownerConfig = StreamingTranscriber.Config()
