@@ -14,7 +14,8 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
 | P-03 QuestionAudioRange | done | bdb237a | `QuestionAudioRangeTests` 7 PASS (AC-06) |
 | P-04 QuestionRedecoder | done | 8e6493e + de-flake commit | `TurnRedecodeTests` 6 PASS (AC-05 re-decode/fallback); budget timer on its own queue (global pool starved under full suite) |
 | P-05 turn flow | done (code), see P-05 state | (P-05 commit) | `swift build` PASS; `swift test` PASS (447 tests, 80 suites); `scripts/run-evals.sh turn` PASS T=700 unchanged (premature 0, missed 0/26, 596 ms); `check-localization.sh` PASS (no new strings) |
-| P-06 … P-13 | not started | | |
+| P-06 per-phrase revision removed | done | (P-06 commit) | `swift build` PASS; `swift test` PASS (444 tests, 79 suites); grep: no `phrase_end_to_revised_ms`/`allowRevision`/`revisionMaxQueueDelay` in Sources/Tests/scripts |
+| P-07 … P-13 | not started | | |
 
 ## Findings of P-01 (what the plan builds on)
 - Turn text = `TurnDetector.pending` (concatenated phrase finals); `Turn` has no audio reference. `phraseFinal(text, speechEnd:)`
@@ -66,6 +67,14 @@ Links: [intent.md](intent.md) · [spec.md](spec.md) · [plan.md](plan.md)
   → joined path; `.speaker` also excludes owner spans inside `QuestionAudioRange`.
 - `first_token ms_from_turn_end` now includes the re-decode time (turn is delivered after it) — intended, matches AC-03.
 - Not run: replay / real Parakeet through the app path (needs live session).
+
+## P-06 state
+- Removed `.revising`/`.revised`, `Config.allowRevision`/`revisionMaxQueueDelay`, `scheduleRevision` and its queue; consumers updated
+  (ListeningController, App, TurnController, TestCallTrial, AnswerCapture, copilot-eval, `SpeakerRouter.decide`). Owner answers now
+  keep their provisional text (`onOwnerRevised`/`ownerFastText` removed); `memory.reviseText`, `sessions.reviseUtterance` and
+  `reviseOwnerUtterance` stay for P-07 (history pass). Tests: removed `RevisionBacklogTests`, `ownerChannelSkipsWhisperRevision`,
+  `finalFollowsRouteDecidedAtRevising`; `trialAndAnswerUsePhraseFinals` replaces the revised-text one.
+- `HybridRecognizer.revise` remains (used by P-07).
 
 ## Next
 P-06 + P-07 together (remove per-phrase Whisper revision, background history pass), P-08 (thresholds, independent), then P-09 (gated drafts —

@@ -19,7 +19,6 @@ struct TurnRedecodeTests {
         let fake = FakeRecognizer()
         let sink = EventSink()
         var config = StreamingTranscriber.Config()
-        config.allowRevision = false
         let t = StreamingTranscriber(recognizer: fake, buffer: buffer, config: config) { sink.add($0) }
         t.setLanguage("uk")
         feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))

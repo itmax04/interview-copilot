@@ -299,45 +299,6 @@ final class SlowRevisionRecognizer: SpeechRecognizer, @unchecked Sendable {
     }
 }
 
-@Suite("StreamingTranscriber — очередь уточнения не растёт без предела (живая сессия 2026-11-20)")
-struct RevisionBacklogTests {
-    /// Плотная речь: фразы приходят чаще, чем Whisper успевает их уточнить. Раньше очередь уточнения росла без предела
-    /// (phrase_end_to_revised_ms до 107 с): уточнения шли с минутным опозданием и подменяли текст уже ушедших вопросов.
-    /// Теперь уточнение, ждавшее дольше `revisionMaxQueueDelay`, не запускается — остаётся быстрый текст.
-    @Test func staleRevisionsAreSkipped() async {
-        let buffer = AudioRingBuffer(seconds: 30)
-        let sink = EventSink()
-        let recognizer = SlowRevisionRecognizer(revisionDelay: 0.3)
-        var config = StreamingTranscriber.Config()
-        config.revisionMaxQueueDelay = 0.5
-        let t = StreamingTranscriber(recognizer: recognizer, buffer: buffer, config: config) { sink.add($0) }
-        t.setLanguage("uk")
-        let tone = (0..<12_800).map { Float(sin(Double($0) * 2 * .pi * 220 / 16_000)) * 0.3 }
-        var samples = [Float](repeating: 0, count: 8_000)
-        for _ in 0..<8 { samples += tone + [Float](repeating: 0, count: 9_600) }
-        var i = 0
-        while i < samples.count {
-            let chunk = Array(samples[i..<min(i + 320, samples.count)])
-            buffer.append(chunk)
-            t.process(chunk)
-            i += 320
-        }
-        func revisedCount(_ events: [TranscriptEvent]) -> Int {
-            events.filter { if case .revised = $0 { true } else { false } }.count
-        }
-        #expect(await sink.waitFor({ events in
-            let f = events.filter { if case .final = $0 { true } else { false } }.count
-            return f == 8 && revisedCount(events) == 8
-        }, timeout: 5))
-        // Каждая реплика получила итог (ожидающие не зависли), но Whisper запускался не для всех.
-        #expect(revisedCount(sink.events) == 8)
-        #expect(recognizer.revisions < 8)
-        #expect(recognizer.revisions >= 1)
-        // Пропущенное уточнение отдаёт быстрый текст.
-        #expect(sink.events.contains { if case .revised(_, "черновик", _) = $0 { true } else { false } })
-    }
-}
-
 /// Распознаватель, у которого первый итог «отменён» чужим `cancel()` (COPILOT-13).
 final class CancelledOnceRecognizer: SpeechRecognizer, @unchecked Sendable {
     private let lock = NSLock()

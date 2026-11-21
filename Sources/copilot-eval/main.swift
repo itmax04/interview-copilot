@@ -119,8 +119,6 @@ case "stt-stream":
             let ms = Double(emitted - phraseEnd) / 1e6
             collector.lock.withLock { collector.latencies.append(ms) }
             print(String(format: "final utt=%d lang=%@ phrase_end_to_final_ms=%.0f text=%@", u, language, ms, text))
-        case .revised(let u, let text, let language):
-            print(String(format: "revised utt=%d lang=%@ text=%@", u, language, text))
         default: break
         }
     }

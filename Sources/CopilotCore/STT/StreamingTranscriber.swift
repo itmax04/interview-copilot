@@ -11,16 +11,12 @@ public enum TranscriptEvent: Sendable, Equatable {
     /// Итоговый текст реплики после паузы. `phraseEnd` — момент окончания речи, `emittedAt` — момент выдачи текста
     /// (оба — `DispatchTime.uptimeNanoseconds`); разница — метрика AC-01.
     case final(utterance: Int, text: String, language: String, phraseEnd: UInt64, emittedAt: UInt64)
-    /// После `final` этой реплики придёт уточнённый текст (R-37). Приходит до `final`.
-    case revising(utterance: Int)
-    /// Уточнённый итог (украинский — Whisper `uk`, R-35/R-37). Ход и подсказка уже запущены по быстрому `final`.
-    case revised(utterance: Int, text: String, language: String)
     /// Реплика без текста (шум, тишина, ошибка распознавания): её итога ждать не нужно (R-38).
     case discarded(utterance: Int, phraseEnd: UInt64)
     /// Реплика сказана не владельцем (отпечаток голоса, COPILOT-05 R-03): вместо `final`, показывается серым.
     case foreignVoice(utterance: Int, text: String, similarity: Float, phraseEnd: UInt64)
     /// Кто сказал реплику — режим «Репетиция с собеседником» (`VoiceVerdict.routeBySpeaker`): `owner` — голос владельца,
-    /// иначе чужой. Приходит до `revising` и `final` этой реплики, только если проверка голоса дала вердикт.
+    /// иначе чужой. Приходит до `final` этой реплики, только если проверка голоса дала вердикт.
     case speaker(utterance: Int, owner: Bool, similarity: Float)
 }
 
@@ -40,12 +36,6 @@ public final class StreamingTranscriber: @unchecked Sendable {
         public var partialInterval: Double = 0.8
         /// Итог использует полный контекст; частичный текст остаётся быстрым.
         public var finalReducedContext = false
-        /// Уточнение итога Whisper (R-37). Канал микрофона владельца (COPILOT-05 R-07) его не просит: текст нужен
-        /// только как контекст подсказки, а Whisper занял бы процессор, нужный для вопросов интервьюера.
-        public var allowRevision = true
-        /// Уточнение, ждавшее в очереди дольше этого (от конца фразы), не запускается: остаётся быстрый текст.
-        /// Живая сессия 2026-11-20: в плотной речи очередь Whisper росла без предела (phrase_end_to_revised_ms до 107 с).
-        public var revisionMaxQueueDelay: Double = 8
         /// С какой длины реплики определять язык, с.
         public var languageDetectAfter: Double = 1.2
         /// Уточнять язык, пока уверенность ниже порога, каждые `languageRefineStep` с звука, но не дольше `languageRefineUntil`.
@@ -79,8 +69,6 @@ public final class StreamingTranscriber: @unchecked Sendable {
     private let onEvent: @Sendable (TranscriptEvent) -> Void
     private let buffer: AudioRingBuffer
     private let work = DispatchQueue(label: "com.itmax04.interviewcopilot.stt", qos: .userInitiated)
-    /// Уточнение итога (Whisper) идёт параллельно: следующая реплика не ждёт его (R-37).
-    private let revisionWork = DispatchQueue(label: "com.itmax04.interviewcopilot.stt-revision", qos: .userInitiated)
     private let lock = NSLock()
     /// Границы и звук закрытых фраз: из них строится звук хода для повторного распознавания (COPILOT-15 R-02).
     public let questionRanges = QuestionAudioRange()
@@ -513,13 +501,9 @@ public final class StreamingTranscriber: @unchecked Sendable {
             }
             let emitted = DispatchTime.now().uptimeNanoseconds
             Log.metrics.notice("transcript_final utt=\(u) lang=\(result.language, privacy: .public) audio_ms=\(Int(result.audioSeconds * 1000)) stt_ms=\(Int(result.elapsedMs)) phrase_end_to_final_ms=\(Int((emitted - phraseEnd) / 1_000_000))")
-            // Двухэтапный итог (R-37): быстрый текст сразу — ход и подсказка не ждут; уточнённый — следом.
-            let revise = config.allowRevision && recognizer.revisionNeeded(result, language: lang)
             if let speaker { questionRanges.setRoute(utterance: u, owner: speaker.owner) }
             if let speaker { onEvent(.speaker(utterance: u, owner: speaker.owner, similarity: speaker.similarity)) }
-            if revise { onEvent(.revising(utterance: u)) }
             onEvent(.final(utterance: u, text: result.text, language: result.language, phraseEnd: phraseEnd, emittedAt: emitted))
-            if revise { scheduleRevision(utterance: u, audio: audio, language: lang, first: result, epoch: scheduledEpoch, phraseEnd: phraseEnd) }
         } catch {
             Log.stt.error("final transcription failed: \(String(describing: error), privacy: .public)")
             discard(u, phraseEnd)
@@ -549,28 +533,5 @@ public final class StreamingTranscriber: @unchecked Sendable {
         if error is CancellationError { return true }
         if case WhisperError.cancelled = error { return true }
         return false
-    }
-
-    /// Уточнение итога в отдельной очереди. При ошибке или паузе — исходный текст, чтобы ожидающие не зависли.
-    private func scheduleRevision(utterance u: Int, audio: [Float], language: String?, first: Transcription, epoch scheduledEpoch: Int,
-                                  phraseEnd: UInt64) {
-        revisionWork.async { [weak self] in
-            guard let self else { return }
-            var revised = first
-            let waitedMs = Int((DispatchTime.now().uptimeNanoseconds - phraseEnd) / 1_000_000)
-            // Отстали: Whisper медленнее потока фраз. Уточнять поздно — ход и подсказка давно ушли, а ожидание
-            // только растит очередь. Быстрый текст остаётся, очередь догоняет поток.
-            let stale = Double(waitedMs) / 1000 > self.config.revisionMaxQueueDelay
-            if stale {
-                Log.metrics.notice("transcript_revision_skipped utt=\(u) reason=stale waited_ms=\(waitedMs)")
-            } else if self.lock.withLock({ self.epoch == scheduledEpoch && !self.paused }),
-               let r = try? self.recognizer.revise(audio, language: HybridRecognizer.revisionLanguage(language: language, text: first.text),
-                                                   prompt: self.prompt(for: language)), !r.text.isEmpty {
-                revised = r
-            }
-            let ms = Int((DispatchTime.now().uptimeNanoseconds - phraseEnd) / 1_000_000)
-            Log.metrics.notice("transcript_revised utt=\(u) lang=\(revised.language, privacy: .public) changed=\(revised.text != first.text) phrase_end_to_revised_ms=\(ms)")
-            self.onEvent(.revised(utterance: u, text: revised.text, language: revised.language))
-        }
     }
 }

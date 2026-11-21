@@ -64,8 +64,8 @@ final class TurnController {
             detector.interviewerStoppedSpeaking(at: Double(at) / 1e6)
         case .discarded(_, let phraseEnd), .foreignVoice(_, _, _, let phraseEnd):
             detector.phraseDiscarded(speechEnd: Double(phraseEnd) / 1e6)
-        case .partial, .revising, .revised, .speaker:
-            // Ход — по быстрому итогу (R-37): уточнённый украинский текст подсказку не задерживает.
+        case .partial, .speaker:
+            // Ход — по итогам фраз; весь вопрос перераспознаётся при завершении хода (COPILOT-15).
             break
         case .final(let utterance, let text, _, let phraseEnd, _):
             finalsSinceTurn += 1

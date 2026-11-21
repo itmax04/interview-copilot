@@ -7,7 +7,6 @@ public struct AnswerCapture: Sendable {
     public private(set) var partial = ""
     private var finals: [Int: String] = [:]
     private var pending: Set<Int> = []
-    private var revising: Set<Int> = []
     private var speaking = false
     private var lastActivity: Double
     private var firstSpeech: Double?
@@ -44,24 +43,15 @@ public struct AnswerCapture: Sendable {
             if pending.contains(u) { partial = value }
         case .final(let u, let value, _, _, _):
             guard pending.contains(u) || finals[u] == nil else { return }
-            if !revising.contains(u) { pending.remove(u) }
+            pending.remove(u)
             finals[u] = value
             partial = ""
             lastActivity = now
-        case .revising(let u):
-            revising.insert(u)
-            pending.insert(u)
         case .discarded(let u, _), .foreignVoice(let u, _, _, _):
             // Чужой голос в ответе владельца (COPILOT-05 R-01) — как шум.
             pending.remove(u)
-            revising.remove(u)
         case .speaker:
             break   // репетиция с собеседником — только «Микрофон Mac»; в ответе ИИ-собеседования событие не приходит
-        case .revised(let u, let value, _):
-            guard revising.remove(u) != nil else { return }
-            finals[u] = value
-            pending.remove(u)
-            lastActivity = now
         }
     }
 

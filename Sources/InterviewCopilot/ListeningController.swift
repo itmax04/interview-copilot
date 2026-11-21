@@ -148,10 +148,6 @@ final class ListeningController {
     private let ownerActive = LockedFlag()
     /// Фраза владельца прошла фильтры — в память интервью (COPILOT-06).
     var onOwnerSaid: ((String) -> Void)?
-    /// Уточнённый текст ответа владельца в самопроверке (Whisper приходит через ~3 с, иногда уже после ⌃⌥A): (черновик, итог).
-    var onOwnerRevised: ((String, String) -> Void)?
-    /// Черновой текст ответов владельца по номеру реплики — до уточнения.
-    private var ownerFastText: [Int: String] = [:]
     /// Вопрос или ответ владельца по говорящему (репетиция с собеседником) и ⌃⌥A.
     private var speakerRouter = SpeakerRouter()
 
@@ -468,7 +464,6 @@ final class ListeningController {
     /// Начало сессии: расшифровка с чистого листа, захват по источнику из настроек.
     func startSession() {
         deliveryEpoch.advance()
-        ownerFastText.removeAll()
         speakerRouter.reset()
         transcript = []
         partialText = nil
@@ -760,7 +755,6 @@ final class ListeningController {
             transcriber = t
             var ownerConfig = StreamingTranscriber.Config()
             ownerConfig.partialInterval = 3600        // промежуточный текст владельца не нужен
-            ownerConfig.allowRevision = false
             ownerConfig.vad = StreamingTranscriber.microphoneVAD
             let ot = StreamingTranscriber(recognizer: engine, buffer: ownerBuffer, config: ownerConfig) { [weak self] event in
                 let epoch = deliveryEpoch.current()
@@ -795,11 +789,6 @@ final class ListeningController {
             onOwnerTranscript?(event)
             return
         }
-        // Уточнение ответа владельца — и после выхода из режима ответа: реплика уже записана ответом, не вопросом.
-        if case .revised(let u, let text, _) = event, let fast = ownerFastText.removeValue(forKey: u) {
-            onOwnerRevised?(fast, text)
-            return
-        }
         if case .speaker(let u, let owner, _) = event {
             speakerRouter.noteSpeaker(utterance: u, owner: owner)
             return
@@ -807,8 +796,6 @@ final class ListeningController {
         // Самопроверка: ответ владельца (⌃⌥A или его голос в репетиции с собеседником) — в память; для хода — как шум.
         if source == .microphone {
             switch event {
-            case .revising(let u) where speakerRouter.decide(utterance: u, ownerAnswering: ownerAnswering) == .ownerAnswer:
-                return   // уточнение придёт в onOwnerRevised, ход его не ждёт
             case .final(let u, let text, _, let phraseEnd, _):
                 let route = speakerRouter.route(utterance: u, ownerAnswering: ownerAnswering)
                 speakerRouter.forget(utterance: u)
@@ -849,7 +836,7 @@ final class ListeningController {
             transcript.append(TranscriptLine(id: u, text: text, language: language, provisional: true))
             if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
             onChange?()
-        case .revising, .discarded, .speaker:
+        case .discarded, .speaker:
             break
         case .foreignVoice(let u, let text, let similarity, let phraseEnd):
             // R-03, R-06: чужой голос — серой строкой; для хода — как шум.
@@ -860,22 +847,12 @@ final class ListeningController {
             onFiltered?(text)
             onTranscript?(.discarded(utterance: u, phraseEnd: phraseEnd))
             return
-        case .revised(let u, let text, let language):
-            // Уточнённый итог (R-37) подменяет строку реплики в расшифровке.
-            if let i = transcript.lastIndex(where: { $0.id == u }) {
-                transcript[i] = TranscriptLine(id: u, text: text, language: language, filtered: transcript[i].filtered, provisional: transcript[i].provisional)
-                onChange?()
-                // Отфильтрованная реплика остаётся отфильтрованной: ход по ней уже не ждут.
-                if transcript[i].filtered != nil { return }
-            }
         }
         onTranscript?(event)
     }
 
     /// Ответ владельца в самопроверке: в память интервью; для хода — как шум, вопросов нет.
     private func recordOwnerAnswer(utterance u: Int, text: String, phraseEnd: UInt64) {
-        ownerFastText[u] = text
-        if ownerFastText.count > 20, let oldest = ownerFastText.keys.min() { ownerFastText.removeValue(forKey: oldest) }
         onOwnerSaid?(text)
         Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=\(self.ownerAnswering ? "self-test" : "rehearsal", privacy: .public)")
         if partialText != nil {

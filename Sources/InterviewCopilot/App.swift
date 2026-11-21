@@ -203,11 +203,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.fastText[u] = text
                 if self.fastText.count > 50, let oldest = self.fastText.keys.min() { self.fastText.removeValue(forKey: oldest) }
             }
-            if case .revised(let u, let text, let lang) = event {
-                self.sessions.reviseUtterance(id: u, text: text, language: lang)
-                // COPILOT-06: уточнённый текст — и в память интервью (живой тест: туда попадал черновой Parakeet).
-                if let fast = self.fastText.removeValue(forKey: u) { self.memory.reviseText(fast, to: text, scope: .questions); self.saveMemory() }
-            }
         }
         listening.onOwnerSpeaking = { [weak self] speaking, t in
             guard let self, !self.testCall.active else { return }
@@ -316,11 +311,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         listening.onOwnerSaid = { [weak self] text in
             self?.memory.addAnswer(text)
             self?.sessions.addOwnerUtterance(text)
-            self?.saveMemory()
-        }
-        listening.onOwnerRevised = { [weak self] fast, text in
-            self?.memory.reviseText(fast, to: text, scope: .answers)
-            self?.sessions.reviseOwnerUtterance(fast, to: text)
             self?.saveMemory()
         }
         if testCallOnly {

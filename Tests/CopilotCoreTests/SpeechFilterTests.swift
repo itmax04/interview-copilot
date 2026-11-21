@@ -279,27 +279,4 @@ struct OwnerChannelTests {
         func revise(_ samples: [Float], language: String?, prompt: String?) throws -> Transcription? { nil }
         func cancelRevision() {}
     }
-
-    @Test func ownerChannelSkipsWhisperRevision() async {
-        for allow in [true, false] {
-            let buffer = AudioRingBuffer(seconds: 30)
-            let sink = EventSink()
-            var config = StreamingTranscriber.Config()
-            config.partialInterval = 3600
-            config.allowRevision = allow
-            let t = StreamingTranscriber(recognizer: RevisingRecognizer(), buffer: buffer, config: config) { sink.add($0) }
-            for chunk in [EnergyVADTests.noise(ms: 300, amplitude: 0.001), EnergyVADTests.tone(ms: 1500, amplitude: 0.3),
-                          EnergyVADTests.noise(ms: 700, amplitude: 0.001)] {
-                var i = 0
-                while i < chunk.count {
-                    let part = Array(chunk[i..<min(i + 320, chunk.count)])
-                    buffer.append(part)
-                    t.process(part)
-                    i += 320
-                }
-            }
-            #expect(await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } })
-            #expect(sink.events.contains { if case .revising = $0 { true } else { false } } == allow)
-        }
-    }
 }

@@ -27,7 +27,7 @@ struct SpeakerRoutingTests {
             }
         }
         _ = await sink.waitFor { events in
-            events.contains { if case .revised = $0 { true } else if case .foreignVoice = $0 { true } else { false } }
+            events.contains { if case .final = $0 { true } else if case .foreignVoice = $0 { true } else { false } }
         }
         return sink
     }
@@ -36,14 +36,12 @@ struct SpeakerRoutingTests {
 
     // MARK: Распознавание: вердикт на событии, итог и уточнение не теряются
 
-    @Test func rejectedVoiceInRehearsalBecomesFinalWithRevision() async throws {
+    @Test func rejectedVoiceInRehearsalBecomesFinal() async throws {
         let sink = await runPhrase(gate: { _ in VoiceVerdict(similarity: 0.40, accepted: false, routeBySpeaker: true) })
         let events = sink.events
         let speaker = try #require(index(events) { if case .speaker(_, false, 0.40) = $0 { true } else { false } })
-        let revising = try #require(index(events) { if case .revising = $0 { true } else { false } })
         let final = try #require(index(events) { if case .final(_, "черновик", _, _, _) = $0 { true } else { false } })
-        #expect(speaker < revising && revising < final)
-        #expect(events.contains { if case .revised(_, "уточнено", _) = $0 { true } else { false } })
+        #expect(speaker < final)
         #expect(!events.contains { if case .foreignVoice = $0 { true } else { false } })
     }
 
@@ -66,7 +64,6 @@ struct SpeakerRoutingTests {
         let rejected = await runPhrase(gate: { _ in VoiceVerdict(similarity: 0.40, accepted: false) })
         #expect(rejected.events.contains { if case .foreignVoice(_, "черновик", 0.40, _) = $0 { true } else { false } })
         #expect(!rejected.events.contains { if case .final = $0 { true } else { false } })
-        #expect(!rejected.events.contains { if case .revising = $0 { true } else { false } })
         // Принятый — обычный итог, поток событий тот же, что до режима репетиции.
         let accepted = await runPhrase(gate: { _ in VoiceVerdict(similarity: 0.66, accepted: true) })
         #expect(accepted.events.contains { if case .final = $0 { true } else { false } })
@@ -119,15 +116,6 @@ struct SpeakerRoutingTests {
         // COPILOT-05 Q13: владелец сам читает вопросы; ответ — только по ⌃⌥A.
         #expect(router.route(utterance: 1, ownerAnswering: false) == .question)
         #expect(router.route(utterance: 1, ownerAnswering: true) == .ownerAnswer)
-    }
-
-    @Test func finalFollowsRouteDecidedAtRevising() {
-        // ⌃⌥A выключили между `revising` и `final`: итог идёт ответом, как и решено, — уточнение не теряется.
-        var router = SpeakerRouter(rehearsal: true)
-        #expect(router.decide(utterance: 4, ownerAnswering: true) == .ownerAnswer)
-        #expect(router.route(utterance: 4, ownerAnswering: false) == .ownerAnswer)
-        router.forget(utterance: 4)
-        #expect(router.route(utterance: 4, ownerAnswering: false) == .question)
     }
 
     @Test func verdictIsForgottenAndBounded() {
