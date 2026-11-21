@@ -29,10 +29,20 @@ for other languages and a one-action switch) plus a live silent-microphone warni
   `updateOwnerChannel`, the `level_db … mic_db … owner_speaking` log line (~line 1046).
 - `Sources/CopilotCore/Session/SessionConfig.swift` — the session `language` (the analyzed session had "auto").
 
+## Owner answers (2026-11-21, recorded in intent.md v2)
+The stray speech was **German spoken near the owner**, picked up by the interviewer-side mic (iPhone + wired AirPods) and
+delivered through Telegram — i.e. it came on the call channel, not from another Mac app. Interviewers never switch to
+English, only IT words. Calls: mostly Meet, sometimes Telegram/Discord/Zoom. Number of interviewers varies.
+Priority for the spec therefore: (1) language gate drops whole foreign/English phrases on the `.call` channel too when the
+session is uk/ru, and "auto" settles on the interview language; (2) silent-mic detection + cause during a Telegram call;
+(3) call-only capture by default, "All system audio" warning, Discord in the auto list.
+
 ## Open
-- Owner questions O1–O5 in intent.md are unanswered; executor defaults are written next to each. Ask them only at an
-  H-checkpoint of plan.md.
-- Cause of the silent microphone (`mic_db=-120.0` all session) is unknown; it may be a device issue, not a code bug.
+- Meet browser (Chrome / Safari / Arc) — unknown; ask at an H-checkpoint.
+- Cause of the silent microphone (`mic_db=-120.0` all session, owner answered into the Mac during a Telegram call) is
+  unknown; suspected the call app holding the input or a different input device. Needs a device check with the owner.
+- Pseudo-English from German: the text detector says `en`; check on synthetic samples (`evals/`) that the stricter rule
+  catches such phrases without dropping uk/ru questions with IT terms (filter-text eval must stay 214/214 or be extended).
 - CLAUDE.md still says the latest task is COPILOT-13 (stale; update when this task's docs land).
 
 ## Next
