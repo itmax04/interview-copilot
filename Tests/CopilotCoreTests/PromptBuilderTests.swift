@@ -47,6 +47,47 @@ struct UnderstoodLineTests {
         #expect(UnderstoodLine.answer("❓ q\n\nanswer") == "answer")
     }
 
+    @Test("split tolerates U+FE0F, markdown emphasis and leading whitespace; the line comes back clean")
+    func splitTolerant() {
+        let variants = [
+            "❓\u{FE0F} Що таке Combine?\nВідповідь",
+            "**❓ Що таке Combine?**\nВідповідь",
+            "**❓\u{FE0F} Що таке Combine?**\nВідповідь",
+            "  \n_❓ Що таке Combine?_\nВідповідь",
+            "*❓ Що таке Combine?*\nВідповідь",
+            "❓Що таке Combine?\nВідповідь",
+            "❓ **Що таке Combine?**\nВідповідь",
+        ]
+        for v in variants {
+            let r = UnderstoodLine.split(v)
+            #expect(r.line == "❓ Що таке Combine?", "\(v)")
+            #expect(r.rest == "Відповідь", "\(v)")
+            #expect(UnderstoodLine.answer(v) == "Відповідь", "\(v)")
+            #expect(UnderstoodLine.state(v) == "present", "\(v)")
+        }
+        // Потоковый кусок с открытым `**` и без перевода строки.
+        #expect(UnderstoodLine.split("**❓ Що таке Comb").line == "❓ Що таке Comb")
+        // Эмодзи не в начале — это не строка пересказа.
+        #expect(UnderstoodLine.split("Відповідь ❓ далі").line == nil)
+    }
+
+    @Test("state: present, absent, malformed (marker without text); the no-answer dash is absent")
+    func stateLabel() {
+        #expect(UnderstoodLine.state("❓ q\na") == "present")
+        #expect(UnderstoodLine.state("**Суть.**\nДеталі") == "absent")
+        #expect(UnderstoodLine.state("—") == "absent")
+        #expect(UnderstoodLine.state("❓\u{FE0F}\nДеталі") == "malformed")
+        #expect(UnderstoodLine.state("**❓**\nДеталі") == "malformed")
+    }
+
+    @Test("The prompt bans topics from earlier turns or the profile in the line; the experience 'Yes' follows the line")
+    func promptRules() {
+        let s = hint().system
+        #expect(s.contains("never bring into it a topic, project"))
+        let withProfile = PromptBuilder.system(profile: Profile(name: "p"), redactPII: false, understoodLine: true)
+        #expect(withProfile.contains("Begin the first line of the answer itself (after the"))
+    }
+
     @Test("Eval helpers look at the answer, not at the understood line")
     func evalHelpers() {
         #expect(PromptScenarios.firstLine("❓ Так, питання\n**Combine — це…**") == "combine — це…")

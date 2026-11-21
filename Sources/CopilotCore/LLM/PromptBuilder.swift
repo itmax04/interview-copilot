@@ -31,13 +31,37 @@ public enum UnderstoodLine {
     public static let marker = "❓"
 
     /// Строка пересказа и остальной ответ. Строки нет — `line == nil`, `rest` — весь текст.
+    /// Разбор терпим к тому, как модель пишет маркер: пробелы в начале, U+FE0F после эмодзи, обрамление `**`/`*`/`_`.
+    /// `line` — чистая строка вида «❓ текст» без обрамления.
     public static func split(_ text: String) -> (line: String?, rest: String) {
-        guard text.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix(marker) else { return (nil, text) }
         let t = text.drop { $0.isWhitespace }
-        guard let nl = t.firstIndex(where: \.isNewline) else { return (String(t), "") }
-        let line = String(t[..<nl]).trimmingCharacters(in: .whitespaces)
+        let nl = t.firstIndex(where: \.isNewline)
+        let first = nl.map { t[..<$0] } ?? t
+        guard let body = markerBody(first) else { return (nil, text) }
+        let line = body.isEmpty ? marker : marker + " " + body
+        guard let nl else { return (line, "") }
         let rest = String(t[nl...]).trimmingCharacters(in: .whitespacesAndNewlines)
         return (line, rest)
+    }
+
+    private static let decoration: Set<Character> = ["*", "_"]
+
+    /// Текст после маркера в первой строке (без обрамления), либо nil, если строка не начинается с маркера.
+    private static func markerBody(_ first: Substring) -> String? {
+        var s = first.drop { $0.isWhitespace || decoration.contains($0) }
+        // Swift склеивает «❓» и U+FE0F в один Character: сравниваем по скалярам.
+        guard s.unicodeScalars.first == "\u{2753}" else { return nil }
+        s = Substring(String(s.unicodeScalars.dropFirst().drop { $0 == "\u{FE0F}" }.map(Character.init)))
+        var body = String(s).trimmingCharacters(in: .whitespaces)
+        while let last = body.last, last.isWhitespace || decoration.contains(last) { body.removeLast() }
+        while let f = body.first, decoration.contains(f) { body.removeFirst() }
+        return body.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Состояние строки в готовой подсказке — для метрик (без текста): present, absent, malformed (маркер без текста).
+    public static func state(_ text: String) -> String {
+        guard let line = split(text).line else { return "absent" }
+        return line == marker ? "malformed" : "present"
     }
 
     /// Ответ без строки пересказа — для буфера обмена, памяти и истории (строка нужна только владельцу на панели).
@@ -50,7 +74,9 @@ public enum PromptBuilder {
         Output format of the hint: the first line is "\(UnderstoodLine.marker) " followed by the interviewer's question restated as \
         you understood it — one short sentence in the language of the question. Only restate: do not correct the wording and do not add \
         any term, name, number or fact that is not in the question. Then a line break and the answer, formatted exactly as the rules above \
-        describe. When you reply with exactly "\(noAnswerMarker)", write only that, without the "\(UnderstoodLine.marker)" line.
+        describe. Take the restatement only from the interviewer's current utterance: never bring into it a topic, project, \
+        technology, name or term from earlier turns, the interview history or the candidate's profile — even when the question is \
+        short or sounds like a follow-up. When you reply with exactly "\(noAnswerMarker)", write only that, without the "\(UnderstoodLine.marker)" line.
         """
 
     /// Ответ модели «не вопрос» — панель не меняется (R-11).
@@ -131,7 +157,8 @@ public enum PromptBuilder {
         claim about the interview record, it follows the record rule above and is never confirmed unless a "Candidate:" line \
         contains it — do not open with "Yes" and do not claim hands-on experience in such an answer. For a plain experience \
         question always answer affirmatively, confidently and in detail — never "no", "I haven't" or "I have no experience", and never \
-        hedge or sound unprepared, even when the profile does not mention X. Begin with a clear "Yes" in the language of the \
+        hedge or sound unprepared, even when the profile does not mention X. Begin the first line of the answer itself (after the \
+        "❓" line, when the output format requires it) with a clear "Yes" in the language of the \
         answer, then give a developed answer of 4–6 sentences or bullets: what the candidate used X for and on what kind of \
         tasks, how the work with X goes and its key features as practitioners really use them, how X fits the experience and \
         skills in the profile, and what the candidate got out of it, in general terms. Ground it in the profile's real roles, \

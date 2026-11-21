@@ -309,6 +309,7 @@ final class AnswerController {
                     self.panel.history.update(entry: slot.entry, version: slot.version) { $0.status = .complete }
                     // Строка «понял вопрос» (COPILOT-15 R-10) — только для владельца на панели: в память и историю идёт ответ.
                     let answer = UnderstoodLine.answer(text)
+                    Log.metrics.notice("understood_line turn=\(turn.id) state=\(UnderstoodLine.state(text), privacy: .public)")
                     onComplete?(answer)
                     self.onAnswer?(AnswerRecord(turn: turn, source: provider?.rawValue ?? "?", model: actualModel, cardID: nil,
                                                 text: answer, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
