@@ -10,6 +10,16 @@ mouse, keyboard) and a terminal.
 Working directory: `/Users/macbook/interview-copilot-audit/.claude/worktrees/copilot-15-accurate-turns-02d5da`
 (branch `feat/copilot-15-accurate-turns`). Speak to the owner in Russian; the report file is in English.
 
+Step 0 — computer use (before anything else):
+- Load the `anthropic-skills:computer-use` skill, then load the tools in one call: ToolSearch `{ query: "computer", max_results: 60 }`.
+- No `mcp__computer-use__*` / `mcp__remote-devices__computer_*` tools and no `enable__…computer` tool → tell the owner in
+  Russian that Computer use must be turned on in the Claude desktop app (Settings → System → Computer use, or
+  Settings → Capabilities → Computer use) and that a new session may be needed; then stop. Do not start the check.
+- Request access once for the apps you need: `InterviewCopilot` (full), plus `Finder` if needed. Do not request
+  System Settings. Prefer the background `app_*` tools; take full-screen control only if a step cannot be done otherwise.
+- Terminal/IDE apps are click-only for computer use: run every shell command with your Bash tool, not by typing into
+  Terminal. Browsers are read-only for computer use; use the browser tools only if a page must be clicked.
+
 Read first, in this order:
 1. `docs/changes/COPILOT-15/h1-live-check.md` — the checklist. It is your task; follow it section by section.
 2. `docs/changes/COPILOT-15/handoff.md` — sections "P-11 state" and "P-12 prep state" (what was built, what is unverified).
