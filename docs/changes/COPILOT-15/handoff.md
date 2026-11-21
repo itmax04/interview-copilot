@@ -72,7 +72,9 @@ Commits: `ad06216` (parser, prompt, metric), `f924503` (test for the reworded ru
 | `scripts/run-evals.sh turn` (AC-04) | PASS — premature 0, missed 0/26, mean latency 791 ms |
 | `scripts/check-localization.sh` | PASS — 808 keys, 0 missing |
 | `scripts/metrics.py` on a synthetic log | PASS as designed (FAIL on p90 > 5000, exit 1) |
-| Full check (`secret-scan.sh`, `build-app.sh`) | NOT RUN (belongs to P-12/P-13) |
+| `scripts/run-evals.sh` (all) | PASS — turn premature 0, missed 0/26; bank top1 94.9%, top3 100%; filter-text 214/214; memory 8/8; materials 23/24 |
+| `scripts/secret-scan.sh` | PASS — 0 findings |
+| `scripts/build-app.sh` | PASS — `dist/InterviewCopilot.app` built and signed (version not bumped; belongs to P-12) |
 | Live effect of fixes (❓ presence, redecode count per turn) | NOT RUN — owner's live session |
 
 ## P-02 state
