@@ -199,6 +199,16 @@ final class ListeningController {
     static let echoWindowMs: Double = 1500
 
     private func handleOwner(_ event: TranscriptEvent) {
+        // Универсальный режим «Всё сразу»: если в системном звуке тишина (звонок на телефоне или живой голос в комнате)
+        // и отпечаток голоса определил ЧУЖОЙ голос на микрофоне — направляем его как вопрос собеседника.
+        if case .foreignVoice(let u, let text, _, let phraseEnd) = event {
+            ownerTranscriber?.questionRanges.drop(utterance: u)
+            let endMs = Double(phraseEnd) / 1e6
+            if !callSpeaking, endMs - callSpeechEndedAt > 2000 {
+                routeForeignMicQuestion(text: text, phraseEnd: phraseEnd)
+            }
+            return
+        }
         guard case .final(let u, let text, _, let phraseEnd, _) = event else { return }
         // Без образца голоса эхо интервьюера из динамиков неотличимо по языку: фраза микрофона, закончившаяся,
         // пока в звонке шла речь или в пределах 1,5 с после неё, считается эхом (как правило эха TurnDetector, S-07).
@@ -943,6 +953,30 @@ final class ListeningController {
             return
         }
         onTranscript?(event)
+    }
+
+    /// Чужой голос в микрофоне при тишине в системном звуке (телефон на громкой связи или очный экзамен) —
+    /// попадает в ленту расшифровки и на определение хода без переключения источника.
+    private func routeForeignMicQuestion(text: String, phraseEnd: UInt64) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let lineID = -Int(phraseEnd & 0x7FFF_FFFF)
+        if let reason = filterReason(trimmed) {
+            onFiltered?(trimmed)
+            transcript.append(TranscriptLine(id: lineID, text: trimmed, language: "", filtered: reason))
+            if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
+            onChange?()
+            return
+        }
+        flushOwnerForInterruption()
+        transcript.append(TranscriptLine(id: lineID, text: trimmed, language: "", provisional: false))
+        if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
+        onChange?()
+        // Сбрасываем ложный флаг речи владельца и состояние подавления в TurnDetector перед доставкой чужого голоса.
+        onOwnerSpeaking?(false, Double(phraseEnd) / 1e6)
+        onTranscript?(.speechStarted(utterance: 0))
+        // utterance == 0 сигнализирует TurnController не делать ring re-decode из пустого системного буфера.
+        onTranscript?(.final(utterance: 0, text: trimmed, language: "", phraseEnd: phraseEnd, emittedAt: DispatchTime.now().uptimeNanoseconds))
     }
 
     /// Ответ владельца в самопроверке: в память интервью; для хода — как шум, вопросов нет.

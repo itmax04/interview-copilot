@@ -118,6 +118,11 @@ final class PanelModel {
     var onRetry: (() -> Void)?
     var onOpenPermissions: (() -> Void)?
     var onCreateSession: (() -> Void)?
+    /// Быстрый старт в 1 клик без 3-шагового мастера: сразу слушает любой звонок на Mac + микрофон.
+    var quickSessionType: SessionType = .interview
+    var quickProfileID: String = ""
+    var quickProfiles: [ProfileInfo] = []
+    var onQuickStart: ((SessionType, String?) -> Void)?
     var onEndSession: (() -> Void)?
     var onStartDetectedCall: (() -> Void)?
     var onDismissDetectedCall: (() -> Void)?

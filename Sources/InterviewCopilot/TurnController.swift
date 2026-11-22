@@ -102,7 +102,7 @@ final class TurnController {
         case .final(let utterance, let text, _, let phraseEnd, _):
             finalsSinceTurn += 1
             lastFinalAt = Self.now()
-            detector.phraseFinal(text, speechEnd: Double(phraseEnd) / 1e6, utterance: utterance)
+            detector.phraseFinal(text, speechEnd: Double(phraseEnd) / 1e6, utterance: utterance > 0 ? utterance : nil)
             if let turn = detector.takeRequestedForce(at: Self.now()) { emit(turn) }
         }
     }

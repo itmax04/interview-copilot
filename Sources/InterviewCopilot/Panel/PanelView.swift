@@ -381,17 +381,69 @@ private struct NoSessionView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(ICDark.stroke))
             }
             Message(icon: "pause.circle", text: "Сессии нет — приложение не слушает звонок и микрофон.")
-            Button { model.onCreateSession?() } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "paperplane")
-                    Text("Создать сессию").font(.system(size: model.fontSize - 1, weight: .semibold))
-                    ICKeycap(text: model.hotkey(.newSession), dark: true)
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach([SessionType.exam, .interview, .regular], id: \.self) { t in
+                        Button(t.title) { model.quickSessionType = t }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: model.quickSessionType == .exam ? "graduationcap" : model.quickSessionType == .regular ? "phone" : "person.fill")
+                        Text(model.quickSessionType.title).lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
+                    }
+                    .font(.system(size: max(11, model.fontSize - 2), weight: .medium))
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(ICDark.raised, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ICDark.stroke))
                 }
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(IC.accent, in: RoundedRectangle(cornerRadius: 10))
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                if !model.quickProfiles.isEmpty {
+                    let currentName = model.quickProfiles.first(where: { $0.id == model.quickProfileID })?.name ?? model.quickProfiles[0].name
+                    Menu {
+                        ForEach(model.quickProfiles) { p in
+                            Button(p.name) { model.quickProfileID = p.id }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "doc.text")
+                            Text(currentName).lineLimit(1)
+                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
+                        }
+                        .font(.system(size: max(11, model.fontSize - 2), weight: .medium))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(ICDark.raised, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ICDark.stroke))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
             }
-            .buttonStyle(.plain)
+            HStack(spacing: 8) {
+                Button { model.onQuickStart?(model.quickSessionType, model.quickProfileID.isEmpty ? nil : model.quickProfileID) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bolt.fill")
+                        Text("Быстрый старт").font(.system(size: model.fontSize - 1, weight: .semibold))
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(IC.accent, in: RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Сразу слушает любой звонок на Mac и микрофон — без выбора приложения.")
+                Button { model.onCreateSession?() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("Настроить…").font(.system(size: model.fontSize - 2, weight: .medium))
+                        ICKeycap(text: model.hotkey(.newSession), dark: true)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(ICDark.raised, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(ICDark.stroke))
+                }
+                .buttonStyle(.plain)
                 .accessibilityHint("Открывает мастер: тип звонка, профиль, проверка перед стартом")
+            }
         }
     }
 }

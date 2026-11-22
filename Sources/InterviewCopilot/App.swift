@@ -259,6 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self.liveSession.isActive { self.listening.start() } else { self.listening.enterStandby() }
         }
         panelModel.onCreateSession = { [weak self] in self?.showWizard() }
+        panelModel.onQuickStart = { [weak self] type, profileID in self?.quickStartSession(type: type, profileID: profileID) }
         panelModel.onEndSession = { [weak self] in self?.liveSession.end() }
         panelModel.onStartDetectedCall = { [weak self] in
             guard let self else { return }
@@ -468,6 +469,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         panelModel.sourceName = listening.source.displayName
         panelModel.ownerAnswering = listening.ownerAnswering
+        panelModel.quickProfiles = bank.profiles
+        if panelModel.quickProfileID.isEmpty || !bank.profiles.contains(where: { $0.id == panelModel.quickProfileID }) {
+            panelModel.quickProfileID = bank.activeID ?? bank.profiles.first?.id ?? ""
+        }
         panelModel.selfTest = state.selfTest
         panelModel.setTranscript(listening.transcript, partial: listening.partialText)
         panelModel.autoGenerate = liveSession.isActive ? liveSession.config.autoGenerate : (model.settings.lastSessionConfig?.autoGenerate ?? true)
@@ -503,7 +508,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let mic = (listening.micLevelDB / 3).rounded() * 3, call = (listening.levelDB / 3).rounded() * 3
         if panelModel.micLevel != mic { panelModel.micLevel = mic }
         if panelModel.callLevel != call { panelModel.callLevel = call }
-        guard liveSession.isActive, listening.phase == .listening, listening.source != .microphone, liveSession.config.type != .mock else {
+        // Предупреждение «не слышу звонок» — только если пользователь явно выбрал конкретное приложение (.app),
+        // а не универсальный авто-захват (где можно нажать «Быстрый старт» заранее, до открытия звонка).
+        let explicitAppSource: Bool = if case .app = model.settings.audioSource { true } else { false }
+        guard liveSession.isActive, listening.phase == .listening, explicitAppSource, liveSession.config.type != .mock else {
             if panelModel.callSilentSeconds != nil { panelModel.callSilentSeconds = nil }
             lastCallSignalAt = Date()
             return
@@ -556,6 +564,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startSession(_ config: SessionConfig) {
         guard !liveSession.isActive, !testCall.active || liveSession.phase == .ending else { return }
         liveSession.start(config)
+    }
+
+    /// Быстрый старт в 1 клик (без 3 шагов мастера): универсальный захват любого звонка на Mac + микрофон.
+    private func quickStartSession(type: SessionType, profileID: String?) {
+        // Всегда слушаем весь системный звук + микрофон (если нет разрешения записи экрана — микрофон),
+        // чтобы не привязываться к конкретной звонилке: работает и с Meet, и с Zoom/Telegram/Teams/FaceTime/телефоном.
+        model.settings.audioSource = Permissions.screenCaptureGranted ? .allSystem : .microphone
+        var config = wizard.defaultConfig()
+        config.type = type
+        config.profileID = profileID ?? bank.activeID
+        config.autoGenerate = true
+        config.saveTranscript = true
+        workspaceModel.quickSessionType = type
+        panelModel.quickSessionType = type
+        if let id = config.profileID { panelModel.quickProfileID = id }
+        startSession(config)
+        panel.show()
     }
 
     /// Сессия начата: профиль, язык, память, история, слушание и ходы. Границы интервью теперь задаёт сессия
@@ -677,7 +702,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupWorkspace() {
+        let initialType = model.settings.lastSessionConfig?.type ?? .interview
+        let quickType: SessionType = (initialType == .mock) ? .interview : initialType
+        workspaceModel.quickSessionType = quickType
+        panelModel.quickSessionType = quickType
+        panelModel.quickProfileID = bank.activeID ?? bank.profiles.first?.id ?? ""
         wizard.onTestCall = { [weak self] in self?.handle(MenuAction.practice) }
+        workspaceModel.onQuickStart = { [weak self] type, profileID in self?.quickStartSession(type: type, profileID: profileID) }
         workspaceModel.onCreateSession = { [weak self] in self?.showWizard() }
         workspaceModel.onTestCall = { [weak self] in self?.handle(MenuAction.practice) }
         workspaceModel.onMock = { [weak self] in self?.handle(MenuAction.aiInterview) }
