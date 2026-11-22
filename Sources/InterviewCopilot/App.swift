@@ -562,7 +562,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// (раньше — тишина 30 мин и смена приложения звонка, COPILOT-06 R-05).
     private func sessionStarted(_ c: SessionConfig) {
         if let id = c.profileID { bank.select(id) }
-        model.settings.useProfile = c.type == .interview || c.type == .mock
+        model.settings.useProfile = c.type == .interview || c.type == .mock || c.type == .exam
         if model.settings.language != c.language { model.settings.language = c.language }
         model.settings.lastSessionConfig = c.defaultsForNext()
         memory.reset()

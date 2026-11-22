@@ -142,7 +142,8 @@ final class AnswerController {
 
         // E-02/E-04: определяем доп. вопрос или неразборчивый обрывок на экзамене при активной теме.
         let unclear = TranscriptSanityCheck.looksUnclear(turn.text)
-        let isFollowUp = activeTopic != nil && (FollowUpDetector.isFollowUp(turn.text) || (isExamCall && unclear))
+        let detectedFollowUp = isExamCall ? FollowUpDetector.isExamFollowUp(turn.text) : FollowUpDetector.isFollowUp(turn.text)
+        let isFollowUp = activeTopic != nil && (detectedFollowUp || (isExamCall && unclear))
         if isFollowUp { syncActiveTopicSpeech() }
 
         let ids = panel.history.begin(question: turn.text, turnID: turn.id, kind: .hint,
@@ -520,7 +521,8 @@ final class AnswerController {
     func prefetch(_ text: String) {
         let settings = effectiveSettings
         guard settings.speculativeAnswers, draft?.text != text else { return }
-        if activeTopic != nil, FollowUpDetector.isFollowUp(text) || (isExamCall && TranscriptSanityCheck.looksUnclear(text)) {
+        let detectedFollowUp = isExamCall ? FollowUpDetector.isExamFollowUp(text) : FollowUpDetector.isFollowUp(text)
+        if activeTopic != nil, detectedFollowUp || (isExamCall && TranscriptSanityCheck.looksUnclear(text)) {
             return
         }
         cancelDraft()
@@ -530,7 +532,7 @@ final class AnswerController {
         let providers = self.providers
         d.task = Task { [weak self] in
             guard let self else { return }
-            if settings.useProfile || self.isRegularCall {
+            if settings.useProfile || self.isRegularCall || self.isExamCall {
                 let found = await self.bank.lookup(text, threshold: settings.bankThreshold)
                 if let match = found.match, settings.useProfile { d.match = match }
                 d.materials = found.materials
@@ -580,7 +582,14 @@ final class AnswerController {
         d.adoptedTurn = turn
         d.adoptedSlot = slot
         d.adoptedGenID = genID
-        if model.settings.useProfile { lastMatch = d.match; lastMaterials = d.materials } else { lastMatch = nil; lastMaterials = [] }
+        if model.settings.useProfile || isExamCall {
+            lastMatch = model.settings.useProfile ? d.match : nil
+            lastMaterials = d.materials
+            activeTopic?.rootMaterials = Array(d.materials.prefix(3))
+        } else {
+            lastMatch = nil
+            lastMaterials = []
+        }
         Log.metrics.notice("draft_used turn=\(turn.id) started_ms_from_speech_end=\(Int(d.startedAt - turn.speechEndedAt)) lead_ms=\(Int(turn.firedAt - d.startedAt)) generating=\(d.generating)")
         generation = d.task
         let expectedLang = d.expectedLanguage ?? PromptBuilder.answerLanguage(setting: effectiveSettings.language.whisperCode, question: turn.text)

@@ -27,9 +27,21 @@ struct ExamFollowUpTests {
         ("Следующий вопрос: виды договоров.", false),
         ("Перейдём к теме залога.", false),
         ("Расскажите про договор аренды.", false),
+        // Real phrases from live Financial Law exam run
+        ("Яка структура?", true),
+        ("Залежно від змісту.", true),
+        ("Які методи застосовуються?", true),
+        ("Класифікуйте їх залежно від способу впливу на учасників фінансових відносин.", true),
     ])
     func examFollowUpDetector(question: String, expected: Bool) {
         #expect(FollowUpDetector.isFollowUp(question) == expected)
+    }
+
+    @Test func examSpecificFollowUpHandlesShortMisheardFragmentsAndNewTickets() {
+        #expect(FollowUpDetector.isExamFollowUp("Яка остаття ця?") == true)
+        #expect(FollowUpDetector.isExamFollowUp("Залежно від змісту.") == true)
+        #expect(FollowUpDetector.isExamFollowUp("Наступне питання. Сформулюйте поняття фінансово-правової норми.") == false)
+        #expect(FollowUpDetector.isExamFollowUp("Сформулюйте поняття фінансового контролю.") == false)
     }
 
     @Test func activeTopicBuildsContextualQueryAndKeepsRootMaterials() {

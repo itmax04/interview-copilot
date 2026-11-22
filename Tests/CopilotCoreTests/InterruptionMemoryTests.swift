@@ -37,13 +37,17 @@ struct InterruptionMemoryTests {
         cfg.allowShortFollowUps = true
         var d = TurnDetector(config: cfg)
 
-        // Пустой бэкченнел не копится в pending.
+        // Пустой бэкченнел (в том числе составной вроде «Добре, дякую.») не копится в pending.
         d.interviewerStartedSpeaking(at: 0)
         d.phraseFinal("Хорошо.", speechEnd: 400)
         #expect(d.pendingText.isEmpty)
 
         d.interviewerStartedSpeaking(at: 500)
-        d.phraseFinal("Дякую.", speechEnd: 900)
+        d.phraseFinal("Добре, дякую.", speechEnd: 900)
+        #expect(d.pendingText.isEmpty)
+
+        d.interviewerStartedSpeaking(at: 920)
+        d.phraseFinal("Хорошо, спасибо.", speechEnd: 980)
         #expect(d.pendingText.isEmpty)
 
         // Короткий доп. вопрос из 2 слов проходит через полную паузу T (1000 мс).

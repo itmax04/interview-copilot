@@ -304,9 +304,10 @@ public struct TurnDetector: Sendable {
     }
 
     /// Пустые подтверждения/реакции собеседника (бэкченнел), не требующие ответа.
-    private static let backchannels: Set<String> = [
-        "ага", "угу", "да", "да да", "так", "так так", "добре", "хорошо", "понял", "поняла", "понятно",
-        "зрозуміло", "ясно", "окей", "ок", "ok", "okay", "спасибо", "дякую", "thanks", "thank you",
+    /// Проверяется пословно: составные фразы вроде «Добре, дякую.», «Хорошо, спасибо.» тоже отбрасываются целиком.
+    private static let backchannelWords: Set<String> = [
+        "ага", "угу", "да", "так", "добре", "хорошо", "понял", "поняла", "понятно",
+        "зрозуміло", "ясно", "окей", "ок", "ok", "okay", "спасибо", "дякую", "thanks", "thank", "you",
         "продолжайте", "продовжуйте", "дальше", "далі", "слушаю", "слухаю", "мгм", "угум", "супер", "отлично", "чудово",
     ]
 
@@ -334,14 +335,14 @@ public struct TurnDetector: Sendable {
     public static func isBackchannel(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasSuffix("?") { return false }
-        let norm = normalizedShort(trimmed)
-        return !norm.isEmpty && backchannels.contains(norm)
+        let words = normalizedShort(trimmed).split(separator: " ").map(String.init)
+        return !words.isEmpty && words.count <= 4 && words.allSatisfy { backchannelWords.contains($0) }
     }
 
     public static func isShortFollowUp(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let norm = normalizedShort(trimmed)
-        guard !norm.isEmpty, !backchannels.contains(norm) else { return false }
+        guard !norm.isEmpty, !isBackchannel(trimmed) else { return false }
         if trimmed.hasSuffix("?") { return true }
         let words = norm.split(separator: " ").map(String.init)
         return words.contains { shortFollowUpKeywords.contains($0) }
