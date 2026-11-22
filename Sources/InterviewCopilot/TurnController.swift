@@ -62,6 +62,11 @@ final class TurnController {
         detector.config.questionThresholdMs = Double(questionMs)
     }
 
+    /// Разрешить короткие доп. вопросы (1–2 слова) и отбрасывать пустой бэкченнел при активной теме.
+    func setAllowShortFollowUps(_ allow: Bool) {
+        detector.config.allowShortFollowUps = allow
+    }
+
     func start() {
         guard timer == nil else { return }
         let t = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in

@@ -153,8 +153,12 @@ final class ListeningController {
     private let ownerBuffer = AudioRingBuffer(seconds: 30)
     private let ownerBox = TranscriberBox()
     private let ownerActive = LockedFlag()
-    /// Фраза владельца прошла фильтры — в память интервью (COPILOT-06).
-    var onOwnerSaid: ((String) -> Void)?
+    /// Текущий активный обмен в памяти интервью — чтобы ответ владельца при перебивании крепился к нему.
+    var currentExchangeID: (() -> Int?)?
+    /// Фраза владельца прошла фильтры — в память интервью (текст, целевой exchangeID при перебивании).
+    var onOwnerSaid: ((String, Int?) -> Void)?
+    /// Уточнение предварительно сброшенного (при перебивании) ответа владельца после re-decode.
+    var onOwnerAnswerRevised: ((String, String, Int) -> Void)?
     /// Вопрос или ответ владельца по говорящему (репетиция с собеседником) и ⌃⌥A.
     private var speakerRouter = SpeakerRouter()
 
@@ -213,7 +217,7 @@ final class ListeningController {
             return
         }
         // COPILOT-15 R-11: фразы владельца предварительные; ответ целиком распознаётся заново, когда владелец замолчал.
-        ownerAssembler.phraseFinal(text: text, utterance: u, speechEnd: Double(phraseEnd) / 1e6)
+        ownerAssembler.phraseFinal(text: text, utterance: u, speechEnd: Double(phraseEnd) / 1e6, exchangeID: currentExchangeID?())
         startOwnerTick()
     }
 
@@ -236,6 +240,30 @@ final class ListeningController {
         }
     }
 
+    /// Перебивание: экзаменатор начал говорить, пока владелец ещё не замолчал на 1 с.
+    /// Немедленно синхронно фиксируем накопленные фразы владельца в его исходном обмене (`targetExchangeID`),
+    /// чтобы новый доп. вопрос увидел прерванную речь, а затем доуточняем её перераспознаванием в фоне.
+    func flushOwnerForInterruption() {
+        guard let answer = ownerAssembler.flush() else { return }
+        ownerTickTask?.cancel()
+        ownerTickTask = nil
+        let targetID = answer.targetExchangeID ?? currentExchangeID?()
+        onOwnerSaid?(answer.provisionalText, targetID)
+        Log.metrics.notice("owner_interrupted_flush words=\(TurnDetectorWords.count(answer.provisionalText)) phrases=\(answer.utterances.count) exchange=\(targetID ?? -1)")
+        let previous = ownerFinishTask
+        let generation = ownerGeneration
+        let transcriber = ownerTranscriber
+        ownerFinishTask = Task { [weak self] in
+            await previous?.value
+            let redecoded = await transcriber?.redecodeQuestion(utterances: answer.utterances, turn: -1,
+                                                                provisional: answer.provisionalText, release: true)?.text
+            guard let self, self.ownerGeneration == generation else { return }
+            if let redecoded, redecoded != answer.provisionalText, let targetID {
+                self.onOwnerAnswerRevised?(answer.provisionalText, redecoded, targetID)
+            }
+        }
+    }
+
     /// Ответ закончен: звук его фраз распознаётся целиком, без Whisper; не получилось — текст фраз.
     /// Ответы идут по очереди, чтобы порядок в памяти не нарушался.
     private func finishOwnerAnswer(_ answer: OwnerAnswer) {
@@ -248,7 +276,7 @@ final class ListeningController {
                                                                 provisional: answer.provisionalText, release: true)?.text
             guard let self, self.ownerGeneration == generation else { return }
             let text = redecoded ?? answer.provisionalText
-            self.onOwnerSaid?(text)
+            self.onOwnerSaid?(text, answer.targetExchangeID)
             Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) phrases=\(answer.utterances.count) redecoded=\(redecoded != nil, privacy: .public)")
         }
     }
@@ -881,6 +909,7 @@ final class ListeningController {
         switch event {
         case .speechStarted:
             callSpeaking = true
+            flushOwnerForInterruption()
         case .speechEnded(_, let at):
             callSpeaking = false
             callSpeechEndedAt = Double(at) / 1e6
@@ -918,7 +947,7 @@ final class ListeningController {
 
     /// Ответ владельца в самопроверке: в память интервью; для хода — как шум, вопросов нет.
     private func recordOwnerAnswer(utterance u: Int, text: String, phraseEnd: UInt64) {
-        onOwnerSaid?(text)
+        onOwnerSaid?(text, currentExchangeID?())
         Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=\(self.ownerAnswering ? "self-test" : "rehearsal", privacy: .public)")
         if partialText != nil {
             partialText = nil

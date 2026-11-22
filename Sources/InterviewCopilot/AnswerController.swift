@@ -10,6 +10,8 @@ final class AnswerController {
     private let panel: PanelModel
     private let providers: [ProviderID: LLMProvider]
     private var generation: Task<Void, Never>?
+    /// Монотонный идентификатор текущей генерации: старые потоки и отмененные коллбеки никогда не смешиваются с новым ответом.
+    private var activeGenerationID: UInt64 = 0
     private(set) var lastQuestion: Turn?
     private var lastMatch: BankMatch?
     /// Фрагменты материалов последнего вопроса (COPILOT-08 R-06) — и для сильной модели.
@@ -106,9 +108,18 @@ final class AnswerController {
         let version: Int
     }
 
+    /// Начинает новую генерацию и жёстко изолирует её от любых событий предыдущей.
+    @discardableResult
+    private func bumpGeneration() -> UInt64 {
+        activeGenerationID &+= 1
+        generation?.cancel()
+        generation = nil
+        return activeGenerationID
+    }
+
     /// Новый ход: отменяет незавершённую генерацию прошлого (R-10), открывает новый вопрос в истории.
     func handle(_ turn: Turn) {
-        generation?.cancel()
+        let genID = bumpGeneration()
         lastQuestion = turn
         panel.history.cancelUnfinished()
         let ids = panel.history.begin(question: turn.text, turnID: turn.id, kind: .hint)
@@ -116,40 +127,40 @@ final class AnswerController {
         // COPILOT-04 R-01: ответ на этот текст уже готовится (или запрос ещё собирается — чтение ключей) —
         // ход забирает его, без нового запроса. Если опережающий запрос решит, что нужна карточка базы, ход пойдёт обычным путём.
         if let d = draft, d.text == turn.text, !d.declined {
-            adopt(d, turn: turn, slot: slot)
+            adopt(d, turn: turn, slot: slot, genID: genID)
             return
         }
         cancelDraft()
-        answerNormally(turn, slot: slot)
+        answerNormally(turn, slot: slot, genID: genID)
     }
 
-    private func answerNormally(_ turn: Turn, slot: Slot) {
+    private func answerNormally(_ turn: Turn, slot: Slot, genID: UInt64) {
         let settings = effectiveSettings
         generation = Task { [weak self] in
-            guard let self else { return }
+            guard let self, self.activeGenerationID == genID else { return }
             // «Без профиля» (R-40): база не ищется, модель отвечает сама. Обычный звонок (COPILOT-09) — без карточек,
             // но с материалами профиля.
             guard settings.useProfile else {
                 self.lastMatch = nil
                 self.lastMaterials = self.isRegularCall ? await self.bank.lookup(turn.text, threshold: 1).materials : []
-                guard !Task.isCancelled else { return }
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials, slot: slot)
+                guard !Task.isCancelled, self.activeGenerationID == genID else { return }
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials, slot: slot, genID: genID)
                 return
             }
             let found = await self.bank.lookup(turn.text, threshold: settings.bankThreshold)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, self.activeGenerationID == genID else { return }
             self.lastMaterials = found.materials
             if !found.materials.isEmpty {
                 Log.metrics.notice("materials_found turn=\(turn.id) count=\(found.materials.count) best=\(found.materials[0].score, format: .fixed(precision: 3))")
             }
             guard let match = found.match else {
                 // Базы нет (нет модели эмбеддингов) — генерация без карточек, если можно.
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: found.materials, slot: slot)
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: found.materials, slot: slot, genID: genID)
                 return
             }
             self.lastMatch = match
             Log.metrics.notice("bank_match turn=\(turn.id) matched=\(match.matched != nil) score=\(match.top.first?.score ?? 0, format: .fixed(precision: 3)) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
-            self.route(turn, match: match, settings: settings, materials: found.materials, slot: slot)
+            self.route(turn, match: match, settings: settings, materials: found.materials, slot: slot, genID: genID)
         }
     }
 
@@ -170,7 +181,7 @@ final class AnswerController {
                                   followUp: followUpContext(for: question))
     }
 
-    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = [], slot: Slot) {
+    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = [], slot: Slot, genID: UInt64) {
         let modelsAvailable = modelsAvailable(settings)
         switch AnswerRouter.decide(mode: settings.mode, match: match, modelsAvailable: modelsAvailable, useProfile: settings.useProfile) {
         case .bankCard(let card):
@@ -181,15 +192,17 @@ final class AnswerController {
         case .generate(let base, let top):
             let secrets = model.secrets
             let providers = self.providers
+            let expectedLang = PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text)
             generation = Task { [weak self] in
-                guard let self else { return }
+                guard let self, self.activeGenerationID == genID else { return }
                 // История интервью (COPILOT-06) и ключи — не на главном потоке.
                 let memory = await self.memoryContext(for: turn.text, turnID: turn.id)
                 let request = self.hintRequest(question: turn.text, base: base, top: top, settings: settings, memory: memory,
                                                materials: materials)
                 let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
-                guard !Task.isCancelled, self.lastQuestion?.id == turn.id else { return }
-                self.generate(turn: turn, chain: chain, request: request, fallbackTop: top, slot: slot)
+                guard !Task.isCancelled, self.activeGenerationID == genID, self.lastQuestion?.id == turn.id else { return }
+                self.generate(turn: turn, chain: chain, request: request, fallbackTop: top, slot: slot,
+                              genID: genID, expectedLanguage: expectedLang)
             }
         }
     }
@@ -228,14 +241,51 @@ final class AnswerController {
 
     // MARK: Генерация (S-03, S-04, R-10)
 
+    /// Строит запасную цепочку для ретрая после срабатывания `OutputSanityGuard`:
+    /// исключает сбойного провайдера, если в цепочке есть другие с ключом (например, Groq → Gemini).
+    private func retryChain(from chain: ProviderChain, excluding failed: ProviderID?) -> ProviderChain? {
+        guard let failed else { return nil }
+        let alternates = chain.steps.filter { $0.provider.id != failed && $0.key?.isEmpty == false }
+        guard !alternates.isEmpty else { return nil }
+        var next = chain
+        next.steps = alternates
+        return next
+    }
+
     private func generate(turn: Turn, chain: ProviderChain, request: LLMRequest, fallbackTop: [CardScore], slot: Slot,
-                          label: String = "generated", onComplete: ((String) -> Void)? = nil) {
+                          label: String = "generated", genID: UInt64? = nil, expectedLanguage: String? = nil,
+                          retryDepth: Int = 0, onComplete: ((String) -> Void)? = nil) {
+        let effectiveGenID = genID ?? activeGenerationID
+        let guardCfg: OutputSanityGuard.Config? = (request.purpose == .hint && retryDepth == 0)
+            ? OutputSanityGuard.Config(expectedLanguage: expectedLanguage, requireUnderstoodLine: true, earlyBufferChars: 90)
+            : nil
+        let onReject: (@MainActor (OutputSanityGuard.Issue, ProviderID?) -> Void)?
+        if guardCfg != nil {
+            onReject = { [weak self] issue, failedProvider in
+                guard let self, self.activeGenerationID == effectiveGenID else { return }
+                Log.metrics.notice("output_guard_rejected turn=\(turn.id) reason=\(issue.rawValue, privacy: .public) provider=\(failedProvider?.rawValue ?? "?", privacy: .public) retry=\(retryDepth)")
+                self.generation?.cancel()
+                let nextChain = self.retryChain(from: chain, excluding: failedProvider) ?? chain
+                self.panel.history.update(entry: slot.entry, version: slot.version) { v in
+                    v.text = ""
+                    v.source = L("Уточняю ответ…")
+                    v.status = .waiting
+                }
+                self.generate(turn: turn, chain: nextChain, request: request, fallbackTop: fallbackTop, slot: slot,
+                              label: label, genID: effectiveGenID, expectedLanguage: expectedLanguage,
+                              retryDepth: retryDepth + 1, onComplete: onComplete)
+            }
+        } else {
+            onReject = nil
+        }
         let consume = makeConsumer(turn: turn, purpose: request.purpose, fallbackTop: fallbackTop, slot: slot, label: label,
-                                   onComplete: onComplete)
+                                   genID: effectiveGenID, sanityGuard: guardCfg.map { OutputSanityGuard(config: $0) },
+                                   onReject: onReject, onComplete: onComplete)
         generation = Task { [weak self] in
             for await event in chain.run(request) {
                 if Task.isCancelled { return }
-                self?.account(event)
+                guard let self, self.activeGenerationID == effectiveGenID else { return }
+                self.account(event)
                 consume(event)
             }
         }
@@ -258,16 +308,23 @@ final class AnswerController {
     }
 
     /// Вывод ответа в его версию истории (S-03, S-04, R-10; COPILOT-09 R-08). `speculative` — ответ начат опережающим
-    /// запросом (метрика COPILOT-04).
+    /// запросом (метрика COPILOT-04). `genID` изолирует поток от старых генераций; `sanityGuard` отсекает мусор и смесь языков.
     private func makeConsumer(turn: Turn, purpose: LLMPurpose, fallbackTop: [CardScore], slot: Slot, label: String,
-                              speculative: Bool = false, onComplete: ((String) -> Void)? = nil) -> @MainActor (ChainEvent) -> Void {
+                              speculative: Bool = false, genID: UInt64? = nil, sanityGuard: OutputSanityGuard? = nil,
+                              onReject: (@MainActor (OutputSanityGuard.Issue, ProviderID?) -> Void)? = nil,
+                              onComplete: ((String) -> Void)? = nil) -> @MainActor (ChainEvent) -> Void {
         var text = ""
         var provider: ProviderID?
         var actualModel: String?
         var firstMs: Double?
         var usage: TokenUsage?
+        var revealed = (sanityGuard == nil || (sanityGuard?.config.earlyBufferChars ?? 0) <= 0)
+        var lastCheckedCount = 0
+        var rejected = false
         return { [weak self] event in
             guard let self else { return }
+            if let genID, self.activeGenerationID != genID { return }
+            if rejected { return }
             switch event {
             case .attempt(let p, let m):
                 provider = p
@@ -285,6 +342,25 @@ final class AnswerController {
                 text += t
                 // «—» — не вопрос: ничего не показываем, пока не станет ясно (R-11).
                 if PromptBuilder.isNoAnswer(text) || (text.count <= 2 && "—–-".contains(text.trimmingCharacters(in: .whitespaces))) { return }
+                if let sanityGuard {
+                    if !revealed {
+                        guard text.count >= sanityGuard.config.earlyBufferChars else { return }
+                        if let issue = sanityGuard.check(text, isFinal: false), let onReject {
+                            rejected = true
+                            onReject(issue, provider)
+                            return
+                        }
+                        revealed = true
+                        lastCheckedCount = text.count
+                    } else if text.count - lastCheckedCount >= 120 {
+                        lastCheckedCount = text.count
+                        if let issue = sanityGuard.check(text, isFinal: false), let onReject {
+                            rejected = true
+                            onReject(issue, provider)
+                            return
+                        }
+                    }
+                }
                 let shown = text, source = "\(Self.label(provider, actualModel)) · \(Self.kindTitle(label))", latency = firstMs.map { $0 / 1000 }
                 self.panel.history.update(entry: slot.entry, version: slot.version) { v in
                     v.text = shown
@@ -294,6 +370,8 @@ final class AnswerController {
                 }
             case .restart:
                 text = ""
+                revealed = (sanityGuard == nil || (sanityGuard?.config.earlyBufferChars ?? 0) <= 0)
+                lastCheckedCount = 0
                 self.panel.history.update(entry: slot.entry, version: slot.version) { $0.text = "" }
             case .providerFailed, .keyFailed:
                 break // учтено в `account`
@@ -306,7 +384,20 @@ final class AnswerController {
                     Log.metrics.notice("not_a_question turn=\(turn.id)")
                     self.onNotAQuestion?(turn)
                 } else {
-                    self.panel.history.update(entry: slot.entry, version: slot.version) { $0.status = .complete }
+                    if let sanityGuard, let issue = sanityGuard.check(text, isFinal: true), let onReject {
+                        rejected = true
+                        onReject(issue, provider)
+                        return
+                    }
+                    let shown = text, source = "\(Self.label(provider, actualModel)) · \(Self.kindTitle(label))", latency = firstMs.map { $0 / 1000 }
+                    self.panel.history.update(entry: slot.entry, version: slot.version) { v in
+                        if !revealed {
+                            v.text = shown
+                            v.source = source
+                            if let latency { v.latency = latency }
+                        }
+                        v.status = .complete
+                    }
                     // Строка «понял вопрос» (COPILOT-15 R-10) — только для владельца на панели: в память и историю идёт ответ.
                     let answer = UnderstoodLine.answer(text)
                     Log.metrics.notice("understood_line turn=\(turn.id) state=\(UnderstoodLine.state(text), privacy: .public)")
@@ -342,7 +433,11 @@ final class AnswerController {
         /// Ход, забравший запрос до решения: если запрос откажется, ход уйдёт обычным путём.
         var adoptedTurn: Turn?
         var adoptedSlot: Slot?
+        var adoptedGenID: UInt64?
         var task: Task<Void, Never>?
+        var request: LLMRequest?
+        var chain: ProviderChain?
+        var expectedLanguage: String?
         private var buffered: [ChainEvent] = []
         private var consumer: (@MainActor (ChainEvent) -> Void)?
 
@@ -390,14 +485,21 @@ final class AnswerController {
                                                                            modelsAvailable: self.modelsAvailable(settings),
                                                                            useProfile: settings.useProfile) else {
                 d.declined = true
-                if let turn = d.adoptedTurn, let slot = d.adoptedSlot, self.lastQuestion?.id == turn.id { self.answerNormally(turn, slot: slot) }
+                if let turn = d.adoptedTurn, let slot = d.adoptedSlot, let genID = d.adoptedGenID,
+                   self.activeGenerationID == genID, self.lastQuestion?.id == turn.id {
+                    self.answerNormally(turn, slot: slot, genID: genID)
+                }
                 return
             }
             let memory = await self.memoryContext(for: text)
+            let expectedLang = PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: text)
             let request = self.hintRequest(question: text, base: base, top: top, settings: settings, memory: memory,
                                            materials: d.materials)
             d.fallbackTop = top
+            d.request = request
+            d.expectedLanguage = expectedLang
             let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
+            d.chain = chain
             guard !Task.isCancelled, self.draft === d || d.adopted else { return }
             d.generating = true
             for await event in chain.run(request) {
@@ -417,14 +519,35 @@ final class AnswerController {
         Log.metrics.notice("draft_cancelled lead_ms=\(Int(Self.now() - d.startedAt)) generating=\(d.generating)")
     }
 
-    private func adopt(_ d: Draft, turn: Turn, slot: Slot) {
+    private func adopt(_ d: Draft, turn: Turn, slot: Slot, genID: UInt64) {
         draft = nil
         d.adoptedTurn = turn
         d.adoptedSlot = slot
+        d.adoptedGenID = genID
         if model.settings.useProfile { lastMatch = d.match; lastMaterials = d.materials } else { lastMatch = nil; lastMaterials = [] }
         Log.metrics.notice("draft_used turn=\(turn.id) started_ms_from_speech_end=\(Int(d.startedAt - turn.speechEndedAt)) lead_ms=\(Int(turn.firedAt - d.startedAt)) generating=\(d.generating)")
         generation = d.task
-        d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, slot: slot, label: "generated", speculative: true))
+        let expectedLang = d.expectedLanguage ?? PromptBuilder.answerLanguage(setting: effectiveSettings.language.whisperCode, question: turn.text)
+        let sanityGuard = OutputSanityGuard(config: .init(expectedLanguage: expectedLang, requireUnderstoodLine: true, earlyBufferChars: 90))
+        let onReject: @MainActor (OutputSanityGuard.Issue, ProviderID?) -> Void = { [weak self] issue, failedProvider in
+            guard let self, self.activeGenerationID == genID else { return }
+            Log.metrics.notice("output_guard_rejected turn=\(turn.id) reason=\(issue.rawValue, privacy: .public) provider=\(failedProvider?.rawValue ?? "?", privacy: .public) retry=0")
+            self.generation?.cancel()
+            self.panel.history.update(entry: slot.entry, version: slot.version) { v in
+                v.text = ""
+                v.source = L("Уточняю ответ…")
+                v.status = .waiting
+            }
+            if let req = d.request, let chain = d.chain {
+                let nextChain = self.retryChain(from: chain, excluding: failedProvider) ?? chain
+                self.generate(turn: turn, chain: nextChain, request: req, fallbackTop: d.fallbackTop, slot: slot,
+                              genID: genID, expectedLanguage: expectedLang, retryDepth: 1)
+            } else {
+                self.answerNormally(turn, slot: slot, genID: genID)
+            }
+        }
+        d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, slot: slot, label: "generated",
+                              speculative: true, genID: genID, sanityGuard: sanityGuard, onReject: onReject))
     }
 
     /// Подпись вида ответа рядом с моделью — на языке интерфейса (COPILOT-12: раньше «generated» было по-английски
@@ -500,7 +623,7 @@ final class AnswerController {
 
     /// Снимок: в течение 30 с после прошлого — та же задача (до 3 снимков, новая версия решения по всем), иначе новая.
     func screenshot(_ jpeg: Data, chain: ProviderChain, language: String?) {
-        generation?.cancel()
+        let genID = bumpGeneration()
         let isNew = tasks.add(jpeg)
         guard let task = tasks.task else { return }
         let slot: Slot
@@ -519,7 +642,7 @@ final class AnswerController {
         let turn = Turn(id: -1, text: "Скриншот задачи", speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         let taskID = task.id
         generate(turn: turn, chain: chain, request: PromptBuilder.screenshotRequest(images: task.images, language: language),
-                 fallbackTop: [], slot: slot, label: "screenshot") { [weak self] text in
+                 fallbackTop: [], slot: slot, label: "screenshot", genID: genID) { [weak self] text in
             guard let self else { return }
             self.tasks.setSolution(text, taskID: taskID)
             if let statement = self.tasks.task?.statement { self.panel.history.retitle(entry: slot.entry, question: "Задача: " + statement) }
@@ -552,20 +675,20 @@ final class AnswerController {
         let settings = effectiveSettings
         let secrets = model.secrets
         let providers = self.providers
-        generation?.cancel()
+        let genID = bumpGeneration()
         guard let version = panel.history.beginVersion(of: entry.id, kind: .refine, instruction: label ?? instruction) else { return }
         let slot = Slot(entry: entry.id, version: version)
         let turn = Turn(id: entry.turnID ?? -1, text: entry.question, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         Log.metrics.notice("refine turn=\(turn.id) quick=\(label != nil)")
         generation = Task { [weak self] in
-            guard let self else { return }
+            guard let self, self.activeGenerationID == genID else { return }
             let memory = await self.memoryContext(for: entry.question, turnID: entry.turnID)
             let request = PromptBuilder.refine(self.hintRequest(question: entry.question, base: nil, top: [], settings: settings,
                                                                 memory: memory, materials: self.lastMaterials),
                                                previousAnswer: previous, instruction: instruction)
             let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
-            guard !Task.isCancelled else { return }
-            self.generate(turn: turn, chain: chain, request: request, fallbackTop: [], slot: slot, label: "уточнение")
+            guard !Task.isCancelled, self.activeGenerationID == genID else { return }
+            self.generate(turn: turn, chain: chain, request: request, fallbackTop: [], slot: slot, label: "уточнение", genID: genID)
         }
     }
 
@@ -573,14 +696,14 @@ final class AnswerController {
     func retry(entry entryID: Int) {
         guard let entry = panel.history.entry(entryID),
               let version = panel.history.beginVersion(of: entryID, kind: .hint) else { return }
-        generation?.cancel()
+        let genID = bumpGeneration()
         let turn = Turn(id: entry.turnID ?? -1, text: entry.question, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         lastQuestion = turn
-        answerNormally(turn, slot: Slot(entry: entryID, version: version))
+        answerNormally(turn, slot: Slot(entry: entryID, version: version), genID: genID)
     }
 
     func cancel() {
-        generation?.cancel()
+        bumpGeneration()
         cancelDraft()
         panel.history.cancelUnfinished()
     }

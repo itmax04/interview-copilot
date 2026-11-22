@@ -104,6 +104,9 @@ public final class InterviewMemory: @unchecked Sendable {
 
     public var all: [SessionExchange] { lock.withLock { exchanges } }
 
+    /// Идентификатор последнего обмена в памяти (активный вопрос/билет).
+    public var currentExchangeID: Int? { lock.withLock { exchanges.last?.id } }
+
     @discardableResult
     public func addQuestion(_ text: String, turnID: Int? = nil, at date: Date = Date()) -> Int {
         lock.withLock {
@@ -114,14 +117,33 @@ public final class InterviewMemory: @unchecked Sendable {
         }
     }
 
-    /// Фраза владельца относится к последнему вопросу. До первого вопроса — не сохраняется (нечему отвечать).
-    public func addAnswer(_ text: String) {
+    /// Фраза владельца относится к указанному обмену (`toExchangeID`) или к последнему вопросу.
+    /// При перебивании `toExchangeID` удерживает прерванный ответ на старом вопросе, даже если новый уже добавлен.
+    public func addAnswer(_ text: String, toExchangeID exchangeID: Int? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         lock.withLock {
-            guard !exchanges.isEmpty else { return }
-            exchanges[exchanges.count - 1].answer.append(trimmed)
-            embeddings[exchanges[exchanges.count - 1].id] = nil   // ответ изменился — эмбеддинг пересчитать
+            let index: Int? = if let exchangeID {
+                exchanges.lastIndex(where: { $0.id == exchangeID })
+            } else {
+                exchanges.isEmpty ? nil : exchanges.count - 1
+            }
+            guard let i = index else { return }
+            exchanges[i].answer.append(trimmed)
+            embeddings[exchanges[i].id] = nil   // ответ изменился — эмбеддинг пересчитать
+        }
+    }
+
+    /// Заменяет предварительный текст прерванного ответа владельца на перераспознанный в конкретном обмене.
+    public func reviseAnswer(_ old: String, to new: String, inExchangeID exchangeID: Int) {
+        let old = old.trimmingCharacters(in: .whitespacesAndNewlines)
+        let new = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !old.isEmpty, !new.isEmpty, old != new else { return }
+        lock.withLock {
+            guard let i = exchanges.lastIndex(where: { $0.id == exchangeID }),
+                  let j = exchanges[i].answer.lastIndex(of: old) else { return }
+            exchanges[i].answer[j] = new
+            embeddings[exchanges[i].id] = nil
         }
     }
 

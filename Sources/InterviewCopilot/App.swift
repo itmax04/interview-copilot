@@ -314,12 +314,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard self.memory.dropUnanswered(turnID: turn.id) else { return }
             self.saveMemory()
         }
-        // COPILOT-06: ответы владельца — в обменах памяти интервью.
+        // COPILOT-06: ответы владельца — в обменах памяти интервью (с привязкой к exchangeID при перебивании).
         answers.memory = memory
         answers.embed = { [weak self] in self?.bank.embedFunction }
-        listening.onOwnerSaid = { [weak self] text in
-            self?.memory.addAnswer(text)
+        listening.currentExchangeID = { [weak self] in self?.memory.currentExchangeID }
+        listening.onOwnerSaid = { [weak self] text, exchangeID in
+            self?.memory.addAnswer(text, toExchangeID: exchangeID)
             self?.sessions.addOwnerUtterance(text)
+            self?.saveMemory()
+        }
+        listening.onOwnerAnswerRevised = { [weak self] old, new, exchangeID in
+            self?.memory.reviseAnswer(old, to: new, inExchangeID: exchangeID)
             self?.saveMemory()
         }
         if testCallOnly {
@@ -516,7 +521,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         panelModel.detection = panelModel.detection.next(on: .turnCompleted)
+        // Если владелец говорил и его прервали коротким вопросом — гарантируем сброс его речи в ПРЕДЫДУЩИЙ обмен
+        // до добавления нового вопроса в память.
+        listening.flushOwnerForInterruption()
         memory.addQuestion(turn.text, turnID: turn.id)
+        turns.setAllowShortFollowUps(true)
         saveMemory()
         if !turn.utterances.isEmpty {
             historyUtterances[turn.id] = turn.utterances
@@ -557,6 +566,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if model.settings.language != c.language { model.settings.language = c.language }
         model.settings.lastSessionConfig = c.defaultsForNext()
         memory.reset()
+        turns.setAllowShortFollowUps(false)
         historyUtterances = [:]
         answers.cancel()
         sessions.start(source: listening.source.displayName, retentionDays: model.settings.historyRetentionDays, config: c)
