@@ -166,8 +166,13 @@ public struct TurnDetector: Sendable {
             interviewerStoppedAt = end
         }
         if ownerSpeaking {
-            // Если владелец говорил ДО перебивания и ещё договаривает — ждём, пока он замолчит, но не глушим ход навсегда.
-            // Когда владелец начинает отвечать ПОСЛЕ вопроса, `suppressed = true` уже выставлен в `setOwnerSpeaking(true)`.
+            // Если владелец начал отвечать после вопроса — подавляем автоход (S-07).
+            // При активной теме и коротком перебивании (владелец говорил ДО экзаменатора и замолкает в пределах 600 мс)
+            // даём владельцу договорить хвост, не глуша вопрос экзаменатора навсегда.
+            let isBriefBargeInYield = config.allowShortFollowUps
+                && (ownerStartedAt ?? .infinity) < (interviewerStartedAt ?? 0)
+                && (t - end) < 600
+            if !isBriefBargeInYield { suppressed = true }
             return nil
         }
         let text = pendingText
