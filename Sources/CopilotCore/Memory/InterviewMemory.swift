@@ -68,11 +68,11 @@ public final class InterviewMemory: @unchecked Sendable {
     /// Порог сходства bge-m3 для «та же тема»; при явной отсылке к прошлому — мягче (подбор — eval `memory`).
     public static let minScore: Float = 0.55
     public static let backReferenceMinScore: Float = 0.35
-    /// Лимиты текста одного обмена в промпте.
-    public static let maxQuestionChars = 300
-    public static let maxAnswerChars = 500
-    /// Показанная подсказка вместо незаписанного ответа — короче: только опорные факты.
-    public static let maxHintChars = 300
+    /// Лимиты текста одного обмена в промпте (расширены в E-02, чтобы не резать контекст экзаменационного ответа).
+    public static let maxQuestionChars = 350
+    public static let maxAnswerChars = 1000
+    /// Показанная подсказка вместо незаписанного ответа — опорные факты и нормы.
+    public static let maxHintChars = 600
 
     /// Подсказка без разметки, в одну строку.
     static func plainHint(_ hint: String?) -> String {

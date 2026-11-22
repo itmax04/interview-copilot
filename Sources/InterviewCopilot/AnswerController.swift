@@ -49,6 +49,9 @@ final class AnswerController {
     }
 
     private var isRegularCall: Bool { session()?.type == .regular }
+    private var isExamCall: Bool { session()?.type == .exam }
+    /// Активная тема/билет текущего диалога (E-02): сохраняется через всю цепочку доп. вопросов и перебиваний.
+    private var activeTopic: ActiveTopic?
 
     /// Тип, указания и стиль ответа сессии; без сессии (ИИ-собеседование, смоки) — стиль по умолчанию из настроек.
     private var sessionPrompt: SessionPrompt? {
@@ -57,11 +60,11 @@ final class AnswerController {
         return SessionPrompt(type: c.type, instructions: c.instructions, style: c.effectiveStyle(default: d))
     }
 
-    /// Профиль в промпте: обычный звонок — только инструкции профиля (без резюме и карточек, Q14); собеседование —
-    /// с вакансией и компанией из мастера вместо вакансии профиля.
+    /// Профиль в промпте: обычный звонок и экзамен — только инструкции профиля (без резюме/легенд работодателей,
+    /// но экзамен использует материалы и карточки); собеседование — с вакансией и компанией из мастера.
     private func promptProfile(_ settings: AppSettings) -> Profile? {
         let s = session()
-        if s?.type == .regular { return Profile(name: bank.profile.name, instructions: bank.profile.instructions) }
+        if s?.type == .regular || s?.type == .exam { return Profile(name: bank.profile.name, instructions: bank.profile.instructions) }
         guard settings.useProfile else { return nil }
         return s?.applyingJob(to: bank.profile) ?? bank.profile
     }
@@ -117,50 +120,93 @@ final class AnswerController {
         return activeGenerationID
     }
 
+    /// Обновляет `ownerLastSpoken` в `activeTopic` из памяти интервью (включая только что сброшенный прерванный ответ).
+    private func syncActiveTopicSpeech() {
+        guard var topic = activeTopic, let memory else { return }
+        let exchanges = memory.all
+        let relevant = exchanges.suffix(3).compactMap { ex -> String? in
+            let a = ex.answerText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return a.isEmpty ? nil : a
+        }
+        if !relevant.isEmpty {
+            topic.ownerLastSpoken = String(relevant.joined(separator: " ").suffix(1000))
+            activeTopic = topic
+        }
+    }
+
     /// Новый ход: отменяет незавершённую генерацию прошлого (R-10), открывает новый вопрос в истории.
     func handle(_ turn: Turn) {
         let genID = bumpGeneration()
         lastQuestion = turn
         panel.history.cancelUnfinished()
-        let ids = panel.history.begin(question: turn.text, turnID: turn.id, kind: .hint)
+
+        // E-02/E-04: определяем доп. вопрос или неразборчивый обрывок на экзамене при активной теме.
+        let unclear = TranscriptSanityCheck.looksUnclear(turn.text)
+        let isFollowUp = activeTopic != nil && (FollowUpDetector.isFollowUp(turn.text) || (isExamCall && unclear))
+        if isFollowUp { syncActiveTopicSpeech() }
+
+        let ids = panel.history.begin(question: turn.text, turnID: turn.id, kind: .hint,
+                                      rootEntryID: isFollowUp ? activeTopic?.rootEntryID : nil,
+                                      rootTitle: isFollowUp ? activeTopic?.rootTitle : nil)
         let slot = Slot(entry: ids.entry, version: ids.version)
-        // COPILOT-04 R-01: ответ на этот текст уже готовится (или запрос ещё собирается — чтение ключей) —
-        // ход забирает его, без нового запроса. Если опережающий запрос решит, что нужна карточка базы, ход пойдёт обычным путём.
-        if let d = draft, d.text == turn.text, !d.declined {
+
+        if isFollowUp {
+            activeTopic?.followUpDepth += 1
+        } else {
+            activeTopic = ActiveTopic(rootExchangeID: memory?.currentExchangeID, rootEntryID: ids.entry,
+                                      rootQuestion: turn.text)
+        }
+
+        // COPILOT-04 R-01: опережающий запрос забираем только на обычном (не follow-up) вопросе.
+        if !isFollowUp, let d = draft, d.text == turn.text, !d.declined {
             adopt(d, turn: turn, slot: slot, genID: genID)
             return
         }
         cancelDraft()
-        answerNormally(turn, slot: slot, genID: genID)
+        answerNormally(turn, slot: slot, genID: genID, isFollowUp: isFollowUp)
     }
 
-    private func answerNormally(_ turn: Turn, slot: Slot, genID: UInt64) {
+    private func answerNormally(_ turn: Turn, slot: Slot, genID: UInt64, isFollowUp: Bool = false) {
         let settings = effectiveSettings
+        let searchQuery = (isFollowUp ? activeTopic?.contextualSearchQuery(for: turn.text) : nil) ?? turn.text
+        let topicSnapshot = isFollowUp ? activeTopic : nil
         generation = Task { [weak self] in
             guard let self, self.activeGenerationID == genID else { return }
-            // «Без профиля» (R-40): база не ищется, модель отвечает сама. Обычный звонок (COPILOT-09) — без карточек,
-            // но с материалами профиля.
+            // «Без профиля» (R-40): база не ищется, модель отвечает сама. Обычный звонок и экзамен — с материалами профиля.
+            let needsMaterials = settings.useProfile || self.isRegularCall || self.isExamCall
             guard settings.useProfile else {
                 self.lastMatch = nil
-                self.lastMaterials = self.isRegularCall ? await self.bank.lookup(turn.text, threshold: 1).materials : []
+                if needsMaterials {
+                    let raw = await self.bank.lookup(searchQuery, threshold: 1).materials
+                    self.lastMaterials = topicSnapshot?.mergeMaterials(followUpHits: raw) ?? raw
+                } else {
+                    self.lastMaterials = []
+                }
                 guard !Task.isCancelled, self.activeGenerationID == genID else { return }
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials, slot: slot, genID: genID)
+                if !isFollowUp { self.activeTopic?.rootMaterials = Array(self.lastMaterials.prefix(3)) }
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials,
+                           slot: slot, genID: genID, isFollowUp: isFollowUp)
                 return
             }
-            let found = await self.bank.lookup(turn.text, threshold: settings.bankThreshold)
+            // На follow-up порог 1.0 блокирует случайную подмену чужой карточкой банка, оставляя контекстные материалы.
+            let cardThreshold = isFollowUp ? 1.0 : settings.bankThreshold
+            let found = await self.bank.lookup(searchQuery, threshold: cardThreshold)
             guard !Task.isCancelled, self.activeGenerationID == genID else { return }
-            self.lastMaterials = found.materials
-            if !found.materials.isEmpty {
-                Log.metrics.notice("materials_found turn=\(turn.id) count=\(found.materials.count) best=\(found.materials[0].score, format: .fixed(precision: 3))")
+            let materials = topicSnapshot?.mergeMaterials(followUpHits: found.materials) ?? found.materials
+            self.lastMaterials = materials
+            if !isFollowUp { self.activeTopic?.rootMaterials = Array(materials.prefix(3)) }
+            if !materials.isEmpty {
+                Log.metrics.notice("materials_found turn=\(turn.id) count=\(materials.count) best=\(materials[0].score, format: .fixed(precision: 3)) followup=\(isFollowUp ? 1 : 0)")
             }
             guard let match = found.match else {
                 // Базы нет (нет модели эмбеддингов) — генерация без карточек, если можно.
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: found.materials, slot: slot, genID: genID)
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: materials,
+                           slot: slot, genID: genID, isFollowUp: isFollowUp)
                 return
             }
             self.lastMatch = match
             Log.metrics.notice("bank_match turn=\(turn.id) matched=\(match.matched != nil) score=\(match.top.first?.score ?? 0, format: .fixed(precision: 3)) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
-            self.route(turn, match: match, settings: settings, materials: found.materials, slot: slot, genID: genID)
+            self.route(turn, match: match, settings: settings, materials: materials, slot: slot, genID: genID, isFollowUp: isFollowUp)
         }
     }
 
@@ -172,20 +218,24 @@ final class AnswerController {
     }
 
     private func hintRequest(question: String, base: BankCard?, top: [CardScore], settings: AppSettings,
-                             memory: MemoryContext = MemoryContext(), materials: [MaterialHit] = []) -> LLMRequest {
+                             memory: MemoryContext = MemoryContext(), materials: [MaterialHit] = [],
+                             isFollowUp: Bool? = nil) -> LLMRequest {
         PromptBuilder.hintRequest(question: question, transcript: transcript(), cards: top, baseCard: base,
                                   profile: promptProfile(settings), redactPII: settings.piiFilterEnabled,
                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question),
                                   memory: memory, generalInstructions: bank.generalInstructions,
-                                  materials: settings.useProfile || isRegularCall ? materials : [], session: sessionPrompt,
-                                  followUp: followUpContext(for: question))
+                                  materials: (settings.useProfile || isRegularCall || isExamCall) ? materials : [],
+                                  session: sessionPrompt,
+                                  followUp: followUpContext(for: question, explicitFollowUp: isFollowUp))
     }
 
-    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = [], slot: Slot, genID: UInt64) {
+    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = [],
+                       slot: Slot, genID: UInt64, isFollowUp: Bool = false) {
         let modelsAvailable = modelsAvailable(settings)
         switch AnswerRouter.decide(mode: settings.mode, match: match, modelsAvailable: modelsAvailable, useProfile: settings.useProfile) {
         case .bankCard(let card):
             showCard(card, turn: turn, slot: slot)
+            activeTopic?.lastShownHint = card.card.answer
         case .noMatch(let top):
             showNoMatch(top, turn: turn, reason: modelsAvailable || (settings.mode == .bankOnly && settings.useProfile) ? nil : "Модели недоступны: нет ключей",
                         slot: slot)
@@ -198,11 +248,13 @@ final class AnswerController {
                 // История интервью (COPILOT-06) и ключи — не на главном потоке.
                 let memory = await self.memoryContext(for: turn.text, turnID: turn.id)
                 let request = self.hintRequest(question: turn.text, base: base, top: top, settings: settings, memory: memory,
-                                               materials: materials)
+                                               materials: materials, isFollowUp: isFollowUp)
                 let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
                 guard !Task.isCancelled, self.activeGenerationID == genID, self.lastQuestion?.id == turn.id else { return }
                 self.generate(turn: turn, chain: chain, request: request, fallbackTop: top, slot: slot,
-                              genID: genID, expectedLanguage: expectedLang)
+                              genID: genID, expectedLanguage: expectedLang) { [weak self] answer in
+                    self?.activeTopic?.lastShownHint = answer
+                }
             }
         }
     }
@@ -463,10 +515,14 @@ final class AnswerController {
     private var draft: Draft?
 
     /// Начать отвечать на законченную реплику до истечения паузы T. Повтор с тем же текстом ничего не делает,
-    /// новый текст (собеседник продолжил) отменяет прежний запрос.
+    /// новый текст (собеседник продолжил) отменяет прежний запрос. Короткие follow-up пропускают черновик,
+    /// чтобы дождаться сброса прерванной речи владельца и контекстного RAG (E-02/E-03).
     func prefetch(_ text: String) {
         let settings = effectiveSettings
         guard settings.speculativeAnswers, draft?.text != text else { return }
+        if activeTopic != nil, FollowUpDetector.isFollowUp(text) || (isExamCall && TranscriptSanityCheck.looksUnclear(text)) {
+            return
+        }
         cancelDraft()
         let d = Draft(text: text, startedAt: Self.now())
         draft = d
@@ -650,18 +706,21 @@ final class AnswerController {
         }
     }
 
-    /// Clear (Q13) и конец сессии: задача больше не идет в запросы.
+    /// Clear (Q13) и конец сессии: задача и активная тема больше не идут в запросы.
     func clearTask() {
         tasks.clear()
+        activeTopic = nil
         onTaskChange?(nil)
     }
 
-    /// Контекст уточнения для запроса: активная задача и «короткий вопрос без предмета» (R-15, R-16).
-    private func followUpContext(for question: String) -> FollowUpContext {
-        let isFollowUp = FollowUpDetector.isFollowUp(question)
+    /// Контекст уточнения для запроса: активная задача, активная тема/билет и флаг неясного STT (R-15, R-16, E-02, E-04).
+    private func followUpContext(for question: String, explicitFollowUp: Bool? = nil) -> FollowUpContext {
+        let isFollowUp = explicitFollowUp ?? FollowUpDetector.isFollowUp(question)
         let active = tasks.active()
         if active != nil, isFollowUp { tasks.touch() }
-        return FollowUpContext(activeTask: active?.promptSummary, isFollowUp: isFollowUp)
+        return FollowUpContext(activeTask: active?.promptSummary, isFollowUp: isFollowUp,
+                               activeTopic: isFollowUp ? activeTopic : nil,
+                               transcriptUnclear: TranscriptSanityCheck.looksUnclear(question))
     }
 
     // MARK: Уточнение и повтор (COPILOT-09 R-08, R-10)

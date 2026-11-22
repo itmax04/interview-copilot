@@ -917,3 +917,7 @@
 "Не удалось удалить сессию" = "Could not delete the session";
 "Не удалось сохранить вопросы" = "Could not save questions";
 "Уточняю ответ…" = "Refining the answer…";
+"Экзамен" = "Exam";
+"Экзамен: строгие ответы по материалам и активной теме, без выдумывания; оптимизировано под перебивания и доп. вопросы." = "Exam: strict answers grounded in your materials and active topic, no fabrication; tuned for interruptions and follow-ups.";
+"К билету: %@" = "Back to topic: %@";
+"Вернуться к основному вопросу" = "Return to the main question";

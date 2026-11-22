@@ -12,6 +12,24 @@ struct AnswerCard: View {
         if let entry = model.history.current, let version = entry.current {
             VStack(alignment: .leading, spacing: 8) {
                 header(entry)
+                if let rootID = entry.rootEntryID, let rootTitle = entry.rootTitle,
+                   model.history.entry(rootID) != nil {
+                    Button { model.history.select(entry: rootID) } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.system(size: max(9, model.fontSize - 4), weight: .semibold))
+                            Text(L("К билету: %@", rootTitle))
+                                .lineLimit(1)
+                        }
+                        .font(.system(size: max(10, model.fontSize - 3), weight: .medium))
+                        .foregroundStyle(IC.accent)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(IC.accent.opacity(0.16), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Вернуться к основному вопросу")
+                    .accessibilityLabel(L("К билету: %@", rootTitle))
+                }
                 if entry.versions.count > 1 { versionTabs(entry) }
                 bodyView(entry: entry, version: version)
                 if version.status == .complete || version.status == .cancelled { footer(version) }
