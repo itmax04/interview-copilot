@@ -64,5 +64,12 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
 - Executor decision E-5: the «≥ 2 words and no anaphora» guard is an addition to the spec's R-03 so that short anaphoric
   clarifications with an opener word are not cut off from the ticket.
 
+## P-04 — Parakeet language hint (2026-11-23)
+- `ParakeetEngine.languageHint(for:)` (uk/ru/en → FluidAudio `Language`, auto/unknown → nil) and `language: hint` in the
+  `manager.transcribe` call; `ParakeetEngine.useLanguageHint` (default true) is the one-flag switch of R-02.
+- `ParakeetLanguageHintTests` (mapping); the seam is the pure mapping function, the `manager.transcribe` call itself is
+  covered only by the real-model check of P-05. `swift test` PASS, 528 tests.
+- Not yet measured: effect on real audio, English terms, decode time (P-05).
+
 ## Next
-P-04: `ParakeetLanguage` mapping + `language:` pass-through in `ParakeetEngine`. Owner accepted the plan on 2026-11-23.
+P-05: real-model check of the hint on synthetic Lesya audio (`copilot-eval stt-parakeet` with and without the hint; needs a flag in the eval to toggle `useLanguageHint`). Owner accepted the plan on 2026-11-23.
