@@ -78,6 +78,11 @@ struct PanelView: View {
             .background(Theme.warn.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.warn.opacity(0.45), lineWidth: 1))
         }
+        if model.micSilent && !model.micHardwareMuted {
+            AlertBox(icon: "mic.slash", text: model.micSilentDevice.map {
+                L("Микрофон не даёт звука (вход: %@). Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук", $0)
+            } ?? L("Микрофон не даёт звука. Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук"), size: model.fontSize)
+        }
         if model.englishNoticeVisible {
             HStack(spacing: 8) {
                 Image(systemName: "character.bubble").foregroundStyle(Theme.warn)

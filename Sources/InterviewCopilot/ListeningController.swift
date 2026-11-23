@@ -181,6 +181,9 @@ final class ListeningController {
     }
 
     /// Канал владельца работает на созвоне (звук приложения или весь системный звук), не в самопроверке и не в тестах.
+    /// COPILOT-16 R-05: микрофон должен звучать — источник «Микрофон» или включён канал владельца (не тестовый звонок).
+    var micExpected: Bool { phase == .listening && testSource == nil && (source == .microphone || ownerActive.value) }
+
     private func updateOwnerChannel() {
         let callSource: Bool = switch source {
         case .app, .allSystem: true

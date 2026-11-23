@@ -530,6 +530,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var lastCallSignalAt = Date()
     private var muteCheckTick = 0
+    private var micSilence = MicSilenceDetector()
 
     /// Уровни микрофона и звонка; «не слышу звонок N с» — только в сессии со звуком приложения (не в самопроверке).
     private func updateLevels() {
@@ -550,6 +551,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelModel.micHardwareMuted = false
             muteCheckTick = 0
         }
+        // COPILOT-16 R-05: микрофон молчит (цифровой ноль) при выключенном mute — уведомление и одна запись в журнал за эпизод.
+        let now = Double(DispatchTime.now().uptimeNanoseconds) / 1e9
+        let active = liveSession.isActive && listening.micExpected
+        if micSilence.update(levelDB: listening.micLevelDB, muted: panelModel.micHardwareMuted, active: active, now: now) {
+            let device = DefaultInputMute.deviceName()
+            panelModel.micSilentDevice = device
+            Log.audio.notice("mic_silent seconds=\(Int(self.micSilence.silentSeconds)) device=\(device ?? "?", privacy: .private) muted=false")
+        }
+        if panelModel.micSilent != micSilence.isSilent { panelModel.micSilent = micSilence.isSilent }
         // Предупреждение «не слышу звонок» — только если пользователь явно выбрал конкретное приложение (.app),
         // а не универсальный авто-захват (где можно нажать «Быстрый старт» заранее, до открытия звонка).
         let explicitAppSource: Bool = if case .app = model.settings.audioSource { true } else { false }

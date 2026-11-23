@@ -96,5 +96,17 @@ session is uk/ru, and "auto" settles on the interview language; (2) silent-mic d
 - Checks: `swift build` PASS; `swift test` PASS 513 tests in 88 suites; run-evals: filter-text 236/236, others unchanged PASS;
   check-localization PASS (823 keys, 0 missing); secret-scan PASS (0 findings); build-app NOT RUN; UI not checked visually.
 
+## P-05 — MicSilenceDetector (2026-11-23)
+- `Sources/CopilotCore/Audio/MicSilenceDetector.swift` (pure): peak ≤ −119 dB for ≥ 10 s with the channel active and the mute
+  flag off → `isSilent`; `update` returns true once per episode (log moment); any louder sample, mute, or inactive channel resets.
+  `DefaultInputMute.deviceName()` (CoreAudio `kAudioObjectPropertyName`) gives the input device name.
+- `ListeningController.micExpected` (listening, not a test call, source mic or owner channel on). `App.updateLevels` feeds the
+  detector (10 Hz) and logs `mic_silent seconds=… device=… muted=false` (device is `.private`). `PanelModel.micSilent`,
+  `micSilentDevice`; PanelView shows an `AlertBox` with the device name and the hint (another app may hold the mic; check
+  System Settings → Sound) and hides it while the mute banner is shown (mute has priority).
+- `MicSilenceDetectorTests` (6 tests, AC-04). English strings added.
+- Checks: `swift build` PASS; `swift test` PASS 519 tests in 89 suites; filter-text 236/236, evals otherwise unchanged PASS;
+  check-localization PASS (825 keys); secret-scan PASS; build-app NOT RUN; UI snapshot NOT RUN (not checked visually).
+
 ## Next
-P-05: `MicSilenceDetector` + panel notice «Микрофон не даёт звука» (R-05). Next owner checkpoint: H-1 live call.
+P-06: "All system audio" notice with «Только звонок» action, wizard footnote, Chrome-tabs note (R-06). Then P-07, H-1.

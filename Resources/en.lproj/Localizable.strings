@@ -931,3 +931,5 @@
 "Собеседник говорит по-английски?" = "Is the interviewer speaking English?";
 "Разрешить английский" = "Allow English";
 "Включить" = "Unmute";
+"Микрофон не даёт звука (вход: %@). Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук" = "The microphone is silent (input: %@). Another app may be holding it — check the input in System Settings → Sound";
+"Микрофон не даёт звука. Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук" = "The microphone is silent. Another app may be holding it — check the input in System Settings → Sound";

@@ -110,6 +110,18 @@ final class MicrophoneTap: @unchecked Sendable {
         return status == noErr ? device : nil
     }
 
+    static func defaultInputDeviceName() -> String? {
+        guard let device = defaultInputDevice() else { return nil }
+        var property = AudioObjectPropertyAddress(mSelector: kAudioObjectPropertyName,
+                                                  mScope: kAudioObjectPropertyScopeGlobal,
+                                                  mElement: kAudioObjectPropertyElementMain)
+        var name: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        let status = AudioObjectGetPropertyData(device, &property, 0, nil, &size, &name)
+        guard status == noErr, let name else { return nil }
+        return name.takeRetainedValue() as String
+    }
+
     /// Проверяет, замьючен ли системный микрофон по умолчанию на уровне macOS (`kAudioDevicePropertyMute == 1`).
     static func isDefaultInputMuted() -> Bool {
         guard let device = defaultInputDevice() else { return false }
@@ -197,4 +209,6 @@ public enum DefaultInputMute {
     public static func isMuted() -> Bool { MicrophoneTap.isDefaultInputMuted() }
     @discardableResult
     public static func unmute() -> Bool { MicrophoneTap.unmuteDefaultInput() }
+    /// Имя устройства ввода по умолчанию (для уведомления «Микрофон не даёт звука»); nil — не определено.
+    public static func deviceName() -> String? { MicrophoneTap.defaultInputDeviceName() }
 }
