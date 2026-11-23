@@ -50,7 +50,9 @@ public struct LanguageGate: Sendable {
         let latin = words.filter(Self.isLatin).count
         let other = words.count - cyrillic - latin
 
-        if cyrillic >= latin && cyrillic >= other {
+        // Латинские термины словаря в русской/украинской фразе не перевешивают кириллицу («Что такое Spring Boot Data JPA»).
+        let foreignLatin = words.filter { Self.isLatin($0) && !terms.words.contains($0) }.count
+        if cyrillic > 0 && cyrillic >= foreignLatin && cyrillic >= other || cyrillic >= latin && cyrillic >= other {
             return allowed.contains("slavic") || words.count < Self.minWordsToDrop ? .keep : .drop(language: "uk/ru")
         }
         if other > latin {

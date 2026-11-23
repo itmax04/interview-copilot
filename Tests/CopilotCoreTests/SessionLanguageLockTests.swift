@@ -116,3 +116,13 @@ import Testing
         #expect(lock.effectiveSetting(.auto) == .en)
     }
 }
+
+@Suite struct SessionLanguageLockTermsTests {
+    @Test func termOnlyEnglishPhrasesDoNotLockEnglish() {
+        var lock = SessionLanguageLock()
+        for t in ["Docker Kubernetes Terraform", "Docker Kubernetes Terraform", "Docker Kubernetes Terraform"] {
+            _ = lock.observeKept(t, base: .auto)
+        }
+        #expect(lock.lockedGroup == nil)
+    }
+}

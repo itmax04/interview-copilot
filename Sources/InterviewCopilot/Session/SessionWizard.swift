@@ -511,7 +511,7 @@ struct SessionWizardView: View {
                     .labelsHidden()
                 }
             }
-            if state.model.settings.audioSource == .allSystem || state.model.settings.audioSource == .auto {
+            if state.model.settings.audioSource == .allSystem {
                 Text("Весь системный звук включает видео и уведомления. Если звонок идёт в Chrome, захватываются все вкладки Chrome.")
                     .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }

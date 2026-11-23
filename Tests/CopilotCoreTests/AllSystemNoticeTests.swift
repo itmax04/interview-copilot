@@ -30,3 +30,12 @@ struct AllSystemNoticeTests {
         #expect(AudioSourceResolver.allSystemNotice(for: resolved, running: [notes]) != nil)
     }
 }
+
+@Suite("COPILOT-16 review — термины не перевешивают кириллицу")
+struct TermsMajorityTests {
+    @Test func cyrillicQuestionWithManyTermsIsKeptOnCall() {
+        let gate = LanguageGate(setting: .uk)
+        #expect(gate.check("Что такое Spring Boot Data JPA", channel: .call) == .keep)
+        #expect(gate.check("Как работает Docker Compose Kubernetes", channel: .call) == .keep)
+    }
+}

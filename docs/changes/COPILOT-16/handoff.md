@@ -121,5 +121,21 @@ session is uk/ru, and "auto" settles on the interview language; (2) silent-mic d
 - Checks: `swift build` PASS; `swift test` PASS 523 tests in 90 suites; filter-text 236/236, evals unchanged PASS;
   check-localization PASS (831 keys); secret-scan PASS; build-app NOT RUN; UI snapshot (`UISnapshots`) NOT RUN — not checked visually.
 
+## P-07 — documents, review, full check (2026-11-23)
+- Documents: ARCHITECTURE (filter flow, Filter/Audio module rows, log events, §9 COPILOT-16 row), AGENTS.md data-flow line;
+  CLAUDE.md already says COPILOT-16; COPILOT-05 Q8 notes were added in P-03.
+- Independent review (fresh `sdlc:reviewer` subagent, standard tier, diff c6b20bf..HEAD): verdict approve-with-notes, no P0/P1.
+  Fixed: F1 (P2) a uk/ru question dominated by dictionary terms («Что такое Spring Boot Data JPA») was dropped on `.call` —
+  dictionary terms no longer outweigh Cyrillic in `LanguageGate`; F2 term-only English phrases no longer lock "auto" to `en`;
+  F3 «Только звонок» override is cleared when the source setting changes; F4 `onChange` when the All-system notice changes;
+  F6 wizard footnote only for All system audio. Not done: a symmetric notice when locked to `en` (lock now ignores term-only
+  phrases; residual risk is listed under Unverified). Tests added: `TermsMajorityTests`, `SessionLanguageLockTermsTests`.
+- Full check: `swift test` PASS 525 tests in 92 suites; `scripts/run-evals.sh` PASS (filter-text 236/236, turn 0%/0%, bank top1
+  94.9%, memory 8/8, materials 23/24) — AC-01, AC-06; `scripts/secret-scan.sh` PASS 0 findings; `scripts/check-localization.sh`
+  PASS 831 keys; `scripts/build-app.sh` PASS (dist/InterviewCopilot.app, signed) — AC-08.
+- Unverified: UI snapshot for AC-05 and visual look of the new banners (NOT RUN); live behaviour (AC-07, H-1); NLLanguageRecognizer
+  on real German/pseudo-English audio; a real interviewer who locks "auto" to `en` on English small talk has no recovery
+  notice (only per-line «Ответить»).
+
 ## Next
-P-07: documents, independent review (fresh subagent, standard), full check and `scripts/build-app.sh`. Then H-1 (owner live call).
+H-1 (owner): live call with background foreign/English speech and the Telegram silent-mic check; then P-08.

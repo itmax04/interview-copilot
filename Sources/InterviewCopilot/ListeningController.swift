@@ -348,7 +348,7 @@ final class ListeningController {
         let gate = LanguageGate(setting: languageLock.effectiveSetting(base), terms: terms)
         guard case .drop(let language) = gate.check(text, channel: gateChannel) else {
             // COPILOT-16 R-03: «Авто» закрепляется за языком собеседника после 3 фраз одной группы.
-            if let group = languageLock.observeKept(text, base: base) {
+            if let group = languageLock.observeKept(text, base: base, terms: terms) {
                 Log.metrics.notice("language_locked group=\(group, privacy: .public) after=\(SessionLanguageLock.phrasesToLock)")
             }
             if englishNoticeVisible { englishNoticeVisible = false }
@@ -657,6 +657,7 @@ final class ListeningController {
 
     /// Смена источника из меню или настроек — без перезапуска приложения (R-01).
     func sourceSettingChanged() {
+        sessionSourceOverride = nil   // явная смена источника в настройках важнее «Только звонок»
         guard phase != .paused, phase != .standby else { return }
         if phase == .noPermission {
             if usesMicrophone { start() }
@@ -668,7 +669,11 @@ final class ListeningController {
     private func runningAppsChanged() {
         guard phase != .paused, phase != .noPermission, phase != .standby else { return }
         let resolved = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
-        if resolved != source { updateCapture(restart: false) } else { refreshAllSystemNotice() }
+        if resolved != source { updateCapture(restart: false) } else {
+            let before = allSystemNotice
+            refreshAllSystemNotice()
+            if allSystemNotice != before { onChange?() }
+        }
     }
 
     /// A system stream can finish starting after cancellation. Drain that operation before touching the next stream.

@@ -50,11 +50,11 @@ public struct SessionLanguageLock: Sendable, Equatable {
 
     /// Фраза интервьюера оставлена фильтром. Возвращает группу, если именно эта фраза закрепила язык.
     @discardableResult
-    public mutating func observeKept(_ text: String, base: RecognitionLanguage) -> String? {
+    public mutating func observeKept(_ text: String, base: RecognitionLanguage, terms: TermDictionary = TermDictionary()) -> String? {
         consecutiveEnglishDrops = 0
         guard base == .auto, lockedGroup == nil, !englishAllowed, Self.words(text).count >= Self.minWords else { return nil }
         // Смешанная фраза (≥ 3 слов, группы нет) прерывает серию; короткая серию не трогает.
-        guard let group = Self.group(of: text) else { resetStreak(); return nil }
+        guard let group = Self.group(of: text, terms: terms) else { resetStreak(); return nil }
         if streakGroup == group { streakCount += 1 } else { streakGroup = group; streakCount = 1 }
         guard streakCount >= Self.phrasesToLock else { return nil }
         lockedGroup = group
@@ -84,13 +84,13 @@ public struct SessionLanguageLock: Sendable, Equatable {
     static func words(_ text: String) -> [String] { LanguageGate.words(text) }
 
     /// «slavic» — кириллица; «en» — латиница, определённая как английская; иначе nil (смешанная/другой язык/термины).
-    static func group(of text: String) -> String? {
+    static func group(of text: String, terms: TermDictionary) -> String? {
         let words = words(text)
         guard words.count >= minWords else { return nil }
         let cyrillic = words.filter(LanguageGate.isCyrillic).count
         let latin = words.filter(LanguageGate.isLatin).count
         if cyrillic > latin { return "slavic" }
-        if latin > cyrillic, LanguageGate.dominantLanguage(text) == "en" { return "en" }
+        if latin > cyrillic, !terms.allTerms(words), LanguageGate.dominantLanguage(text) == "en" { return "en" }
         return nil
     }
 }

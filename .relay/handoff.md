@@ -19,6 +19,8 @@
   build-app and UI snapshot NOT RUN.
 - P-06 done: All-system-audio notice + «Только звонок» (session override) + wizard footnotes; 523 tests PASS, localization/secret-scan PASS,
   build-app and UI snapshot NOT RUN.
+- P-07 done: docs, independent review (approve-with-notes, F1/F2/F3/F4/F6 fixed), full check PASS (525 tests, evals, secret-scan,
+  localization, build-app).
 
 ## Next
-P-07 documents + independent review + full check and build-app. Then H-1 live call.
+H-1 owner live call (see plan.md), then P-08.
