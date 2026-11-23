@@ -172,6 +172,13 @@ struct AudioSettingsView: View {
                 Text("Пауза после вопроса со знаком «?»: \(model.settings.questionPauseMs) мс")
                 Slider(value: questionPauseBinding, in: Double(AppSettings.questionPauseRange.lowerBound)...Double(AppSettings.questionPauseRange.upperBound), step: 50)
             }
+            Picker("Точный вопрос (+2 с)", selection: $model.settings.preciseQuestion) {
+                Text("Авто (экзамен)").tag(PreciseQuestionMode.auto)
+                Text("Включено").tag(PreciseQuestionMode.on)
+                Text("Выключено").tag(PreciseQuestionMode.off)
+            }
+            Text("Подсказка ждёт повторное распознавание Whisper: текст вопроса точнее, первый токен позже ≈ на 2 с. Только для украинского.")
+                .font(.footnote).foregroundStyle(.secondary)
             Toggle("Фильтр языка: чужой язык — серым, английские термины сохраняются", isOn: $model.settings.languageFilter)
             Text("Українська или Русский — проходят оба языка; English — только английский; Auto — украинский, русский, английский. В звонке целая английская фраза интервьюера проходит; в микрофоне — только термины. Серую строку можно нажать (или \(model.settings.hotkey(.answerNow).displayString)), чтобы ответить.")
                 .font(.footnote).foregroundStyle(.secondary)

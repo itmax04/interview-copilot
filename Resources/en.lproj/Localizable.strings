@@ -766,6 +766,11 @@
 "Движок распознавания" = "Recognition engine";
 "Модель распознавания" = "Recognition model";
 "Точный итоговый текст" = "Accurate final text";
+"Точный вопрос (+2 с)" = "Precise question (+2 s)";
+"Авто (экзамен)" = "Auto (exam)";
+"Включено" = "On";
+"Выключено" = "Off";
+"Подсказка ждёт повторное распознавание Whisper: текст вопроса точнее, первый токен позже ≈ на 2 с. Только для украинского." = "The hint waits for the Whisper re-recognition: the question text is more accurate, the first token comes about 2 s later. Ukrainian only.";
 "Украинский итог — через Whisper turbo" = "Ukrainian final text — via Whisper turbo";
 "Уточнять через Whisper и русский/английский (термины, имена)" = "Also refine Russian/English via Whisper (terms, names)";
 "Подсказывать распознаванию формулировки из базы вопросов" = "Prompt recognition with phrasings from the question bank";

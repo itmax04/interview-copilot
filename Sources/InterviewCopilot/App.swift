@@ -648,6 +648,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.settings.useProfile = c.type == .interview || c.type == .mock || c.type == .exam
         if model.settings.language != c.language { model.settings.language = c.language }
         model.settings.lastSessionConfig = c.defaultsForNext()
+        listening.setHintWaitsForWhisper(PreciseQuestionMode.waits(mode: model.settings.preciseQuestion, session: c.type, language: c.language))
         memory.reset()
         turns.setAllowShortFollowUps(false)
         historyUtterances = [:]
@@ -674,6 +675,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func sessionEnded(_ c: SessionConfig) -> Task<Void, Never> {
+        listening.setHintWaitsForWhisper(false)
         hotkeys?.unregisterSession()
         panelModel.sessionHotkeysFailed = []
         answers.clearTask()

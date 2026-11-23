@@ -101,5 +101,22 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
   (no UI snapshot target exists in this package).
 - `swift build` PASS; `swift test` PASS, 534 tests in 94 suites.
 
+## P-07 — «Точный вопрос (+2 с)» setting (2026-11-23)
+- `PreciseQuestionMode` (auto/on/off) + `waits(mode:session:language:)` in `Domain/Modes.swift`; `AppSettings.preciseQuestion`
+  (default `.auto`, old files decode to it). Wait only when the language is `uk`; `auto` = exam sessions.
+- Wiring: `App.sessionStarted` sets `listening.setHintWaitsForWhisper(...)`, `sessionEnded` resets it; applied to
+  `StreamingTranscriber.setHintWaitsForWhisper(_:budget:)` (new; redecoder is built lazily from it, so it is fixed per session).
+  Reuses the COPILOT-15 R-14 fallback B (`QuestionRedecoder.Config.waitsForWhisper`, budget 6 s); no new recognition path.
+- Log `hint_wait_whisper turn= waited_ms= used=whisper|parakeet` (numbers only). Speculative drafts use the no-wait path
+  (`release:false` redecode still goes through the same redecoder — see unverified below).
+- Settings → Recognition: picker «Точный вопрос (+2 с)» (Авто (экзамен) / Включено / Выключено) + explanation; English lines added;
+  `scripts/check-localization.sh` PASS.
+- Tests: `PreciseQuestionSettingTests` (3×3×4 table, old-file decode + round trip); stalled-recognizer test in
+  `OwnerAnswerRedecodeTests` (revise stalls 3 s, budget 0.4 s → nil in < 1.5 s, hint falls back to the Parakeet text).
+  `swift build` PASS; `swift test` PASS, 537 tests in 95 suites.
+- Unverified: the +2.2 s median (AC-08) needs live logs (H-1). R-07 «wait does not apply to speculative drafts and bank
+  cards»: `turns.draftRedecode` shares the transcriber's redecoder, so a draft in a wait-on session would also wait —
+  to be checked in the P-10 review / H-1 (possible fix: a per-call `waits:false` argument for drafts).
+
 ## Next
-P-07: `preciseQuestion` setting (auto/on/off), effective-wait function, Settings row, `hint_wait_whisper` log, stalled-recognizer test.
+P-08: `QuestionAudioStore` (opt-in question-audio saving), then P-09, P-10, H-1.

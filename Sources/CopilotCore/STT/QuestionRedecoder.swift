@@ -19,9 +19,9 @@ public final class QuestionRedecoder: @unchecked Sendable {
         /// текст заменяет текст Parakeet; бюджет выше (+2,2–2,4 с на M1). Включается одной строкой после живой проверки.
         public var waitsForWhisper = false
         public static let whisperBudget: Double = 6
-        public init(waitsForWhisper: Bool = false) {
+        public init(waitsForWhisper: Bool = false, whisperBudget: Double = Config.whisperBudget) {
             self.waitsForWhisper = waitsForWhisper
-            if waitsForWhisper { budget = Self.whisperBudget }
+            if waitsForWhisper { budget = whisperBudget }
         }
     }
 
@@ -40,6 +40,7 @@ public final class QuestionRedecoder: @unchecked Sendable {
     public func run(_ audio: QuestionAudio, language: String?, turn: Int, provisionalWords: Int) async -> QuestionRedecode? {
         let started = DispatchTime.now().uptimeNanoseconds
         let audioMs = Int(audio.seconds * 1000)
+        let usedWhisper = Flag()
         let outcome: Result<Transcription, Error>? = await withCheckedContinuation { continuation in
             let once = Once(continuation)
             queue.async { [recognizer, config] in
@@ -50,6 +51,7 @@ public final class QuestionRedecoder: @unchecked Sendable {
                         if config.waitsForWhisper, recognizer.revisionNeeded(r, language: language),
                            let second = try? recognizer.revise(audio.samples, language: HybridRecognizer.revisionLanguage(language: language, text: r.text), prompt: nil) {
                             r = second
+                            usedWhisper.set()
                         }
                         once.resume(.success(r))
                         return
@@ -66,6 +68,10 @@ public final class QuestionRedecoder: @unchecked Sendable {
             timer.asyncAfter(deadline: .now() + config.budget) { once.resume(nil) }
         }
         let elapsedMs = Int((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)
+        if config.waitsForWhisper {
+            let used = outcome != nil && usedWhisper.value ? "whisper" : "parakeet"
+            Log.metrics.notice("hint_wait_whisper turn=\(turn) waited_ms=\(elapsedMs) used=\(used, privacy: .public)")
+        }
         switch outcome {
         case .success(let t) where !t.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty:
             let text = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -79,6 +85,13 @@ public final class QuestionRedecoder: @unchecked Sendable {
             Log.metrics.notice("redecode_failed turn=\(turn) reason=budget audio_ms=\(audioMs) elapsed_ms=\(elapsedMs)")
         }
         return nil
+    }
+
+    private final class Flag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var on = false
+        func set() { lock.withLock { on = true } }
+        var value: Bool { lock.withLock { on } }
     }
 
     /// Продолжение, которое возобновляется один раз: результат прогона и таймер бюджета соревнуются.

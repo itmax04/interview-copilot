@@ -106,6 +106,24 @@ struct OwnerAnswerRedecodeTests {
         #expect(QuestionRedecoder.Config(waitsForWhisper: true).budget > QuestionRedecoder.Config().budget)
     }
 
+    // MARK: COPILOT-17 R-07
+
+    @Test("COPILOT-17 R-07: a stalled Whisper does not stall the question — budget, then Parakeet text")
+    func stalledRecognizerFallsBackWithinBudget() async {
+        let buffer = AudioRingBuffer(seconds: 30)
+        let rec = SlowRevisionRecognizer(revisionDelay: 3)
+        let (t, sink) = ownerTranscriber(rec, buffer)
+        t.setHintWaitsForWhisper(true, budget: 0.4)
+        feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
+        feed(t, buffer, EnergyVADTests.tone(ms: 1500, amplitude: 0.3))
+        feed(t, buffer, EnergyVADTests.noise(ms: 900, amplitude: 0.001))
+        _ = await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } }
+        let began = Date()
+        let result = await t.redecodeQuestion(utterances: [1], turn: 1, provisional: "x")
+        #expect(result == nil)                                   // Whisper завис: ход идёт по тексту Parakeet
+        #expect(Date().timeIntervalSince(began) < 1.5)
+    }
+
     // MARK: rehearsal (AC-07)
 
     @Test("Rehearsal: owner phrases are left out of the question audio")

@@ -147,6 +147,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var speculativeAnswers = true
     /// Фильтр языка (COPILOT-05 R-05): реплики на чужом языке — серым, английские термины сохраняются.
     public var languageFilter = true
+    /// «Точный вопрос (+2 с)» (COPILOT-17 R-06): ждать Whisper перед подсказкой; auto — только экзамен; только для украинского.
+    public var preciseQuestion: PreciseQuestionMode = .auto
     /// Нейросетевая проверка речи Silero (COPILOT-05 R-02): шум без речи не становится репликой. Нужна модель.
     public var neuralSpeechGate = true
     /// Только голос владельца в микрофоне (COPILOT-05 R-03): нужен записанный образец голоса.
@@ -311,6 +313,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         questionPauseMs = v(.questionPauseMs, d.questionPauseMs)
         speculativeAnswers = v(.speculativeAnswers, d.speculativeAnswers)
         languageFilter = v(.languageFilter, d.languageFilter)
+        preciseQuestion = v(.preciseQuestion, d.preciseQuestion)
         neuralSpeechGate = v(.neuralSpeechGate, d.neuralSpeechGate)
         ownerVoiceOnly = v(.ownerVoiceOnly, d.ownerVoiceOnly)
         rehearsalWithInterviewer = v(.rehearsalWithInterviewer, d.rehearsalWithInterviewer)

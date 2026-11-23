@@ -89,6 +89,12 @@ final class ListeningController {
     /// Фильтр отбросил реплику (COPILOT-05 R-06) — текст для ⌃⌥↩ «ответить всё равно».
     var onFiltered: ((String) -> Void)?
     /// Фоновый проход Whisper по истории закончил вопрос хода (COPILOT-15 R-07): (номер хода, прежний текст, уточнённый, язык).
+    /// COPILOT-17 R-06: подсказка ждёт Whisper — решается при старте сессии (`PreciseQuestionMode.waits`).
+    private(set) var hintWaitsForWhisper = false
+    func setHintWaitsForWhisper(_ on: Bool) {
+        hintWaitsForWhisper = on
+        transcriber?.setHintWaitsForWhisper(on)
+    }
     var onHistoryText: ((Int, String, String, String, Double) -> Void)?
 
     /// После хода: поставить проход Whisper по звуку вопроса (только история и память, не подсказка).
@@ -914,6 +920,7 @@ final class ListeningController {
                     self.onHistoryText?(turn, old, result.text, result.language, seconds)
                 }
             }
+            t.setHintWaitsForWhisper(hintWaitsForWhisper)
             transcriberBox.set(t)
             transcriber = t
             var ownerConfig = StreamingTranscriber.Config()

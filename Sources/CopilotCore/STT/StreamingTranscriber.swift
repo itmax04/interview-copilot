@@ -74,7 +74,24 @@ public final class StreamingTranscriber: @unchecked Sendable {
     private let lock = NSLock()
     /// Границы и звук закрытых фраз: из них строится звук хода для повторного распознавания (COPILOT-15 R-02).
     public let questionRanges = QuestionAudioRange()
-    private lazy var redecoder = QuestionRedecoder(recognizer: recognizer, config: QuestionRedecoder.Config(waitsForWhisper: config.hintWaitsForWhisper))
+    private var redecoderWaitsForWhisper: Bool?
+    private var redecoderBudget: Double?
+    private var redecoderStore: QuestionRedecoder?
+    private var redecoder: QuestionRedecoder {
+        lock.withLock {
+            if let r = redecoderStore { return r }
+            let r = QuestionRedecoder(recognizer: recognizer, config: QuestionRedecoder.Config(
+                waitsForWhisper: redecoderWaitsForWhisper ?? config.hintWaitsForWhisper,
+                whisperBudget: redecoderBudget ?? QuestionRedecoder.Config.whisperBudget))
+            redecoderStore = r
+            return r
+        }
+    }
+
+    /// COPILOT-17 R-06: ожидание Whisper задаётся при старте сессии и не меняется посреди неё.
+    public func setHintWaitsForWhisper(_ on: Bool, budget: Double? = nil) {
+        lock.withLock { redecoderWaitsForWhisper = on; redecoderBudget = budget; redecoderStore = nil }
+    }
     private var redecodeCache: [(utterances: [Int], result: QuestionRedecode)] = []
     /// Звук последних вопросов для фонового прохода Whisper по истории (R-07): живёт дольше `release` хода, не больше трёх.
     private var historyAudio: [(utterances: [Int], audio: QuestionAudio)] = []
