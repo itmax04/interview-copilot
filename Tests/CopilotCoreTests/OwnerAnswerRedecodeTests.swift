@@ -100,7 +100,7 @@ struct OwnerAnswerRedecodeTests {
         feed(t, buffer, EnergyVADTests.tone(ms: 1500, amplitude: 0.3))
         feed(t, buffer, EnergyVADTests.noise(ms: 900, amplitude: 0.001))
         _ = await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } }
-        let result = await t.redecodeQuestion(utterances: [1], turn: 1, provisional: "x")
+        let result = await t.redecodeQuestion(utterances: [1], turn: 1, provisional: "x", release: true)
         #expect(result?.text == "уточнено")
         #expect(rec.revisions >= 1)
         #expect(QuestionRedecoder.Config(waitsForWhisper: true).budget > QuestionRedecoder.Config().budget)
@@ -119,9 +119,30 @@ struct OwnerAnswerRedecodeTests {
         feed(t, buffer, EnergyVADTests.noise(ms: 900, amplitude: 0.001))
         _ = await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } }
         let began = Date()
-        let result = await t.redecodeQuestion(utterances: [1], turn: 1, provisional: "x")
+        let result = await t.redecodeQuestion(utterances: [1], turn: 1, provisional: "x", release: true)
         #expect(result == nil)                                   // Whisper завис: ход идёт по тексту Parakeet
         #expect(Date().timeIntervalSince(began) < 1.5)
+    }
+
+    @Test("COPILOT-17 R-07: a speculative draft does not wait for Whisper and does not poison the turn's result")
+    func draftSkipsWhisperWaitAndTurnStillGetsIt() async {
+        let buffer = AudioRingBuffer(seconds: 30)
+        let rec = SlowRevisionRecognizer(revisionDelay: 1.0)
+        let (t, sink) = ownerTranscriber(rec, buffer)
+        t.setHintWaitsForWhisper(true, budget: 5)
+        feed(t, buffer, EnergyVADTests.noise(ms: 300, amplitude: 0.001))
+        feed(t, buffer, EnergyVADTests.tone(ms: 1500, amplitude: 0.3))
+        feed(t, buffer, EnergyVADTests.noise(ms: 900, amplitude: 0.001))
+        _ = await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } }
+        let before = rec.revisions
+        let began = Date()
+        let draft = await t.redecodeQuestion(utterances: [1], turn: 1, provisional: "", release: false)
+        #expect(draft?.text == "черновик")                       // Parakeet text, no Whisper
+        #expect(Date().timeIntervalSince(began) < 0.7)
+        #expect(rec.revisions == before)
+        let turn = await t.redecodeQuestion(utterances: [1], turn: 1, provisional: "x", release: true)
+        #expect(turn?.text == "уточнено")                        // the cached draft did not satisfy the waiting turn
+        #expect(rec.revisions == before + 1)
     }
 
     // MARK: rehearsal (AC-07)

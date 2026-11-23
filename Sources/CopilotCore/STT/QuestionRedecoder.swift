@@ -27,6 +27,7 @@ public final class QuestionRedecoder: @unchecked Sendable {
 
     private let recognizer: SpeechRecognizer
     private let config: Config
+    public var waitsForWhisper: Bool { config.waitsForWhisper }
     private let queue = DispatchQueue(label: "com.itmax04.interviewcopilot.stt-redecode", qos: .userInitiated)
     /// Отдельная очередь для таймера бюджета: общий пул GCD может быть занят блокирующими прогонами.
     private let timer = DispatchQueue(label: "com.itmax04.interviewcopilot.stt-redecode-budget", qos: .userInitiated)
@@ -37,18 +38,21 @@ public final class QuestionRedecoder: @unchecked Sendable {
     }
 
     /// `language` — язык фраз (nil для мультиязычного движка). `turn` и `provisionalWords` — только для метрики.
-    public func run(_ audio: QuestionAudio, language: String?, turn: Int, provisionalWords: Int) async -> QuestionRedecode? {
+    /// `waits: false` — спекулятивный черновик: ожидание Whisper не применяется, бюджет обычный (COPILOT-17 R-07).
+    public func run(_ audio: QuestionAudio, language: String?, turn: Int, provisionalWords: Int, waits: Bool = true) async -> QuestionRedecode? {
+        let waitsForWhisper = config.waitsForWhisper && waits
+        let budget = (config.waitsForWhisper && !waits) ? Config().budget : config.budget
         let started = DispatchTime.now().uptimeNanoseconds
         let audioMs = Int(audio.seconds * 1000)
         let usedWhisper = Flag()
         let outcome: Result<Transcription, Error>? = await withCheckedContinuation { continuation in
             let once = Once(continuation)
-            queue.async { [recognizer, config] in
+            queue.async { [recognizer] in
                 var attempt = 0
                 while true {
                     do {
                         var r = try recognizer.transcribe(audio.samples, language: language, prompt: nil, reducedContext: false)
-                        if config.waitsForWhisper, recognizer.revisionNeeded(r, language: language),
+                        if waitsForWhisper, recognizer.revisionNeeded(r, language: language),
                            let second = try? recognizer.revise(audio.samples, language: HybridRecognizer.revisionLanguage(language: language, text: r.text), prompt: nil) {
                             r = second
                             usedWhisper.set()
@@ -65,10 +69,10 @@ public final class QuestionRedecoder: @unchecked Sendable {
                     }
                 }
             }
-            timer.asyncAfter(deadline: .now() + config.budget) { once.resume(nil) }
+            timer.asyncAfter(deadline: .now() + budget) { once.resume(nil) }
         }
         let elapsedMs = Int((DispatchTime.now().uptimeNanoseconds - started) / 1_000_000)
-        if config.waitsForWhisper {
+        if waitsForWhisper {
             let used = outcome != nil && usedWhisper.value ? "whisper" : "parakeet"
             Log.metrics.notice("hint_wait_whisper turn=\(turn) waited_ms=\(elapsedMs) used=\(used, privacy: .public)")
         }

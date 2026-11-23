@@ -141,7 +141,31 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
   deleteAll, unreadable file); the `SessionController` call itself is a one-line app-target wiring, NOT unit-tested
   (no test target for the app module). `swift build` PASS; `swift test` PASS, 542 tests.
 
+## P-10 — documents, independent review, full check (2026-11-23)
+- Documents (commit 3f4ab2d): `AGENTS.md` (§1 "by default no audio", §6 `question-audio/`, §8 recipe), `docs/ARCHITECTURE.md` (§1, §3 STT row,
+  §4 data on disk, §9 row COPILOT-17), `README.md` (limitations), `CLAUDE.md` (latest task COPILOT-17). `ADR-0001` untouched: no new
+  dependency; cloud STT stays excluded by D3.
+- Independent review: fresh `sdlc:reviewer` subagent (standard tier), diff `50e65b6..HEAD`. Verdict: **approve-with-notes**, no blocker.
+  OK: audio store permissions (dir 700 re-asserted, files 600, backup exclusion), no text in logs/sidecars/file names (three new log lines
+  numbers only), call-channel-only saving (owner mic has no sink; drafts and test call do not save), P-06 guards, language hint and openers.
+  - F1 (major, fixed): speculative drafts waited for Whisper (shared redecoder/cache). Fix: `redecodeQuestion` waits only for the
+    turn (`release`) when the setting is on; `QuestionRedecoder.run(waits:)`; cache and in-flight entries carry `waited`, a non-waited
+    entry never satisfies a waiting turn. Test `draftSkipsWhisperWaitAndTurnStillGetsIt` (draft < 0.7 s, no revise call, turn then gets
+    the Whisper text). Two older tests now pass `release: true` (they model the turn).
+  - F3 (minor, fixed): file created with mode 600 at creation (`createFile` with attributes), no wider-permission window.
+  - F4 (minor, fixed): `QuestionAudioStore` lock is shared by all instances (purge/deleteAll no longer race a save).
+  - Not fixed, recorded: (a) bank cards: matching runs on the turn text after the redecode is awaited, so with the wait on bank cards are
+    delayed together with the turn — R-07 "not for bank cards" cannot hold without architectural change (accepted; the cost is the
+    same +2 s, the setting is one tap off). (b) On Whisper timeout `run` returns nil, so the turn uses the per-phrase text, not the
+    whole-question Parakeet result (log says `used=parakeet`); a timed-out Whisper job also keeps the serial queue busy for the next turn.
+    (c) The hint also applies to the owner-mic transcriber (accepted by R-01/R-02; `useLanguageHint` is the kill switch; H-1 should
+    include an English-term case). (d) With the wait on, the history Whisper pass repeats the same Whisper decode (CPU only). (e) Tests:
+    no chmod-000 case, no explicit test that owner/test-call never save.
+- Full check on the final tree: `swift test` PASS (543 tests, 96 suites); `scripts/run-evals.sh` PASS (turn 0%/0%, bank top1 94.9%, filter-text
+  236/236, exam-followup 48/48, memory 8/8 and 0/2, materials 23/24 and 2/8); `scripts/secret-scan.sh` PASS (0 findings);
+  `scripts/check-localization.sh` PASS (843/843); `scripts/build-app.sh` PASS (signed app in `dist/`).
+- NOT RUN: AC-06 metrics replay, AC-08 latency numbers, a real call with saving on (H-1).
+
 ## Next
-P-10: documents (AGENTS.md "no audio" wording and §6, ARCHITECTURE §3/§4/§9, CLAUDE.md latest task), independent review of the whole
-diff (fresh subagent, standard tier; check audio permissions, no text in files/logs, the draft/wait issue from P-07), fix findings,
-full check and `scripts/build-app.sh`; then H-1.
+H-1: live check by the owner (uk exam session): question text accuracy, ticket root title, «Точный вопрос (+2 с)» latency from the
+`hint_wait_whisper` logs, an English-term case in the owner's answer, question-audio saving and wipe. No push.

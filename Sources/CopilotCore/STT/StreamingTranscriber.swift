@@ -98,11 +98,11 @@ public final class StreamingTranscriber: @unchecked Sendable {
     public func setHintWaitsForWhisper(_ on: Bool, budget: Double? = nil) {
         lock.withLock { redecoderWaitsForWhisper = on; redecoderBudget = budget; redecoderStore = nil }
     }
-    private var redecodeCache: [(utterances: [Int], result: QuestionRedecode)] = []
+    private var redecodeCache: [(utterances: [Int], waited: Bool, result: QuestionRedecode)] = []
     /// Звук последних вопросов для фонового прохода Whisper по истории (R-07): живёт дольше `release` хода, не больше трёх.
     private var historyAudio: [(utterances: [Int], audio: QuestionAudio)] = []
     /// Идущие повторные распознавания по списку фраз (не больше четырёх); очищается на паузе вместе с эпохой.
-    private var redecodeInFlight: [(id: UUID, utterances: [Int], task: Task<QuestionRedecode?, Never>)] = []
+    private var redecodeInFlight: [(id: UUID, utterances: [Int], waits: Bool, task: Task<QuestionRedecode?, Never>)] = []
     private var historyPass: HistoryPassScheduler!
     private var onHistoryText: (@Sendable (_ turn: Int, _ oldText: String, _ result: Transcription, _ audioSeconds: Double) -> Void)?
 
@@ -451,22 +451,25 @@ public final class StreamingTranscriber: @unchecked Sendable {
         // Кэш и «уже идёт» проверяются под одним lock: второй вызов с тем же списком фраз (ход во время опережающего
         // прогона) ждёт идущий, а не запускает Parakeet второй раз. Звук освобождает только вызов с `release`, и только
         // после результата: прогон забрал звук при старте. Общий `Task` не наследует отмену ожидающего.
+        // COPILOT-17 R-07: ожидание Whisper только у хода (`release`); черновик его не ждёт и не отравляет кэш — запись без
+        // ожидания не годится ходу, который ждёт, а запись с ожиданием годится всем.
+        let waits = release && redecoder.waitsForWhisper
         let work: Task<QuestionRedecode?, Never> = lock.withLock {
-            if let hit = redecodeCache.first(where: { $0.utterances == utterances })?.result { return Task { hit } }
-            if let flight = redecodeInFlight.first(where: { $0.utterances == utterances }) { return flight.task }
+            if let hit = redecodeCache.first(where: { $0.utterances == utterances && ($0.waited || !waits) })?.result { return Task { hit } }
+            if let flight = redecodeInFlight.first(where: { $0.utterances == utterances && ($0.waits || !waits) }) { return flight.task }
             let id = UUID()
             let task = Task<QuestionRedecode?, Never> { [self] in
-                let r = await runRedecode(utterances: utterances, turn: turn, provisional: provisional)
+                let r = await runRedecode(utterances: utterances, turn: turn, provisional: provisional, waits: waits)
                 lock.withLock {
                     if let r {
-                        redecodeCache.append((utterances, r))
+                        redecodeCache.append((utterances, waits, r))
                         if redecodeCache.count > 4 { redecodeCache.removeFirst() }
                     }
                     redecodeInFlight.removeAll { $0.id == id }
                 }
                 return r
             }
-            if redecodeInFlight.count < 4 { redecodeInFlight.append((id, utterances, task)) } // предел: сверх него не склеиваем
+            if redecodeInFlight.count < 4 { redecodeInFlight.append((id, utterances, waits, task)) } // предел: сверх него не склеиваем
             return task
         }
         let result = await work.value
@@ -478,7 +481,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
         return result
     }
 
-    private func runRedecode(utterances: [Int], turn: Int, provisional: String) async -> QuestionRedecode? {
+    private func runRedecode(utterances: [Int], turn: Int, provisional: String, waits: Bool) async -> QuestionRedecode? {
         guard let audio = questionRanges.audio(for: utterances, ring: buffer) else {
             Log.metrics.notice("redecode_failed turn=\(turn) reason=no_audio")
             return nil
@@ -489,7 +492,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
         }
         let language = recognizer.nativeMultilingual ? nil : lock.withLock { lastLanguage }
         return await redecoder.run(audio, language: language, turn: turn,
-                                   provisionalWords: provisional.split { $0.isWhitespace }.count)
+                                   provisionalWords: provisional.split { $0.isWhitespace }.count, waits: waits)
     }
 
     private func runFinal(_ request: FinalRequest) {

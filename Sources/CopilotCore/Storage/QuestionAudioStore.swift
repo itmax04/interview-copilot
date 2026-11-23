@@ -22,7 +22,9 @@ public final class QuestionAudioStore: @unchecked Sendable {
     }
 
     public let directory: URL
-    private let lock = NSLock()
+    /// Общая на все экземпляры: очистка и сохранение из разных мест не гоняются друг с другом.
+    private static let sharedLock = NSLock()
+    private var lock: NSLock { Self.sharedLock }
     private let now: @Sendable () -> Date
 
     public init(directory: URL = AppPaths.questionAudio, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -104,8 +106,10 @@ public final class QuestionAudioStore: @unchecked Sendable {
     }
 
     private func write(_ data: Data, to url: URL) throws {
-        try data.write(to: url, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        // Сразу с правами 600, без окна с правами по умолчанию.
+        guard FileManager.default.createFile(atPath: url.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
         var u = url
         var values = URLResourceValues(); values.isExcludedFromBackup = true
         try? u.setResourceValues(values)
