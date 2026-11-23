@@ -3,7 +3,7 @@
 ## Identity
 - Branch `feat/copilot-16-source-language`, created from `feat/copilot-15-accurate-turns` at 36a3402 (COPILOT-15 is not
   merged into `main`; it is the previous task's branch, as CLAUDE.md requires).
-- Intent commit: 06f29fd. Not pushed, no PR.
+- Intent commit: 06f29fd. Spec and plan: see below. Not pushed, no PR.
 
 ## Goal and scope
 See [intent.md](intent.md). Owner decision 2026-11-21: «Источник и язык» — options 1 + 2 of the brainstorm (capture only
@@ -15,9 +15,26 @@ for other languages and a one-action switch) plus a live silent-microphone warni
 - Stage 0 (brainstorm and analysis, Opus): the session of 2026-11-21 19:05–19:09 was analyzed from its session file and
   the app log; findings in intent.md "Problem". `docs/changes/COPILOT-16/intent.md` written.
 
+## Work merged before the spec (2026-11-22…23, outside the plan)
+Six commits landed on this branch without spec/plan: 89522df (Wave 1: output sanity guard, generation isolation,
+interruption owner flush, short follow-ups), cd4879c (Waves 2–3: ActiveTopic RAG, Exam mode, transcript sanity check,
+follow-up return UX), 13e669e (TurnDetector barge-in window < 600 ms), 826c987 (Exam live-run fixes), a45f63b (1-click
+Quick Start; Auto falls back to All system audio; Teams/Discord/Safari in Auto), 9922aee (owner voice question repeat,
+lecture STT vocabulary from materials, strict answer language for the LLM, macOS mic mute banner).
+Relation to this task: a45f63b reverses the intent's "call-only by default" — **owner decision 2026-11-23: keep All system
+audio for Quick Start / Auto fallback and add a warning** (spec R-06). 9922aee's mute banner covers one silent-mic cause.
+Observed: Quick Start writes `.allSystem` into the saved source setting (not changed by this task).
+
+## Spec and plan (2026-11-23)
+`spec.md` (R-01…R-09, AC-01…AC-08) and `plan.md` (P-01…P-08, H-1) cover only the remaining scope: language gate on the
+call channel, "auto" language lock, live silent-mic notice, All-system-audio warning.
+
 ## Verified
 - `scripts/secret-scan.sh` — PASS, 0 findings (at 06f29fd).
-- `swift build && swift test` — NOT RUN (docs only).
+- `swift build && swift test` — NOT RUN at 06f29fd (docs only); **PASS at 9922aee** (2026-11-23): 502 tests in 87 suites.
+- At 9922aee: `scripts/run-evals.sh` PASS (turn 0%/0%, mean 791 ms; bank top1 94.9%; filter-text 214/214; memory 8/8;
+  materials 23/24); `scripts/secret-scan.sh` PASS, 0 findings; `scripts/check-localization.sh` PASS, 821/821;
+  `scripts/build-app.sh` NOT RUN.
 
 ## Code pointers found during the analysis
 - `Sources/CopilotCore/Filter/LanguageGate.swift` — `.auto` → {slavic, en}; whole English phrases are kept on `.call`
@@ -47,8 +64,5 @@ session is uk/ru, and "auto" settles on the interview language; (2) silent-mic d
 - CLAUDE.md still says the latest task is COPILOT-13 (stale; update when this task's docs land).
 
 ## Next
-Write `spec.md` (requirements R-…, acceptance criteria AC-… with measurable checks, synthetic test data only) and
-`plan.md` (steps with commands, H-checkpoints: the owner's answers to O1–O4 and a live check on a real call), then
-implement step by step with a commit and a handoff update after each step. Checks: quick `swift build && swift test`;
-full set from CLAUDE.md before reporting done. Independent review (fresh subagent, standard) of the code changes before
-asking the owner to accept. Stop and ask the owner at the H-checkpoints only.
+P-02 of plan.md: eval cases first (`english-call` → drop, new `pseudo-en-call` and `terms-call`), then P-03 (LanguageGate on
+`.call`). Owner review of spec/plan is welcome but not a checkpoint; the next owner checkpoint is H-1 (live call).
