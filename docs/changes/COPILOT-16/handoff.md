@@ -36,6 +36,12 @@ call channel, "auto" language lock, live silent-mic notice, All-system-audio war
   materials 23/24); `scripts/secret-scan.sh` PASS, 0 findings; `scripts/check-localization.sh` PASS, 821/821;
   `scripts/build-app.sh` NOT RUN.
 
+## P-02 — eval cases first (2026-11-23)
+- `evals/filter/text-cases.jsonl`: 4 `english-call` → drop; +14 `pseudo-en-call` (7 synthetic phrases × uk/ru, `.call`, drop);
+  +8 `terms-call` (keep). Total 214 → 236 cases. No real transcript text.
+- `scripts/run-evals.sh filter-text` before P-03: **FAIL as expected**, 218/236 correct (18 wrong: english-call 0/4,
+  pseudo-en-call 0/14; terms-call 8/8). Next: P-03.
+
 ## Code pointers found during the analysis
 - `Sources/CopilotCore/Filter/LanguageGate.swift` — `.auto` → {slavic, en}; whole English phrases are kept on `.call`
   always and on `.allSystem`/`.mic` only when `allowed` contains "en".
@@ -64,5 +70,4 @@ session is uk/ru, and "auto" settles on the interview language; (2) silent-mic d
 - CLAUDE.md still says the latest task is COPILOT-13 (stale; update when this task's docs land).
 
 ## Next
-P-02 of plan.md: eval cases first (`english-call` → drop, new `pseudo-en-call` and `terms-call`), then P-03 (LanguageGate on
-`.call`). Owner review of spec/plan is welcome but not a checkpoint; the next owner checkpoint is H-1 (live call).
+P-03 (LanguageGate on `.call`). Owner review of spec/plan is welcome but not a checkpoint; the next owner checkpoint is H-1 (live call).
