@@ -191,6 +191,14 @@ public enum FollowUpDetector {
         "this", "that", "here", "in that case", "them",
     ]
 
+    /// Начало фразы-вопроса, открывающей новый билет («назвіть…», «що таке…», «what is…»; COPILOT-17 R-03).
+    /// Только в начале фразы и только с предметом после него: «а що таке це в цьому випадку?» и «назвіть їх» остаются уточнениями.
+    static let newTicketOpeners = [
+        "назвіть", "перелічіть", "охарактеризуйте", "розкрийте", "що таке", "що називається", "дайте характеристику",
+        "назовите", "перечислите", "раскройте", "что такое", "что называется",
+        "what is", "what are", "name the", "define", "describe", "explain",
+    ]
+
     /// Явный старт нового экзаменационного билета (не уточнение, даже если короткий).
     static let newTicketMarkers = [
         "сформулюйте поняття", "сформулируйте понятие", "дайте визначення", "дайте определение",
@@ -223,7 +231,16 @@ public enum FollowUpDetector {
         let padded = " " + t + " "
         if topicShiftMarkers.contains(where: { padded.contains(" " + $0) }) { return false }
         if newTicketMarkers.contains(where: { padded.contains(" " + $0) }) { return false }
+        if startsNewTicket(t) { return false }
         if isFollowUp(question) { return true }
         return words <= 8 && !newTopicMarkers.contains(where: { padded.contains(" " + $0) })
+    }
+
+    /// COPILOT-17 R-03: фраза начинается с вопросного зачина и после него есть предмет (≥ 2 слов, без указательных слов).
+    static func startsNewTicket(_ normalized: String) -> Bool {
+        guard let opener = newTicketOpeners.first(where: { normalized.hasPrefix($0 + " ") }) else { return false }
+        let rest = " " + normalized.dropFirst(opener.count) + " "
+        guard rest.split(whereSeparator: { $0.isWhitespace }).count >= 2 else { return false }
+        return !anaphoricMarkers.contains { rest.contains(" " + $0 + " ") }
     }
 }

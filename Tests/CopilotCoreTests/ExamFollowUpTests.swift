@@ -44,6 +44,15 @@ struct ExamFollowUpTests {
         #expect(FollowUpDetector.isExamFollowUp("Сформулюйте поняття фінансового контролю.") == false)
     }
 
+    @Test func examOpenersStartNewTicketOnlyAtTheStartWithASubject() {
+        #expect(FollowUpDetector.isExamFollowUp("Що таке фінансовий контроль?") == false)
+        #expect(FollowUpDetector.isExamFollowUp("Назовите основные признаки налога.") == false)
+        #expect(FollowUpDetector.isExamFollowUp("What is a subsidy?") == false)
+        #expect(FollowUpDetector.isExamFollowUp("А що таке це в цьому випадку?") == true)
+        #expect(FollowUpDetector.isExamFollowUp("Назвіть їх.") == true)
+        #expect(FollowUpDetector.isExamFollowUp("Describe it.") == true)
+    }
+
     @Test func activeTopicBuildsContextualQueryAndKeepsRootMaterials() {
         let rootMat = MaterialHit(source: "ЦКУ_позовна_давність.md", text: "Ст. 257 ЦКУ: загальна позовна давність 3 роки.", score: 0.78)
         let topic = ActiveTopic(

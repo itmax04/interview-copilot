@@ -56,5 +56,13 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
   `scripts/run-evals.sh`; `evals/README.md` updated.
 - Before P-03: **FAIL as expected**, 24/48 (opener-new 0/24, followup 24/24).
 
+## P-03 — exam new-ticket openers (2026-11-23)
+- `FollowUpDetector.newTicketOpeners` (uk/ru/en, 18 openers) + `startsNewTicket`: start-anchored, needs ≥ 2 words after the
+  opener and no anaphoric word in the rest («назвіть їх», «describe it», «а що таке це…» stay follow-ups). Checked after the
+  topic-shift and `newTicketMarkers`, before `isFollowUp`.
+- `copilot-eval exam-followup`: **PASS 48/48**; `swift test` PASS, 526 tests (new `examOpeners…` test; existing exam tests unchanged).
+- Executor decision E-5: the «≥ 2 words and no anaphora» guard is an addition to the spec's R-03 so that short anaphoric
+  clarifications with an opener word are not cut off from the ticket.
+
 ## Next
-P-03: `FollowUpDetector.isExamFollowUp` openers, until exam-followup is 48/48. Owner accepted the plan on 2026-11-23.
+P-04: `ParakeetLanguage` mapping + `language:` pass-through in `ParakeetEngine`. Owner accepted the plan on 2026-11-23.
