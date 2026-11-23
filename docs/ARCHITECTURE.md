@@ -15,7 +15,7 @@ floating overlay. During a call (Google Meet in a browser, Zoom, Telegram) the a
    Claude → custom API), streamed; the first words appear about 1 s after the question ends;
 6. remembers the whole interview: questions, the owner's answers, shown hints — and reviews it after the call.
 
-Languages: Ukrainian, Russian, English. One user — the owner. No audio is written to disk.
+Languages: Ukrainian, Russian, English. One user — the owner. By default no audio is written to disk (opt-in `question-audio/`, §4).
 
 ## 2. Data flow
 ```
@@ -55,7 +55,7 @@ background (`Task.detached`, transcriber queues). Cross-thread state uses small 
 | Folder | What | Key types |
 |---|---|---|
 | `Sources/CopilotCore/Audio` | capture, VAD, buffer, permissions | `SystemAudioCapture`, `MicrophoneCapture`, `EnergyVAD`, `AudioRingBuffer`, `AudioSourceResolver`, `MicSilenceDetector` |
-| `…/STT` | recognition | `StreamingTranscriber` (segmentation, finals, refinement), `ParakeetEngine`, `WhisperEngine`, `HybridRecognizer` |
+| `…/STT` | recognition | `StreamingTranscriber` (segmentation, finals, refinement; Parakeet language hint from the session language, optional wait for the Whisper text before the hint — `PreciseQuestionMode`, uk only; question-audio sink), `QuestionAudioStore` (Storage, opt-in WAV + sidecar), `ParakeetEngine`, `WhisperEngine`, `HybridRecognizer` |
 | `…/Filter` | what not to recognize or show | `SileroSpeechGate`, `LanguageGate`, `SessionLanguageLock`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
 | `…/Turns` | end of question | `TurnDetector` (pure logic, fully tested), `TurnEval` |
 | `…/Profiles` | profiles, file import, materials (COPILOT-08) | `ProfileLibrary` (create, switch, delete, migrate the old `profile/`, materials), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md), `MaterialChunker`, `MaterialIndex`, `MaterialIndexBuilder` |
@@ -89,6 +89,8 @@ Rule: logic belongs in `CopilotCore` (tested without UI); the app only wires and
   `parakeet-models.json`, `filter-models.json`);
 - `sessions/*.json` — history (utterances, turns, exchanges with the owner's answers, review), permissions 600, purged by
   retention; "Delete all history" also removes unreadable files;
+- `question-audio/` — opt-in (`AppSettings.saveQuestionAudio`, default off): call-channel question WAV (16 kHz mono) + numbers-only sidecar,
+  dir 700, files 600, excluded from backup, retention `questionAudioRetentionDays` (default 14), wiped by "Delete all history";
 - `voice/owner.json` — voiceprint (192 numbers), 600; `usage.json` — spending.
 Settings — UserDefaults `com.itmax04.interviewcopilot`, key `settings.v1`. API keys — Keychain only.
 
@@ -165,6 +167,7 @@ redacted (`SSE.redactIdentifiers`).
 | COPILOT-13 | technical audit: finals lost to a stray cancel, microphone restart on device change, retention of unreadable sessions, save throttle, shared URLSession, job page decoding (in progress) | `feat/copilot-13-audit-fixes` |
 | COPILOT-15 | accurate turns: whole-question Parakeet re-decode (`QuestionAudioRange`, `QuestionRedecoder`), provisional partials, one background Whisper pass per question (`HistoryPassScheduler`, history/memory only), pause 1000/600 ms, understood-question line in the hint, gated drafts (`DraftGate`), owner answers re-decoded as a whole (`OwnerAnswerAssembler`), prepared fallback B `StreamingTranscriber.Config.hintWaitsForWhisper` (off) (in progress) | `feat/copilot-15-accurate-turns` |
 | COPILOT-16 | source and language: `LanguageGate` drops whole English/foreign phrases on the call channel, `SessionLanguageLock` ("auto" settles on the interview language, «Разрешить английский»), `MicSilenceDetector` ("Микрофон не даёт звука"), "All system audio" notice with «Только звонок» (in progress) | `feat/copilot-16-source-language` |
+| COPILOT-17 | Ukrainian question accuracy: Parakeet language hint, exam new-ticket openers, Whisper text corrects the active ticket root (`TicketRootUpdate`), «Точный вопрос (+2 с)» setting (wait for Whisper, uk only, never for drafts/bank cards), opt-in local question audio (`QuestionAudioStore`) (in progress) | `feat/copilot-17-uk-question` |
 
 Branches form a chain (each from the previous one). `main` is fast-forwarded to the latest reviewed task by the owner's decision.
 
