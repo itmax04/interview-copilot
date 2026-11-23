@@ -81,7 +81,7 @@ public final class StreamingTranscriber: @unchecked Sendable {
     /// Идущие повторные распознавания по списку фраз (не больше четырёх); очищается на паузе вместе с эпохой.
     private var redecodeInFlight: [(id: UUID, utterances: [Int], task: Task<QuestionRedecode?, Never>)] = []
     private var historyPass: HistoryPassScheduler!
-    private var onHistoryText: (@Sendable (_ turn: Int, _ oldText: String, _ result: Transcription) -> Void)?
+    private var onHistoryText: (@Sendable (_ turn: Int, _ oldText: String, _ result: Transcription, _ audioSeconds: Double) -> Void)?
 
     // Состояние под lock.
     private var vad: EnergyVAD
@@ -124,13 +124,13 @@ public final class StreamingTranscriber: @unchecked Sendable {
             },
             apply: { [weak self] job, result in
                 guard let handler = self?.lock.withLock({ self?.onHistoryText }) else { return }
-                handler(job.turn, job.oldText, result)
+                handler(job.turn, job.oldText, result, job.audio.seconds)
             })
     }
 
     /// Результат фонового прохода по истории: (номер хода, текст вопроса в памяти, уточнённый текст). Только память,
     /// история и отчёт; подсказку и ход он не меняет (COPILOT-15 R-07).
-    public func setHistoryHandler(_ handler: (@Sendable (_ turn: Int, _ oldText: String, _ result: Transcription) -> Void)?) {
+    public func setHistoryHandler(_ handler: (@Sendable (_ turn: Int, _ oldText: String, _ result: Transcription, _ audioSeconds: Double) -> Void)?) {
         lock.withLock { onHistoryText = handler }
     }
 

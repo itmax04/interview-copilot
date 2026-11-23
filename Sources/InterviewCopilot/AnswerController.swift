@@ -144,6 +144,13 @@ final class AnswerController {
         }
     }
 
+    /// COPILOT-17 R-05: Whisper по звуку уточнил текст — если это корень активного билета, обновляем его заголовки.
+    func refineTicketRoot(turn: Int, old: String, new: String, audioSeconds: Double) {
+        guard let out = TicketRootUpdate.apply(turn: turn, oldText: old, newText: new, audioSeconds: audioSeconds,
+                                               topic: &activeTopic, history: &panel.history) else { return }
+        Log.metrics.notice("ticket_root_updated turn=\(turn) chars_old=\(out.charsOld) chars_new=\(out.charsNew)")
+    }
+
     /// Новый ход: отменяет незавершённую генерацию прошлого (R-10), открывает новый вопрос в истории.
     func handle(_ turn: Turn) {
         let genID = bumpGeneration()

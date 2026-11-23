@@ -240,8 +240,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         turns.onQuestionText = { [weak self] utterances, text in self?.listening.replaceQuestionLines(utterances: utterances, with: text) }
         listening.onFiltered = { [weak self] text in self?.turns.filtered(text) }
         // R-07: Whisper по звуку вопроса уточняет только память, историю и отчёт; показанная подсказка не меняется.
-        listening.onHistoryText = { [weak self] turn, old, new, language in
+        listening.onHistoryText = { [weak self] turn, old, new, language, seconds in
             guard let self else { return }
+            self.answers.refineTicketRoot(turn: turn, old: old, new: new, audioSeconds: seconds)
             self.memory.reviseText(old, to: new, scope: .questions)
             if let ids = self.historyUtterances.removeValue(forKey: turn) { self.sessions.reviseQuestion(utterances: ids, text: new, language: language) }
             self.saveMemory()

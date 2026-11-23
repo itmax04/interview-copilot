@@ -20,6 +20,8 @@ public struct ActiveTopic: Equatable, Sendable {
     public var rootMaterials: [MaterialHit]
     /// Количество подряд идущих доп. вопросов в этой цепочке.
     public var followUpDepth: Int
+    /// Текст корня уже уточнён Whisper (COPILOT-17 R-05): второй раз не обновляется.
+    public var rootRefined = false
 
     public init(rootExchangeID: Int? = nil, rootEntryID: Int? = nil, rootQuestion: String,
                 rootTitle: String? = nil, ownerLastSpoken: String = "", lastShownHint: String = "",
@@ -87,5 +89,34 @@ public struct ActiveTopic: Equatable, Sendable {
             lines.append("Last shown hint on this topic (may not have been said): \(redact(String(hint.prefix(600))))")
         }
         return "<active_topic>\n" + lines.joined(separator: "\n") + "\n</active_topic>"
+    }
+}
+
+/// Whisper по звуку вопроса уточняет корень активного билета (COPILOT-17 R-05). Чистая логика: подсказка не
+/// пересоздаётся, ничего не ожидается; только заголовки и корневой вопрос.
+public enum TicketRootUpdate {
+    public struct Outcome: Equatable, Sendable {
+        public var charsOld: Int
+        public var charsNew: Int
+    }
+
+    /// `nil` — без изменений. Охранные условия: ход — корень текущего билета (id обмена не проверяется: билет
+    /// определяется карточкой), корень не менялся и ещё не уточнялся, текст не пустой, не «выдумка», не тот же.
+    @discardableResult
+    public static func apply(turn: Int, oldText: String, newText: String, audioSeconds: Double,
+                             topic: inout ActiveTopic?, history: inout AnswerHistory) -> Outcome? {
+        let old = oldText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let new = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let t = topic, !t.rootRefined, let rootID = t.rootEntryID,
+              !new.isEmpty, new != old,
+              !HallucinationFilter.isLikely(new, audioSeconds: audioSeconds),
+              let entry = history.entry(rootID), entry.turnID == turn,
+              t.rootQuestion.trimmingCharacters(in: .whitespacesAndNewlines) == old,
+              entry.question.trimmingCharacters(in: .whitespacesAndNewlines) == old else { return nil }
+        history.refineRoot(entry: rootID, question: new)
+        topic?.rootQuestion = new
+        topic?.rootTitle = AnswerHistory.title(for: new)
+        topic?.rootRefined = true
+        return Outcome(charsOld: old.count, charsNew: new.count)
     }
 }

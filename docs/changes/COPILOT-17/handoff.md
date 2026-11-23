@@ -86,5 +86,20 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
 - R-02 decision: keep the hint on; `ParakeetEngine.useLanguageHint` stays the one-flag fallback if H-1 shows lost terms.
 - `copilot-eval` got `--no-lang-hint` (comparison only).
 
+## P-06 — Whisper corrects the ticket root (2026-11-23)
+- `TicketRootUpdate.apply` (CopilotCore, pure) + `AnswerHistory.refineRoot` + `ActiveTopic.rootRefined`; wired in
+  `AnswerController.refineTicketRoot`, called from the `onHistoryText` handler in `App.swift`. The memory text and the session
+  report were already revised by that handler (COPILOT-15), so only the ticket/panel part is new.
+- Guards: turn is the root entry's turn, `rootQuestion` and the entry text still equal the old text, ticket not changed
+  (otherwise the root entry/turn no longer match), text non-empty, differs, not `HallucinationFilter`, not refined before.
+  Log `ticket_root_updated turn= chars_old= chars_new=` (numbers only). No await, no hint regeneration (AC-06 by construction;
+  the metrics replay is NOT RUN).
+- Executor decision E-6: the history handler now also passes the audio seconds (`StreamingTranscriber.setHistoryHandler`,
+  `ListeningController.onHistoryText`) so the hallucination check gets the real duration.
+- Tests: `ActiveTopicUpdateTests` (6: root updated incl. follow-up `rootTitle`; non-root; changed ticket; text mismatch;
+  empty/identical/hallucination; twice). The `AnswerCardView` title is `entry.rootTitle`, covered by the model assertion
+  (no UI snapshot target exists in this package).
+- `swift build` PASS; `swift test` PASS, 534 tests in 94 suites.
+
 ## Next
-P-06: Whisper history text corrects the ticket root (`ActiveTopic`, `AnswerHistory`, memory, panel title). Owner accepted the plan on 2026-11-23.
+P-07: `preciseQuestion` setting (auto/on/off), effective-wait function, Settings row, `hint_wait_whisper` log, stalled-recognizer test.

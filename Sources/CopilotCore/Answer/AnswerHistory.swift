@@ -140,6 +140,14 @@ public struct AnswerHistory: Equatable, Sendable {
         entries[i].title = Self.title(for: question)
     }
 
+    /// Whisper уточнил текст корня билета (COPILOT-17 R-05): вопрос и заголовок корня, `rootTitle` его уточнений.
+    public mutating func refineRoot(entry entryID: Int, question: String) {
+        guard index(of: entryID) != nil else { return }
+        retitle(entry: entryID, question: question)
+        let title = Self.title(for: question)
+        for i in entries.indices where entries[i].rootEntryID == entryID { entries[i].rootTitle = title }
+    }
+
     /// Не вопрос («—»): вопрос убирается, просмотр возвращается к предыдущему.
     public mutating func remove(entry entryID: Int) {
         guard let i = index(of: entryID) else { return }

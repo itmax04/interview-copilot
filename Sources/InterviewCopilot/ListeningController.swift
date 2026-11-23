@@ -89,7 +89,7 @@ final class ListeningController {
     /// Фильтр отбросил реплику (COPILOT-05 R-06) — текст для ⌃⌥↩ «ответить всё равно».
     var onFiltered: ((String) -> Void)?
     /// Фоновый проход Whisper по истории закончил вопрос хода (COPILOT-15 R-07): (номер хода, прежний текст, уточнённый, язык).
-    var onHistoryText: ((Int, String, String, String) -> Void)?
+    var onHistoryText: ((Int, String, String, String, Double) -> Void)?
 
     /// После хода: поставить проход Whisper по звуку вопроса (только история и память, не подсказка).
     func submitHistoryPass(utterances: [Int], turn: Int, text: String) {
@@ -908,10 +908,10 @@ final class ListeningController {
             let enhancerBox = self.enhancerBox
             t.setAudioEnhancer { samples in enhancerBox.enhance(samples) }
             t.setPaused(phase != .listening)
-            t.setHistoryHandler { [weak self] turn, old, result in
+            t.setHistoryHandler { [weak self] turn, old, result, seconds in
                 Task { @MainActor in
                     guard let self, self.recognizerGeneration == generation else { return }
-                    self.onHistoryText?(turn, old, result.text, result.language)
+                    self.onHistoryText?(turn, old, result.text, result.language, seconds)
                 }
             }
             transcriberBox.set(t)
