@@ -121,7 +121,8 @@ StreamingTranscriber: EnergyVAD segments → Silero "is it speech" → Parakeet 
   voiceprint (mic mode) → events .partial / .final / .foreignVoice / .discarded
   (+ .speaker before .final in "Rehearsal with an interviewer": SpeakerRouter → question or owner answer)
                                                                                            ▼
-ListeningController: language filter (LanguageGate + term dictionary) → transcript line or a gray "filtered" line
+ListeningController: language filter (LanguageGate + term dictionary; per-session language via SessionLanguageLock — "auto"
+  locks on the interview language, whole English is dropped on every channel unless the owner allows it) → transcript line or a gray "filtered" line
                                                                                            ▼
 TurnController → TurnDetector: pause T (1000 ms; 600 ms after "?"; question re-decoded from its whole audio), owner speech, echo → Turn
   + speculative draft request for a finished phrase before the pause expires

@@ -30,7 +30,8 @@ StreamingTranscriber: EnergyVAD splits phrases → [LocalVQE, off] → Silero "i
   "Rehearsal with an interviewer" (mic mode): the verdict comes as .speaker before .final instead of .foreignVoice,
   `SpeakerRouter` sends the owner's voice to answers and other voices to questions
                                                                                           │
-ListeningController.handle: language filter (LanguageGate + term dictionary) → overlay line or a gray line
+ListeningController.handle: language filter (LanguageGate + term dictionary; the language comes from SessionLanguageLock:
+  "auto" settles on uk/ru or en after 3 phrases, whole English is dropped on every channel unless allowed) → overlay line or a gray line
                                                                                           ▼
 TurnController → TurnDetector: pause T (1000 ms; 600 ms after "?"), owner speech, echo → Turn (phrase texts are
   provisional) → QuestionRedecoder: one Parakeet pass over the whole question audio (≤ 2 s, else phrase text) = Turn.text
@@ -53,9 +54,9 @@ background (`Task.detached`, transcriber queues). Cross-thread state uses small 
 ## 3. Modules
 | Folder | What | Key types |
 |---|---|---|
-| `Sources/CopilotCore/Audio` | capture, VAD, buffer, permissions | `SystemAudioCapture`, `MicrophoneCapture`, `EnergyVAD`, `AudioRingBuffer`, `AudioSourceResolver` |
+| `Sources/CopilotCore/Audio` | capture, VAD, buffer, permissions | `SystemAudioCapture`, `MicrophoneCapture`, `EnergyVAD`, `AudioRingBuffer`, `AudioSourceResolver`, `MicSilenceDetector` |
 | `…/STT` | recognition | `StreamingTranscriber` (segmentation, finals, refinement), `ParakeetEngine`, `WhisperEngine`, `HybridRecognizer` |
-| `…/Filter` | what not to recognize or show | `SileroSpeechGate`, `LanguageGate`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
+| `…/Filter` | what not to recognize or show | `SileroSpeechGate`, `LanguageGate`, `SessionLanguageLock`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
 | `…/Turns` | end of question | `TurnDetector` (pure logic, fully tested), `TurnEval` |
 | `…/Profiles` | profiles, file import, materials (COPILOT-08) | `ProfileLibrary` (create, switch, delete, migrate the old `profile/`, materials), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md), `MaterialChunker`, `MaterialIndex`, `MaterialIndexBuilder` |
 | `…/Bank` | profile and answer bank | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML: `BankCard` with an answer status, `QuestionBankWriter`), `QuestionImport` (rules + model), `QuestionPreparation` (phrasings, drafts), `BankMatcher`, `TextEmbedder` |
@@ -136,7 +137,7 @@ Eval thresholds — `evals/README.md`. Live checks run from the signed `.app`: o
 Categories: `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Important events: `transcript_final`, `redecode`, `whisper_history`,
 `filtered reason=lang|vad|voice|echo|hallucination`, `voice_ok similarity=…`, `turn_end`, `draft_start/used/cancelled`,
 `bank_match`, `no_match`, `first_token … ms_from_speech_end=…`, `not_a_question`, `last resort: …`,
-`owner answering on/off`, `owner_final … redecoded=`, `redecode`/`redecode_failed`, `capture_restart`.
+`language_locked`/`language_unlocked`, `mic_silent`, `source_call_only`, `owner answering on/off`, `owner_final … redecoded=`, `redecode`/`redecode_failed`, `capture_restart`.
 **Utterance texts, answers and keys are never logged** — only events, numbers and model IDs; provider error messages are
 redacted (`SSE.redactIdentifiers`).
 
@@ -163,6 +164,7 @@ redacted (`SSE.redactIdentifiers`).
 | COPILOT-12 | final review: capture start/stop race, history wipe, error redaction, Groq token budget, repository hygiene, English documentation and `AGENTS.md`, `main` fast-forwarded (0.15.1) | `feat/copilot-12-final-review` |
 | COPILOT-13 | technical audit: finals lost to a stray cancel, microphone restart on device change, retention of unreadable sessions, save throttle, shared URLSession, job page decoding (in progress) | `feat/copilot-13-audit-fixes` |
 | COPILOT-15 | accurate turns: whole-question Parakeet re-decode (`QuestionAudioRange`, `QuestionRedecoder`), provisional partials, one background Whisper pass per question (`HistoryPassScheduler`, history/memory only), pause 1000/600 ms, understood-question line in the hint, gated drafts (`DraftGate`), owner answers re-decoded as a whole (`OwnerAnswerAssembler`), prepared fallback B `StreamingTranscriber.Config.hintWaitsForWhisper` (off) (in progress) | `feat/copilot-15-accurate-turns` |
+| COPILOT-16 | source and language: `LanguageGate` drops whole English/foreign phrases on the call channel, `SessionLanguageLock` ("auto" settles on the interview language, «Разрешить английский»), `MicSilenceDetector` ("Микрофон не даёт звука"), "All system audio" notice with «Только звонок» (in progress) | `feat/copilot-16-source-language` |
 
 Branches form a chain (each from the previous one). `main` is fast-forwarded to the latest reviewed task by the owner's decision.
 
