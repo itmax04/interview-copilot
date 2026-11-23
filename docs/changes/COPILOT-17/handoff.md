@@ -71,5 +71,20 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
   covered only by the real-model check of P-05. `swift test` PASS, 528 tests.
 - Not yet measured: effect on real audio, English terms, decode time (P-05).
 
+## P-05 — real-model check of the hint (2026-11-23)
+- Setup: 10 synthetic Ukrainian sentences (`say -v Lesya`, 16 kHz wav, kept outside the repo): 4 without terms, 6 with IT
+  terms (Docker, Kubernetes, REST, PostgreSQL, Git rebase/merge, garbage collector, CI/CD, GitLab, TCP/UDP);
+  `copilot-eval stt-parakeet … --lang uk --full-context --repeat 3` with and without the new flag `--no-lang-hint`.
+- AC-03 latency: median decode **80 ms with the hint vs 78 ms without** (30 runs each) → +2 ms, within the ≤ 20 ms budget. PASS.
+- AC-02(a): no sentence came out as English text with the hint. NOT a proof for the live case: the synthetic voice never
+  produced English output without the hint either, so the live turn-1 English failure is **not reproduced** here.
+- AC-02(b)/(c): without the hint the Lesya voice already pronounces the terms Ukrainian-style and Parakeet writes them in
+  Cyrillic (e.g. «доокер», «Рестапі…»); with the hint the output is identical in 9 of 10 sentences, in the 10th only one
+  Latin letter inside a misrecognized word became Cyrillic. So the synthetic set **cannot show** whether real English terms
+  spoken with an English accent are lost: that stays **NOT VERIFIED** and is the main thing to look at in H-1 (e).
+  All outputs are Cyrillic, so `LanguageGate` keeps them (no Latin to drop).
+- R-02 decision: keep the hint on; `ParakeetEngine.useLanguageHint` stays the one-flag fallback if H-1 shows lost terms.
+- `copilot-eval` got `--no-lang-hint` (comparison only).
+
 ## Next
-P-05: real-model check of the hint on synthetic Lesya audio (`copilot-eval stt-parakeet` with and without the hint; needs a flag in the eval to toggle `useLanguageHint`). Owner accepted the plan on 2026-11-23.
+P-06: Whisper history text corrects the ticket root (`ActiveTopic`, `AnswerHistory`, memory, panel title). Owner accepted the plan on 2026-11-23.

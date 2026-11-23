@@ -41,6 +41,7 @@ case "stt", "stt-parakeet", "stt-hybrid":
     args.removeFirst()
     if hybridWhisper != nil { args.remove(at: 1) }
     let lang = option("--lang")
+    if flag("--no-lang-hint") { ParakeetEngine.useLanguageHint = false }   // COPILOT-17 P-05: сравнение с подсказкой языка и без
     guard let repeats = Int(option("--repeat") ?? "1"), repeats > 0 else { fail("--repeat must be a positive integer") }
     let fullContext = flag("--full-context")
     guard args.count >= 2 else { fail("usage: copilot-eval stt <model.bin> <file.wav>... [--lang xx] [--full-context] [--repeat N]") }
