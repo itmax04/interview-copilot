@@ -68,4 +68,24 @@ public enum AudioSourceResolver {
     public static func belongsTo(_ bundleID: String, app: String) -> Bool {
         bundleID == app || bundleID.hasPrefix(app + ".")
     }
+
+    /// COPILOT-16 R-06: запущенное приложение звонка по порядку Auto (для действия «Только звонок»).
+    public static func runningCallApp(_ running: [RunningAppInfo]) -> RunningAppInfo? {
+        for candidate in autoPriority {
+            if let app = running.first(where: { candidate.bundleIDs.contains($0.bundleID) }) {
+                return RunningAppInfo(bundleID: app.bundleID, name: candidate.name)
+            }
+        }
+        return nil
+    }
+
+    /// COPILOT-16 R-06: предупреждение «слушаю весь звук Mac» — только для `.allSystem`; `callApp` — что предложить вместо.
+    public struct AllSystemNotice: Equatable, Sendable {
+        public var callApp: RunningAppInfo?
+    }
+
+    public static func allSystemNotice(for resolved: ResolvedAudioSource, running: [RunningAppInfo]) -> AllSystemNotice? {
+        guard resolved == .allSystem else { return nil }
+        return AllSystemNotice(callApp: runningCallApp(running))
+    }
 }

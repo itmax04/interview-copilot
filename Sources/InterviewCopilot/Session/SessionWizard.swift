@@ -511,6 +511,14 @@ struct SessionWizardView: View {
                     .labelsHidden()
                 }
             }
+            if state.model.settings.audioSource == .allSystem || state.model.settings.audioSource == .auto {
+                Text("Весь системный звук включает видео и уведомления. Если звонок идёт в Chrome, захватываются все вкладки Chrome.")
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if case .app(let id, _) = state.model.settings.audioSource, id == "com.google.Chrome" {
+                Text("Chrome: захватываются все вкладки браузера, не только звонок.")
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
             row("globe", "Язык звонка") {
                 Picker("Язык звонка", selection: $state.config.language) {
                     ForEach(RecognitionLanguage.allCases, id: \.self) { Text($0.menuTitle).tag($0) }

@@ -933,3 +933,9 @@
 "Включить" = "Unmute";
 "Микрофон не даёт звука (вход: %@). Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук" = "The microphone is silent (input: %@). Another app may be holding it — check the input in System Settings → Sound";
 "Микрофон не даёт звука. Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук" = "The microphone is silent. Another app may be holding it — check the input in System Settings → Sound";
+"Слушаю весь звук Mac — видео и уведомления тоже попадут в расшифровку" = "Listening to all Mac audio — videos and notifications will end up in the transcript too";
+"Только звонок" = "Call only";
+"Слушать только %@ на эту сессию" = "Listen to %@ only for this session";
+"Скрыть" = "Dismiss";
+"Весь системный звук включает видео и уведомления. Если звонок идёт в Chrome, захватываются все вкладки Chrome." = "All system audio includes videos and notifications. If the call runs in Chrome, every Chrome tab is captured.";
+"Chrome: захватываются все вкладки браузера, не только звонок." = "Chrome: every browser tab is captured, not only the call.";

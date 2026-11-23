@@ -36,7 +36,9 @@ final class ListeningController {
     }
 
     private(set) var phase: Phase = .idle
-    private(set) var source: ResolvedAudioSource = .none
+    private(set) var source: ResolvedAudioSource = .none {
+        didSet { if source != oldValue { refreshAllSystemNotice() } }
+    }
     /// Уровень сигнала собеседника, dBFS (debug-индикатор P-03).
     private(set) var levelDB: Float = -120
     /// Уровень микрофона владельца для индикатора оверлея (COPILOT-09 R-08).
@@ -420,7 +422,30 @@ final class ListeningController {
     /// Микрофон как источник (режим самопроверки, запрос владельца 2026-10-07).
     private var micSource: (any MicrophoneInput)?
     private var testSource: AudioSourceSetting?
-    private var effectiveSource: AudioSourceSetting { testSource ?? model.settings.audioSource }
+    private var effectiveSource: AudioSourceSetting { testSource ?? sessionSourceOverride ?? model.settings.audioSource }
+
+    // COPILOT-16 R-06: предупреждение о «Всём системном звуке» и действие «Только звонок» (источник только на сессию).
+    private var sessionSourceOverride: AudioSourceSetting?
+    private var allSystemDismissed = false
+    private(set) var allSystemNotice: AudioSourceResolver.AllSystemNotice?
+
+    private func refreshAllSystemNotice() {
+        let notice = allSystemDismissed ? nil : AudioSourceResolver.allSystemNotice(for: source, running: Self.runningApps())
+        if notice != allSystemNotice { allSystemNotice = notice }
+    }
+
+    func dismissAllSystemNotice() {
+        allSystemDismissed = true
+        refreshAllSystemNotice()
+    }
+
+    /// «Только звонок»: на эту сессию захватываем приложение звонка; настройка источника не меняется.
+    func switchToCallOnly() {
+        guard let app = allSystemNotice?.callApp else { return }
+        sessionSourceOverride = .app(bundleID: app.bundleID, name: app.name)
+        Log.audio.notice("source_call_only app=\(app.name, privacy: .public)")
+        updateCapture(restart: false)
+    }
     private var usesMicrophone: Bool { effectiveSource == .microphone }
     var recognitionReady: Bool { transcriber != nil && phase == .listening }
     private var pausedBeforeTest = false
@@ -590,6 +615,8 @@ final class ListeningController {
         callSpeaking = false
         languageLock.reset()
         englishNoticeVisible = false
+        sessionSourceOverride = nil
+        allSystemDismissed = false
         start()
     }
 
@@ -641,7 +668,7 @@ final class ListeningController {
     private func runningAppsChanged() {
         guard phase != .paused, phase != .noPermission, phase != .standby else { return }
         let resolved = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
-        if resolved != source { updateCapture(restart: false) }
+        if resolved != source { updateCapture(restart: false) } else { refreshAllSystemNotice() }
     }
 
     /// A system stream can finish starting after cancellation. Drain that operation before touching the next stream.

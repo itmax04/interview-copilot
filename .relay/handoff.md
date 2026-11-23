@@ -17,6 +17,8 @@
   513 tests PASS, filter-text 236/236, localization PASS, secret-scan PASS, build-app NOT RUN, UI not visually checked.
 - P-05 done: `MicSilenceDetector` + panel notice «Микрофон не даёт звука»; 519 tests PASS, filter-text 236/236, localization/secret-scan PASS,
   build-app and UI snapshot NOT RUN.
+- P-06 done: All-system-audio notice + «Только звонок» (session override) + wizard footnotes; 523 tests PASS, localization/secret-scan PASS,
+  build-app and UI snapshot NOT RUN.
 
 ## Next
-P-06 "All system audio" notice with «Только звонок» action (R-06). Then P-07, H-1 live call.
+P-07 documents + independent review + full check and build-app. Then H-1 live call.

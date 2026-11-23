@@ -100,6 +100,11 @@ final class PanelModel {
     /// Системный микрофон по умолчанию замьючен в macOS (`kAudioDevicePropertyMute == 1`).
     var micHardwareMuted = false
     var onUnmuteMic: (() -> Void)?
+    /// COPILOT-16 R-06: «Слушаю весь звук Mac…»; `allSystemCallApp` — имя запущенного приложения звонка для «Только звонок».
+    var allSystemNoticeVisible = false
+    var allSystemCallApp: String?
+    var onAllSystemCallOnly: (() -> Void)?
+    var onDismissAllSystem: (() -> Void)?
     /// COPILOT-16 R-05: микрофон ≥ 10 с даёт цифровой ноль при выключенном mute; имя входа — для подсказки.
     var micSilent = false
     var micSilentDevice: String?

@@ -108,5 +108,18 @@ session is uk/ru, and "auto" settles on the interview language; (2) silent-mic d
 - Checks: `swift build` PASS; `swift test` PASS 519 tests in 89 suites; filter-text 236/236, evals otherwise unchanged PASS;
   check-localization PASS (825 keys); secret-scan PASS; build-app NOT RUN; UI snapshot NOT RUN (not checked visually).
 
+## P-06 — "All system audio" notice (2026-11-23)
+- `AudioSourceResolver.runningCallApp` / `allSystemNotice(for:running:)` (pure): notice only for `.allSystem`; `callApp` is the
+  first running app by `autoPriority` (Discord is already in the list).
+- `ListeningController`: `allSystemNotice` (refreshed on source change and app launch/terminate), `dismissAllSystemNotice()`,
+  `switchToCallOnly()` — a per-session `sessionSourceOverride` (settings untouched; reset in `startSession`), log
+  `source_call_only app=…`. Executor decision: override instead of changing `settings.audioSource`, per R-06 "for the session".
+- Panel: warning row «Слушаю весь звук Mac — …» with «Только звонок» (only when a call app runs) and a dismiss button.
+  Wizard: footnote under the source picker for All system audio / Auto, and a Chrome note («захватываются все вкладки»)
+  when Chrome is chosen. English strings added.
+- `AllSystemNoticeTests` (4 tests, AC-05 logic part).
+- Checks: `swift build` PASS; `swift test` PASS 523 tests in 90 suites; filter-text 236/236, evals unchanged PASS;
+  check-localization PASS (831 keys); secret-scan PASS; build-app NOT RUN; UI snapshot (`UISnapshots`) NOT RUN — not checked visually.
+
 ## Next
-P-06: "All system audio" notice with «Только звонок» action, wizard footnote, Chrome-tabs note (R-06). Then P-07, H-1.
+P-07: documents, independent review (fresh subagent, standard), full check and `scripts/build-app.sh`. Then H-1 (owner live call).

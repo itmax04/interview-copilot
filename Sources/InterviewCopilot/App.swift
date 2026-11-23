@@ -268,6 +268,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.listening.allowEnglish()
             self?.panelModel.englishNoticeVisible = false
         }
+        panelModel.onAllSystemCallOnly = { [weak self] in self?.listening.switchToCallOnly() }
+        panelModel.onDismissAllSystem = { [weak self] in self?.listening.dismissAllSystemNotice() }
         panelModel.onEndSession = { [weak self] in self?.liveSession.end() }
         panelModel.onStartDetectedCall = { [weak self] in
             guard let self else { return }
@@ -496,6 +498,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.callDetected = liveSession.detectedCall
 
         panelModel.sourceName = listening.source.displayName
+        let allSystem = liveSession.isActive ? listening.allSystemNotice : nil
+        if panelModel.allSystemNoticeVisible != (allSystem != nil) { panelModel.allSystemNoticeVisible = allSystem != nil }
+        if panelModel.allSystemCallApp != allSystem?.callApp?.name { panelModel.allSystemCallApp = allSystem?.callApp?.name }
         panelModel.ownerAnswering = listening.ownerAnswering
         panelModel.quickProfiles = bank.profiles
         if panelModel.quickProfileID.isEmpty || !bank.profiles.contains(where: { $0.id == panelModel.quickProfileID }) {

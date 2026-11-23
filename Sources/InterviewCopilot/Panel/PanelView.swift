@@ -83,6 +83,27 @@ struct PanelView: View {
                 L("Микрофон не даёт звука (вход: %@). Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук", $0)
             } ?? L("Микрофон не даёт звука. Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук"), size: model.fontSize)
         }
+        if model.allSystemNoticeVisible {
+            HStack(spacing: 8) {
+                Image(systemName: "speaker.wave.3").foregroundStyle(Theme.warn)
+                Text("Слушаю весь звук Mac — видео и уведомления тоже попадут в расшифровку")
+                    .font(.system(size: max(12, model.fontSize - 2), weight: .medium))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if let app = model.allSystemCallApp {
+                    Button("Только звонок") { model.onAllSystemCallOnly?() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .help(L("Слушать только %@ на эту сессию", app))
+                }
+                IconButton(symbol: "xmark", label: "Скрыть") { model.onDismissAllSystem?() }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Theme.warn.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.warn.opacity(0.45), lineWidth: 1))
+        }
         if model.englishNoticeVisible {
             HStack(spacing: 8) {
                 Image(systemName: "character.bubble").foregroundStyle(Theme.warn)
