@@ -944,3 +944,10 @@
 "Скрыть" = "Dismiss";
 "Весь системный звук включает видео и уведомления. Если звонок идёт в Chrome, захватываются все вкладки Chrome." = "All system audio includes videos and notifications. If the call runs in Chrome, every Chrome tab is captured.";
 "Chrome: захватываются все вкладки браузера, не только звонок." = "Chrome: every browser tab is captured, not only the call.";
+"Сохранять аудио вопросов на этом Mac" = "Save question audio on this Mac";
+"Хранится только звук собеседника из звонка, это чужие голоса. Файлы лежат в папке приложения, не попадают в резервные копии и удаляются автоматически через указанный срок." = "Only the other party's call audio is stored — these are other people's voices. Files stay in the app folder, are excluded from backups and are deleted automatically after the chosen period.";
+"Хранить аудио вопросов: %lld дн." = "Keep question audio: %lld days";
+"Сохранено: %lld шт., %@" = "Saved: %lld files, %@";
+"Удалить сохранённое аудио" = "Delete saved audio";
+"Удалить всё сохранённое аудио вопросов?" = "Delete all saved question audio?";
+"Это действие нельзя отменить." = "This cannot be undone.";

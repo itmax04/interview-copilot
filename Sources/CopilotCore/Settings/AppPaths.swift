@@ -26,6 +26,8 @@ public enum AppPaths {
     /// Общие инструкции для всех профилей и режима «Без профиля» (COPILOT-08 R-04).
     public static var generalInstructions: URL { root.appendingPathComponent("instructions.md") }
     public static var sessions: URL { root.appendingPathComponent("sessions", isDirectory: true) }
+    /// COPILOT-17 R-09: звук вопросов, только если владелец включил сохранение.
+    public static var questionAudio: URL { root.appendingPathComponent("question-audio", isDirectory: true) }
     public static var cache: URL { root.appendingPathComponent("cache", isDirectory: true) }
 
     public static func model(_ file: String) -> URL { models.appendingPathComponent(file) }

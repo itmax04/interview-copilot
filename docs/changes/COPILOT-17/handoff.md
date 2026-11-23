@@ -118,5 +118,21 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
   cards»: `turns.draftRedecode` shares the transcriber's redecoder, so a draft in a wait-on session would also wait —
   to be checked in the P-10 review / H-1 (possible fix: a per-call `waits:false` argument for drafts).
 
+## P-08 — opt-in question-audio saving (2026-11-23)
+- `QuestionAudioStore` (CopilotCore/Storage): 16-bit mono 16 kHz WAV + numbers-only sidecar (`durationSeconds`, `sampleRate`,
+  `language`, `channel`, `decodeMs`), dir 700, files 600, excluded from backup, `purge(olderThanDays:)` (clock injected),
+  `deleteAll()`, `stats()`, write failures return nil. `AppPaths.questionAudio`; `AppSettings.saveQuestionAudio` (false) and
+  `questionAudioRetentionDays` (14, clamped 1…90).
+- Wiring: `StreamingTranscriber.setQuestionAudioSink` fires in `redecodeQuestion(release: true)` for the final turn (call-channel
+  transcriber only; the owner-mic transcriber has no sink; drafts and test-call do not save), `ListeningController.saveQuestionAudio`
+  writes on a utility queue; log `question_audio_saved bytes= seconds=`.
+- Settings → Privacy: toggle «Сохранять аудио вопросов на этом Mac» + note, retention stepper, count/size line, button
+  «Удалить сохранённое аудио» with a confirmation. English lines added; localization 843/843.
+- Executor decision E-7: the sidecar has no `whisperDecodeMs`/`whisperTextDiffered` values yet (the fields exist, stay absent):
+  the Whisper history pass finishes after the turn is delivered. Filling them is optional for P-09/P-11.
+- Tests: `QuestionAudioStoreTests` (WAV header and size, sidecar keys, permissions and backup flag, failure does not throw,
+  retention by injected clock, deleteAll/stats incl. unreadable file, settings default/clamp). `swift test` PASS, 542 tests.
+- NOT RUN: a real call with saving on (H-1 f).
+
 ## Next
-P-08: `QuestionAudioStore` (opt-in question-audio saving), then P-09, P-10, H-1.
+P-09: «Удалить всю историю» also wipes `question-audio/`; retention purge on app start and at session end (also when saving is off).

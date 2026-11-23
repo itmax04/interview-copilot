@@ -648,6 +648,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.settings.useProfile = c.type == .interview || c.type == .mock || c.type == .exam
         if model.settings.language != c.language { model.settings.language = c.language }
         model.settings.lastSessionConfig = c.defaultsForNext()
+        listening.sessionStartedAt = Date()
         listening.setHintWaitsForWhisper(PreciseQuestionMode.waits(mode: model.settings.preciseQuestion, session: c.type, language: c.language))
         memory.reset()
         turns.setAllowShortFollowUps(false)

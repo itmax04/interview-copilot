@@ -95,6 +95,23 @@ final class ListeningController {
         hintWaitsForWhisper = on
         transcriber?.setHintWaitsForWhisper(on)
     }
+    /// COPILOT-17 R-09: сохранение звука вопросов (по умолчанию выключено); запись — в фоне, после доставки хода.
+    let questionAudioStore = QuestionAudioStore()
+    var sessionStartedAt = Date()
+    private let questionAudioQueue = DispatchQueue(label: "com.itmax04.interviewcopilot.question-audio", qos: .utility)
+    private func saveQuestionAudio(_ audio: QuestionAudio, turn: Int, decodeMs: Int, language: String) {
+        guard model.settings.saveQuestionAudio, testSource == nil else { return }
+        let store = questionAudioStore, start = sessionStartedAt
+        let lang = language.isEmpty ? model.settings.language.rawValue : language
+        questionAudioQueue.async {
+            let side = QuestionAudioStore.Sidecar(durationSeconds: audio.seconds, language: lang, decodeMs: decodeMs)
+            if let bytes = store.save(samples: audio.samples, turn: turn, sessionStart: start, sidecar: side) {
+                Log.metrics.notice("question_audio_saved bytes=\(bytes) seconds=\(audio.seconds, format: .fixed(precision: 1))")
+            } else {
+                Log.metrics.notice("question_audio_failed turn=\(turn)")
+            }
+        }
+    }
     var onHistoryText: ((Int, String, String, String, Double) -> Void)?
 
     /// После хода: поставить проход Whisper по звуку вопроса (только история и память, не подсказка).
@@ -921,6 +938,9 @@ final class ListeningController {
                 }
             }
             t.setHintWaitsForWhisper(hintWaitsForWhisper)
+            t.setQuestionAudioSink { [weak self] audio, turn, decodeMs, language in
+                Task { @MainActor in self?.saveQuestionAudio(audio, turn: turn, decodeMs: decodeMs, language: language) }
+            }
             transcriberBox.set(t)
             transcriber = t
             var ownerConfig = StreamingTranscriber.Config()

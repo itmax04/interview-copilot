@@ -247,6 +247,8 @@ struct BankSettingsView: View {
 /// Privacy — фильтр личных данных и срок хранения истории (R-12, R-19).
 struct PrivacySettingsView: View {
     @Bindable var model: AppModel
+    @State private var audioStats: (count: Int, bytes: Int) = (0, 0)
+    @State private var confirmDeleteAudio = false
 
     var body: some View {
         Form {
@@ -254,8 +256,28 @@ struct PrivacySettingsView: View {
             Stepper(value: $model.settings.historyRetentionDays, in: AppSettings.retentionRange) {
                 Text("Хранить историю сессий: \(model.settings.historyRetentionDays) дн.")
             }
+            Toggle("Сохранять аудио вопросов на этом Mac", isOn: $model.settings.saveQuestionAudio)
+            Text("Хранится только звук собеседника из звонка, это чужие голоса. Файлы лежат в папке приложения, не попадают в резервные копии и удаляются автоматически через указанный срок.")
+                .font(.footnote).foregroundStyle(.secondary)
+            Stepper(value: $model.settings.questionAudioRetentionDays, in: AppSettings.questionAudioRetentionRange) {
+                Text("Хранить аудио вопросов: \(model.settings.questionAudioRetentionDays) дн.")
+            }
+            HStack {
+                Text("Сохранено: \(audioStats.count) шт., \(ByteCountFormatter.string(fromByteCount: Int64(audioStats.bytes), countStyle: .file))")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Удалить сохранённое аудио", role: .destructive) { confirmDeleteAudio = true }
+                    .disabled(audioStats.count == 0 && audioStats.bytes == 0)
+            }
+            .confirmationDialog("Удалить всё сохранённое аудио вопросов?", isPresented: $confirmDeleteAudio) {
+                Button("Удалить", role: .destructive) {
+                    QuestionAudioStore().deleteAll()
+                    audioStats = QuestionAudioStore().stats()
+                }
+            } message: { Text("Это действие нельзя отменить.") }
         }
         .formStyle(.grouped)
+        .onAppear { audioStats = QuestionAudioStore().stats() }
     }
 }
 

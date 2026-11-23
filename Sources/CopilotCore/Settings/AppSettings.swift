@@ -149,6 +149,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var languageFilter = true
     /// «Точный вопрос (+2 с)» (COPILOT-17 R-06): ждать Whisper перед подсказкой; auto — только экзамен; только для украинского.
     public var preciseQuestion: PreciseQuestionMode = .auto
+    /// Сохранять звук вопросов собеседника на этом Mac (COPILOT-17 R-09); по умолчанию выключено.
+    public var saveQuestionAudio = false
+    public var questionAudioRetentionDays = 14
+    public static let questionAudioRetentionRange = 1...90
     /// Нейросетевая проверка речи Silero (COPILOT-05 R-02): шум без речи не становится репликой. Нужна модель.
     public var neuralSpeechGate = true
     /// Только голос владельца в микрофоне (COPILOT-05 R-03): нужен записанный образец голоса.
@@ -277,6 +281,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         s.questionPauseMs = s.questionPauseMs.clamped(to: Self.questionPauseRange)
         s.bankThreshold = s.bankThreshold.clamped(to: Self.bankThresholdRange)
         s.historyRetentionDays = s.historyRetentionDays.clamped(to: Self.retentionRange)
+        s.questionAudioRetentionDays = s.questionAudioRetentionDays.clamped(to: Self.questionAudioRetentionRange)
         s.panelOpacity = s.panelOpacity.clamped(to: Self.panelOpacityRange)
         s.panelWidth = s.panelWidth.clamped(to: Self.panelWidthRange)
         s.panelZoom = s.panelZoom.clamped(to: Self.panelZoomRange)
@@ -314,6 +319,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         speculativeAnswers = v(.speculativeAnswers, d.speculativeAnswers)
         languageFilter = v(.languageFilter, d.languageFilter)
         preciseQuestion = v(.preciseQuestion, d.preciseQuestion)
+        saveQuestionAudio = v(.saveQuestionAudio, d.saveQuestionAudio)
+        questionAudioRetentionDays = v(.questionAudioRetentionDays, d.questionAudioRetentionDays)
         neuralSpeechGate = v(.neuralSpeechGate, d.neuralSpeechGate)
         ownerVoiceOnly = v(.ownerVoiceOnly, d.ownerVoiceOnly)
         rehearsalWithInterviewer = v(.rehearsalWithInterviewer, d.rehearsalWithInterviewer)

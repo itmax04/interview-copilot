@@ -88,6 +88,12 @@ public final class StreamingTranscriber: @unchecked Sendable {
         }
     }
 
+    /// COPILOT-17 R-09: звук итогового вопроса хода (только канал собеседника): (звук, ход, мс распознавания, язык).
+    private var questionAudioSink: (@Sendable (QuestionAudio, Int, Int, String) -> Void)?
+    public func setQuestionAudioSink(_ sink: (@Sendable (QuestionAudio, Int, Int, String) -> Void)?) {
+        lock.withLock { questionAudioSink = sink }
+    }
+
     /// COPILOT-17 R-06: ожидание Whisper задаётся при старте сессии и не меняется посреди неё.
     public func setHintWaitsForWhisper(_ on: Bool, budget: Double? = nil) {
         lock.withLock { redecoderWaitsForWhisper = on; redecoderBudget = budget; redecoderStore = nil }
@@ -464,6 +470,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
             return task
         }
         let result = await work.value
+        if release, turn >= 0, let result {
+            let (audio, sink) = lock.withLock { (historyAudio.last { $0.0 == utterances }?.1, questionAudioSink) }
+            if let audio, let sink { sink(audio, turn, result.decodeMs, result.language) }
+        }
         if release { questionRanges.release(utterances: utterances) }
         return result
     }
