@@ -1,0 +1,48 @@
+{"text": "Назвіть основні ознаки податку.", "lang": "uk", "expect": "new", "tag": "opener-new"}
+{"text": "Що таке фінансовий контроль?", "lang": "uk", "expect": "new", "tag": "opener-new"}
+{"text": "Перелічіть методи фінансового контролю.", "lang": "uk", "expect": "new", "tag": "opener-new"}
+{"text": "Охарактеризуйте бюджетну систему.", "lang": "uk", "expect": "new", "tag": "opener-new"}
+{"text": "Розкрийте поняття субсидії.", "lang": "uk", "expect": "new", "tag": "opener-new"}
+{"text": "Що називається бюджетним правом?", "lang": "uk", "expect": "new", "tag": "opener-new"}
+{"text": "Дайте характеристику податкової норми.", "lang": "uk", "expect": "new", "tag": "opener-new"}
+{"text": "Назвіть джерела фінансового права.", "lang": "uk", "expect": "new", "tag": "opener-new"}
+{"text": "Назовите основные признаки налога.", "lang": "ru", "expect": "new", "tag": "opener-new"}
+{"text": "Что такое финансовый контроль?", "lang": "ru", "expect": "new", "tag": "opener-new"}
+{"text": "Перечислите методы финансового контроля.", "lang": "ru", "expect": "new", "tag": "opener-new"}
+{"text": "Охарактеризуйте бюджетную систему.", "lang": "ru", "expect": "new", "tag": "opener-new"}
+{"text": "Раскройте понятие субсидии.", "lang": "ru", "expect": "new", "tag": "opener-new"}
+{"text": "Что называется бюджетным правом?", "lang": "ru", "expect": "new", "tag": "opener-new"}
+{"text": "Дайте характеристику налоговой нормы.", "lang": "ru", "expect": "new", "tag": "opener-new"}
+{"text": "Назовите источники финансового права.", "lang": "ru", "expect": "new", "tag": "opener-new"}
+{"text": "What is a financial control?", "lang": "en", "expect": "new", "tag": "opener-new"}
+{"text": "What are the main signs of a tax?", "lang": "en", "expect": "new", "tag": "opener-new"}
+{"text": "Name the sources of financial law.", "lang": "en", "expect": "new", "tag": "opener-new"}
+{"text": "Define a budget subsidy.", "lang": "en", "expect": "new", "tag": "opener-new"}
+{"text": "Describe the budget system.", "lang": "en", "expect": "new", "tag": "opener-new"}
+{"text": "Explain the notion of a tax norm.", "lang": "en", "expect": "new", "tag": "opener-new"}
+{"text": "What is a subsidy?", "lang": "en", "expect": "new", "tag": "opener-new"}
+{"text": "Name the methods of control.", "lang": "en", "expect": "new", "tag": "opener-new"}
+{"text": "Яка стаття ця?", "lang": "uk", "expect": "followup", "tag": "followup"}
+{"text": "А в цьому випадку?", "lang": "uk", "expect": "followup", "tag": "followup"}
+{"text": "Чому саме так?", "lang": "uk", "expect": "followup", "tag": "followup"}
+{"text": "Залежно від змісту.", "lang": "uk", "expect": "followup", "tag": "followup"}
+{"text": "А що про це каже закон?", "lang": "uk", "expect": "followup", "tag": "followup"}
+{"text": "Поясніть детальніше.", "lang": "uk", "expect": "followup", "tag": "followup"}
+{"text": "Наведіть приклад.", "lang": "uk", "expect": "followup", "tag": "followup"}
+{"text": "А що таке це в цьому випадку?", "lang": "uk", "expect": "followup", "tag": "followup"}
+{"text": "Какая статья эта?", "lang": "ru", "expect": "followup", "tag": "followup"}
+{"text": "А в этом случае?", "lang": "ru", "expect": "followup", "tag": "followup"}
+{"text": "Почему именно так?", "lang": "ru", "expect": "followup", "tag": "followup"}
+{"text": "Зависит от содержания.", "lang": "ru", "expect": "followup", "tag": "followup"}
+{"text": "А что об этом говорит закон?", "lang": "ru", "expect": "followup", "tag": "followup"}
+{"text": "Поясните подробнее.", "lang": "ru", "expect": "followup", "tag": "followup"}
+{"text": "Приведите пример.", "lang": "ru", "expect": "followup", "tag": "followup"}
+{"text": "А что такое это в этом случае?", "lang": "ru", "expect": "followup", "tag": "followup"}
+{"text": "Which article is that?", "lang": "en", "expect": "followup", "tag": "followup"}
+{"text": "And in this case?", "lang": "en", "expect": "followup", "tag": "followup"}
+{"text": "Why exactly so?", "lang": "en", "expect": "followup", "tag": "followup"}
+{"text": "Can you do better?", "lang": "en", "expect": "followup", "tag": "followup"}
+{"text": "What does the law say about it?", "lang": "en", "expect": "followup", "tag": "followup"}
+{"text": "Give an example.", "lang": "en", "expect": "followup", "tag": "followup"}
+{"text": "And if without exceptions?", "lang": "en", "expect": "followup", "tag": "followup"}
+{"text": "And what is that in this case?", "lang": "en", "expect": "followup", "tag": "followup"}

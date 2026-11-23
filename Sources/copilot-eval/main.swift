@@ -182,6 +182,29 @@ case "filter-text":
     let passed = total > 0 && ok == total
     print("filter-text: cases=\(total) correct=\(ok) \(passed ? "PASS" : "FAIL")")
     finish(passed ? 0 : 1)
+case "exam-followup":
+    // Eval правила «Экзамен» (COPILOT-17 R-03/R-04): новая фраза-вопрос открывает новый билет, уточнение остаётся в билете. Без моделей.
+    args.removeFirst()
+    let verbose = flag("--verbose")
+    let path = args.first ?? "evals/exam-followup/cases.jsonl"
+    guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { fail("\(path): нет файла", code: 1) }
+    var total = 0, ok = 0
+    var byTag: [String: (ok: Int, total: Int)] = [:]
+    for line in raw.split(separator: "\n") where !line.isEmpty {
+        guard let c = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: String],
+              let text = c["text"], let expect = c["expect"] else { fail("Invalid evaluation case or missing fixture", code: 1) }
+        let got = FollowUpDetector.isExamFollowUp(text) ? "followup" : "new"
+        total += 1
+        let tag = c["tag"] ?? "-"
+        var t = byTag[tag] ?? (0, 0)
+        t.total += 1
+        if got == expect { ok += 1; t.ok += 1 } else if verbose { print("FAIL [\(tag)] expect=\(expect) got=\(got): \(text)") }
+        byTag[tag] = t
+    }
+    for (tag, t) in byTag.sorted(by: { $0.key < $1.key }) { print("  \(tag): \(t.ok)/\(t.total)") }
+    let passed = total > 0 && ok == total
+    print("exam-followup: cases=\(total) correct=\(ok) \(passed ? "PASS" : "FAIL")")
+    finish(passed ? 0 : 1)
 case "filter":
     // Eval `filter` по звуку (COPILOT-05 AC-01, AC-02, AC-04): Silero → Parakeet → фильтр языка, по одному файлу.
     // Упрощение: файл — одна реплика (сегментация энергетическим детектором здесь не участвует).

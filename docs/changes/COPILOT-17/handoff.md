@@ -42,5 +42,19 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
 - The cause of the misheard key word on live audio (needs the saved audio of R-09; the bake-off is a separate task).
 - Baseline latency numbers (P-01).
 
+## P-01 — baseline at e2583df (2026-11-23)
+- `swift build` PASS; `swift test` PASS, 525 tests in 92 suites.
+- `scripts/run-evals.sh turn bank filter-text memory materials`: turn 0%/0%, mean 791 ms; bank top1 94.9%, top3 100%;
+  filter-text 236/236; memory 8/8; materials 23/24 — all PASS.
+- `scripts/secret-scan.sh` 0 findings; `scripts/check-localization.sh` 831/831.
+- `scripts/build-app.sh`, Parakeet decode baseline (AC-03) and first-token baseline (AC-06/08): NOT RUN (the latter needs a
+  recent session log and the models; taken before P-04/P-07).
+
+## P-02 — exam-followup eval first (2026-11-23)
+- `evals/exam-followup/cases.jsonl`: 48 synthetic cases (24 `opener-new` uk/ru/en, 24 `followup`, incl. three mid-sentence
+  «що таке / что такое / what is» that must stay follow-ups); `copilot-eval exam-followup`; added to the default list of
+  `scripts/run-evals.sh`; `evals/README.md` updated.
+- Before P-03: **FAIL as expected**, 24/48 (opener-new 0/24, followup 24/24).
+
 ## Next
-Owner reviews the documents. Then P-01 (baseline) and P-02 (eval first). Tier: standard (Sonnet 5.5 medium), in a new session.
+P-03: `FollowUpDetector.isExamFollowUp` openers, until exam-followup is 48/48. Owner accepted the plan on 2026-11-23.

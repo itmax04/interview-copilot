@@ -64,6 +64,11 @@ Filled in by the executor in P-06 and P-12: date, commit, models, thresholds, re
 | 2026-10-06 | P-05 (after `e836139`) | — / whisper small q5_1 | T = 700 ms | NOT RUN (P-06) | NOT RUN (P-06) | 0% / 0% (34 cases) |
 | 2026-10-06 | P-06 (after `61bfd6d`) | bge-m3 Q8_0 / whisper small q5_1 | 0.74; T = 700 ms | 94.9% (holdout 91.7%) | 0% (holdout 0%) | 0% / 0% |
 
+## `exam-followup` set (COPILOT-17, R-03/R-04)
+`evals/exam-followup/cases.jsonl` (48 synthetic phrases uk/ru/en, in Git): 24 question openers that must start a new ticket
+(`opener-new`) and 24 clarifications that must stay in the ticket (`followup`). Run: `scripts/run-evals.sh exam-followup`
+(no models). Threshold: all cases correct.
+
 ## `filter` set (COPILOT-05, R-02, R-05; AC-01, AC-02, AC-04)
 - **Text** — `evals/filter/text-cases.jsonl` (214 cases, in Git): phrase, menu language, channel, expected keep/drop.
   Run: `scripts/run-evals.sh filter-text` (part of the default run, no models needed). Threshold: all cases correct.
