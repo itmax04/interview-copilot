@@ -62,6 +62,22 @@ struct PanelView: View {
         if let silent = model.callSilentSeconds, silent >= 10 {
             AlertBox(icon: "speaker.slash.fill", text: L("Не слышу звонок %lld с — проверьте звук вкладки или источник", silent), size: model.fontSize)
         }
+        if model.micHardwareMuted {
+            HStack(spacing: 8) {
+                Image(systemName: "mic.slash.fill").foregroundStyle(Theme.warn)
+                Text("Микрофон выключен в macOS (Mute)")
+                    .font(.system(size: max(12, model.fontSize - 2), weight: .medium))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 4)
+                Button("Включить") { model.onUnmuteMic?() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Theme.warn.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.warn.opacity(0.45), lineWidth: 1))
+        }
         if model.ownerAnswering {
             Banner(icon: "mic.fill", text: L("Ваш ответ записывается — %@, чтобы закончить", model.hotkey(.ownerAnswer)), color: Theme.warn,
                    size: model.fontSize)

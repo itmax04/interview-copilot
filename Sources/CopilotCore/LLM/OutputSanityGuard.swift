@@ -155,6 +155,12 @@ public struct OutputSanityGuard: Sendable {
 
     private static let ruOnlyLetters: Set<Character> = ["ы", "э", "ё", "ъ"]
     private static let ukOnlyLetters: Set<Character> = ["і", "ї", "є", "ґ"]
+    /// Частотные служебные слова, существующие только в русском (ловят чисто русский ответ при ожидаемом «uk» даже без ы/э/ё/ъ).
+    private static let ruOnlyFunctionWords: Set<String> = [
+        "это", "что", "как", "или", "только", "также", "можно", "нужно", "если", "когда",
+        "чтобы", "который", "которая", "которое", "которые", "является", "являются",
+        "потому", "поэтому", "между", "очень", "всегда", "здесь", "включает", "регулирует", "определяет",
+    ]
 
     private func hasLanguageMix(_ text: String, expected: String) -> Bool {
         let lower = text.lowercased()
@@ -166,9 +172,13 @@ public struct OutputSanityGuard: Sendable {
         case "uk":
             let ruWords = cyrTokens.filter { word in word.contains { Self.ruOnlyLetters.contains($0) } }.count
             if ruWords >= 2 { return true }
-            if cyrTokens.count <= 10, ruWords >= 1 {
-                let ukWords = cyrTokens.filter { word in word.contains { Self.ukOnlyLetters.contains($0) } }.count
-                if ukWords == 0 { return true }
+            let ukWords = cyrTokens.filter { word in word.contains { Self.ukOnlyLetters.contains($0) } }.count
+            if cyrTokens.count <= 10, ruWords >= 1, ukWords == 0 {
+                return true
+            }
+            if cyrTokens.count >= 8, ukWords == 0 {
+                let ruFunc = cyrTokens.filter { Self.ruOnlyFunctionWords.contains($0) }.count
+                if ruFunc >= 2 || (ruWords >= 1 && ruFunc >= 1) { return true }
             }
             return false
         case "ru":

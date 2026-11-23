@@ -42,9 +42,13 @@ final class AnswerController {
     var session: () -> SessionConfig? = { nil }
 
     /// Настройки с цепочкой сессии: выбранная в мастере модель — первой (COPILOT-09 R-01).
+    /// Язык активной сессии также жёстко фиксируется, чтобы не слетать в `.auto` посреди экзамена.
     private var effectiveSettings: AppSettings {
         var s = model.settings
-        if let c = session() { s.chain = c.chain(from: s.chain) }
+        if let c = session() {
+            s.chain = c.chain(from: s.chain)
+            if c.language != .auto { s.language = c.language }
+        }
         return s
     }
 
@@ -52,6 +56,12 @@ final class AnswerController {
     private var isExamCall: Bool { session()?.type == .exam }
     /// Активная тема/билет текущего диалога (E-02): сохраняется через всю цепочку доп. вопросов и перебиваний.
     private var activeTopic: ActiveTopic?
+    /// Время последнего вопроса и счётчик синтетических turnID для повтора голосом владельца.
+    private var lastQuestionAt: Date?
+    private var nextOwnerTurnID = -1000
+
+    var lastQuestionAge: TimeInterval? { lastQuestionAt.map { Date().timeIntervalSince($0) } }
+    var hasActiveQuestion: Bool { panel.history.entries.last != nil }
 
     /// Тип, указания и стиль ответа сессии; без сессии (ИИ-собеседование, смоки) — стиль по умолчанию из настроек.
     private var sessionPrompt: SessionPrompt? {
@@ -138,6 +148,7 @@ final class AnswerController {
     func handle(_ turn: Turn) {
         let genID = bumpGeneration()
         lastQuestion = turn
+        lastQuestionAt = Date()
         panel.history.cancelUnfinished()
 
         // E-02/E-04: определяем доп. вопрос или неразборчивый обрывок на экзамене при активной теме.
@@ -167,9 +178,85 @@ final class AnswerController {
         answerNormally(turn, slot: slot, genID: genID, isFollowUp: isFollowUp)
     }
 
-    private func answerNormally(_ turn: Turn, slot: Slot, genID: UInt64, isFollowUp: Bool = false) {
+    /// Повтор или уточнение вопроса голосом самого владельца (без нажатия кнопок):
+    /// при повторе в пределах 25–30 с обновляет текущую карточку новой версией, иначе создаёт новую карточку.
+    func handleOwnerQuestion(_ decision: OwnerQuestionDetector.Decision) {
+        guard decision != .none else { return }
+        let genID = bumpGeneration()
+        cancelDraft()
+        panel.history.cancelUnfinished()
+        let now = Self.now()
+
+        switch decision {
+        case .none:
+            return
+        case .replaceLastQuestion(let repeated):
+            if let lastEntry = panel.history.entries.last,
+               let versionID = panel.history.beginVersion(of: lastEntry.id, kind: .hint, instruction: L("Повтор голосом")) {
+                panel.history.retitle(entry: lastEntry.id, question: repeated)
+                panel.history.select(entry: lastEntry.id)
+                let wasFollowUp = lastEntry.rootEntryID != nil
+                nextOwnerTurnID -= 1
+                let turn = Turn(id: lastEntry.turnID ?? nextOwnerTurnID, text: repeated, speechEndedAt: now, firedAt: now, forced: true)
+                lastQuestion = turn
+                lastQuestionAt = Date()
+                if !wasFollowUp {
+                    activeTopic = ActiveTopic(rootExchangeID: memory?.currentExchangeID, rootEntryID: lastEntry.id, rootQuestion: repeated)
+                }
+                answerNormally(turn, slot: Slot(entry: lastEntry.id, version: versionID), genID: genID,
+                               isFollowUp: wasFollowUp, label: "ownerVoice")
+                return
+            }
+            // Фолбэк, если истории ещё нет: открываем как новый вопрос.
+            handleOwnerQuestion(.newQuestion(repeated))
+
+        case .clarifyLastQuestion(let correction):
+            if let lastEntry = panel.history.entries.last,
+               let versionID = panel.history.beginVersion(of: lastEntry.id, kind: .hint, instruction: L("Уточнение голосом: %@", correction)) {
+                let previousQ = lastEntry.question
+                let combinedPromptQ = "\(previousQ) (\(L("уточнение голосом")): \(correction))"
+                let searchQuery = "\(correction) \(previousQ)"
+                panel.history.retitle(entry: lastEntry.id, question: "\(previousQ) · \(correction)")
+                panel.history.select(entry: lastEntry.id)
+                let wasFollowUp = lastEntry.rootEntryID != nil
+                nextOwnerTurnID -= 1
+                let turn = Turn(id: lastEntry.turnID ?? nextOwnerTurnID, text: combinedPromptQ, speechEndedAt: now, firedAt: now, forced: true)
+                lastQuestion = turn
+                lastQuestionAt = Date()
+                if !wasFollowUp {
+                    activeTopic = ActiveTopic(rootExchangeID: memory?.currentExchangeID, rootEntryID: lastEntry.id, rootQuestion: combinedPromptQ)
+                }
+                answerNormally(turn, slot: Slot(entry: lastEntry.id, version: versionID), genID: genID,
+                               isFollowUp: wasFollowUp, label: "ownerVoice", searchOverride: searchQuery)
+                return
+            }
+            handleOwnerQuestion(.newQuestion(correction))
+
+        case .newQuestion(let question):
+            nextOwnerTurnID -= 1
+            let turn = Turn(id: nextOwnerTurnID, text: question, speechEndedAt: now, firedAt: now, forced: true)
+            lastQuestion = turn
+            lastQuestionAt = Date()
+            let detectedFollowUp = isExamCall ? FollowUpDetector.isExamFollowUp(question) : FollowUpDetector.isFollowUp(question)
+            let isFollowUp = activeTopic != nil && detectedFollowUp
+            if isFollowUp { syncActiveTopicSpeech() }
+            let ids = panel.history.begin(question: question, turnID: turn.id, kind: .hint,
+                                          rootEntryID: isFollowUp ? activeTopic?.rootEntryID : nil,
+                                          rootTitle: isFollowUp ? activeTopic?.rootTitle : nil)
+            if isFollowUp {
+                activeTopic?.followUpDepth += 1
+            } else {
+                activeTopic = ActiveTopic(rootExchangeID: memory?.currentExchangeID, rootEntryID: ids.entry, rootQuestion: question)
+            }
+            answerNormally(turn, slot: Slot(entry: ids.entry, version: ids.version), genID: genID,
+                           isFollowUp: isFollowUp, label: "ownerVoice")
+        }
+    }
+
+    private func answerNormally(_ turn: Turn, slot: Slot, genID: UInt64, isFollowUp: Bool = false,
+                                label: String = "generated", searchOverride: String? = nil) {
         let settings = effectiveSettings
-        let searchQuery = (isFollowUp ? activeTopic?.contextualSearchQuery(for: turn.text) : nil) ?? turn.text
+        let searchQuery = searchOverride ?? (isFollowUp ? activeTopic?.contextualSearchQuery(for: turn.text) : nil) ?? turn.text
         let topicSnapshot = isFollowUp ? activeTopic : nil
         generation = Task { [weak self] in
             guard let self, self.activeGenerationID == genID else { return }
@@ -186,7 +273,7 @@ final class AnswerController {
                 guard !Task.isCancelled, self.activeGenerationID == genID else { return }
                 if !isFollowUp { self.activeTopic?.rootMaterials = Array(self.lastMaterials.prefix(3)) }
                 self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials,
-                           slot: slot, genID: genID, isFollowUp: isFollowUp)
+                           slot: slot, genID: genID, isFollowUp: isFollowUp, label: label)
                 return
             }
             // На follow-up порог 1.0 блокирует случайную подмену чужой карточкой банка, оставляя контекстные материалы.
@@ -202,12 +289,12 @@ final class AnswerController {
             guard let match = found.match else {
                 // Базы нет (нет модели эмбеддингов) — генерация без карточек, если можно.
                 self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: materials,
-                           slot: slot, genID: genID, isFollowUp: isFollowUp)
+                           slot: slot, genID: genID, isFollowUp: isFollowUp, label: label)
                 return
             }
             self.lastMatch = match
             Log.metrics.notice("bank_match turn=\(turn.id) matched=\(match.matched != nil) score=\(match.top.first?.score ?? 0, format: .fixed(precision: 3)) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
-            self.route(turn, match: match, settings: settings, materials: materials, slot: slot, genID: genID, isFollowUp: isFollowUp)
+            self.route(turn, match: match, settings: settings, materials: materials, slot: slot, genID: genID, isFollowUp: isFollowUp, label: label)
         }
     }
 
@@ -231,7 +318,7 @@ final class AnswerController {
     }
 
     private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = [],
-                       slot: Slot, genID: UInt64, isFollowUp: Bool = false) {
+                       slot: Slot, genID: UInt64, isFollowUp: Bool = false, label: String = "generated") {
         let modelsAvailable = modelsAvailable(settings)
         switch AnswerRouter.decide(mode: settings.mode, match: match, modelsAvailable: modelsAvailable, useProfile: settings.useProfile) {
         case .bankCard(let card):
@@ -253,7 +340,7 @@ final class AnswerController {
                 let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
                 guard !Task.isCancelled, self.activeGenerationID == genID, self.lastQuestion?.id == turn.id else { return }
                 self.generate(turn: turn, chain: chain, request: request, fallbackTop: top, slot: slot,
-                              genID: genID, expectedLanguage: expectedLang) { [weak self] answer in
+                              label: label, genID: genID, expectedLanguage: expectedLang) { [weak self] answer in
                     self?.activeTopic?.lastShownHint = answer
                 }
             }
@@ -324,7 +411,13 @@ final class AnswerController {
                     v.source = L("Уточняю ответ…")
                     v.status = .waiting
                 }
-                self.generate(turn: turn, chain: nextChain, request: request, fallbackTop: fallbackTop, slot: slot,
+                var retryRequest = request
+                if issue == .languageMix, let lang = expectedLanguage, !retryRequest.messages.isEmpty {
+                    let langName = InterviewerPrompt.languageName(lang)
+                    let lastIdx = retryRequest.messages.count - 1
+                    retryRequest.messages[lastIdx].text += "\n\nCRITICAL CORRECTION: Your previous output used the wrong language. Answer STRICTLY in \(langName) only — do NOT use any other language."
+                }
+                self.generate(turn: turn, chain: nextChain, request: retryRequest, fallbackTop: fallbackTop, slot: slot,
                               label: label, genID: effectiveGenID, expectedLanguage: expectedLanguage,
                               retryDepth: retryDepth + 1, onComplete: onComplete)
             }
@@ -622,6 +715,7 @@ final class AnswerController {
         case "generated": L("ответ модели")
         case "strong": L("сильная модель")
         case "screenshot": L("по скриншоту")
+        case "ownerVoice": L("с вашего голоса")
         case "уточнение": L("уточнение")
         default: label
         }
@@ -719,6 +813,7 @@ final class AnswerController {
     func clearTask() {
         tasks.clear()
         activeTopic = nil
+        lastQuestionAt = nil
         onTaskChange?(nil)
     }
 

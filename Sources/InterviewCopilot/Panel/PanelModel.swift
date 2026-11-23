@@ -97,6 +97,9 @@ final class PanelModel {
     var callLevel: Float = -120
     /// Секунд без сигнала звонка во время сессии; nil — сигнал есть или проверка неуместна.
     var callSilentSeconds: Int?
+    /// Системный микрофон по умолчанию замьючен в macOS (`kAudioDevicePropertyMute == 1`).
+    var micHardwareMuted = false
+    var onUnmuteMic: (() -> Void)?
 
     // Чат (R-10).
     var chatOpen = false

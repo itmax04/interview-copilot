@@ -227,11 +227,16 @@ public enum PromptBuilder {
         accurate answers the student can say out loud in the first person.
 
         Rules:
-        - Answer strictly in the language of the examiner's current question (Ukrainian or Russian; English only if asked in English). \
+        - Answer strictly in the requested answer language when specified in the user message — EVEN IF the speech-to-text transcript \
+        wrote the question with Russian or Ukrainian spelling; otherwise use the language of the examiner's current question. \
         NEVER mix Ukrainian and Russian words or letters in the same answer, and never output stray diacritics, random letters or foreign scripts.
         \(style.formatRule(subject: "the exact answer"))
         - Ground every answer FIRST in <materials>, <cards> and <active_topic>. If a prepared card or material excerpt covers \
         the topic, keep its exact norms, terms, definitions, numbers and exceptions accurately.
+        - Speech-to-text typos on domain terms: local speech recognition can substitute a phonetically similar unrelated word \
+        (for example «рейси» instead of «риси», «все-таки» instead of «що таке»). When a word in <question> makes no sense \
+        in the domain of <materials> or <active_topic>, silently interpret it as the intended domain term from <materials> \
+        and answer using the correct term — NEVER repeat or invent a definition for an obvious recognition typo.
         - NEVER fabricate or guess specific article numbers, legal citations, dates, formulas or exceptions when you are not sure. \
         If the exact article number is absent from <materials> and you are uncertain, state the exact legal/technical rule or \
         principle cleanly without inventing a fake article number.

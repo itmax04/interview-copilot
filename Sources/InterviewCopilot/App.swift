@@ -260,6 +260,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         panelModel.onCreateSession = { [weak self] in self?.showWizard() }
         panelModel.onQuickStart = { [weak self] type, profileID in self?.quickStartSession(type: type, profileID: profileID) }
+        panelModel.onUnmuteMic = { [weak self] in
+            DefaultInputMute.unmute()
+            self?.panelModel.micHardwareMuted = DefaultInputMute.isMuted()
+        }
         panelModel.onEndSession = { [weak self] in self?.liveSession.end() }
         panelModel.onStartDetectedCall = { [weak self] in
             guard let self else { return }
@@ -319,10 +323,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.memory = memory
         answers.embed = { [weak self] in self?.bank.embedFunction }
         listening.currentExchangeID = { [weak self] in self?.memory.currentExchangeID }
-        listening.onOwnerSaid = { [weak self] text, exchangeID in
-            self?.memory.addAnswer(text, toExchangeID: exchangeID)
-            self?.sessions.addOwnerUtterance(text)
-            self?.saveMemory()
+        listening.onOwnerSaid = { [weak self] text, exchangeID, interrupted in
+            guard let self else { return }
+            // Если владелец не был перебит, а сам повторил или уточнил вопрос — обновляем/создаём подсказку без кнопок.
+            if !interrupted, !self.testCall.active, !self.testCallOnly, self.liveSession.isActive,
+               self.liveSession.config.type != .mock {
+                let decision = OwnerQuestionDetector.detect(
+                    text: text,
+                    secondsSinceLastQuestion: self.answers.lastQuestionAge,
+                    hasActiveQuestion: self.answers.hasActiveQuestion
+                )
+                if decision != .none {
+                    Log.metrics.notice("owner_question_trigger decision=\(String(describing: decision).prefix(24), privacy: .public)")
+                    if case .newQuestion(let q) = decision {
+                        self.memory.addQuestion(q, turnID: nil)
+                        self.saveMemory()
+                    }
+                    self.answers.handleOwnerQuestion(decision)
+                    return
+                }
+            }
+            self.memory.addAnswer(text, toExchangeID: exchangeID)
+            self.sessions.addOwnerUtterance(text)
+            self.saveMemory()
         }
         listening.onOwnerAnswerRevised = { [weak self] old, new, exchangeID in
             self?.memory.reviseAnswer(old, to: new, inExchangeID: exchangeID)
@@ -440,7 +463,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let cards = bank.cards
-        listening.setRecognitionPrompt { language in RecognitionVocabulary.prompt(cards: cards, language: language) }
+        let materials = bank.materialTexts
+        listening.setRecognitionPrompt { language in RecognitionVocabulary.prompt(cards: cards, materials: materials, language: language) }
     }
 
     private func refreshUI() {
@@ -501,6 +525,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Звук в оверлее (COPILOT-09 R-08)
 
     private var lastCallSignalAt = Date()
+    private var muteCheckTick = 0
 
     /// Уровни микрофона и звонка; «не слышу звонок N с» — только в сессии со звуком приложения (не в самопроверке).
     private func updateLevels() {
@@ -508,6 +533,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let mic = (listening.micLevelDB / 3).rounded() * 3, call = (listening.levelDB / 3).rounded() * 3
         if panelModel.micLevel != mic { panelModel.micLevel = mic }
         if panelModel.callLevel != call { panelModel.callLevel = call }
+        // Раз в ~1 с проверяем, не замьючен ли микрофон системой macOS (kAudioDevicePropertyMute == 1).
+        if liveSession.isActive, listening.phase == .listening {
+            muteCheckTick += 1
+            if muteCheckTick >= 10 {
+                muteCheckTick = 0
+                let muted = DefaultInputMute.isMuted()
+                if panelModel.micHardwareMuted != muted { panelModel.micHardwareMuted = muted }
+            }
+        } else if panelModel.micHardwareMuted {
+            panelModel.micHardwareMuted = false
+            muteCheckTick = 0
+        }
         // Предупреждение «не слышу звонок» — только если пользователь явно выбрал конкретное приложение (.app),
         // а не универсальный авто-захват (где можно нажать «Быстрый старт» заранее, до открытия звонка).
         let explicitAppSource: Bool = if case .app = model.settings.audioSource { true } else { false }
@@ -598,6 +635,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         turns.autoEnabled = c.autoGenerate
         panelModel.history.clear()
         panelModel.detection = panelModel.detection.next(on: .reset)
+        panelModel.micHardwareMuted = DefaultInputMute.isMuted()
         answers.clearTask()
         // ⌘-схема ParakeetAI — только на время сессии (Q10).
         panelModel.sessionHotkeysFailed = Set(hotkeys?.registerSession() ?? [])

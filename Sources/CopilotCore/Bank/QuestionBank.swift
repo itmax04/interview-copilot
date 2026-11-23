@@ -191,10 +191,10 @@ public enum QuestionBankWriter {
     }
 }
 
-/// Подсказка для распознавания речи из базы: формулировки вопросов на нужном языке (по алфавиту письма),
-/// не длиннее `limit` символов. Термины и имена из базы чаще распознаются верно.
+/// Подсказка для распознавания речи из базы и загруженных материалов: формулировки вопросов и частые термины лекций
+/// на нужном языке, не длиннее `limit` символов. Термины и имена из профиля чаще распознаются верно.
 public enum RecognitionVocabulary {
-    public static func prompt(cards: [BankCard], language: String, limit: Int = 400) -> String {
+    public static func prompt(cards: [BankCard], materials: [String] = [], language: String, limit: Int = 400) -> String {
         func lang(_ q: String) -> String {
             if q.range(of: "[іїєґІЇЄҐ]", options: .regularExpression) != nil { return "uk" }
             if q.range(of: "[а-яА-ЯёЁ]", options: .regularExpression) != nil { return "ru" }
@@ -209,6 +209,60 @@ public enum RecognitionVocabulary {
                 break // по одной формулировке на карточку — шире словарь
             }
         }
+        guard !materials.isEmpty, out.count < limit - 20 else { return out }
+        let terms = topMaterialTerms(materials: materials, language: language)
+        for term in terms {
+            let next = out.isEmpty ? term : out + ", " + term
+            if next.count > limit { break }
+            out = next
+        }
         return out
+    }
+
+    /// Частые предметные слова (≥ 4 букв) из загруженных материалов профиля для подсказки STT.
+    static func topMaterialTerms(materials: [String], language: String, maxTerms: Int = 45) -> [String] {
+        let stop: Set<String> = [
+            "також", "можуть", "може", "бути", "який", "яких", "якою", "якої", "яким", "якщо", "вони", "його",
+            "вона", "воно", "інших", "інші", "цього", "цьому", "цих", "через", "після", "перед", "понад",
+            "также", "могут", "может", "быть", "который", "которых", "которой", "которую", "если", "этого",
+            "этом", "этих", "через", "после", "перед", "между", "более", "менее", "только", "чтобы",
+            "which", "their", "there", "these", "those", "about", "where", "would", "could", "should",
+        ]
+        var counts: [String: Int] = [:]
+        var display: [String: String] = [:]
+        for text in materials {
+            // Собираем слова (включая дефисные термины вроде «фінансово-правові»).
+            var current = ""
+            func flush() {
+                defer { current = "" }
+                let trimmed = current.trimmingCharacters(in: CharacterSet(charactersIn: "-–—"))
+                guard trimmed.count >= 4, trimmed.count <= 32 else { return }
+                let lower = trimmed.lowercased()
+                guard !stop.contains(lower) else { return }
+                if language == "en" {
+                    guard lower.unicodeScalars.allSatisfy({ ($0.value >= 0x61 && $0.value <= 0x7A) || $0 == "-" }) else { return }
+                } else {
+                    guard lower.unicodeScalars.contains(where: { $0.value >= 0x0400 && $0.value <= 0x04FF }) else { return }
+                }
+                counts[lower, default: 0] += 1
+                if display[lower] == nil { display[lower] = lower }
+            }
+            for ch in text {
+                if ch.isLetter || ch == "-" {
+                    current.append(ch)
+                } else if !current.isEmpty {
+                    flush()
+                }
+            }
+            if !current.isEmpty { flush() }
+        }
+        return counts
+            .filter { $0.value >= 2 }
+            .sorted { a, b in
+                if a.value != b.value { return a.value > b.value }
+                return a.key.count > b.key.count
+            }
+            .prefix(maxTerms)
+            .compactMap { display[$0.key] }
     }
 }

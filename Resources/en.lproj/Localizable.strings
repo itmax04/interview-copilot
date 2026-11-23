@@ -923,3 +923,9 @@
 "Вернуться к основному вопросу" = "Return to the main question";
 "Быстрый старт" = "Quick start";
 "Сразу слушает любой звонок на Mac и микрофон — без выбора приложения." = "Immediately listens to any call on your Mac plus microphone — no app setup needed.";
+"Повтор голосом" = "Repeated by your voice";
+"Уточнение голосом: %@" = "Voice clarification: %@";
+"уточнение голосом" = "voice clarification";
+"с вашего голоса" = "from your voice";
+"Микрофон выключен в macOS (Mute)" = "Microphone is muted in macOS";
+"Включить" = "Unmute";

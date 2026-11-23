@@ -155,8 +155,9 @@ final class ListeningController {
     private let ownerActive = LockedFlag()
     /// Текущий активный обмен в памяти интервью — чтобы ответ владельца при перебивании крепился к нему.
     var currentExchangeID: (() -> Int?)?
-    /// Фраза владельца прошла фильтры — в память интервью (текст, целевой exchangeID при перебивании).
-    var onOwnerSaid: ((String, Int?) -> Void)?
+    /// Фраза владельца прошла фильтры — в память интервью или повтор вопроса голосом
+    /// (текст, целевой exchangeID при перебивании, флаг `interrupted`).
+    var onOwnerSaid: ((String, Int?, Bool) -> Void)?
     /// Уточнение предварительно сброшенного (при перебивании) ответа владельца после re-decode.
     var onOwnerAnswerRevised: ((String, String, Int) -> Void)?
     /// Вопрос или ответ владельца по говорящему (репетиция с собеседником) и ⌃⌥A.
@@ -258,7 +259,7 @@ final class ListeningController {
         ownerTickTask?.cancel()
         ownerTickTask = nil
         let targetID = answer.targetExchangeID ?? currentExchangeID?()
-        onOwnerSaid?(answer.provisionalText, targetID)
+        onOwnerSaid?(answer.provisionalText, targetID, true)
         Log.metrics.notice("owner_interrupted_flush words=\(TurnDetectorWords.count(answer.provisionalText)) phrases=\(answer.utterances.count) exchange=\(targetID ?? -1)")
         let previous = ownerFinishTask
         let generation = ownerGeneration
@@ -286,7 +287,7 @@ final class ListeningController {
                                                                 provisional: answer.provisionalText, release: true)?.text
             guard let self, self.ownerGeneration == generation else { return }
             let text = redecoded ?? answer.provisionalText
-            self.onOwnerSaid?(text, answer.targetExchangeID)
+            self.onOwnerSaid?(text, answer.targetExchangeID, false)
             Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) phrases=\(answer.utterances.count) redecoded=\(redecoded != nil, privacy: .public)")
         }
     }
@@ -759,6 +760,7 @@ final class ListeningController {
     func setRecognitionPrompt(_ provider: (@Sendable (String) -> String?)?) {
         promptProvider = provider
         transcriber?.setPromptProvider(testSource == nil ? provider : nil)
+        ownerTranscriber?.setPromptProvider(testSource == nil ? provider : nil)
     }
 
     private var promptProvider: (@Sendable (String) -> String?)?
@@ -867,6 +869,7 @@ final class ListeningController {
                 }
             }
             ot.setLanguage(model.settings.language.whisperCode)
+            ot.setPromptProvider(testSource == nil ? promptProvider : nil)
             ot.setSpeechGate(gate.map { g in { @Sendable samples in g.isSpeech(samples) } })
             // Эхо интервьюера из динамиков и чужие голоса отсекает отпечаток голоса (решение исполнителя, этап 4).
             ot.setVoiceGate { samples in voiceGate.check(samples, ignoringActive: true, allowRouting: false) }
@@ -981,7 +984,7 @@ final class ListeningController {
 
     /// Ответ владельца в самопроверке: в память интервью; для хода — как шум, вопросов нет.
     private func recordOwnerAnswer(utterance u: Int, text: String, phraseEnd: UInt64) {
-        onOwnerSaid?(text, currentExchangeID?())
+        onOwnerSaid?(text, currentExchangeID?(), false)
         Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=\(self.ownerAnswering ? "self-test" : "rehearsal", privacy: .public)")
         if partialText != nil {
             partialText = nil
