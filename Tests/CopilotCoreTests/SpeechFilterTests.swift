@@ -40,16 +40,32 @@ struct LanguageGateTests {
         if case .drop = ru.check(fr, channel: .mic) {} else { Issue.record("французский должен отбрасываться") }
     }
 
-    @Test func englishPhraseRulesDependOnChannel() {
+    @Test func englishPhraseRulesDoNotDependOnChannel() {
+        // COPILOT-16 R-01 (AC-02): целиком английская фраза при uk/ru отбрасывается в любом канале, включая звонок.
         let phrase = "Let's continue in English. Tell me about your last project."
-        // S-04, Q8: в звонке английская фраза интервьюера проходит.
-        #expect(ru.check(phrase, channel: .call) == .keep)
-        // В микрофоне и «Весь системный звук» — строго.
-        #expect(ru.check(phrase, channel: .mic) == .drop(language: "en"))
-        #expect(uk.check(phrase, channel: .allSystem) == .drop(language: "en"))
-        // English и Auto — английский разрешён.
-        #expect(en.check(phrase, channel: .mic) == .keep)
-        #expect(auto.check(phrase, channel: .mic) == .keep)
+        for channel in [LanguageGate.Channel.call, .mic, .allSystem] {
+            #expect(ru.check(phrase, channel: channel) == .drop(language: "en"))
+            #expect(uk.check(phrase, channel: channel) == .drop(language: "en"))
+            // English и Auto — английский разрешён.
+            #expect(en.check(phrase, channel: channel) == .keep)
+            #expect(auto.check(phrase, channel: channel) == .keep)
+        }
+    }
+
+    @Test func pseudoEnglishOnCallIsDropped() {
+        // R-02: немецкая речь, распознанная как английские слова, в звонке отбрасывается тем же правилом.
+        let text = "So we have a bit of the time and you can come with me."
+        #expect(uk.check(text, channel: .call) == .drop(language: "en"))
+        #expect(ru.check(text, channel: .call) == .drop(language: "en"))
+    }
+
+    @Test func termAndShortPhrasesPassOnCall() {
+        // Правила терминов и коротких фраз остаются и в звонке.
+        #expect(ru.check("Pull request and code review", channel: .call) == .keep)
+        #expect(uk.check("Kubernetes Deployment", channel: .call) == .keep)
+        #expect(uk.check("Yes, exactly.", channel: .call) == .keep)
+        #expect(ru.check("Okay thanks", channel: .call) == .keep)
+        #expect(ru.check("I really love watching football matches", channel: .call) == .drop(language: "en"))
     }
 
     @Test func shortEnglishTermPhrasesPassInMic() {

@@ -54,7 +54,8 @@ Numbers without a prefix belong to this task; previous ones — "01/", "03/", "0
   - Allowed: Українська/Русский → {uk, ru}; English → {en}; Auto → {uk, ru, en} (Q7, Q12).
   - Phrase language: Apple `NLLanguageRecognizer` (on device) + the share of Cyrillic/Latin; uk and ru are one group.
   - Latin words inside a phrase in an allowed language are always kept (Q9).
-  - A whole English phrase with uk/ru: passes in the call channel (Q8); on the microphone and in "All system audio" — only
+  - A whole English phrase with uk/ru: ~~passes in the call channel (Q8)~~ **superseded by COPILOT-16 R-01: dropped on the call
+    channel too**; on the microphone and in "All system audio" — only
     if ≤ 4 words and all words are dictionary terms: résumé, job, `questions.yaml`, a built-in IT list (`Resources/terms-en.txt`).
   - A phrase shorter than 3 words with an uncertain language is not dropped (better to let it through than to lose a question).
   - A "Language filter" toggle.

@@ -42,6 +42,17 @@ call channel, "auto" language lock, live silent-mic notice, All-system-audio war
 - `scripts/run-evals.sh filter-text` before P-03: **FAIL as expected**, 218/236 correct (18 wrong: english-call 0/4,
   pseudo-en-call 0/14; terms-call 8/8). Next: P-03.
 
+## P-03 — LanguageGate on `.call` (2026-11-23)
+- `LanguageGate.check`: whole English phrase (≥ 3 words, not a term phrase ≤ 4 meaningful words) is dropped on every channel
+  when `en` is not allowed (`allowed.contains("en")` is the only keep condition); term-phrase and short-phrase rules unchanged.
+  `channel` is kept in the signature (call sites in `ListeningController` untouched; they compile and still pass `gateChannel`).
+- Doc comment updated (Q8 superseded); COPILOT-05 `spec.md` R-05 and `intent.md` Q8 carry a superseded note.
+- `LanguageGateTests`: `englishPhraseRulesDoNotDependOnChannel` (uk/ru drop, en/auto keep, all channels),
+  `pseudoEnglishOnCallIsDropped`, `termAndShortPhrasesPassOnCall` (AC-02).
+- Checks: `swift build` PASS; `swift test` PASS 504 tests in 87 suites; `scripts/run-evals.sh`: filter-text 236/236 PASS (AC-01),
+  turn 0%/0% mean 791 ms, bank top1 94.9%, memory 8/8, materials 23/24 — all unchanged PASS. secret-scan / localization /
+  build-app NOT RUN in this step (no strings or secrets touched).
+
 ## Code pointers found during the analysis
 - `Sources/CopilotCore/Filter/LanguageGate.swift` — `.auto` → {slavic, en}; whole English phrases are kept on `.call`
   always and on `.allSystem`/`.mic` only when `allowed` contains "en".
@@ -70,4 +81,4 @@ session is uk/ru, and "auto" settles on the interview language; (2) silent-mic d
 - CLAUDE.md still says the latest task is COPILOT-13 (stale; update when this task's docs land).
 
 ## Next
-P-03 (LanguageGate on `.call`). Owner review of spec/plan is welcome but not a checkpoint; the next owner checkpoint is H-1 (live call).
+P-04: `SessionLanguageLock` (R-03, R-04). Owner review of spec/plan is welcome but not a checkpoint; the next owner checkpoint is H-1 (live call).
