@@ -134,5 +134,14 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
   retention by injected clock, deleteAll/stats incl. unreadable file, settings default/clamp). `swift test` PASS, 542 tests.
 - NOT RUN: a real call with saving on (H-1 f).
 
+## P-09 — wipe and retention (2026-11-23)
+- `SessionController.deleteAll` (the «Удалить всю историю» path) now also calls `QuestionAudioStore().deleteAll()` (whole folder,
+  unreadable files included). `App.purgeQuestionAudio` runs `purge(olderThanDays:)` on a utility queue at app launch and at
+  session end, independent of the saving toggle. Store-level behavior is covered by `QuestionAudioStoreTests` (retention,
+  deleteAll, unreadable file); the `SessionController` call itself is a one-line app-target wiring, NOT unit-tested
+  (no test target for the app module). `swift build` PASS; `swift test` PASS, 542 tests.
+
 ## Next
-P-09: «Удалить всю историю» also wipes `question-audio/`; retention purge on app start and at session end (also when saving is off).
+P-10: documents (AGENTS.md "no audio" wording and §6, ARCHITECTURE §3/§4/§9, CLAUDE.md latest task), independent review of the whole
+diff (fresh subagent, standard tier; check audio permissions, no text in files/logs, the draft/wait issue from P-07), fix findings,
+full check and `scripts/build-app.sh`; then H-1.

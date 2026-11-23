@@ -153,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        purgeQuestionAudio()
         // Язык интерфейса (COPILOT-10) — до первого окна и меню: английская таблица из пакета, при запуске из `.build` — из Resources.
         L10n.loadTable(bundle: .main, fallbackDirectory: URL(fileURLWithPath: "Resources"))
         UILanguage.shared.apply(model.settings.interfaceLanguage)
@@ -643,6 +644,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Сессия начата: профиль, язык, память, история, слушание и ходы. Границы интервью теперь задаёт сессия
     /// (раньше — тишина 30 мин и смена приложения звонка, COPILOT-06 R-05).
+    /// COPILOT-17 R-10: старые файлы звука вопросов удаляются всегда, даже при выключенном сохранении.
+    private func purgeQuestionAudio() {
+        let days = model.settings.questionAudioRetentionDays
+        DispatchQueue.global(qos: .utility).async { QuestionAudioStore().purge(olderThanDays: days) }
+    }
+
     private func sessionStarted(_ c: SessionConfig) {
         if let id = c.profileID { bank.select(id) }
         model.settings.useProfile = c.type == .interview || c.type == .mock || c.type == .exam
@@ -677,6 +684,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func sessionEnded(_ c: SessionConfig) -> Task<Void, Never> {
         listening.setHintWaitsForWhisper(false)
+        purgeQuestionAudio()
         hotkeys?.unregisterSession()
         panelModel.sessionHotkeysFailed = []
         answers.clearTask()

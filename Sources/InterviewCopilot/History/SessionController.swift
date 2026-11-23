@@ -19,6 +19,7 @@ final class SessionController {
 
     func deleteAll() throws {
         persist = false
+        QuestionAudioStore().deleteAll()    // COPILOT-17 R-10: звук вопросов уходит вместе с историей
         try store.deleteAll()
     }
     private(set) var current: SessionRecord?
