@@ -80,5 +80,21 @@ session is uk/ru, and "auto" settles on the interview language; (2) silent-mic d
   catches such phrases without dropping uk/ru questions with IT terms (filter-text eval must stay 214/214 or be extended).
 - CLAUDE.md still says the latest task is COPILOT-13 (stale; update when this task's docs land).
 
+## P-04 — SessionLanguageLock (2026-11-23)
+- `Sources/CopilotCore/Filter/SessionLanguageLock.swift` (pure): in "auto" locks to slavic/en after 3 consecutive kept
+  interviewer phrases (≥ 3 words) of one group (a mixed ≥ 3-word phrase breaks the streak; short ones are ignored);
+  `effectiveSetting(base)` feeds `LanguageGate`; 2 consecutive `en` drops in a uk/ru (set or locked) session raise the
+  notice once; `allowEnglish()` opens English for the session (also for explicit uk/ru, no relock); `reset()` per session.
+- `ListeningController`: `languageLock` reset in `startSession`; `filterReason` uses the effective setting, logs
+  `language_locked group=… after=3`, raises `englishNoticeVisible`; `allowEnglish()` logs `language_unlocked reason=owner`.
+  Settings are not changed (session state only). Mic-channel gate in `handleOwner` is untouched (owner's own speech).
+- Panel: banner «Собеседник говорит по-английски?» + button «Разрешить английский» (`PanelModel.englishNoticeVisible`,
+  `onAllowEnglish`, synced in `App.updateLevels`); the notice hides on the next kept phrase or after the action. English
+  strings added to `Resources/en.lproj/Localizable.strings`. Executor decision: notice is a banner row in the existing
+  banners block (same style as the mute banner), no new animation, so Reduce Motion is not affected.
+- `SessionLanguageLockTests` (9 tests, AC-03).
+- Checks: `swift build` PASS; `swift test` PASS 513 tests in 88 suites; run-evals: filter-text 236/236, others unchanged PASS;
+  check-localization PASS (823 keys, 0 missing); secret-scan PASS (0 findings); build-app NOT RUN; UI not checked visually.
+
 ## Next
-P-04: `SessionLanguageLock` (R-03, R-04). Owner review of spec/plan is welcome but not a checkpoint; the next owner checkpoint is H-1 (live call).
+P-05: `MicSilenceDetector` + panel notice «Микрофон не даёт звука» (R-05). Next owner checkpoint: H-1 live call.

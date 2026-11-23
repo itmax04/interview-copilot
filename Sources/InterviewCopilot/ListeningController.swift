@@ -339,10 +339,31 @@ final class ListeningController {
     /// Причина отбросить реплику или nil. Тестовый звонок не фильтруется: он меряет само распознавание.
     private func filterReason(_ text: String) -> String? {
         guard testSource == nil, model.settings.languageFilter else { return nil }
-        let gate = LanguageGate(setting: model.settings.language, terms: terms)
-        guard case .drop(let language) = gate.check(text, channel: gateChannel) else { return nil }
+        let base = model.settings.language
+        let gate = LanguageGate(setting: languageLock.effectiveSetting(base), terms: terms)
+        guard case .drop(let language) = gate.check(text, channel: gateChannel) else {
+            // COPILOT-16 R-03: «Авто» закрепляется за языком собеседника после 3 фраз одной группы.
+            if let group = languageLock.observeKept(text, base: base) {
+                Log.metrics.notice("language_locked group=\(group, privacy: .public) after=\(SessionLanguageLock.phrasesToLock)")
+            }
+            if englishNoticeVisible { englishNoticeVisible = false }
+            return nil
+        }
         Log.metrics.notice("filtered reason=lang channel=\(self.gateChannel.rawValue, privacy: .public) lang=\(language, privacy: .public)")
+        // R-04: две фразы подряд отброшены как английские — предлагаем разрешить английский.
+        if languageLock.observeDrop(language: language, base: base) { englishNoticeVisible = true }
         return L("язык %@", language)
+    }
+
+    /// COPILOT-16 R-03/R-04: замок языка сессии и подсказка «Разрешить английский» (только состояние сессии).
+    private var languageLock = SessionLanguageLock()
+    private(set) var englishNoticeVisible = false
+
+    /// Действие подсказки: английский разрешён до конца сессии (настройки не меняются).
+    func allowEnglish() {
+        languageLock.allowEnglish()
+        englishNoticeVisible = false
+        Log.metrics.notice("language_unlocked reason=owner")
     }
 
     /// Загрузка Silero в фоне (если включено и модель установлена) и подключение к распознаванию.
@@ -564,6 +585,8 @@ final class ListeningController {
         transcript = []
         partialText = nil
         callSpeaking = false
+        languageLock.reset()
+        englishNoticeVisible = false
         start()
     }
 

@@ -78,6 +78,23 @@ struct PanelView: View {
             .background(Theme.warn.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.warn.opacity(0.45), lineWidth: 1))
         }
+        if model.englishNoticeVisible {
+            HStack(spacing: 8) {
+                Image(systemName: "character.bubble").foregroundStyle(Theme.warn)
+                Text("Собеседник говорит по-английски?")
+                    .font(.system(size: max(12, model.fontSize - 2), weight: .medium))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Button("Разрешить английский") { model.onAllowEnglish?() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Theme.warn.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.warn.opacity(0.45), lineWidth: 1))
+        }
         if model.ownerAnswering {
             Banner(icon: "mic.fill", text: L("Ваш ответ записывается — %@, чтобы закончить", model.hotkey(.ownerAnswer)), color: Theme.warn,
                    size: model.fontSize)

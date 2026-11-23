@@ -13,6 +13,8 @@
 
 - P-02 done (d06921b: eval cases; filter-text failed 218/236 before P-03). P-03 done (see commit after d06921b): whole English
   dropped on `.call`; 504 tests PASS, filter-text 236/236, other evals unchanged.
+- P-04 done (commit after a15ccba): `SessionLanguageLock` + ListeningController wiring + panel notice «Разрешить английский»;
+  513 tests PASS, filter-text 236/236, localization PASS, secret-scan PASS, build-app NOT RUN, UI not visually checked.
 
 ## Next
-P-04 `SessionLanguageLock` (R-03/R-04). Next owner checkpoint: H-1 live call.
+P-05 `MicSilenceDetector` + panel notice «Микрофон не даёт звука» (R-05). Next owner checkpoint: H-1 live call.

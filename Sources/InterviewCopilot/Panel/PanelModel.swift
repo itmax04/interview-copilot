@@ -100,6 +100,9 @@ final class PanelModel {
     /// Системный микрофон по умолчанию замьючен в macOS (`kAudioDevicePropertyMute == 1`).
     var micHardwareMuted = false
     var onUnmuteMic: (() -> Void)?
+    /// COPILOT-16 R-04: две английские фразы подряд отброшены в сессии на uk/ru — подсказка «Разрешить английский».
+    var englishNoticeVisible = false
+    var onAllowEnglish: (() -> Void)?
 
     // Чат (R-10).
     var chatOpen = false

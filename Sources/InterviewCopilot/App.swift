@@ -264,6 +264,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DefaultInputMute.unmute()
             self?.panelModel.micHardwareMuted = DefaultInputMute.isMuted()
         }
+        panelModel.onAllowEnglish = { [weak self] in
+            self?.listening.allowEnglish()
+            self?.panelModel.englishNoticeVisible = false
+        }
         panelModel.onEndSession = { [weak self] in self?.liveSession.end() }
         panelModel.onStartDetectedCall = { [weak self] in
             guard let self else { return }
@@ -533,6 +537,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let mic = (listening.micLevelDB / 3).rounded() * 3, call = (listening.levelDB / 3).rounded() * 3
         if panelModel.micLevel != mic { panelModel.micLevel = mic }
         if panelModel.callLevel != call { panelModel.callLevel = call }
+        if panelModel.englishNoticeVisible != listening.englishNoticeVisible { panelModel.englishNoticeVisible = listening.englishNoticeVisible }
         // Раз в ~1 с проверяем, не замьючен ли микрофон системой macOS (kAudioDevicePropertyMute == 1).
         if liveSession.isActive, listening.phase == .listening {
             muteCheckTick += 1
