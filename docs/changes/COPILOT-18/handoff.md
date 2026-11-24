@@ -114,4 +114,5 @@ Full check on d5e3b21, run sequentially (outputs in `/private/tmp/claude-501/chk
 
 ## Next
 1. ~~Widen forced mode~~ — done above.
-2. **H-1** (plan.md, items a–f) together with COPILOT-17 H-1. No push.
+2. ~~**H-1**~~ — owner live check done 2026-11-24 on build d5e3b21 installed to /Applications: «все окей» for items a–f (COPILOT-17 and 18 together). No numbers from the log were supplied; owner's verdict only. Installing the build into /Applications was done by the executor (ditto from dist/, codesign verify OK).
+3. **P-06**: final handoff with the AC evidence table, ask for acceptance. No push until the owner allows.
