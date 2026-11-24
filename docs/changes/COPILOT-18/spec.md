@@ -1,6 +1,6 @@
 # COPILOT-18: Spec
 
-ID: COPILOT-18-spec · Status: **draft** · Version: 1 · Date: 2026-11-24
+ID: COPILOT-18-spec · Status: **draft** · Version: 2 (D9: R-09…R-11, AC-12…AC-14) · Date: 2026-11-24
 Links: [intent.md](intent.md), [plan.md](plan.md), [handoff.md](handoff.md)
 
 ## Starting point
@@ -20,6 +20,9 @@ In the «Микрофон Mac» source (self-test, rehearsal) and in the test ca
 | R-05 | **Indicator only** (D6): red state `ICDark.red` + changed icon and label (colour is not the only signal); the mic level wave is flat while off; no banner, reminder or auto-unmute; `micExpected` is false while off, so `MicSilenceDetector` does not fire. `micHardwareMuted` is unchanged and independent |
 | R-06 | **Muted intervals** (D7): `SessionRecord.micMutedIntervals: [MicMutedInterval]` (start, optional end; times only, no text; old files decode to empty). Opened/closed on toggle, closed at session end. History transcript shows a «Микрофон выключен в Copilot · 12:05–13:40 — ваши слова не записывались» row; the review transcript carries a line that the owner's microphone was switched off and that missing answers are not silence |
 | R-07 | **Test call / rehearsal / self-test**: unchanged; the toggle is unavailable there (R-02). No new risk to `voiceGate` (it only guards the owner channel, which is inactive while off) or echo handling (`callSpeaking`, `echoWindowMs` read the call channel only) |
+| R-09 | **One-shot voice clarification (D9)**: `VoiceClarifyArm` (CopilotCore) — `toggle` arms or cancels; `consume(interrupted:)` spends the armed state on the next owner phrase that reaches `onOwnerSaid` (an interrupted phrase does not spend it); `expire` disarms after **15 s** without a phrase, but not while the owner is speaking (waits for the phrase end). Available only where the mic switch is (R-02); ignored with a log line while the owner mic is off; disarmed when the mic is switched off and at session start and end (never saved) |
+| R-10 | **Decision for the armed phrase**: bypasses `ownerVoiceClarification` (D1 setting unchanged) and uses `OwnerQuestionDetector.detectForced`: the ordinary `detect` decision if it gives one; otherwise, with an active question, a short phrase (≤ `maxWords`, not only fillers/backchannel) is `.clarifyLastQuestion`; otherwise `.none` → ordinary owner answer (memory/history) |
+| R-11 | **Control** (D9): `HotkeyAction.voiceClarify` appended last (session **⇧⌘U**, otherwise **⌃⌥U**). Overlay button «Уточнить» (armed: «Говорите…», icon `waveform`, `ICDark.accent` with a 2 pt border — colour is not the only signal), between «Микрофон» and «Чат», full and collapsed toolbar; hidden while the owner mic is off. No animation (Reduce Motion unaffected). Log lines carry only armed/cancelled/timed out, never text |
 | R-08 | UI strings are Russian single literals with English lines in `Resources/en.lproj/Localizable.strings`; synthetic test data only; no text, audio or secrets in logs (the new log lines carry only "on"/"off") |
 
 ## Acceptance criteria
@@ -36,6 +39,9 @@ In the «Микрофон Mac» source (self-test, rehearsal) and in the test ca
 | AC-09 | Existing evals unchanged | `scripts/run-evals.sh` |
 | AC-10 | Full check | `swift test && scripts/run-evals.sh && scripts/secret-scan.sh && scripts/check-localization.sh && scripts/build-app.sh` |
 | AC-11 | **Live check (H-1, with COPILOT-17 H-1):** see plan | owner |
+| AC-12 | `VoiceClarifyArm`: arm/cancel, one-shot consume, interrupted phrase keeps it armed, 15 s timeout only when the owner is silent | `VoiceClarifyTests` |
+| AC-13 | `detectForced`: plain short phrase with an active question → `clarifyLastQuestion`; detector decision kept when it speaks; no active question, fillers, empty or long phrase → `.none`; D1 default still false; `voiceClarify` last, ⌃⌥U / ⇧⌘U | `VoiceClarifyTests`, `OwnerMicToggleTests`, `InterviewMemoryTests` |
+| AC-14 | Overlay shows «Уточнить» (mic on), «Говорите…» armed, no button while the mic is off; the row fits the default overlay width | `--ui-snapshots` (`panel-mic-toggle-on/off.png`, `panel-voice-clarify-armed.png`) |
 
 ## Risks
 | Risk | Mitigation |
@@ -44,4 +50,6 @@ In the «Микрофон Mac» source (self-test, rehearsal) and in the test ca
 | Pausing the owner transcriber cancelled the shared engine and could drop an interviewer phrase | `setPaused(_, cancelRecognizer: false)` (AC-03) |
 | ⇧⌘M is also a Chrome shortcut («Profile» menu) while a session runs | Owner's choice (D5); the session scheme registers it only during a session; a failed registration falls back to ⌃⌥M like the other ⌘ keys; rebinding in Settings |
 | A phrase spoken just before the press and still being decoded is dropped | Intended by D3 ("fully ignored"); the spoken-before-press part is not kept either |
+| The armed phrase is a backchannel or noise and spends the one shot | Fillers/backchannel give `.none` (ordinary answer); the owner presses again |
+| Armed and forgotten | 15 s self-disarm; disarmed on mute and session end |
 | Mic off by mistake for a whole answer | Red state; the history/review marks (D7) say the answer was not recorded |

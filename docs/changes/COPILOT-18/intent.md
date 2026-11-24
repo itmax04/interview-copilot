@@ -1,6 +1,6 @@
 # COPILOT-18: Intent — the owner's own voice must not start hints, and the owner can switch the app's microphone off
 
-ID: COPILOT-18-intent · Status: **draft** (owner decisions D1–D8 of 2026-11-24) · Version: 1 · Date: 2026-11-24 · Owner: itmax04
+ID: COPILOT-18-intent · Status: **draft** (owner decisions D1–D9 of 2026-11-24) · Version: 2 · Date: 2026-11-24 · Owner: itmax04
 Links: [spec.md](spec.md), [plan.md](plan.md), [handoff.md](handoff.md)
 
 ## Problem
@@ -27,8 +27,12 @@ Two separate needs follow:
   Separate from `PanelModel.micHardwareMuted` (macOS mute).
 - **D7** Session history and review mark the muted intervals, so the review does not say the owner did not answer.
 - **D8** New task on `feat/copilot-18-mic-toggle` from `feat/copilot-17-uk-question`; one live check (H-1) covers COPILOT-17 and 18.
+- **D9** (added after P-05) One-shot «уточнение голосом»: D1 stays (automatic clarification off by default). A new overlay button next to
+  «Микрофон» and a global hotkey ⇧⌘U arm a one-shot mode: the owner's **next** phrase is treated as a voice clarification of the current
+  question (the existing `OwnerQuestionDetector` / `AnswerController.handleOwnerQuestion` clarify-or-replace logic); after that phrase the
+  mode turns itself off; pressing again while armed cancels. The armed state is clearly visible on the button.
 
 ## Scope
-In: the setting (D1); the toggle, button, hotkey, indicator (D2–D6); history/review marks (D7); effect on turn detection, echo
+In: the setting (D1); the toggle, button, hotkey, indicator (D2–D6); history/review marks (D7); the one-shot voice clarification (D9); effect on turn detection, echo
 handling, `voiceGate`, test call and rehearsal (checked, see spec). Out: changing the detector's rules, cloud features, pushing
 anything, touching system security settings.
