@@ -12,7 +12,7 @@ Branch `feat/copilot-18-mic-toggle` (from `feat/copilot-17-uk-question`, 83592c6
 | P-05 docs, review, full check | DONE (D9 pending, below) | c4f9357 docs, 8440086 review fixes | full check on tree 8440086 (run sequentially, no parallel build) — see "Full check" |
 | P-05a D9 one-shot voice clarification | DONE; widened forced mode added (owner decision 2026-11-24), full check PASS on d5e3b21 | b9c2f74 code, 3d791e5 docs | see "D9 — done" |
 | H-1 owner live check | DONE — owner: «все окей» (a–f), build d5e3b21 | f2d7a42 | owner verdict only, no log numbers |
-| P-06 final handoff, AC table | DONE — awaiting owner acceptance | see git log | table below |
+| P-06 final handoff, AC table | DONE — accepted by owner 2026-11-24 | see git log | table below |
 
 ## Executor decisions
 - **Availability.** The toggle works on call sessions only (source is not «Микрофон Mac», no test call, not the AI interview). There the
@@ -133,3 +133,5 @@ Full check on d5e3b21, run sequentially (outputs in `/private/tmp/claude-501/chk
 **Unverified / limits:** the widened forced mode was covered by unit tests and by the owner's live check, but no review subagent
 looked at commit 393d9a6 (owner-requested small change); ListeningController wiring is app-target code without unit tests;
 latency/log numbers for COPILOT-17 H-1 (e) were not supplied. No push done; branch is not merged into `main`.
+
+**Owner accepted COPILOT-18 on 2026-11-24.** Not pushed, not merged into `main` (needs the owner's decision).
