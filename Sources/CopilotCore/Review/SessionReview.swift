@@ -90,6 +90,8 @@ public struct SessionReview: Codable, Equatable, Sendable {
 public struct TimelineEntry: Equatable, Sendable, Identifiable {
     public enum Speaker: String, Sendable {
         case interviewer, owner, hint
+        /// Метка «микрофон выключен» (COPILOT-18 D7): `until` — когда включён снова; nil — до конца сессии.
+        case micOff
     }
 
     public var id: String
@@ -98,9 +100,17 @@ public struct TimelineEntry: Equatable, Sendable, Identifiable {
     public var at: Date
     /// Секунд от начала сессии.
     public var offset: TimeInterval
+    /// Только для `.micOff`: конец отрезка.
+    public var until: Date?
 
     /// «12:05».
     public var clock: String { Self.clock(offset) }
+
+    /// Для `.micOff`: «12:05–13:40» или «12:05–…», если микрофон так и остался выключенным.
+    public var mutedRange: String {
+        guard let until else { return clock + "–…" }
+        return clock + "–" + Self.clock(offset + until.timeIntervalSince(at))
+    }
 
     /// Время от начала сессии: «12:05», «1:02:05».
     public static func clock(_ offset: TimeInterval) -> String {
@@ -123,8 +133,12 @@ extension SessionRecord {
         for (i, t) in turns.enumerated() where !t.answer.isEmpty {
             out.append(TimelineEntry(id: "h\(i)", speaker: .hint, text: t.answer, at: t.at, offset: t.at.timeIntervalSince(startedAt)))
         }
-        // При равном времени: вопрос → подсказка → ответ владельца.
-        let rank: [TimelineEntry.Speaker: Int] = [.interviewer: 0, .hint: 1, .owner: 2]
+        // COPILOT-18 D7: отрезки, когда микрофон владельца был выключен в Copilot, — отдельной меткой.
+        for (i, m) in micMutedIntervals.enumerated() {
+            out.append(TimelineEntry(id: "m\(i)", speaker: .micOff, text: "", at: m.start, offset: m.start.timeIntervalSince(startedAt), until: m.end))
+        }
+        // При равном времени: вопрос → подсказка → ответ владельца; метка микрофона — первой.
+        let rank: [TimelineEntry.Speaker: Int] = [.micOff: -1, .interviewer: 0, .hint: 1, .owner: 2]
         return out.sorted { ($0.at, rank[$0.speaker]!) < ($1.at, rank[$1.speaker]!) }
     }
 
@@ -238,12 +252,19 @@ public enum ReviewPrompt {
         if !record.utterances.isEmpty || !record.ownerUtterances.isEmpty {
             lines = record.timeline.compactMap { e in
                 guard e.speaker != .hint else { return nil }
+                if e.speaker == .micOff {
+                    let end = e.until.map { TimelineEntry.clock($0.timeIntervalSince(record.startedAt)) } ?? "end"
+                    return "[\(e.clock)] (\(r.owner)'s microphone was switched off in the app until \(end): their speech was not recorded — do not treat it as silence or a missing answer)"
+                }
                 return "[\(e.clock)] \(e.speaker == .owner ? r.owner : r.asker): \(clean(e.text, redactPII))"
             }
         } else if !record.exchanges.isEmpty {
             lines = record.exchanges.map { "\(r.asker): \(clean($0.question, redactPII))\n\(r.owner): \(clean($0.answerText, redactPII))" }
         } else {
             lines = record.turns.map { "\(r.asker): \(clean($0.question, redactPII))" }
+        }
+        if !record.micMutedIntervals.isEmpty, record.utterances.isEmpty, record.ownerUtterances.isEmpty {
+            lines.append("(\(r.owner)'s microphone was switched off in the app for part of the session: missing answers there were not recorded, they are not silence)")
         }
         let text = lines.joined(separator: "\n")
         guard text.count > budget else { return text }

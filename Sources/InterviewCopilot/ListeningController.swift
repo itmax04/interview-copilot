@@ -205,9 +205,52 @@ final class ListeningController {
         return true
     }
 
+    // MARK: «Микрофон выкл.» (COPILOT-18 D2–D6)
+
+    /// Владелец выключил свой микрофон в Copilot: речь с микрофона полностью игнорируется (нет распознавания, текста в истории,
+    /// памяти и разборе, подсказок, сигнала «владелец говорит» для конца хода). Системный mute и Meet не затрагиваются.
+    /// Не путать с `PanelModel.micHardwareMuted` (mute macOS). Не запоминается: каждая сессия начинается с включённым.
+    private(set) var ownerMicOff = false
+
+    /// Кнопка работает на созвоне со звуком приложения или системы; в самопроверке и тестовом звонке микрофон — единственный вход.
+    var ownerMicSwitchAvailable: Bool {
+        testSource == nil && source != .microphone
+    }
+
+    /// Нажатие: выключить ↔ включить. Возвращает новое состояние «выключен» или nil, если переключатель здесь недоступен.
+    @discardableResult
+    func toggleOwnerMic() -> Bool? {
+        guard ownerMicSwitchAvailable else { return nil }
+        setOwnerMicOff(!ownerMicOff)
+        return ownerMicOff
+    }
+
+    func setOwnerMicOff(_ off: Bool) {
+        guard ownerMicOff != off else { return }
+        ownerMicOff = off
+        if off {
+            // Накопленное и ещё не готовое отбрасывается; «говорит владелец» гасим, чтобы конец хода шёл только по паузе.
+            resetOwnerAnswer()
+            if ownerSpeaking {
+                ownerSpeaking = false
+                onOwnerSpeaking?(false, Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
+            }
+        }
+        updateOwnerChannel()
+        Log.audio.notice("owner mic \(off ? "off" : "on", privacy: .public)")
+        onOwnerMicChanged?(off)
+        onChange?()
+    }
+
+    /// Начало и конец сессии: микрофон снова включён (D4).
+    func resetOwnerMic() { setOwnerMicOff(false) }
+
+    /// Состояние кнопки изменилось (для истории сессии и панели).
+    var onOwnerMicChanged: ((Bool) -> Void)?
+
     /// Канал владельца работает на созвоне (звук приложения или весь системный звук), не в самопроверке и не в тестах.
     /// COPILOT-16 R-05: микрофон должен звучать — источник «Микрофон» или включён канал владельца (не тестовый звонок).
-    var micExpected: Bool { phase == .listening && testSource == nil && (source == .microphone || ownerActive.value) }
+    var micExpected: Bool { phase == .listening && testSource == nil && !ownerMicOff && (source == .microphone || ownerActive.value) }
 
     private func updateOwnerChannel() {
         let callSource: Bool = switch source {
@@ -215,10 +258,11 @@ final class ListeningController {
         default: false
         }
         let active = model.settings.ownerSpeechContext && testSource == nil && phase == .listening && callSource
-            && Permissions.microphone == .granted
+            && Permissions.microphone == .granted && !ownerMicOff
         guard ownerActive.value != active else { return }
         ownerActive.set(active)
-        ownerTranscriber?.setPaused(!active)
+        // COPILOT-18: общий движок не отменяем — идущий прогон канала интервьюера не должен теряться из-за кнопки микрофона.
+        ownerTranscriber?.setPaused(!active, cancelRecognizer: false)
         Log.audio.info("owner channel \(active ? "on" : "off", privacy: .public)")
     }
 
@@ -228,6 +272,11 @@ final class ListeningController {
     static let echoWindowMs: Double = 1500
 
     private func handleOwner(_ event: TranscriptEvent) {
+        // COPILOT-18 D3: фраза, дораспознанная после нажатия «Микрофон выкл.», не попадает никуда.
+        guard !ownerMicOff else {
+            if case .final(let u, _, _, _, _) = event { ownerTranscriber?.questionRanges.drop(utterance: u) }
+            return
+        }
         // Универсальный режим «Всё сразу»: если в системном звуке тишина (звонок на телефоне или живой голос в комнате)
         // и отпечаток голоса определил ЧУЖОЙ голос на микрофоне — направляем его как вопрос собеседника.
         if case .foreignVoice(let u, let text, _, let phraseEnd) = event {
@@ -1146,8 +1195,12 @@ final class ListeningController {
             mic = MicActivityDetector { [weak self] speaking in
                 let t = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
                 Task { @MainActor in
-                    self?.ownerSpeaking = speaking
-                    self?.onOwnerSpeaking?(speaking, t)
+                    guard let self else { return }
+                    // COPILOT-18 D3: пока микрофон выключен, «владелец говорит» не сообщается (конец хода — по паузе).
+                    let effective = speaking && !self.ownerMicOff
+                    guard self.ownerSpeaking != effective else { return }
+                    self.ownerSpeaking = effective
+                    self.onOwnerSpeaking?(effective, t)
                 }
             }
             // R-07: тот же микрофон — в распознавание речи владельца, пока канал включён.

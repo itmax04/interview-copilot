@@ -240,7 +240,8 @@ public final class StreamingTranscriber: @unchecked Sendable {
     }
 
     /// Пауза (S-08): незавершённая реплика отбрасывается, ничего не распознаётся.
-    public func setPaused(_ value: Bool) {
+    /// `cancelRecognizer: false` — пауза канала владельца (COPILOT-18): движок общий с каналом интервьюера, его текущий прогон не трогаем.
+    public func setPaused(_ value: Bool, cancelRecognizer: Bool = true) {
         let cancel = lock.withLock { () -> Bool in
             paused = value
             utteranceStart = nil
@@ -249,8 +250,10 @@ public final class StreamingTranscriber: @unchecked Sendable {
             return value
         }
         if cancel {
-            recognizer.cancel()
-            recognizer.cancelRevision()
+            if cancelRecognizer {
+                recognizer.cancel()
+                recognizer.cancelRevision()
+            }
             historyPass.reset()
         }
     }

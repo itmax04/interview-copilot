@@ -168,6 +168,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Расшифровывать речь владельца на созвоне и передавать модели как контекст (COPILOT-05 R-07, Q6):
     /// в панели и истории её нет; текст ответов уходит в модель вместе с вопросом.
     public var ownerSpeechContext = true
+    /// Автоматическое «уточнение голосом» (COPILOT-18 D1): фраза владельца, похожая на повтор или поправку вопроса,
+    /// запускает или меняет подсказку. По умолчанию выключено — речь владельца идёт только в память и историю как ответ.
+    public var ownerVoiceClarification = false
 
     // Answer / Bank
     public var mode: AnswerMode = .bankAndHint
@@ -327,6 +330,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         ownerVoiceThreshold = v(.ownerVoiceThreshold, d.ownerVoiceThreshold)
         micNoiseSuppression = v(.micNoiseSuppression, d.micNoiseSuppression)
         ownerSpeechContext = v(.ownerSpeechContext, d.ownerSpeechContext)
+        ownerVoiceClarification = v(.ownerVoiceClarification, d.ownerVoiceClarification)
         mode = v(.mode, d.mode)
         useProfile = v(.useProfile, d.useProfile)
         activeProfileID = v(.activeProfileID, d.activeProfileID)

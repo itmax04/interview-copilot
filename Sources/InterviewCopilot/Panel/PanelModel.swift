@@ -157,6 +157,11 @@ final class PanelModel {
     var onTogglePrivate: (() -> Void)?
     var onCheckVisibility: (() -> Void)?
     var onOwnerAnswer: (() -> Void)?
+    /// «Микрофон выкл.» (COPILOT-18): приложение игнорирует микрофон владельца. Не путать с `micHardwareMuted` (mute macOS).
+    var ownerMicOff = false
+    /// Кнопка доступна: сессия на созвоне со звуком приложения/системы (в самопроверке и тестовом звонке микрофон — единственный вход).
+    var ownerMicAvailable = false
+    var onToggleOwnerMic: (() -> Void)?
 
     func selectPrevious() { history.selectPrevious() }
     func selectNext() { history.selectNext() }

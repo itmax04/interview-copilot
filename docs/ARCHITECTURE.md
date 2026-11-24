@@ -47,6 +47,9 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 hint → InterviewMemory.setHint(turnID); everything → SessionController → SessionStore (JSON, retention) →
 ReviewController (post-call comments, summary, "Ask AI")
 ```
+
+**Owner microphone switch (COPILOT-18).** «Микрофон выкл.» (overlay button, ⇧⌘M in a session, ⌃⌥M otherwise; call sessions only) makes the app ignore the owner microphone completely: the owner channel is deactivated (samples dropped, transcriber paused without cancelling the shared engine), pending owner phrases are discarded, "owner speaking" is reported false (the turn ends by pause only) and the silent-mic notice is suppressed. Meet and the macOS mute are untouched; `PanelModel.micHardwareMuted` is separate. Muted intervals (`MicMutedInterval`, times only) are stored in the session and marked in the history and the review. The automatic voice clarification (`OwnerQuestionDetector` → hint) runs only with the setting `ownerVoiceClarification` (off by default).
+
 The main actor (`@MainActor`) owns the UI and controllers. Recognition, embeddings, Keychain and networking run in the
 background (`Task.detached`, transcriber queues). Cross-thread state uses small `…Box` classes with `NSLock`
 (`TranscriberBox`, `VoiceGateBox`, `EnhancerBox`, `AudioRouteBox`).
@@ -168,6 +171,7 @@ redacted (`SSE.redactIdentifiers`).
 | COPILOT-15 | accurate turns: whole-question Parakeet re-decode (`QuestionAudioRange`, `QuestionRedecoder`), provisional partials, one background Whisper pass per question (`HistoryPassScheduler`, history/memory only), pause 1000/600 ms, understood-question line in the hint, gated drafts (`DraftGate`), owner answers re-decoded as a whole (`OwnerAnswerAssembler`), prepared fallback B `StreamingTranscriber.Config.hintWaitsForWhisper` (off) (in progress) | `feat/copilot-15-accurate-turns` |
 | COPILOT-16 | source and language: `LanguageGate` drops whole English/foreign phrases on the call channel, `SessionLanguageLock` ("auto" settles on the interview language, «Разрешить английский»), `MicSilenceDetector` ("Микрофон не даёт звука"), "All system audio" notice with «Только звонок» (in progress) | `feat/copilot-16-source-language` |
 | COPILOT-17 | Ukrainian question accuracy: Parakeet language hint, exam new-ticket openers, Whisper text corrects the active ticket root (`TicketRootUpdate`), «Точный вопрос (+2 с)» setting (wait for Whisper, uk only, never for drafts/bank cards), opt-in local question audio (`QuestionAudioStore`) (in progress) | `feat/copilot-17-uk-question` |
+| COPILOT-18 | owner microphone toggle «Микрофон выкл.» (overlay button, ⇧⌘M in a session / ⌃⌥M; owner channel fully ignored, `MicMutedInterval` marks in history and review) and the voice clarification setting (`ownerVoiceClarification`, off by default) (in progress) | `feat/copilot-18-mic-toggle` |
 
 Branches form a chain (each from the previous one). `main` is fast-forwarded to the latest reviewed task by the owner's decision.
 

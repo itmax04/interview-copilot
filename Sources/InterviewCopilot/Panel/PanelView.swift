@@ -231,6 +231,11 @@ private struct Toolbar: View {
             LevelWave(level: model.callLevel, icon: "speaker.wave.2.fill", label: "Звук звонка", silent: model.callSilentSeconds != nil)
             Spacer(minLength: 2)
             ForEach([("doc", "Ответ", HotkeyAction.answerNow), ("crop", "Скриншот", .screenshot), ("bubble.left", "Чат", .chat)], id: \.1) { icon, title, action in
+                if action == .chat, model.ownerMicAvailable {
+                    IconButton(symbol: model.ownerMicOff ? "mic.slash.fill" : "mic.fill",
+                               label: "\(model.ownerMicOff ? "Микрофон выкл." : "Микрофон") \(model.hotkey(.toggleMic))") { model.onToggleOwnerMic?() }
+                        .foregroundStyle(model.ownerMicOff ? AnyShapeStyle(ICDark.red) : AnyShapeStyle(.foreground))
+                }
                 IconButton(symbol: icon, label: "\(title) \(model.hotkey(action))") {
                     switch action {
                     case .answerNow: model.onAnswerNow?()
@@ -297,6 +302,12 @@ private struct Toolbar: View {
                         .help("Ответить на последнюю реплику сейчас")
                     ICOverlayButton(title: "Скриншот", icon: "crop", keys: model.hotkey(.screenshot), size: model.fontSize) { model.onScreenshot?() }
                         .help("Снимок экрана с задачей → решение")
+                    if model.ownerMicAvailable {
+                        ICOverlayButton(title: model.ownerMicOff ? "Микрофон выкл." : "Микрофон", icon: model.ownerMicOff ? "mic.slash.fill" : "mic.fill",
+                                        keys: model.hotkey(.toggleMic), size: model.fontSize, alert: model.ownerMicOff) { model.onToggleOwnerMic?() }
+                            .help(model.ownerMicOff ? "Микрофон выключен только для Copilot. Нажмите, чтобы включить снова"
+                                  : "Выключить микрофон для Copilot: он не будет слушать вас. Встреча вас по-прежнему слышит")
+                    }
                     ICOverlayButton(title: "Чат", icon: "bubble.left", keys: model.hotkey(.chat), size: model.fontSize) { model.onToggleChat?() }
                         .help("Вопрос текстом или уточнение ответа")
                     if model.selfTest {

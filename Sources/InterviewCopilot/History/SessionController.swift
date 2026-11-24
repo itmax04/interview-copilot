@@ -70,6 +70,13 @@ final class SessionController {
         scheduleSave()
     }
 
+    /// «Микрофон выкл.» нажат или отпущен (COPILOT-18 D7): отрезок отмечается в сессии — разбор не примет молчание за отсутствие ответа.
+    func micMuteChanged(off: Bool, at now: Date = Date()) {
+        guard current != nil else { return }
+        MicMutedInterval.apply(muted: off, at: now, to: &current!.micMutedIntervals)
+        scheduleSave()
+    }
+
     /// Обмены интервью с ответами владельца (COPILOT-06) — снимок памяти текущего интервью.
     func updateExchanges(_ exchanges: [SessionExchange]) {
         guard current != nil else { return }
@@ -110,7 +117,9 @@ final class SessionController {
     func finish() -> SessionRecord? {
         saveTask?.cancel()
         saveTask = nil
-        current?.endedAt = Date()
+        let now = Date()
+        current?.endedAt = now
+        if current != nil { MicMutedInterval.close(&current!.micMutedIntervals, at: now) }
         saveNow()
         let finished = current
         current = nil

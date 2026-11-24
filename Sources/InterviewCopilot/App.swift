@@ -331,10 +331,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.memory = memory
         answers.embed = { [weak self] in self?.bank.embedFunction }
         listening.currentExchangeID = { [weak self] in self?.memory.currentExchangeID }
+        listening.onOwnerMicChanged = { [weak self] off in
+            guard let self else { return }
+            self.sessions.micMuteChanged(off: off)
+            self.panelModel.ownerMicOff = off
+            self.refreshUI()
+        }
         listening.onOwnerSaid = { [weak self] text, exchangeID, interrupted in
             guard let self else { return }
             // Если владелец не был перебит, а сам повторил или уточнил вопрос — обновляем/создаём подсказку без кнопок.
-            if !interrupted, !self.testCall.active, !self.testCallOnly, self.liveSession.isActive,
+            // COPILOT-18 D1: только если владелец включил «Уточнение голосом»; по умолчанию его речь — лишь ответ в памяти.
+            if self.model.settings.ownerVoiceClarification, !interrupted, !self.testCall.active, !self.testCallOnly, self.liveSession.isActive,
                self.liveSession.config.type != .mock {
                 let decision = OwnerQuestionDetector.detect(
                     text: text,
@@ -504,6 +511,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panelModel.allSystemNoticeVisible != (allSystem != nil) { panelModel.allSystemNoticeVisible = allSystem != nil }
         if panelModel.allSystemCallApp != allSystem?.callApp?.name { panelModel.allSystemCallApp = allSystem?.callApp?.name }
         panelModel.ownerAnswering = listening.ownerAnswering
+        panelModel.ownerMicOff = listening.ownerMicOff
+        panelModel.ownerMicAvailable = liveSession.isActive && liveSession.config.type != .mock && !testCall.active && !testCallOnly
+            && listening.ownerMicSwitchAvailable
         panelModel.quickProfiles = bank.profiles
         if panelModel.quickProfileID.isEmpty || !bank.profiles.contains(where: { $0.id == panelModel.quickProfileID }) {
             panelModel.quickProfileID = bank.activeID ?? bank.profiles.first?.id ?? ""
@@ -542,7 +552,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Уровни микрофона и звонка; «не слышу звонок N с» — только в сессии со звуком приложения (не в самопроверке).
     private func updateLevels() {
         // Шаг 3 дБ и запись только при изменении: шапка не перерисовывается 10 раз в секунду без нужды.
-        let mic = (listening.micLevelDB / 3).rounded() * 3, call = (listening.levelDB / 3).rounded() * 3
+        // COPILOT-18: пока микрофон выключен в Copilot, индикатор молчит — приложение его не слышит.
+        let mic = listening.ownerMicOff ? Float(-120) : (listening.micLevelDB / 3).rounded() * 3, call = (listening.levelDB / 3).rounded() * 3
         if panelModel.micLevel != mic { panelModel.micLevel = mic }
         if panelModel.callLevel != call { panelModel.callLevel = call }
         if panelModel.englishNoticeVisible != listening.englishNoticeVisible { panelModel.englishNoticeVisible = listening.englishNoticeVisible }
@@ -656,6 +667,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if model.settings.language != c.language { model.settings.language = c.language }
         model.settings.lastSessionConfig = c.defaultsForNext()
         listening.sessionStartedAt = Date()
+        listening.resetOwnerMic()
         listening.setHintWaitsForWhisper(PreciseQuestionMode.waits(mode: model.settings.preciseQuestion, session: c.type, language: c.language))
         memory.reset()
         turns.setAllowShortFollowUps(false)
@@ -683,6 +695,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func sessionEnded(_ c: SessionConfig) -> Task<Void, Never> {
+        listening.resetOwnerMic()
         listening.setHintWaitsForWhisper(false)
         purgeQuestionAudio()
         hotkeys?.unregisterSession()
@@ -722,6 +735,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .togglePause: togglePause()
         case .strongModel: answers.askStrongModel()
         case .ownerAnswer: toggleOwnerAnswering()
+        case .toggleMic: toggleOwnerMic()
         case .screenshot: takeScreenshot()
         case .newSession: showWizard()
         case .chat: toggleChat()
@@ -844,6 +858,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         panelModel.onOwnerAnswer = { [weak self] in self?.toggleOwnerAnswering() }
+        panelModel.onToggleOwnerMic = { [weak self] in self?.toggleOwnerMic() }
+    }
+
+    /// ⇧⌘M (в сессии) / ⌃⌥M или кнопка «Микрофон» в оверлее: Copilot перестаёт слушать микрофон владельца и снова слушает (COPILOT-18).
+    private func toggleOwnerMic() {
+        guard liveSession.isActive, liveSession.config.type != .mock, !testCall.active, !testCallOnly,
+              listening.toggleOwnerMic() != nil else {
+            Log.app.info("owner mic toggle ignored: no call session")
+            return
+        }
+        refreshUI()
     }
 
     /// ⌃⌥A или пункт меню «Сейчас отвечаю я» (самопроверка, COPILOT-06/07).

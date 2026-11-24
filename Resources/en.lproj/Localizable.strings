@@ -951,3 +951,11 @@
 "Удалить сохранённое аудио" = "Delete saved audio";
 "Удалить всё сохранённое аудио вопросов?" = "Delete all saved question audio?";
 "Это действие нельзя отменить." = "This cannot be undone.";
+"Микрофон" = "Microphone";
+"Микрофон выкл." = "Mic off";
+"Микрофон выкл. / вкл." = "Mic off / on";
+"Микрофон выключен только для Copilot. Нажмите, чтобы включить снова" = "The microphone is off for Copilot only. Click to turn it on again";
+"Выключить микрофон для Copilot: он не будет слушать вас. Встреча вас по-прежнему слышит" = "Turn the microphone off for Copilot: it will not listen to you. The meeting still hears you";
+"Уточнение голосом: моя короткая фраза может менять подсказку" = "Voice clarification: my short phrase may change the hint";
+"Выключено по умолчанию. Если включить, повтор или поправка вопроса вашим голосом создаёт новую версию подсказки («с вашего голоса»). Выключенным ваша речь только сохраняется как ответ в памяти и истории. Рядом с колонками ноутбука или при втором устройстве лучше оставить выключенным." = "Off by default. When on, repeating or correcting a question in your own voice creates a new hint version (“in your voice”). When off, your speech is only saved as an answer in memory and history. Keep it off if the microphone can hear the speakers or a second device.";
+"Микрофон выключен в Copilot · %@ — ваши слова не записывались" = "Microphone off in Copilot · %@ — your words were not recorded";

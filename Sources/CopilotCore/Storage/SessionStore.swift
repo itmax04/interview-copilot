@@ -51,6 +51,8 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
     public var config: SessionConfig?
     /// Ваши фразы с временем — расшифровка по говорящим (COPILOT-09 R-14); у сессий до 09 — пусто.
     public var ownerUtterances: [Utterance] = []
+    /// Когда владелец выключал свой микрофон в Copilot (COPILOT-18 D7): только время; у прежних сессий — пусто.
+    public var micMutedIntervals: [MicMutedInterval] = []
     /// Разбор после End (COPILOT-09 R-13).
     public var review: SessionReview?
 
@@ -60,7 +62,7 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
         self.source = source
     }
 
-    enum CodingKeys: String, CodingKey { case id, startedAt, endedAt, source, utterances, turns, exchanges, config, ownerUtterances, review }
+    enum CodingKeys: String, CodingKey { case id, startedAt, endedAt, source, utterances, turns, exchanges, config, ownerUtterances, micMutedIntervals, review }
 
     // Старые файлы истории без новых полей читаются (COPILOT-06).
     public init(from decoder: Decoder) throws {
@@ -74,6 +76,7 @@ public struct SessionRecord: Codable, Equatable, Sendable, Identifiable {
         exchanges = try c.decodeIfPresent([SessionExchange].self, forKey: .exchanges) ?? []
         config = try? c.decodeIfPresent(SessionConfig.self, forKey: .config)
         ownerUtterances = (try? c.decodeIfPresent([Utterance].self, forKey: .ownerUtterances)) ?? []
+        micMutedIntervals = (try? c.decodeIfPresent([MicMutedInterval].self, forKey: .micMutedIntervals)) ?? []
         // Поврежденный разбор не мешает открыть расшифровку (AC-07).
         review = try? c.decodeIfPresent(SessionReview.self, forKey: .review)
     }
