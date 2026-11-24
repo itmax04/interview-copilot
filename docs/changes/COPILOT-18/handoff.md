@@ -10,6 +10,7 @@ Branch `feat/copilot-18-mic-toggle` (from `feat/copilot-17-uk-question`, 83592c6
 | P-03 app wiring | DONE | see git log | `swift build` PASS |
 | P-04 UI | DONE | see git log | `--ui-snapshots` 94/94 PNG; `panel-mic-toggle-on/off.png` checked by eye |
 | P-05 docs, review, full check | DONE (D9 pending, below) | c4f9357 docs, 8440086 review fixes | full check on tree 8440086 (run sequentially, no parallel build) — see "Full check" |
+| P-05a D9 one-shot voice clarification | DONE (code + docs); full check partly recorded; owner question open | b9c2f74 code, 3d791e5 docs | see "D9 — done" |
 | H-1 owner live check | PENDING | — | — |
 
 ## Executor decisions
@@ -39,7 +40,7 @@ P-05 (new session): re-run the full check, run the independent review (fresh sub
 3. `resetOwnerMic()` at session end runs while phase is still `.listening` (re-activates the owner channel just before standby); and `updateOwnerChannel` now pauses with `cancelRecognizer: false` for ALL deactivations (permission, phase, standby), not only mute — pass `cancelRecognizer: !ownerMicOff` there; call the end-of-session reset after `enterStandby()` or without `updateOwnerChannel`.
 4. Nit: review marker line can be dropped by the "earlier part omitted" truncation — optionally keep it in the tail.
 
-## D9 (owner decision relayed 2026-11-24, NOT implemented yet) — one-shot «уточнение голосом»
+## D9 (owner decision relayed 2026-11-24) — request (implemented, see "D9 — done") — one-shot «уточнение голосом»
 Request: the D1 setting stays (automatic clarification off by default). New control: overlay button next to «Микрофон выкл.» + global hotkey ⇧⌘U.
 Pressing arms a one-shot mode: the owner's NEXT phrase is treated as a voice clarification of the current question (existing
 `OwnerQuestionDetector` decisions / `AnswerController.handleOwnerQuestion`, clarify or replace logic); after that one phrase the mode turns
@@ -62,3 +63,37 @@ To do in the next session (after the P-05 full check is recorded; do not edit `S
 
 ## Next
 D9 (section above), then re-run the full check, then **H-1** (plan.md) together with COPILOT-17 H-1. No push.
+
+## D9 — done (2026-11-24, session after copilot18-d9 was stopped by the owner)
+Branch `feat/copilot-18-mic-toggle`, HEAD 3d791e5 (+ this handoff commit), tree clean, no upstream, **no push**.
+- Code (b9c2f74): `Sources/CopilotCore/Turns/VoiceClarifyArm.swift` (toggle / one-shot `consume` / 15 s `expire` that waits while the owner
+  speaks; `OwnerQuestionDetector.detectForced`), `HotkeyAction.voiceClarify` last (⇧⌘U / ⌃⌥U), `App.swift` wiring (disarm on mute and at
+  session start/end, timer), overlay button «Уточнить» / armed «Говорите…» (`ICDark.accent`, 2 pt border) in full and collapsed toolbars,
+  `UISnapshots` state `voice-clarify-armed`, 5 strings + en.lproj, `Tests/CopilotCoreTests/VoiceClarifyTests.swift` (+8 tests).
+- Docs (3d791e5): intent D9, spec R-09…R-11 / AC-12…AC-14 + risks, plan P-05a and H-1 item (f), ARCHITECTURE.
+- Executor decisions (D9): (1) mic off → arming ignored with a log line, and the button is **hidden** (not dimmed): with five buttons the
+  default-width overlay overflowed («Завершить» and «Чат» clipped, seen on `--ui-snapshots`); (2) idle label shortened to «Уточнить» for
+  the same reason (long form «Уточнить голосом» stays in the collapsed-toolbar label and the hotkey title «Уточнение голосом (одна фраза)»);
+  (3) armed colour uses a new overlay token `ICDark.accent` (#6382FF, = `IC.accent` dark) — the overlay is always dark; (4) 15 s timeout,
+  not kept across sessions, `detectForced` as suggested above; an interrupted phrase does not spend the armed state.
+- Snapshots: `--ui-snapshots` 95/95 PNG; `panel-mic-toggle-on/off.png`, `panel-voice-clarify-armed.png` checked by eye (row fits).
+
+### Full check on tree 3d791e5 (sequential; log `/private/tmp/claude-501/-Users-macbook--claude-spares-spare-hX7LOE/0ff6bd41-c894-4134-966b-08d28e921a68/scratchpad/full-d9.txt`)
+- `swift test`: **PASS**, 561 tests in 98 suites (exit 0).
+- `scripts/run-evals.sh`: **PASS** (exit 0): filter-text 236/236, exam-followup 48/48, memory 8/8 and 0/2, materials 23/24 and 2/8.
+- `scripts/secret-scan.sh`, `scripts/check-localization.sh`, `scripts/build-app.sh`: **NOT RECORDED** — still running when this handoff was
+  written (context limit). Earlier on the same code: `check-localization.sh` PASS (855 keys, 856 translations, 0 missing). Read the log
+  above if it still exists; otherwise re-run these three sequentially.
+
+### Open — owner question raised in chat (answer before H-1)
+The owner's scenario: "the model did not catch the interviewer's question → I press «Уточнить» → I repeat the question". With the current
+`detectForced` this fails when (a) the repeated question is longer than `maxWords` = 15 words, or (b) there is no active question card and
+the phrase has no question form (no starter, no «?»); also (c) phrases starting like an answer («я думаю», «например», «это когда»). In
+those cases the phrase becomes an ordinary answer and the one shot is spent. Proposed (owner to choose: «Да, расширить» / «Оставить как
+есть»): in forced mode only, raise the word limit to 40 and treat any non-filler phrase without an active question as `.newQuestion`;
+the automatic mode (D1, off by default) unchanged. If accepted: change `detectForced` + tests, update spec R-10/AC-13, re-run the full check.
+
+## Next
+1. Record the remaining full-check lines (secret-scan, l10n, build-app) from the log or by re-running them sequentially.
+2. Get the owner's answer on "Open — owner question"; if «расширить», implement it (tests first), update spec, re-run the full check.
+3. Then **H-1** (plan.md, items a–f) together with COPILOT-17 H-1. No push.
