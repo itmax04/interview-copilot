@@ -15,6 +15,8 @@ public enum OwnerQuestionDetector {
     }
 
     public static let maxWords = 15
+    /// Предел длины фразы во взведённом режиме «Уточнить» (D9): владелец может повторить вопрос целиком.
+    public static let forcedMaxWords = 40
     public static let replaceWindowSeconds: TimeInterval = 30
     public static let clarifyWindowSeconds: TimeInterval = 25
     public static let maxClarifyWords = 5
@@ -89,11 +91,15 @@ public enum OwnerQuestionDetector {
 
     public static func detect(text: String, secondsSinceLastQuestion: TimeInterval?,
                               hasActiveQuestion: Bool) -> Decision {
+        detect(text: text, secondsSinceLastQuestion: secondsSinceLastQuestion, hasActiveQuestion: hasActiveQuestion, wordLimit: maxWords)
+    }
+
+    static func detect(text: String, secondsSinceLastQuestion: TimeInterval?, hasActiveQuestion: Bool, wordLimit: Int) -> Decision {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return .none }
 
         let words = extractWords(trimmed)
-        guard !words.isEmpty, words.count <= maxWords else { return .none }
+        guard !words.isEmpty, words.count <= wordLimit else { return .none }
 
         // Бэкченнелы и слова-заполнители («добре, секунду», «так, зрозумів») никогда не запускают подсказку.
         if words.allSatisfy({ fillerWords.contains($0) }) || TurnDetector.isBackchannel(trimmed) {

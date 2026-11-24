@@ -37,16 +37,18 @@ public struct VoiceClarifyArm: Sendable, Equatable {
 }
 
 extension OwnerQuestionDetector {
-    /// Решение для фразы, сказанной во взведённом режиме. Сначала обычный `detect`; если он молчит (`.none`) и есть активный вопрос,
-    /// фраза — поправка к нему (`clarifyLastQuestion`). Заполнители и бэкченнелы («угу», «секунду») и длинные фразы — обычный ответ.
+    /// Решение для фразы, сказанной во взведённом режиме (D9). Предел — `forcedMaxWords` (40), а не `maxWords`. Сначала обычные правила
+    /// `detect` с этим пределом (повтор вопроса целиком → `replaceLastQuestion`/`newQuestion`); если они молчат, любая содержательная
+    /// фраза — поправка к активному вопросу (`clarifyLastQuestion`), а без активного вопроса — новый вопрос (`newQuestion`).
+    /// Пустая фраза, заполнители/бэкченнелы («угу», «секунду») и фразы длиннее 40 слов — обычный ответ. Автоматический `detect` (D1) не затронут.
     public static func detectForced(text: String, secondsSinceLastQuestion: TimeInterval?, hasActiveQuestion: Bool) -> Decision {
-        let d = detect(text: text, secondsSinceLastQuestion: secondsSinceLastQuestion, hasActiveQuestion: hasActiveQuestion)
-        guard d == .none, hasActiveQuestion else { return d }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let words = trimmed.lowercased().split { !$0.isLetter && !$0.isNumber }
-        guard !words.isEmpty, words.count <= maxWords, !TurnDetector.isBackchannel(trimmed) else { return .none }
-        let lead = words.map(String.init)
-        guard !lead.allSatisfy({ isFiller($0) }) else { return .none }
-        return .clarifyLastQuestion(correction: trimmed)
+        guard !words.isEmpty, words.count <= forcedMaxWords else { return .none }
+        let d = detect(text: trimmed, secondsSinceLastQuestion: secondsSinceLastQuestion, hasActiveQuestion: hasActiveQuestion,
+                       wordLimit: forcedMaxWords)
+        guard d == .none else { return d }
+        guard !TurnDetector.isBackchannel(trimmed), !words.allSatisfy({ isFiller(String($0)) }) else { return .none }
+        return hasActiveQuestion ? .clarifyLastQuestion(correction: trimmed) : .newQuestion(trimmed)
     }
 }

@@ -62,12 +62,44 @@ struct VoiceClarifyTests {
         #expect(OwnerQuestionDetector.detectForced(text: text, secondsSinceLastQuestion: 5, hasActiveQuestion: true) == normal)
     }
 
-    @Test func forcedWithoutActiveQuestionOrWithFillerIsOrdinaryAnswer() {
-        #expect(OwnerQuestionDetector.detectForced(text: "основні ознаки держави", secondsSinceLastQuestion: nil, hasActiveQuestion: false) == .none)
-        #expect(OwnerQuestionDetector.detectForced(text: "так, секунду", secondsSinceLastQuestion: 5, hasActiveQuestion: true) == .none)
-        #expect(OwnerQuestionDetector.detectForced(text: "", secondsSinceLastQuestion: 5, hasActiveQuestion: true) == .none)
-        let long = Array(repeating: "слово", count: 20).joined(separator: " ")
-        #expect(OwnerQuestionDetector.detectForced(text: long, secondsSinceLastQuestion: 5, hasActiveQuestion: true) == .none)
+    @Test func forcedFillerEmptyOrTooLongIsOrdinaryAnswer() {
+        for active in [true, false] {
+            #expect(OwnerQuestionDetector.detectForced(text: "так, секунду", secondsSinceLastQuestion: 5, hasActiveQuestion: active) == .none)
+            #expect(OwnerQuestionDetector.detectForced(text: "", secondsSinceLastQuestion: 5, hasActiveQuestion: active) == .none)
+            #expect(OwnerQuestionDetector.detectForced(text: "  \n ", secondsSinceLastQuestion: nil, hasActiveQuestion: active) == .none)
+            let tooLong = Array(repeating: "слово", count: OwnerQuestionDetector.forcedMaxWords + 1).joined(separator: " ")
+            #expect(OwnerQuestionDetector.detectForced(text: tooLong, secondsSinceLastQuestion: 5, hasActiveQuestion: active) == .none)
+        }
+    }
+
+    @Test func forcedWithoutActiveQuestionTurnsAnyContentPhraseIntoNewQuestion() {
+        let plain = "основні ознаки держави"
+        #expect(OwnerQuestionDetector.detectForced(text: plain, secondsSinceLastQuestion: nil, hasActiveQuestion: false)
+                == .newQuestion(plain))
+        let noMark = "розкажіть мені про принципи розділення влад у сучасній демократичній державі"   // без вопросительной формы
+        #expect(OwnerQuestionDetector.detectForced(text: noMark, secondsSinceLastQuestion: nil, hasActiveQuestion: false)
+                == .newQuestion(noMark))
+    }
+
+    @Test func forcedAcceptsLongRepeatedQuestionUpToFortyWords() {
+        #expect(OwnerQuestionDetector.forcedMaxWords == 40 && OwnerQuestionDetector.maxWords == 15)
+        let body = Array(repeating: "слово", count: 29).joined(separator: " ")
+        let long = "Що таке держава і " + body + "?"                      // 33 слова: автоматический detect молчит
+        #expect(OwnerQuestionDetector.detect(text: long, secondsSinceLastQuestion: 5, hasActiveQuestion: true) == .none)
+        #expect(OwnerQuestionDetector.detectForced(text: long, secondsSinceLastQuestion: 5, hasActiveQuestion: true)
+                == .replaceLastQuestion(long))
+        #expect(OwnerQuestionDetector.detectForced(text: long, secondsSinceLastQuestion: nil, hasActiveQuestion: false)
+                == .newQuestion(long))
+        let exactly40 = Array(repeating: "слово", count: 40).joined(separator: " ")
+        #expect(OwnerQuestionDetector.detectForced(text: exactly40, secondsSinceLastQuestion: 60, hasActiveQuestion: true)
+                == .clarifyLastQuestion(correction: exactly40))
+    }
+
+    @Test func automaticDetectIsUnchangedByForcedWidening() {
+        // D1: без взведённого режима детектор по-прежнему молчит на фразу без маркеров и на фразу длиннее 15 слов.
+        #expect(OwnerQuestionDetector.detect(text: "основні ознаки держави", secondsSinceLastQuestion: nil, hasActiveQuestion: false) == .none)
+        let sixteen = "Що таке держава " + Array(repeating: "слово", count: 13).joined(separator: " ")
+        #expect(OwnerQuestionDetector.detect(text: sixteen, secondsSinceLastQuestion: 5, hasActiveQuestion: true) == .none)
     }
 
     @Test func hotkeyDefaults() {
