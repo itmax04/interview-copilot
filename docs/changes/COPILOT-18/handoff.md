@@ -9,7 +9,7 @@ Branch `feat/copilot-18-mic-toggle` (from `feat/copilot-17-uk-question`, 83592c6
 | P-02 core | DONE | see git log | `swift test` PASS: 552 tests, 97 suites (+9) |
 | P-03 app wiring | DONE | see git log | `swift build` PASS |
 | P-04 UI | DONE | see git log | `--ui-snapshots` 94/94 PNG; `panel-mic-toggle-on/off.png` checked by eye |
-| P-05 docs, review, full check | IN PROGRESS | docs in c4f9357 | full check was started in the background (output `/private/tmp/claude-501/full.txt`, may be gone) — **NOT RUN to completion as recorded; re-run**; independent review DONE (below); full check: `swift test` 551/552 — only the timing test `TurnRedecodeTests.swift:111` (1.04 s < 1.0 s) failed while the review ran in parallel, re-run alone; evals/secret-scan/localization/build-app NOT RUN |
+| P-05 docs, review, full check | DONE (D9 pending, below) | c4f9357 docs, 8440086 review fixes | full check on tree 8440086 (run sequentially, no parallel build) — see "Full check" |
 | H-1 owner live check | PENDING | — | — |
 
 ## Executor decisions
@@ -48,3 +48,17 @@ To do in the next session (after the P-05 full check is recorded; do not edit `S
 - Add D9 to intent.md, R-/AC- rows to spec.md, a step to plan.md (P-05a), tests, strings (Russian single literals + en.lproj), `HotkeyAction.voiceClarify` appended last (session ⇧⌘U, otherwise ⌃⌥U).
 - Suggested executor decisions to record: (1) mic off → arming is **disabled** (button dimmed, hotkey ignored with a log line) rather than implicitly turning the mic on — HIG: an action must not silently change another control's state; (2) armed timeout **15 s** without a phrase, then it disarms itself silently; (3) armed state does not survive session end; (4) the armed phrase bypasses `ownerVoiceClarification` but still uses `OwnerQuestionDetector.detect` with the forced mode (if it returns `.none`, treat as `.clarifyLastQuestion` of the phrase when an active question exists, otherwise ordinary answer).
 - Then the full check, handoff → H-1 (add a D9 case to the H-1 list: arm, speak a short clarification, version «с вашего голоса» appears once; the next phrase does not).
+
+## Full check (tree 8440086, run sequentially; output file `/private/tmp/claude-501/full2.txt`)
+- `swift test`: **PASS**, 553 tests in 97 suites (exit 0). The earlier single failure of the timing test `TurnRedecodeTests.swift:111`
+  (1.04 s < 1.0 s) happened while the review subagent ran in parallel (551/552); on the sequential run it did not fail, so no separate rerun was needed.
+- `scripts/run-evals.sh`: **PASS** (output tail only was kept: filter-text 236/236, exam-followup 48/48, memory 8/8 and 0/2,
+  materials 23/24 and 2/8; the turn and bank lines were cut off by `tail` — NOT RECORDED this time, unchanged code paths).
+- `scripts/secret-scan.sh`: **PASS**, 0 findings.
+- `scripts/check-localization.sh`: **PASS**, 850 keys, 850 translations, 0 missing, 0 mismatches.
+- `scripts/build-app.sh`: **PASS**, signed `dist/InterviewCopilot.app` (verified OK).
+- AC-01…AC-04, AC-06 (unit tests), AC-05 (snapshots), AC-08…AC-10: evidence above. AC-07 and AC-11: review (done) and **H-1 pending**.
+- Not covered by automated tests: `ListeningController`/`App.swift` wiring (see above). Review nit 4 (marker may be truncated in very long reviews) left as is.
+
+## Next
+D9 (section above), then re-run the full check, then **H-1** (plan.md) together with COPILOT-17 H-1. No push.
