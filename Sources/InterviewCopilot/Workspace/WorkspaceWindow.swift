@@ -40,6 +40,8 @@ final class WorkspaceModel {
     var recognitionStatus = ""
     var recognizerReady = false
 
+    var quickSessionType: SessionType = .interview
+    var onQuickStart: ((SessionType, String?) -> Void)?
     var onCreateSession: (() -> Void)?
     var onTestCall: (() -> Void)?
     var onMock: (() -> Void)?
@@ -255,20 +257,48 @@ struct TodayView: View {
                      ? "Подсказки — в оверлее рядом со звонком.\nЗавершите сессию, чтобы получить разбор."
                      : "AI будет слушать, анализировать вопросы\nи подсказывать ответы в реальном времени.")
                     .font(.system(size: 17)).foregroundStyle(IC.secondary).lineSpacing(3)
+                if !workspace.sessionActive {
+                    HStack(spacing: 10) {
+                        Picker("", selection: Binding(get: { workspace.quickSessionType }, set: { workspace.quickSessionType = $0 })) {
+                            ForEach([SessionType.exam, .interview, .regular], id: \.self) { t in
+                                Text(t.title).tag(t)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(maxWidth: 185)
+                        if !bank.profiles.isEmpty {
+                            Picker("", selection: Binding(get: { bank.activeID ?? bank.profiles[0].id }, set: { bank.select($0) })) {
+                                ForEach(bank.profiles) { p in
+                                    Text(p.name).tag(p.id)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(maxWidth: 220)
+                        }
+                    }
+                    .padding(.top, 2)
+                }
                 HStack(spacing: 12) {
                     if workspace.sessionActive {
                         Button { workspace.onShowPanel?() } label: { Label("Показать оверлей", systemImage: "rectangle.on.rectangle") }
                             .buttonStyle(ICButtonStyle(primary: true))
                     } else {
-                        Button { workspace.onCreateSession?() } label: {
-                            HStack(spacing: 10) {
-                                Label("Создать сессию", systemImage: "paperplane")
-                                Text(model.settings.hotkey(.newSession).displayString).font(.system(size: 11, weight: .medium))
-                                    .padding(.horizontal, 6).padding(.vertical, 3)
-                                    .background(Color.white.opacity(0.2), in: RoundedRectangle(cornerRadius: 5))
-                            }
+                        Button { workspace.onQuickStart?(workspace.quickSessionType, bank.activeID) } label: {
+                            Label("Быстрый старт", systemImage: "bolt.fill")
                         }
                         .buttonStyle(ICButtonStyle(primary: true))
+                        .help("Сразу слушает любой звонок на Mac и микрофон — без выбора приложения.")
+                        Button { workspace.onCreateSession?() } label: {
+                            HStack(spacing: 8) {
+                                Label("Создать сессию", systemImage: "slider.horizontal.3")
+                                Text(model.settings.hotkey(.newSession).displayString).font(.system(size: 11, weight: .medium))
+                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                    .background(IC.line.opacity(0.6), in: RoundedRectangle(cornerRadius: 5))
+                            }
+                        }
+                        .buttonStyle(ICButtonStyle())
                         Button { workspace.onTestCall?() } label: { Label("Пробный звонок", systemImage: "play") }
                             .buttonStyle(ICButtonStyle())
                     }

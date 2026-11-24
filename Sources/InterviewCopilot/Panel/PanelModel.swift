@@ -33,6 +33,8 @@ final class PanelModel {
         let text: String
         /// Отфильтровано (COPILOT-05 R-06): «язык de» — серым, по клику — ответ.
         var filtered: String? = nil
+        /// Предварительный текст фразы (COPILOT-15 R-04): приглушённый стиль до итогового текста вопроса.
+        var provisional = false
     }
 
     var state: State = .idle
@@ -66,7 +68,7 @@ final class PanelModel {
     }
 
     func setTranscript(_ finals: [ListeningController.TranscriptLine], partial: String?) {
-        lines = finals.suffix(6).map { Line(id: $0.id, text: $0.text, filtered: $0.filtered) }
+        lines = finals.suffix(6).map { Line(id: $0.id, text: $0.text, filtered: $0.filtered, provisional: $0.provisional) }
         self.partial = partial
     }
 
@@ -95,6 +97,20 @@ final class PanelModel {
     var callLevel: Float = -120
     /// Секунд без сигнала звонка во время сессии; nil — сигнал есть или проверка неуместна.
     var callSilentSeconds: Int?
+    /// Системный микрофон по умолчанию замьючен в macOS (`kAudioDevicePropertyMute == 1`).
+    var micHardwareMuted = false
+    var onUnmuteMic: (() -> Void)?
+    /// COPILOT-16 R-06: «Слушаю весь звук Mac…»; `allSystemCallApp` — имя запущенного приложения звонка для «Только звонок».
+    var allSystemNoticeVisible = false
+    var allSystemCallApp: String?
+    var onAllSystemCallOnly: (() -> Void)?
+    var onDismissAllSystem: (() -> Void)?
+    /// COPILOT-16 R-05: микрофон ≥ 10 с даёт цифровой ноль при выключенном mute; имя входа — для подсказки.
+    var micSilent = false
+    var micSilentDevice: String?
+    /// COPILOT-16 R-04: две английские фразы подряд отброшены в сессии на uk/ru — подсказка «Разрешить английский».
+    var englishNoticeVisible = false
+    var onAllowEnglish: (() -> Void)?
 
     // Чат (R-10).
     var chatOpen = false
@@ -116,6 +132,11 @@ final class PanelModel {
     var onRetry: (() -> Void)?
     var onOpenPermissions: (() -> Void)?
     var onCreateSession: (() -> Void)?
+    /// Быстрый старт в 1 клик без 3-шагового мастера: сразу слушает любой звонок на Mac + микрофон.
+    var quickSessionType: SessionType = .interview
+    var quickProfileID: String = ""
+    var quickProfiles: [ProfileInfo] = []
+    var onQuickStart: ((SessionType, String?) -> Void)?
     var onEndSession: (() -> Void)?
     var onStartDetectedCall: (() -> Void)?
     var onDismissDetectedCall: (() -> Void)?
@@ -136,6 +157,14 @@ final class PanelModel {
     var onTogglePrivate: (() -> Void)?
     var onCheckVisibility: (() -> Void)?
     var onOwnerAnswer: (() -> Void)?
+    /// «Микрофон выкл.» (COPILOT-18): приложение игнорирует микрофон владельца. Не путать с `micHardwareMuted` (mute macOS).
+    var ownerMicOff = false
+    /// Кнопка доступна: сессия на созвоне со звуком приложения/системы (в самопроверке и тестовом звонке микрофон — единственный вход).
+    var ownerMicAvailable = false
+    var onToggleOwnerMic: (() -> Void)?
+    /// «Уточнение голосом» взведено: следующая фраза владельца уточняет вопрос (COPILOT-18 D9).
+    var voiceClarifyArmed = false
+    var onVoiceClarify: (() -> Void)?
 
     func selectPrevious() { history.selectPrevious() }
     func selectNext() { history.selectNext() }

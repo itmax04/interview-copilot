@@ -25,12 +25,12 @@ In addition, speech in other languages gets into the transcript (for example, Ge
 | Q5 | How to recognize the owner's voice | Record a 20–30 s sample once; only a "print" (numbers) is stored |
 | Q6 | Why transcribe the owner's speech | Only as context for hints (the text goes to the model); not in the panel, not in history. **Changed 2026-10-23 (COPILOT-06 Q1): saved in session history** |
 | Q7 | Ukrainian is selected but Russian is heard (or vice versa) | Let both through: uk and ru are one group |
-| Q8 | A whole English phrase of the interviewer in a uk/ru interview | Let it through in the call channel; the strict filter is for the microphone and "All system audio" |
+| Q8 | A whole English phrase of the interviewer in a uk/ru interview | ~~Let it through in the call channel; the strict filter is for the microphone and "All system audio"~~ **Superseded by COPILOT-16 R-01 (owner, 2026-11-21): interviewers never switch to English, only IT terms — whole English is dropped on every channel** |
 | Q9 | Terms | Rule + dictionary: Latin script inside a phrase in the selected language — always; a whole English phrase on the microphone — if ≤ 4 words and all words are terms (résumé, job, bank, a built-in IT list) |
 | Q10 | Speed | Everything on by default, separate toggles in Settings → Audio |
 | Q11 | Headphones | Varies — echo cancellation is needed |
 | Q12 | Language "Auto" | Let only uk / ru / en through, the rest — gray |
-| Q13 | Self-check "Mac microphone" | Only the owner's voice counts as questions |
+| Q13 | Self-check "Mac microphone" | Only the owner's voice counts as questions. **Added 2026-11-20 (owner, option C after the live self-test):** a separate setting "Rehearsal with an interviewer" (off by default) — another voice counts as questions, the owner's voice as answers |
 | Q14 | Call channel | A neural speech detector + the language filter, no noise suppression (questions are not slowed down) |
 | Q15 | Verification | Synthetic mixes + a live test by the owner (~10 min) |
 | Q16 | Order | Task → stages with separate builds |

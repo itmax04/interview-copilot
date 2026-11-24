@@ -20,7 +20,8 @@ struct SettingsStoreTests {
         #expect(s.chain == [.groq, .cerebras, .gemini, .deepseek, .anthropic, .custom])   // R-09, R-36: быстрые первыми; COPILOT-04 R-06
         #expect(s.hedgeAfter == 1.5)                           // R-36
         #expect(s.firstTokenTimeout == 4)                      // R-09
-        #expect(s.pauseThresholdMs == 700)                     // R-05
+        #expect(s.pauseThresholdMs == 1000)                    // R-05, COPILOT-15 R-09
+        #expect(s.questionPauseMs == 600)
         #expect(s.bankThreshold == 0.74)                       // R-07, порог по eval bank (P-06)
         #expect(s.embeddingModel == "bge-m3-q8_0.gguf")        // ADR-0001 п. 6
         #expect(s.piiFilterEnabled)                            // R-12
@@ -76,7 +77,7 @@ struct SettingsStoreTests {
         defaults.set(Data(#"{"mode":"bankOnly","unknownField":1}"#.utf8), forKey: SettingsStore.defaultsKey)
         let s = store.load()
         #expect(s.mode == .bankOnly)
-        #expect(s.pauseThresholdMs == 700)
+        #expect(s.pauseThresholdMs == 1000)
         #expect(s.recognitionAccuracy)
     }
 
@@ -116,4 +117,21 @@ struct SettingsStoreTests {
         #expect(custom.migrated().whisperModel == "custom.bin")
     }
 
+
+    @Test("Saved pause values equal to the old defaults 700/350 migrate; owner-chosen values stay")
+    func pauseDefaultsMigrate() throws {
+        let (store, defaults, suite) = makeStore()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(Data(#"{"schemaVersion":6,"pauseThresholdMs":700,"questionPauseMs":350}"#.utf8), forKey: SettingsStore.defaultsKey)
+        var s = store.load()
+        #expect(s.pauseThresholdMs == 1000 && s.questionPauseMs == 600)
+        #expect(s.schemaVersion == AppSettings.currentSchema)
+        defaults.set(Data(#"{"schemaVersion":6,"pauseThresholdMs":900,"questionPauseMs":350}"#.utf8), forKey: SettingsStore.defaultsKey)
+        s = store.load()
+        #expect(s.pauseThresholdMs == 900 && s.questionPauseMs == 600)
+        // Уже на новой схеме: 700 — выбор владельца, не умолчание.
+        defaults.set(Data(#"{"schemaVersion":7,"pauseThresholdMs":700,"questionPauseMs":350}"#.utf8), forKey: SettingsStore.defaultsKey)
+        s = store.load()
+        #expect(s.pauseThresholdMs == 700 && s.questionPauseMs == 350)
+    }
 }

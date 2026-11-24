@@ -4,6 +4,8 @@ import Foundation
 public enum SessionType: String, Codable, CaseIterable, Sendable, Identifiable {
     /// Собеседование: резюме, вакансия, материалы, вопросы профиля; ответ от лица кандидата.
     case interview
+    /// Экзамен / зачёт: строгая опора на материалы и активную тему, без выдумывания, оптимизировано под перебивания и доп. вопросы.
+    case exam
     /// Обычный звонок: «что сказать» по теме, инструкциям и материалам — без резюме и карточек (Q14).
     case regular
     /// ИИ-собеседование (COPILOT-03) — запуск из мастера.
@@ -14,6 +16,7 @@ public enum SessionType: String, Codable, CaseIterable, Sendable, Identifiable {
     public var title: String {
         switch self {
         case .interview: L10n.t("Собеседование")
+        case .exam: L10n.t("Экзамен")
         case .regular: L10n.t("Обычный звонок")
         case .mock: L10n.t("ИИ-собеседование")
         }

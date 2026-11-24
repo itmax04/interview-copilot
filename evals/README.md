@@ -42,7 +42,8 @@ A run is mandatory when the embedding model, the Whisper model, thresholds or th
   short interjections, the owner speaking, speaker echo in the microphone, a forced turn; uk / ru / en.
 - Run: `scripts/run-evals.sh turn` (or `copilot-eval turn --threshold-ms N --verbose`).
 - Choosing T (P-05): 400 and 500 ms — 3 premature turns of 34 (8.8%), 600 ms — 1 (2.9%), **700 ms — 0**, 1000 ms — 0.
-  The default stays 700 ms (R-05): the smallest threshold without premature turns on the set.
+  The default was 700 ms (R-05): the smallest threshold without premature turns on the set. COPILOT-15 R-09 raises the defaults to
+  T = 1000 ms and question pause 600 ms (whole-question re-decode needs the full audio): 0 premature, 0 missed, mean latency 791 ms.
 
 ## Audio fixtures (P-04)
 - `evals/audio/*.wav` — phrases generated with `say` (uk / ru / en), 16 kHz mono. Used for Whisper measurements and
@@ -62,6 +63,11 @@ Filled in by the executor in P-06 and P-12: date, commit, models, thresholds, re
 |---|---|---|---|---|---|---|
 | 2026-10-06 | P-05 (after `e836139`) | — / whisper small q5_1 | T = 700 ms | NOT RUN (P-06) | NOT RUN (P-06) | 0% / 0% (34 cases) |
 | 2026-10-06 | P-06 (after `61bfd6d`) | bge-m3 Q8_0 / whisper small q5_1 | 0.74; T = 700 ms | 94.9% (holdout 91.7%) | 0% (holdout 0%) | 0% / 0% |
+
+## `exam-followup` set (COPILOT-17, R-03/R-04)
+`evals/exam-followup/cases.jsonl` (48 synthetic phrases uk/ru/en, in Git): 24 question openers that must start a new ticket
+(`opener-new`) and 24 clarifications that must stay in the ticket (`followup`). Run: `scripts/run-evals.sh exam-followup`
+(no models). Threshold: all cases correct.
 
 ## `filter` set (COPILOT-05, R-02, R-05; AC-01, AC-02, AC-04)
 - **Text** — `evals/filter/text-cases.jsonl` (214 cases, in Git): phrase, menu language, channel, expected keep/drop.
@@ -93,6 +99,23 @@ Filled in by the executor in P-06 and P-12: date, commit, models, thresholds, re
 
 Apple's synthetic voices are similar to each other (Milena↔Lesya up to 0.89); live voices differ more, but the owner's
 live voice also varies more — so the threshold is personal and checked on the live voice (H-2).
+
+## `stt-dense` set (COPILOT-15 P-02, AC-01)
+- Why: phrase-by-phrase recognition of dense speech loses words at the chunk cuts; one pass over the whole question does not.
+- `scripts/make-dense-fixtures.py`: 8 questions (6 uk/ru from the experiment + 2 English), texts and cut points in
+  `evals/stt-dense/texts.json`. Audio — `evals/audio/stt-dense/` (not in Git).
+- Run: `scripts/run-evals.sh stt-dense` or `copilot-eval stt-dense [parakeet-dir] [fixtures-dir] [--verbose]` (needs the
+  Parakeet model; exit 2 = NOT RUN when fixtures or model are missing).
+- Modes: `chunks` (each phrase decoded separately), `whole` (one pass over the question), `joined` (phrases joined with gaps).
+  Thresholds: whole ≤ 8%, joined ≤ 12%, whole ≤ chunks / 2.
+
+| Date | chunks WER | whole WER | joined WER | Decode per question (as printed by the eval) |
+|---|---:|---:|---:|---|
+| 2026-11-20 | 28.2% (uk 26.3 / ru 16.7 / en 40.9) | 4.5% (uk 5.3 / ru 2.8 / en 4.5) | 7.1% | 1557 / 266 / 171 ms |
+
+### Replay of a dense call (COPILOT-15 P-12, AC-02/AC-03) — live only
+Play the `stt-dense` audio (or `evals/audio/test-call`) through the app as a call, then `scripts/metrics.py --last 15m`:
+`redecode_ms` (median ≤ 2000, AC-05 budget) and `turn_end → first_token` (≤ 2500, includes the re-decode). NOT RUN without a live session.
 
 ## `enhance` set (COPILOT-05 R-04)
 - `scripts/make-noisy-fixtures.py`: 10 questions (Milena ru, Lesya uk, Samantha en), clean and over a background —

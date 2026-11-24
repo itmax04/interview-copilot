@@ -30,13 +30,18 @@ public enum ResolvedAudioSource: Equatable, Sendable {
     }
 }
 
-/// Выбор источника — R-01. Auto: первое запущенное из zoom.us → Google Chrome → Telegram.
+/// Выбор источника — R-01 + универсальный Быстрый старт.
+/// Auto: первое запущенное приложение звонка (Zoom → Teams → Chrome → Telegram → Discord → Safari);
+/// если ни одно не запущено — сразу «Весь системный звук» (никогда не блокирует с «Звонок не найден»).
 public enum AudioSourceResolver {
     /// Порядок Auto. У Telegram два клиента: «Telegram» (App Store) и «Telegram Desktop».
     public static let autoPriority: [(bundleIDs: [String], name: String)] = [
         (["us.zoom.xos"], "Zoom"),
+        (["com.microsoft.teams2", "com.microsoft.teams"], "Teams"),
         (["com.google.Chrome"], "Chrome"),
         (["ru.keepcoder.Telegram", "org.telegram.desktop"], "Telegram"),
+        (["com.hnc.Discord"], "Discord"),
+        (["com.apple.Safari"], "Safari"),
     ]
 
     public static func resolve(_ setting: AudioSourceSetting, running: [RunningAppInfo]) -> ResolvedAudioSource {
@@ -54,7 +59,7 @@ public enum AudioSourceResolver {
                     return .app(RunningAppInfo(bundleID: app.bundleID, name: candidate.name))
                 }
             }
-            return .none
+            return .allSystem
         }
     }
 
@@ -62,5 +67,25 @@ public enum AudioSourceResolver {
     /// (`com.google.Chrome.helper…` — звук вкладок Chrome идёт из них).
     public static func belongsTo(_ bundleID: String, app: String) -> Bool {
         bundleID == app || bundleID.hasPrefix(app + ".")
+    }
+
+    /// COPILOT-16 R-06: запущенное приложение звонка по порядку Auto (для действия «Только звонок»).
+    public static func runningCallApp(_ running: [RunningAppInfo]) -> RunningAppInfo? {
+        for candidate in autoPriority {
+            if let app = running.first(where: { candidate.bundleIDs.contains($0.bundleID) }) {
+                return RunningAppInfo(bundleID: app.bundleID, name: candidate.name)
+            }
+        }
+        return nil
+    }
+
+    /// COPILOT-16 R-06: предупреждение «слушаю весь звук Mac» — только для `.allSystem`; `callApp` — что предложить вместо.
+    public struct AllSystemNotice: Equatable, Sendable {
+        public var callApp: RunningAppInfo?
+    }
+
+    public static func allSystemNotice(for resolved: ResolvedAudioSource, running: [RunningAppInfo]) -> AllSystemNotice? {
+        guard resolved == .allSystem else { return nil }
+        return AllSystemNotice(callApp: runningCallApp(running))
     }
 }

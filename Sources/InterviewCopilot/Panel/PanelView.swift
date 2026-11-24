@@ -62,6 +62,65 @@ struct PanelView: View {
         if let silent = model.callSilentSeconds, silent >= 10 {
             AlertBox(icon: "speaker.slash.fill", text: L("Не слышу звонок %lld с — проверьте звук вкладки или источник", silent), size: model.fontSize)
         }
+        if model.micHardwareMuted {
+            HStack(spacing: 8) {
+                Image(systemName: "mic.slash.fill").foregroundStyle(Theme.warn)
+                Text("Микрофон выключен в macOS (Mute)")
+                    .font(.system(size: max(12, model.fontSize - 2), weight: .medium))
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 4)
+                Button("Включить") { model.onUnmuteMic?() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Theme.warn.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.warn.opacity(0.45), lineWidth: 1))
+        }
+        if model.micSilent && !model.micHardwareMuted {
+            AlertBox(icon: "mic.slash", text: model.micSilentDevice.map {
+                L("Микрофон не даёт звука (вход: %@). Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук", $0)
+            } ?? L("Микрофон не даёт звука. Возможно, микрофон занят другим приложением — проверьте вход в Системных настройках → Звук"), size: model.fontSize)
+        }
+        if model.allSystemNoticeVisible {
+            HStack(spacing: 8) {
+                Image(systemName: "speaker.wave.3").foregroundStyle(Theme.warn)
+                Text("Слушаю весь звук Mac — видео и уведомления тоже попадут в расшифровку")
+                    .font(.system(size: max(12, model.fontSize - 2), weight: .medium))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if let app = model.allSystemCallApp {
+                    Button("Только звонок") { model.onAllSystemCallOnly?() }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .help(L("Слушать только %@ на эту сессию", app))
+                }
+                IconButton(symbol: "xmark", label: "Скрыть") { model.onDismissAllSystem?() }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Theme.warn.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.warn.opacity(0.45), lineWidth: 1))
+        }
+        if model.englishNoticeVisible {
+            HStack(spacing: 8) {
+                Image(systemName: "character.bubble").foregroundStyle(Theme.warn)
+                Text("Собеседник говорит по-английски?")
+                    .font(.system(size: max(12, model.fontSize - 2), weight: .medium))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                Button("Разрешить английский") { model.onAllowEnglish?() }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Theme.warn.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Theme.warn.opacity(0.45), lineWidth: 1))
+        }
         if model.ownerAnswering {
             Banner(icon: "mic.fill", text: L("Ваш ответ записывается — %@, чтобы закончить", model.hotkey(.ownerAnswer)), color: Theme.warn,
                    size: model.fontSize)
@@ -172,6 +231,16 @@ private struct Toolbar: View {
             LevelWave(level: model.callLevel, icon: "speaker.wave.2.fill", label: "Звук звонка", silent: model.callSilentSeconds != nil)
             Spacer(minLength: 2)
             ForEach([("doc", "Ответ", HotkeyAction.answerNow), ("crop", "Скриншот", .screenshot), ("bubble.left", "Чат", .chat)], id: \.1) { icon, title, action in
+                if action == .chat, model.ownerMicAvailable {
+                    IconButton(symbol: model.ownerMicOff ? "mic.slash.fill" : "mic.fill",
+                               label: "\(model.ownerMicOff ? "Микрофон выкл." : "Микрофон") \(model.hotkey(.toggleMic))") { model.onToggleOwnerMic?() }
+                        .foregroundStyle(model.ownerMicOff ? AnyShapeStyle(ICDark.red) : AnyShapeStyle(.foreground))
+                }
+                if action == .chat, model.ownerMicAvailable, !model.ownerMicOff {
+                    IconButton(symbol: model.voiceClarifyArmed ? "waveform" : "mic.badge.plus",
+                               label: "\(model.voiceClarifyArmed ? "Говорите…" : "Уточнить голосом") \(model.hotkey(.voiceClarify))") { model.onVoiceClarify?() }
+                        .foregroundStyle(model.voiceClarifyArmed ? AnyShapeStyle(ICDark.accent) : AnyShapeStyle(.foreground))
+                }
                 IconButton(symbol: icon, label: "\(title) \(model.hotkey(action))") {
                     switch action {
                     case .answerNow: model.onAnswerNow?()
@@ -238,6 +307,19 @@ private struct Toolbar: View {
                         .help("Ответить на последнюю реплику сейчас")
                     ICOverlayButton(title: "Скриншот", icon: "crop", keys: model.hotkey(.screenshot), size: model.fontSize) { model.onScreenshot?() }
                         .help("Снимок экрана с задачей → решение")
+                    if model.ownerMicAvailable {
+                        ICOverlayButton(title: model.ownerMicOff ? "Микрофон выкл." : "Микрофон", icon: model.ownerMicOff ? "mic.slash.fill" : "mic.fill",
+                                        keys: model.hotkey(.toggleMic), size: model.fontSize, alert: model.ownerMicOff) { model.onToggleOwnerMic?() }
+                            .help(model.ownerMicOff ? "Микрофон выключен только для Copilot. Нажмите, чтобы включить снова"
+                                  : "Выключить микрофон для Copilot: он не будет слушать вас. Встреча вас по-прежнему слышит")
+                    }
+                    // D9: при выключенном микрофоне кнопки нет — уточнять нечем, а пять кнопок не помещаются в узкий оверлей.
+                    if model.ownerMicAvailable, !model.ownerMicOff {
+                        ICOverlayButton(title: model.voiceClarifyArmed ? "Говорите…" : "Уточнить", icon: model.voiceClarifyArmed ? "waveform" : "mic.badge.plus",
+                                        keys: model.hotkey(.voiceClarify), size: model.fontSize, armed: model.voiceClarifyArmed) { model.onVoiceClarify?() }
+                            .help(model.voiceClarifyArmed ? "Следующая ваша фраза уточнит вопрос. Нажмите ещё раз, чтобы отменить"
+                                  : "Одна следующая ваша фраза уточнит текущий вопрос (подсказка «с вашего голоса»)")
+                    }
                     ICOverlayButton(title: "Чат", icon: "bubble.left", keys: model.hotkey(.chat), size: model.fontSize) { model.onToggleChat?() }
                         .help("Вопрос текстом или уточнение ответа")
                     if model.selfTest {
@@ -381,17 +463,69 @@ private struct NoSessionView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(ICDark.stroke))
             }
             Message(icon: "pause.circle", text: "Сессии нет — приложение не слушает звонок и микрофон.")
-            Button { model.onCreateSession?() } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "paperplane")
-                    Text("Создать сессию").font(.system(size: model.fontSize - 1, weight: .semibold))
-                    ICKeycap(text: model.hotkey(.newSession), dark: true)
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach([SessionType.exam, .interview, .regular], id: \.self) { t in
+                        Button(t.title) { model.quickSessionType = t }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: model.quickSessionType == .exam ? "graduationcap" : model.quickSessionType == .regular ? "phone" : "person.fill")
+                        Text(model.quickSessionType.title).lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
+                    }
+                    .font(.system(size: max(11, model.fontSize - 2), weight: .medium))
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(ICDark.raised, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ICDark.stroke))
                 }
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(IC.accent, in: RoundedRectangle(cornerRadius: 10))
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                if !model.quickProfiles.isEmpty {
+                    let currentName = model.quickProfiles.first(where: { $0.id == model.quickProfileID })?.name ?? model.quickProfiles[0].name
+                    Menu {
+                        ForEach(model.quickProfiles) { p in
+                            Button(p.name) { model.quickProfileID = p.id }
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "doc.text")
+                            Text(currentName).lineLimit(1)
+                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 9))
+                        }
+                        .font(.system(size: max(11, model.fontSize - 2), weight: .medium))
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(ICDark.raised, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(ICDark.stroke))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
             }
-            .buttonStyle(.plain)
+            HStack(spacing: 8) {
+                Button { model.onQuickStart?(model.quickSessionType, model.quickProfileID.isEmpty ? nil : model.quickProfileID) } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bolt.fill")
+                        Text("Быстрый старт").font(.system(size: model.fontSize - 1, weight: .semibold))
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(IC.accent, in: RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Сразу слушает любой звонок на Mac и микрофон — без выбора приложения.")
+                Button { model.onCreateSession?() } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("Настроить…").font(.system(size: model.fontSize - 2, weight: .medium))
+                        ICKeycap(text: model.hotkey(.newSession), dark: true)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(ICDark.raised, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(ICDark.stroke))
+                }
+                .buttonStyle(.plain)
                 .accessibilityHint("Открывает мастер: тип звонка, профиль, проверка перед стартом")
+            }
         }
     }
 }
@@ -464,7 +598,8 @@ private struct TranscriptLineView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Игнорировано, \(reason): \(line.text). Ответить")
         } else {
-            Text(line.text).foregroundStyle(.white.opacity(0.7)).fixedSize(horizontal: false, vertical: true)
+            // Предварительный текст (COPILOT-15 R-04) — приглушённо; без анимации, Reduce Motion не затрагивается.
+            Text(line.text).foregroundStyle(.white.opacity(line.provisional ? 0.5 : 0.7)).fixedSize(horizontal: false, vertical: true)
         }
     }
 }

@@ -41,6 +41,7 @@ case "stt", "stt-parakeet", "stt-hybrid":
     args.removeFirst()
     if hybridWhisper != nil { args.remove(at: 1) }
     let lang = option("--lang")
+    if flag("--no-lang-hint") { ParakeetEngine.useLanguageHint = false }   // COPILOT-17 P-05: сравнение с подсказкой языка и без
     guard let repeats = Int(option("--repeat") ?? "1"), repeats > 0 else { fail("--repeat must be a positive integer") }
     let fullContext = flag("--full-context")
     guard args.count >= 2 else { fail("usage: copilot-eval stt <model.bin> <file.wav>... [--lang xx] [--full-context] [--repeat N]") }
@@ -119,8 +120,6 @@ case "stt-stream":
             let ms = Double(emitted - phraseEnd) / 1e6
             collector.lock.withLock { collector.latencies.append(ms) }
             print(String(format: "final utt=%d lang=%@ phrase_end_to_final_ms=%.0f text=%@", u, language, ms, text))
-        case .revised(let u, let text, let language):
-            print(String(format: "revised utt=%d lang=%@ text=%@", u, language, text))
         default: break
         }
     }
@@ -183,6 +182,29 @@ case "filter-text":
     for (tag, t) in byTag.sorted(by: { $0.key < $1.key }) { print("  \(tag): \(t.ok)/\(t.total)") }
     let passed = total > 0 && ok == total
     print("filter-text: cases=\(total) correct=\(ok) \(passed ? "PASS" : "FAIL")")
+    finish(passed ? 0 : 1)
+case "exam-followup":
+    // Eval правила «Экзамен» (COPILOT-17 R-03/R-04): новая фраза-вопрос открывает новый билет, уточнение остаётся в билете. Без моделей.
+    args.removeFirst()
+    let verbose = flag("--verbose")
+    let path = args.first ?? "evals/exam-followup/cases.jsonl"
+    guard let raw = try? String(contentsOfFile: path, encoding: .utf8) else { fail("\(path): нет файла", code: 1) }
+    var total = 0, ok = 0
+    var byTag: [String: (ok: Int, total: Int)] = [:]
+    for line in raw.split(separator: "\n") where !line.isEmpty {
+        guard let c = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: String],
+              let text = c["text"], let expect = c["expect"] else { fail("Invalid evaluation case or missing fixture", code: 1) }
+        let got = FollowUpDetector.isExamFollowUp(text) ? "followup" : "new"
+        total += 1
+        let tag = c["tag"] ?? "-"
+        var t = byTag[tag] ?? (0, 0)
+        t.total += 1
+        if got == expect { ok += 1; t.ok += 1 } else if verbose { print("FAIL [\(tag)] expect=\(expect) got=\(got): \(text)") }
+        byTag[tag] = t
+    }
+    for (tag, t) in byTag.sorted(by: { $0.key < $1.key }) { print("  \(tag): \(t.ok)/\(t.total)") }
+    let passed = total > 0 && ok == total
+    print("exam-followup: cases=\(total) correct=\(ok) \(passed ? "PASS" : "FAIL")")
     finish(passed ? 0 : 1)
 case "filter":
     // Eval `filter` по звуку (COPILOT-05 AC-01, AC-02, AC-04): Silero → Parakeet → фильтр языка, по одному файлу.
@@ -402,10 +424,67 @@ case "voice":
                  thresholds.map { String(format: "%.2f", $0) }.joined(separator: "/"), accepted, ownTotal, acceptRate * 100, rejected, otherTotal, rejectRate * 100,
                  embedMs.sorted().dropFirst(embedMs.count / 2).first ?? 0, pass ? "PASS" : "FAIL"))
     finish(pass ? 0 : 1)
+case "stt-dense":
+    // Eval `stt-dense` (COPILOT-15 AC-01): dense questions cut like live VAD phrases; Parakeet on the chunks (today),
+    // on the whole question (continuous audio) and on the chunks joined with 150 ms gaps (rehearsal routing).
+    // Fixtures: scripts/make-dense-fixtures.py → evals/audio/stt-dense/. Usage: copilot-eval stt-dense [parakeet-dir] [fixtures-dir]
+    args.removeFirst()
+    let verbose = flag("--verbose")
+    let modelDir = args.first.map { URL(fileURLWithPath: $0) } ?? AppPaths.models.appendingPathComponent("parakeet-tdt-0.6b-v3")
+    let fixtures = URL(fileURLWithPath: args.dropFirst().first ?? "evals/audio/stt-dense")
+    struct DenseItem: Decodable { var id: String; var lang: String; var text: String; var full: String; var chunks: [String] }
+    guard let manifestData = try? Data(contentsOf: fixtures.appendingPathComponent("manifest.json")),
+          let items = try? JSONDecoder().decode([DenseItem].self, from: manifestData)
+    else { fail("stt-dense: NOT RUN — no fixtures; run scripts/make-dense-fixtures.py", code: 2) }
+    guard FileManager.default.fileExists(atPath: modelDir.path) else { fail("stt-dense: NOT RUN — no Parakeet model at \(modelDir.path)", code: 2) }
+    let engine: ParakeetEngine
+    do { engine = try await ParakeetEngine.load(from: modelDir) } catch { fail("stt-dense: \(error)", code: 1) }
+    func read(_ name: String) -> [Float] {
+        do { return try AudioFileReader.read16kMono(fixtures.appendingPathComponent(name)) } catch { fail("\(name): \(error)", code: 1) }
+    }
+    func decode(_ samples: [Float]) -> (text: String, ms: Double) {
+        do {
+            let r = try engine.transcribe(samples, language: nil, prompt: nil, reducedContext: false)
+            return (r.text, r.elapsedMs)
+        } catch { fail("stt-dense: \(error)", code: 1) }
+    }
+    _ = decode(read(items[0].full))   // warm-up: the first Core ML call is slow
+    let modes = ["chunks", "whole", "joined"]
+    var errors = [String: [String: Int]](), words = [String: Int](), totalMs = [String: Double]()
+    for item in items {
+        let n = WordErrorRate.referenceWords(item.text)
+        words[item.lang, default: 0] += n; words["all", default: 0] += n
+        let gap = [Float](repeating: 0, count: 2400)   // 150 ms
+        let pieces = item.chunks.map(read)
+        var hyp = [String: (text: String, ms: Double)]()
+        let parts = pieces.map(decode)
+        hyp["chunks"] = (parts.map(\.text).joined(separator: " "), parts.reduce(0) { $0 + $1.ms })
+        hyp["whole"] = decode(read(item.full))
+        hyp["joined"] = decode(pieces.enumerated().flatMap { $0.offset == 0 ? $0.element : gap + $0.element })
+        for mode in modes {
+            let e = WordErrorRate.errors(reference: item.text, hypothesis: hyp[mode]!.text)
+            errors[mode, default: [:]][item.lang, default: 0] += e
+            errors[mode, default: [:]]["all", default: 0] += e
+            totalMs[mode, default: 0] += hyp[mode]!.ms
+            if verbose { print("\(item.id) \(mode) errors=\(e) ms=\(Int(hyp[mode]!.ms)) text=\(hyp[mode]!.text)") }
+        }
+    }
+    func wer(_ mode: String, _ lang: String = "all") -> Double {
+        Double(errors[mode]?[lang] ?? 0) / Double(max(1, words[lang] ?? 0))
+    }
+    for mode in modes {
+        let perLang = ["uk", "ru", "en"].filter { words[$0] != nil }
+            .map { String(format: "%@ %.1f%%", $0, wer(mode, $0) * 100) }.joined(separator: " ")
+        print(String(format: "stt-dense: %@ WER %.1f%% (%d/%d words) [%@] decode_ms_per_question=%.0f", mode, wer(mode) * 100,
+                     errors[mode]?["all"] ?? 0, words["all"] ?? 0, perLang, (totalMs[mode] ?? 0) / Double(items.count)))
+    }
+    let pass = wer("whole") <= 0.08 && wer("joined") <= 0.12 && wer("whole") <= wer("chunks") / 2
+    print(String(format: "stt-dense: thresholds whole ≤ 8%%, joined ≤ 12%%, whole ≤ chunks/2 → %@", pass ? "PASS" : "FAIL"))
+    finish(pass ? 0 : 1)
 case "turn":
     // Eval `turn` (R-05): evals/turn/cases.jsonl → преждевременные/пропущенные ходы, задержка.
     args.removeFirst()
-    let threshold = Double(option("--threshold-ms") ?? "700") ?? 700
+    let threshold = Double(option("--threshold-ms") ?? "1000") ?? 1000
     let verbose = flag("--verbose")
     var config = TurnDetector.Config(thresholdMs: threshold)
     if let q = option("--question-ms").flatMap(Double.init) { config.questionThresholdMs = q }

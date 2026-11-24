@@ -40,16 +40,32 @@ struct LanguageGateTests {
         if case .drop = ru.check(fr, channel: .mic) {} else { Issue.record("французский должен отбрасываться") }
     }
 
-    @Test func englishPhraseRulesDependOnChannel() {
+    @Test func englishPhraseRulesDoNotDependOnChannel() {
+        // COPILOT-16 R-01 (AC-02): целиком английская фраза при uk/ru отбрасывается в любом канале, включая звонок.
         let phrase = "Let's continue in English. Tell me about your last project."
-        // S-04, Q8: в звонке английская фраза интервьюера проходит.
-        #expect(ru.check(phrase, channel: .call) == .keep)
-        // В микрофоне и «Весь системный звук» — строго.
-        #expect(ru.check(phrase, channel: .mic) == .drop(language: "en"))
-        #expect(uk.check(phrase, channel: .allSystem) == .drop(language: "en"))
-        // English и Auto — английский разрешён.
-        #expect(en.check(phrase, channel: .mic) == .keep)
-        #expect(auto.check(phrase, channel: .mic) == .keep)
+        for channel in [LanguageGate.Channel.call, .mic, .allSystem] {
+            #expect(ru.check(phrase, channel: channel) == .drop(language: "en"))
+            #expect(uk.check(phrase, channel: channel) == .drop(language: "en"))
+            // English и Auto — английский разрешён.
+            #expect(en.check(phrase, channel: channel) == .keep)
+            #expect(auto.check(phrase, channel: channel) == .keep)
+        }
+    }
+
+    @Test func pseudoEnglishOnCallIsDropped() {
+        // R-02: немецкая речь, распознанная как английские слова, в звонке отбрасывается тем же правилом.
+        let text = "So we have a bit of the time and you can come with me."
+        #expect(uk.check(text, channel: .call) == .drop(language: "en"))
+        #expect(ru.check(text, channel: .call) == .drop(language: "en"))
+    }
+
+    @Test func termAndShortPhrasesPassOnCall() {
+        // Правила терминов и коротких фраз остаются и в звонке.
+        #expect(ru.check("Pull request and code review", channel: .call) == .keep)
+        #expect(uk.check("Kubernetes Deployment", channel: .call) == .keep)
+        #expect(uk.check("Yes, exactly.", channel: .call) == .keep)
+        #expect(ru.check("Okay thanks", channel: .call) == .keep)
+        #expect(ru.check("I really love watching football matches", channel: .call) == .drop(language: "en"))
     }
 
     @Test func shortEnglishTermPhrasesPassInMic() {
@@ -202,7 +218,7 @@ struct VoicePrintTests {
         config.partialInterval = 10
         let t = StreamingTranscriber(recognizer: fake, buffer: buffer, config: config) { sink.add($0) }
         t.setLanguage("uk")
-        t.setVoiceGate { _ in (similarity: 0.41, accepted: false) }
+        t.setVoiceGate { _ in VoiceVerdict(similarity: 0.41, accepted: false) }
         for chunk in [EnergyVADTests.noise(ms: 300, amplitude: 0.001), EnergyVADTests.tone(ms: 1500, amplitude: 0.3),
                       EnergyVADTests.noise(ms: 700, amplitude: 0.001)] {
             var i = 0
@@ -278,28 +294,5 @@ struct OwnerChannelTests {
         func revisionNeeded(_ first: Transcription, language: String?) -> Bool { true }
         func revise(_ samples: [Float], language: String?, prompt: String?) throws -> Transcription? { nil }
         func cancelRevision() {}
-    }
-
-    @Test func ownerChannelSkipsWhisperRevision() async {
-        for allow in [true, false] {
-            let buffer = AudioRingBuffer(seconds: 30)
-            let sink = EventSink()
-            var config = StreamingTranscriber.Config()
-            config.partialInterval = 3600
-            config.allowRevision = allow
-            let t = StreamingTranscriber(recognizer: RevisingRecognizer(), buffer: buffer, config: config) { sink.add($0) }
-            for chunk in [EnergyVADTests.noise(ms: 300, amplitude: 0.001), EnergyVADTests.tone(ms: 1500, amplitude: 0.3),
-                          EnergyVADTests.noise(ms: 700, amplitude: 0.001)] {
-                var i = 0
-                while i < chunk.count {
-                    let part = Array(chunk[i..<min(i + 320, chunk.count)])
-                    buffer.append(part)
-                    t.process(part)
-                    i += 320
-                }
-            }
-            #expect(await sink.waitFor { $0.contains { if case .final = $0 { true } else { false } } })
-            #expect(sink.events.contains { if case .revising = $0 { true } else { false } } == allow)
-        }
     }
 }

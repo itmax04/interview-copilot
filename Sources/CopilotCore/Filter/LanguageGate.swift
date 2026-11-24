@@ -6,8 +6,9 @@ import NaturalLanguage
 /// - Разрешено: Українська / Русский → {uk, ru} (одна группа: Parakeet пишет украинскую речь то «по-русски», Q7);
 ///   English → {en}; Auto → {uk, ru, en} (Q12).
 /// - Латинские слова внутри фразы на разрешённом языке не мешают: фраза оценивается по большинству слов (Q9).
-/// - Целиком английская фраза при uk/ru: в канале звонка проходит (Q8); в микрофоне и «Весь системный звук» — только
-///   короткая (≤ 4 слов) и из терминов словаря (Q9).
+/// - Целиком английская фраза при uk/ru отбрасывается в любом канале, включая звонок (COPILOT-16 R-01; Q8 из COPILOT-05
+///   «в звонке английский проходит» отменено): проходит только короткая (≤ 4 значимых слов) фраза из терминов словаря (Q9).
+///   Так же отбрасывается «псевдоанглийский» — немецкая речь, которую распознали как английские слова (R-02).
 /// - Фраза короче 3 слов, язык которой не очевиден, не отбрасывается: лучше пропустить шум, чем потерять вопрос.
 public struct LanguageGate: Sendable {
     public enum Channel: String, Sendable {
@@ -15,7 +16,7 @@ public struct LanguageGate: Sendable {
         case call
         /// Микрофон Mac.
         case mic
-        /// «Весь системный звук»: кроме звонка там видео и уведомления — правила строже, как у микрофона (Q8).
+        /// «Весь системный звук»: кроме звонка там видео и уведомления. Правила языка с COPILOT-16 одинаковы для всех каналов.
         case allSystem
     }
 
@@ -49,7 +50,9 @@ public struct LanguageGate: Sendable {
         let latin = words.filter(Self.isLatin).count
         let other = words.count - cyrillic - latin
 
-        if cyrillic >= latin && cyrillic >= other {
+        // Латинские термины словаря в русской/украинской фразе не перевешивают кириллицу («Что такое Spring Boot Data JPA»).
+        let foreignLatin = words.filter { Self.isLatin($0) && !terms.words.contains($0) }.count
+        if cyrillic > 0 && cyrillic >= foreignLatin && cyrillic >= other || cyrillic >= latin && cyrillic >= other {
             return allowed.contains("slavic") || words.count < Self.minWordsToDrop ? .keep : .drop(language: "uk/ru")
         }
         if other > latin {
@@ -67,7 +70,8 @@ public struct LanguageGate: Sendable {
             if words.count < Self.minWordsToDrop || allTerms { return .keep }
             return .drop(language: language ?? "?")
         }
-        if allowed.contains("en") || channel == .call { return .keep }
+        // COPILOT-16 R-01: канал не важен — английский целиком проходит только если он разрешён (English/Auto).
+        if allowed.contains("en") { return .keep }
         return words.count < Self.minWordsToDrop ? .keep : .drop(language: "en")
     }
 

@@ -31,7 +31,7 @@ answers), screenshot → coding-task solution by a strong model, answer style (f
 "Ask AI", a local AI mock interview (the model asks questions by voice), a browser-based test call for measuring
 recognition accuracy, light/dark theme, Russian/English UI.
 
-There is exactly one user — the **owner**. The app is not distributed. No audio is ever written to disk.
+There is exactly one user — the **owner**. The app is not distributed. By default no audio is written to disk; the only exception is the opt-in `question-audio/` folder (§6).
 
 Current version: see `CFBundleShortVersionString` in `Resources/Info.plist` and the latest task in `docs/changes/`.
 
@@ -118,11 +118,13 @@ owner mic ─► MicActivityDetector (is the owner speaking) ─► TurnDetector
           └► second StreamingTranscriber (owner answers) ─► InterviewMemory.addAnswer      │
                                                                                            ▼
 StreamingTranscriber: EnergyVAD segments → Silero "is it speech" → Parakeet final (~0.1 s) → HallucinationFilter →
-  voiceprint (mic mode) → events .partial / .final / .revised (Whisper turbo refine) / .foreignVoice / .discarded
+  voiceprint (mic mode) → events .partial / .final / .foreignVoice / .discarded
+  (+ .speaker before .final in "Rehearsal with an interviewer": SpeakerRouter → question or owner answer)
                                                                                            ▼
-ListeningController: language filter (LanguageGate + term dictionary) → transcript line or a gray "filtered" line
+ListeningController: language filter (LanguageGate + term dictionary; per-session language via SessionLanguageLock — "auto"
+  locks on the interview language, whole English is dropped on every channel unless the owner allows it) → transcript line or a gray "filtered" line
                                                                                            ▼
-TurnController → TurnDetector: pause T (700 ms; 350 ms after "?"), owner speech, echo → Turn
+TurnController → TurnDetector: pause T (1000 ms; 600 ms after "?"; question re-decoded from its whole audio), owner speech, echo → Turn
   + speculative draft request for a finished phrase before the pause expires
                                                                                            ▼
 AppDelegate.turnCompleted → InterviewMemory.addQuestion → AnswerController.handle(turn)
@@ -170,6 +172,9 @@ More detail per module: `docs/ARCHITECTURE.md`.
 - `instructions.md` — general instructions (all profiles and "No profile");
 - `models/` — Whisper, bge-m3, Parakeet, Silero, CAM++, LocalVQE;
 - `sessions/*.json` — session history (utterances, turns, exchanges, review), 600, purged by retention;
+- `question-audio/` — **opt-in, off by default** (Settings → Privacy «Сохранять аудио вопросов на этом Mac»): the call channel's question
+  audio as 16 kHz mono WAV plus a numbers-only sidecar (duration, sample rate, language, channel, decode ms; no text), dir 700, files 600,
+  excluded from backup, purged after N days (default 14) and removed by "Delete all history" / «Удалить сохранённое аудио»;
 - `voice/owner.json` — voiceprint (192 floats), 600; `usage.json` — token/cost counters.
 
 Settings: UserDefaults domain `com.itmax04.interviewcopilot`, key `settings.v1`. API keys: Keychain service
@@ -207,7 +212,7 @@ Settings: UserDefaults domain `com.itmax04.interviewcopilot`, key `settings.v1`.
 | A menu item | `MenuAction` + `MenuLayout.sections` + `AppDelegate.handle(_: MenuAction)` (the switch is exhaustive) + `MenuLayoutTests`. |
 | A UI string or window | See §7 "UI text"; run `scripts/check-localization.sh`. |
 | Provider fallback behavior | `ProviderChain` (`run` sequential, `runHedged` parallel, `lastResort`), `ProviderHealth`; tests in `ChainResilienceTests`, `MultiKeyTests`, `LLMTests`. |
-| Something stored on disk | Keep it backward compatible (optional fields), keep permissions 600/700, never store audio. |
+| Something stored on disk | Keep it backward compatible (optional fields), keep permissions 600/700, never store audio (the opt-in `question-audio/` is the only exception). |
 | A dependency or model | ADR entry in `docs/decisions/ADR-0001-stack.md`; models with SHA256 in the lists at the repo root. |
 
 ## 9. Verification
@@ -232,7 +237,7 @@ baselines: `evals/README.md`. If a command does not exist yet for your step, wri
 /usr/bin/log show --predicate 'subsystem == "com.itmax04.interviewcopilot"' --info --last 30m
 ```
 
-Categories `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Useful events: `transcript_final`, `transcript_revised`,
+Categories `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Useful events: `transcript_final`, `redecode`, `whisper_history`,
 `filtered reason=lang|vad|voice|echo|hallucination`, `turn_end`, `draft_start/used/cancelled`, `bank_match`, `no_match`,
 `first_token … ms_from_speech_end=…`, `not_a_question`, `provider … failed: …`, `last resort: …`, `capture_restart`.
 Session files in `sessions/*.json` contain per-turn `source`, `model`, `firstTokenMs`, `inputTokens` — useful for

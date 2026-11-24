@@ -12,6 +12,24 @@ struct AnswerCard: View {
         if let entry = model.history.current, let version = entry.current {
             VStack(alignment: .leading, spacing: 8) {
                 header(entry)
+                if let rootID = entry.rootEntryID, let rootTitle = entry.rootTitle,
+                   model.history.entry(rootID) != nil {
+                    Button { model.history.select(entry: rootID) } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.uturn.backward")
+                                .font(.system(size: max(9, model.fontSize - 4), weight: .semibold))
+                            Text(L("К билету: %@", rootTitle))
+                                .lineLimit(1)
+                        }
+                        .font(.system(size: max(10, model.fontSize - 3), weight: .medium))
+                        .foregroundStyle(IC.accent)
+                        .padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(IC.accent.opacity(0.16), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Вернуться к основному вопросу")
+                    .accessibilityLabel(L("К билету: %@", rootTitle))
+                }
                 if entry.versions.count > 1 { versionTabs(entry) }
                 bodyView(entry: entry, version: version)
                 if version.status == .complete || version.status == .cancelled { footer(version) }
@@ -105,7 +123,7 @@ struct AnswerCard: View {
             // P02 №4: статус «Готовлю ответ…» — в пилюле над карточкой, здесь — полоса ожидания.
             ProgressView().progressViewStyle(.linear).tint(IC.accent).accessibilityLabel("Готовлю ответ")
             // R-08: прежний ответ виден, но не выдаёт себя за новый.
-            if entry.versions.count == 1, let previous = model.history.previous, let text = previous.current?.text, !text.isEmpty {
+            if entry.versions.count == 1, let previous = model.history.previous, let text = previous.current.map({ UnderstoodLine.answer($0.text) }), !text.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Предыдущий ответ · \(previous.title)").font(.system(size: model.fontSize - 4, weight: .semibold))
                     MarkdownText(text, fontSize: model.fontSize - 2).lineLimit(4)
@@ -117,7 +135,16 @@ struct AnswerCard: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 4) {
-                        MarkdownText(version.text, fontSize: model.fontSize, emphasizeLead: true)
+                        let parts = UnderstoodLine.split(version.text)
+                        if let understood = parts.line {
+                            // COPILOT-15 R-10: как понят вопрос — приглушённая строка над ответом.
+                            Text(understood)
+                                .font(.system(size: model.fontSize - 3, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.55))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityLabel(Text("Понятый вопрос: \(understood.dropFirst(UnderstoodLine.marker.count).trimmingCharacters(in: .whitespaces))"))
+                        }
+                        MarkdownText(parts.rest, fontSize: model.fontSize, emphasizeLead: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .textSelection(.enabled)
                         if version.status == .streaming { Text("▍").foregroundStyle(.white.opacity(0.6)) }

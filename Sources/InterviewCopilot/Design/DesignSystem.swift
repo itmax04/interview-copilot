@@ -262,6 +262,10 @@ enum ICDark {
     static let stroke = Color.white.opacity(0.11)
     static let secondary = Color.white.opacity(0.58)
     static let divider = Color.white.opacity(0.09)
+    /// Состояние «выключено» на тёмном стекле (кнопка «Микрофон выкл.», COPILOT-18); тот же оттенок, что `IC.red` в тёмной теме.
+    static let red = Color(hex: 0xFA5252)
+    /// Состояние «взведено» на тёмном стекле (кнопка «Уточнить голосом», COPILOT-18 D9); тот же оттенок, что `IC.accent` в тёмной теме.
+    static let accent = Color(hex: 0x6382FF)
 }
 
 /// Кнопка оверлея: иконка, подпись и подсказка клавиши (P01: «Ответ ⌘↩»).
@@ -270,6 +274,10 @@ struct ICOverlayButton: View {
     let icon: String
     var keys: String? = nil
     var size: Double = 13
+    /// Состояние «выключено» (красный): кнопка «Микрофон выкл.» (COPILOT-18). Цвет не единственный признак — меняются иконка и подпись.
+    var alert = false
+    /// Состояние «взведено» (акцент + рамка 2 pt, подпись и иконка тоже меняются): «Уточнение голосом» (COPILOT-18 D9). Без анимации — Reduce Motion не затронут.
+    var armed = false
     let action: () -> Void
     var body: some View {
         Button(action: action) {
@@ -282,8 +290,9 @@ struct ICOverlayButton: View {
             }
             .padding(.horizontal, 8).padding(.vertical, 6)
             .frame(maxWidth: .infinity)
-            .background(ICDark.surface, in: RoundedRectangle(cornerRadius: 9))
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(ICDark.stroke))
+            .foregroundStyle(alert ? AnyShapeStyle(ICDark.red) : armed ? AnyShapeStyle(ICDark.accent) : AnyShapeStyle(.foreground))
+            .background(alert ? ICDark.red.opacity(0.18) : armed ? ICDark.accent.opacity(0.22) : ICDark.surface, in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(alert ? ICDark.red : armed ? ICDark.accent : ICDark.stroke, lineWidth: armed ? 2 : 1))
             .contentShape(RoundedRectangle(cornerRadius: 9))
         }
         .buttonStyle(.plain)

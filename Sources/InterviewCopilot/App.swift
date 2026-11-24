@@ -153,6 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        purgeQuestionAudio()
         // Язык интерфейса (COPILOT-10) — до первого окна и меню: английская таблица из пакета, при запуске из `.build` — из Resources.
         L10n.loadTable(bundle: .main, fallbackDirectory: URL(fileURLWithPath: "Resources"))
         UILanguage.shared.apply(model.settings.interfaceLanguage)
@@ -200,13 +201,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             if case .final(let u, let text, let lang, _, _) = event {
                 self.sessions.addUtterance(id: u, text: text, language: lang)
-                self.fastText[u] = text
-                if self.fastText.count > 50, let oldest = self.fastText.keys.min() { self.fastText.removeValue(forKey: oldest) }
-            }
-            if case .revised(let u, let text, let lang) = event {
-                self.sessions.reviseUtterance(id: u, text: text, language: lang)
-                // COPILOT-06: уточнённый текст — и в память интервью (живой тест: туда попадал черновой Parakeet).
-                if let fast = self.fastText.removeValue(forKey: u) { self.memory.reviseText(fast, to: text); self.saveMemory() }
             }
         }
         listening.onOwnerSpeaking = { [weak self] speaking, t in
@@ -236,7 +230,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         turns.onTurn = { [weak self] turn in self?.turnCompleted(turn) }
         turns.onDraft = { [weak self] text in self?.draftReady(text) }
+        turns.onDraftCancel = { [weak self] in self?.answers.cancelDraft() }
+        // COPILOT-15: вопрос хода — повторное распознавание звука целиком; текст фраз только предварительный.
+        turns.redecode = { [weak self] utterances, turn, provisional in
+            await self?.listening.redecodeQuestion(utterances: utterances, turn: turn, provisional: provisional)
+        }
+        turns.draftRedecode = { [weak self] utterances, turn in
+            await self?.listening.redecodeQuestion(utterances: utterances, turn: turn, provisional: "", release: false)
+        }
+        turns.onQuestionText = { [weak self] utterances, text in self?.listening.replaceQuestionLines(utterances: utterances, with: text) }
         listening.onFiltered = { [weak self] text in self?.turns.filtered(text) }
+        // R-07: Whisper по звуку вопроса уточняет только память, историю и отчёт; показанная подсказка не меняется.
+        listening.onHistoryText = { [weak self] turn, old, new, language, seconds in
+            guard let self else { return }
+            self.answers.refineTicketRoot(turn: turn, old: old, new: new, audioSeconds: seconds)
+            self.memory.reviseText(old, to: new, scope: .questions)
+            if let ids = self.historyUtterances.removeValue(forKey: turn) { self.sessions.reviseQuestion(utterances: ids, text: new, language: language) }
+            self.saveMemory()
+        }
         // Образец голоса записан или удалён в настройках (COPILOT-05 R-03).
         NotificationCenter.default.addObserver(forName: ListeningController.voicePrintChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.listening.voiceSettingsChanged() }
@@ -250,6 +261,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self.liveSession.isActive { self.listening.start() } else { self.listening.enterStandby() }
         }
         panelModel.onCreateSession = { [weak self] in self?.showWizard() }
+        panelModel.onQuickStart = { [weak self] type, profileID in self?.quickStartSession(type: type, profileID: profileID) }
+        panelModel.onUnmuteMic = { [weak self] in
+            DefaultInputMute.unmute()
+            self?.panelModel.micHardwareMuted = DefaultInputMute.isMuted()
+        }
+        panelModel.onAllowEnglish = { [weak self] in
+            self?.listening.allowEnglish()
+            self?.panelModel.englishNoticeVisible = false
+        }
+        panelModel.onAllSystemCallOnly = { [weak self] in self?.listening.switchToCallOnly() }
+        panelModel.onDismissAllSystem = { [weak self] in self?.listening.dismissAllSystemNotice() }
         panelModel.onEndSession = { [weak self] in self?.liveSession.end() }
         panelModel.onStartDetectedCall = { [weak self] in
             guard let self else { return }
@@ -305,17 +327,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard self.memory.dropUnanswered(turnID: turn.id) else { return }
             self.saveMemory()
         }
-        // COPILOT-06: ответы владельца — в обменах памяти интервью.
+        // COPILOT-06: ответы владельца — в обменах памяти интервью (с привязкой к exchangeID при перебивании).
         answers.memory = memory
         answers.embed = { [weak self] in self?.bank.embedFunction }
-        listening.onOwnerSaid = { [weak self] text in
-            self?.memory.addAnswer(text)
-            self?.sessions.addOwnerUtterance(text)
-            self?.saveMemory()
+        listening.currentExchangeID = { [weak self] in self?.memory.currentExchangeID }
+        listening.onOwnerMicChanged = { [weak self] off in
+            guard let self else { return }
+            self.sessions.micMuteChanged(off: off)
+            self.panelModel.ownerMicOff = off
+            if off, self.voiceClarify.isArmed { self.voiceClarify.disarm(); self.voiceClarifyChanged() }   // D9: при выключенном микрофоне режим не живёт
+            self.refreshUI()
         }
-        listening.onOwnerRevised = { [weak self] fast, text in
-            self?.memory.reviseText(fast, to: text)
-            self?.sessions.reviseOwnerUtterance(fast, to: text)
+        listening.onOwnerSaid = { [weak self] text, exchangeID, interrupted in
+            guard let self else { return }
+            // Если владелец не был перебит, а сам повторил или уточнил вопрос — обновляем/создаём подсказку без кнопок.
+            // COPILOT-18 D1: только если владелец включил «Уточнение голосом»; по умолчанию его речь — лишь ответ в памяти.
+            // D9: одноразовое «Уточнение голосом» (кнопка / ⇧⌘U) обходит настройку, но только для одной следующей фразы.
+            let forced = self.voiceClarify.consume(interrupted: interrupted)
+            if forced { self.voiceClarifyChanged() }
+            if forced || self.model.settings.ownerVoiceClarification, !interrupted, !self.testCall.active, !self.testCallOnly, self.liveSession.isActive,
+               self.liveSession.config.type != .mock {
+                let age = self.answers.lastQuestionAge, active = self.answers.hasActiveQuestion
+                let decision = forced
+                    ? OwnerQuestionDetector.detectForced(text: text, secondsSinceLastQuestion: age, hasActiveQuestion: active)
+                    : OwnerQuestionDetector.detect(text: text, secondsSinceLastQuestion: age, hasActiveQuestion: active)
+                if decision != .none {
+                    Log.metrics.notice("owner_question_trigger decision=\(String(describing: decision).prefix(24), privacy: .public)")
+                    if case .newQuestion(let q) = decision {
+                        self.memory.addQuestion(q, turnID: nil)
+                        self.saveMemory()
+                    }
+                    self.answers.handleOwnerQuestion(decision)
+                    return
+                }
+            }
+            self.memory.addAnswer(text, toExchangeID: exchangeID)
+            self.sessions.addOwnerUtterance(text)
+            self.saveMemory()
+        }
+        listening.onOwnerAnswerRevised = { [weak self] old, new, exchangeID in
+            self?.memory.reviseAnswer(old, to: new, inExchangeID: exchangeID)
             self?.saveMemory()
         }
         if testCallOnly {
@@ -399,7 +450,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if !force && s.language != old.language { listening.languageSettingChanged() }
         if force || s.neuralSpeechGate != old.neuralSpeechGate { listening.speechGateSettingChanged() }
-        if force || s.ownerVoiceOnly != old.ownerVoiceOnly || s.ownerVoiceThreshold != old.ownerVoiceThreshold { listening.voiceSettingsChanged() }
+        if force || s.ownerVoiceOnly != old.ownerVoiceOnly || s.ownerVoiceThreshold != old.ownerVoiceThreshold
+            || s.rehearsalWithInterviewer != old.rehearsalWithInterviewer { listening.voiceSettingsChanged() }
         if force || s.micNoiseSuppression != old.micNoiseSuppression { listening.noiseSuppressionSettingChanged() }
         if !force && s.ownerSpeechContext != old.ownerSpeechContext { listening.ownerSpeechSettingChanged() }
         if force { updateFilterTerms() }
@@ -429,7 +481,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let cards = bank.cards
-        listening.setRecognitionPrompt { language in RecognitionVocabulary.prompt(cards: cards, language: language) }
+        let materials = bank.materialTexts
+        listening.setRecognitionPrompt { language in RecognitionVocabulary.prompt(cards: cards, materials: materials, language: language) }
     }
 
     private func refreshUI() {
@@ -457,7 +510,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panelModel.callDetected = liveSession.detectedCall
 
         panelModel.sourceName = listening.source.displayName
+        let allSystem = liveSession.isActive ? listening.allSystemNotice : nil
+        if panelModel.allSystemNoticeVisible != (allSystem != nil) { panelModel.allSystemNoticeVisible = allSystem != nil }
+        if panelModel.allSystemCallApp != allSystem?.callApp?.name { panelModel.allSystemCallApp = allSystem?.callApp?.name }
         panelModel.ownerAnswering = listening.ownerAnswering
+        panelModel.ownerMicOff = listening.ownerMicOff
+        panelModel.voiceClarifyArmed = voiceClarify.isArmed
+        panelModel.ownerMicAvailable = liveSession.isActive && liveSession.config.type != .mock && !testCall.active && !testCallOnly
+            && listening.ownerMicSwitchAvailable
+        panelModel.quickProfiles = bank.profiles
+        if panelModel.quickProfileID.isEmpty || !bank.profiles.contains(where: { $0.id == panelModel.quickProfileID }) {
+            panelModel.quickProfileID = bank.activeID ?? bank.profiles.first?.id ?? ""
+        }
         panelModel.selfTest = state.selfTest
         panelModel.setTranscript(listening.transcript, partial: listening.partialText)
         panelModel.autoGenerate = liveSession.isActive ? liveSession.config.autoGenerate : (model.settings.lastSessionConfig?.autoGenerate ?? true)
@@ -486,14 +550,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Звук в оверлее (COPILOT-09 R-08)
 
     private var lastCallSignalAt = Date()
+    private var muteCheckTick = 0
+    private var micSilence = MicSilenceDetector()
 
     /// Уровни микрофона и звонка; «не слышу звонок N с» — только в сессии со звуком приложения (не в самопроверке).
     private func updateLevels() {
         // Шаг 3 дБ и запись только при изменении: шапка не перерисовывается 10 раз в секунду без нужды.
-        let mic = (listening.micLevelDB / 3).rounded() * 3, call = (listening.levelDB / 3).rounded() * 3
+        // COPILOT-18: пока микрофон выключен в Copilot, индикатор молчит — приложение его не слышит.
+        let mic = listening.ownerMicOff ? Float(-120) : (listening.micLevelDB / 3).rounded() * 3, call = (listening.levelDB / 3).rounded() * 3
         if panelModel.micLevel != mic { panelModel.micLevel = mic }
         if panelModel.callLevel != call { panelModel.callLevel = call }
-        guard liveSession.isActive, listening.phase == .listening, listening.source != .microphone, liveSession.config.type != .mock else {
+        if panelModel.englishNoticeVisible != listening.englishNoticeVisible { panelModel.englishNoticeVisible = listening.englishNoticeVisible }
+        // Раз в ~1 с проверяем, не замьючен ли микрофон системой macOS (kAudioDevicePropertyMute == 1).
+        if liveSession.isActive, listening.phase == .listening {
+            muteCheckTick += 1
+            if muteCheckTick >= 10 {
+                muteCheckTick = 0
+                let muted = DefaultInputMute.isMuted()
+                if panelModel.micHardwareMuted != muted { panelModel.micHardwareMuted = muted }
+            }
+        } else if panelModel.micHardwareMuted {
+            panelModel.micHardwareMuted = false
+            muteCheckTick = 0
+        }
+        // COPILOT-16 R-05: микрофон молчит (цифровой ноль) при выключенном mute — уведомление и одна запись в журнал за эпизод.
+        let now = Double(DispatchTime.now().uptimeNanoseconds) / 1e9
+        let active = liveSession.isActive && listening.micExpected
+        if micSilence.update(levelDB: listening.micLevelDB, muted: panelModel.micHardwareMuted, active: active, now: now) {
+            let device = DefaultInputMute.deviceName()
+            panelModel.micSilentDevice = device
+            Log.audio.notice("mic_silent seconds=\(Int(self.micSilence.silentSeconds)) device=\(device ?? "?", privacy: .private) muted=false")
+        }
+        if panelModel.micSilent != micSilence.isSilent { panelModel.micSilent = micSilence.isSilent }
+        // Предупреждение «не слышу звонок» — только если пользователь явно выбрал конкретное приложение (.app),
+        // а не универсальный авто-захват (где можно нажать «Быстрый старт» заранее, до открытия звонка).
+        let explicitAppSource: Bool = if case .app = model.settings.audioSource { true } else { false }
+        guard liveSession.isActive, listening.phase == .listening, explicitAppSource, liveSession.config.type != .mock else {
             if panelModel.callSilentSeconds != nil { panelModel.callSilentSeconds = nil }
             lastCallSignalAt = Date()
             return
@@ -511,16 +603,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         panelModel.detection = panelModel.detection.next(on: .turnCompleted)
+        // Если владелец говорил и его прервали коротким вопросом — гарантируем сброс его речи в ПРЕДЫДУЩИЙ обмен
+        // до добавления нового вопроса в память.
+        listening.flushOwnerForInterruption()
         memory.addQuestion(turn.text, turnID: turn.id)
+        turns.setAllowShortFollowUps(true)
         saveMemory()
+        if !turn.utterances.isEmpty {
+            historyUtterances[turn.id] = turn.utterances
+            if historyUtterances.count > 10, let oldest = historyUtterances.keys.min() { historyUtterances.removeValue(forKey: oldest) }
+            listening.submitHistoryPass(utterances: turn.utterances, turn: turn.id, text: turn.text)
+        }
         answers.handle(turn)
     }
 
     // MARK: Память интервью (COPILOT-06)
 
     let memory = InterviewMemory()
-    /// Быстрый текст реплик до уточнения (R-37): по нему находим вопрос в памяти.
-    private var fastText: [Int: String] = [:]
+    /// Номера фраз ходов, ждущих фонового прохода Whisper по истории (COPILOT-15 R-07).
+    private var historyUtterances: [Int: [Int]] = [:]
 
     private func saveMemory() {
         sessions.updateExchanges(memory.all)
@@ -539,20 +640,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         liveSession.start(config)
     }
 
+    /// Быстрый старт в 1 клик (без 3 шагов мастера): универсальный захват любого звонка на Mac + микрофон.
+    private func quickStartSession(type: SessionType, profileID: String?) {
+        // Всегда слушаем весь системный звук + микрофон (если нет разрешения записи экрана — микрофон),
+        // чтобы не привязываться к конкретной звонилке: работает и с Meet, и с Zoom/Telegram/Teams/FaceTime/телефоном.
+        model.settings.audioSource = Permissions.screenCaptureGranted ? .allSystem : .microphone
+        var config = wizard.defaultConfig()
+        config.type = type
+        config.profileID = profileID ?? bank.activeID
+        config.autoGenerate = true
+        config.saveTranscript = true
+        workspaceModel.quickSessionType = type
+        panelModel.quickSessionType = type
+        if let id = config.profileID { panelModel.quickProfileID = id }
+        startSession(config)
+        panel.show()
+    }
+
     /// Сессия начата: профиль, язык, память, история, слушание и ходы. Границы интервью теперь задаёт сессия
     /// (раньше — тишина 30 мин и смена приложения звонка, COPILOT-06 R-05).
+    /// COPILOT-17 R-10: старые файлы звука вопросов удаляются всегда, даже при выключенном сохранении.
+    private func purgeQuestionAudio() {
+        let days = model.settings.questionAudioRetentionDays
+        DispatchQueue.global(qos: .utility).async { QuestionAudioStore().purge(olderThanDays: days) }
+    }
+
     private func sessionStarted(_ c: SessionConfig) {
         if let id = c.profileID { bank.select(id) }
-        model.settings.useProfile = c.type == .interview || c.type == .mock
+        model.settings.useProfile = c.type == .interview || c.type == .mock || c.type == .exam
         if model.settings.language != c.language { model.settings.language = c.language }
         model.settings.lastSessionConfig = c.defaultsForNext()
+        listening.sessionStartedAt = Date()
+        listening.resetOwnerMic()
+        resetVoiceClarify()
+        listening.setHintWaitsForWhisper(PreciseQuestionMode.waits(mode: model.settings.preciseQuestion, session: c.type, language: c.language))
         memory.reset()
-        fastText = [:]
+        turns.setAllowShortFollowUps(false)
+        historyUtterances = [:]
         answers.cancel()
         sessions.start(source: listening.source.displayName, retentionDays: model.settings.historyRetentionDays, config: c)
         turns.autoEnabled = c.autoGenerate
         panelModel.history.clear()
         panelModel.detection = panelModel.detection.next(on: .reset)
+        panelModel.micHardwareMuted = DefaultInputMute.isMuted()
         answers.clearTask()
         // ⌘-схема ParakeetAI — только на время сессии (Q10).
         panelModel.sessionHotkeysFailed = Set(hotkeys?.registerSession() ?? [])
@@ -570,6 +700,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func sessionEnded(_ c: SessionConfig) -> Task<Void, Never> {
+        listening.setHintWaitsForWhisper(false)
+        purgeQuestionAudio()
         hotkeys?.unregisterSession()
         panelModel.sessionHotkeysFailed = []
         answers.clearTask()
@@ -579,6 +711,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.cancel()
         let browserCleanup = c.type == .mock ? interviewer.close() : testCall.close()
         let standby = listening.enterStandby()
+        resetVoiceClarify()
+        listening.resetOwnerMic()      // после standby: канал владельца не включается на миг; отрезок закрывается до finish()
         let record = sessions.finish()
         refreshUI()
         // Разбор (R-13, Q15): сразу после End в фоне; окно открывается на этой сессии — расшифровка видна сразу.
@@ -607,6 +741,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .togglePause: togglePause()
         case .strongModel: answers.askStrongModel()
         case .ownerAnswer: toggleOwnerAnswering()
+        case .toggleMic: toggleOwnerMic()
+        case .voiceClarify: toggleVoiceClarify()
         case .screenshot: takeScreenshot()
         case .newSession: showWizard()
         case .chat: toggleChat()
@@ -657,7 +793,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupWorkspace() {
+        let initialType = model.settings.lastSessionConfig?.type ?? .interview
+        let quickType: SessionType = (initialType == .mock) ? .interview : initialType
+        workspaceModel.quickSessionType = quickType
+        panelModel.quickSessionType = quickType
+        panelModel.quickProfileID = bank.activeID ?? bank.profiles.first?.id ?? ""
         wizard.onTestCall = { [weak self] in self?.handle(MenuAction.practice) }
+        workspaceModel.onQuickStart = { [weak self] type, profileID in self?.quickStartSession(type: type, profileID: profileID) }
         workspaceModel.onCreateSession = { [weak self] in self?.showWizard() }
         workspaceModel.onTestCall = { [weak self] in self?.handle(MenuAction.practice) }
         workspaceModel.onMock = { [weak self] in self?.handle(MenuAction.aiInterview) }
@@ -723,6 +865,66 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         panelModel.onOwnerAnswer = { [weak self] in self?.toggleOwnerAnswering() }
+        panelModel.onToggleOwnerMic = { [weak self] in self?.toggleOwnerMic() }
+        panelModel.onVoiceClarify = { [weak self] in self?.toggleVoiceClarify() }
+    }
+
+    /// ⇧⌘M (в сессии) / ⌃⌥M или кнопка «Микрофон» в оверлее: Copilot перестаёт слушать микрофон владельца и снова слушает (COPILOT-18).
+    private func toggleOwnerMic() {
+        guard liveSession.isActive, liveSession.config.type != .mock, !testCall.active, !testCallOnly,
+              listening.toggleOwnerMic() != nil else {
+            Log.app.info("owner mic toggle ignored: no call session")
+            return
+        }
+        refreshUI()
+    }
+
+    // MARK: «Уточнение голосом» одним разом (COPILOT-18 D9)
+
+    private var voiceClarify = VoiceClarifyArm()
+    private var voiceClarifyTimer: Task<Void, Never>?
+
+    /// ⇧⌘U (в сессии) / ⌃⌥U или кнопка: взвести («следующая моя фраза уточняет вопрос») или отменить. Выключенный микрофон не включается молча.
+    private func toggleVoiceClarify() {
+        guard liveSession.isActive, liveSession.config.type != .mock, !testCall.active, !testCallOnly,
+              listening.ownerMicSwitchAvailable else {
+            Log.app.info("voice clarify ignored: no call session")
+            return
+        }
+        if listening.ownerMicOff, !voiceClarify.isArmed {
+            Log.app.info("voice clarify ignored: owner mic is off")
+            return
+        }
+        let armed = voiceClarify.toggle(now: Date())
+        Log.app.notice("voice clarify \(armed ? "armed" : "cancelled", privacy: .public)")
+        voiceClarifyChanged()
+    }
+
+    /// Состояние изменилось: таймер самоотключения (15 с, пока владелец говорит — ждём конца фразы) и панель.
+    private func voiceClarifyChanged() {
+        voiceClarifyTimer?.cancel()
+        voiceClarifyTimer = nil
+        if voiceClarify.isArmed {
+            voiceClarifyTimer = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(VoiceClarifyArm.timeoutSeconds))
+                while !Task.isCancelled, let self, self.voiceClarify.isArmed {
+                    if self.voiceClarify.expire(now: Date(), ownerSpeaking: self.listening.ownerSpeaking) {
+                        Log.app.notice("voice clarify timed out")
+                        self.voiceClarifyChanged()
+                        return
+                    }
+                    try? await Task.sleep(for: .seconds(1))
+                }
+            }
+        }
+        refreshUI()
+    }
+
+    /// Начало и конец сессии: режим не переживает сессию.
+    private func resetVoiceClarify() {
+        guard voiceClarify.isArmed else { return }
+        voiceClarify.disarm()
+        voiceClarifyChanged()
     }
 
     /// ⌃⌥A или пункт меню «Сейчас отвечаю я» (самопроверка, COPILOT-06/07).

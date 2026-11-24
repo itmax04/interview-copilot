@@ -358,6 +358,11 @@ enum UISnapshots {
                 listening(m); m.state = .listening; m.sessionActive = true; m.sessionTimer = "56:12"
                 m.planNotice = "Осталось 4 мин по плану"
             }),
+            // COPILOT-18: кнопка «Микрофон» между «Скриншот» и «Чат» — включён и выключен (красное состояние).
+            ("mic-toggle-on", { m in session(m); m.ownerMicAvailable = true }),
+            ("mic-toggle-off", { m in session(m); m.ownerMicAvailable = true; m.ownerMicOff = true; m.micLevel = -120 }),
+            // COPILOT-18 D9: «Уточнить голосом» — взведено (акцент). При выключенном микрофоне кнопки нет (см. mic-toggle-off).
+            ("voice-clarify-armed", { m in session(m); m.ownerMicAvailable = true; m.voiceClarifyArmed = true }),
             ("no-permission", { $0.state = .noPermission }),
             ("downloading", { $0.state = .downloading(0.42) }),
             ("listening", { m in listening(m); m.state = .listening; m.partial = "А как вы тестируете" }),

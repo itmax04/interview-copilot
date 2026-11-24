@@ -125,13 +125,14 @@ final class SessionWizardModel {
         if let id = config.profileID, bank.profiles.contains(where: { $0.id == id }) {
             let p = bank.library.load(id)
             switch config.type {
-            case .regular: profile = Profile(name: p.name, instructions: p.instructions)
+            case .regular, .exam: profile = Profile(name: p.name, instructions: p.instructions)
             case .interview, .mock:
                 if settings.useProfile { profile = config.applyingJob(to: p) }
             }
         }
+        let previewType: SessionType = config.type == .regular ? .regular : (config.type == .exam ? .exam : .interview)
         let context = StylePreview.Context(settings: settings, secrets: model.secrets, profile: profile,
-                                           generalInstructions: bank.generalInstructions, sessionType: config.type == .regular ? .regular : .interview,
+                                           generalInstructions: bank.generalInstructions, sessionType: previewType,
                                            sessionInstructions: config.instructions, language: config.language.whisperCode ?? "uk")
         stylePreview = StylePreview(style: effectiveStyle, context: context)
     }
@@ -380,7 +381,7 @@ struct SessionWizardView: View {
             ForEach(SessionType.allCases) { t in
                 let selected = state.config.type == t
                 Button { state.config.type = t } label: {
-                    Label(t.title, systemImage: t == .interview ? "person.fill" : t == .regular ? "phone" : "sparkles")
+                    Label(t.title, systemImage: t == .interview ? "person.fill" : t == .exam ? "graduationcap" : t == .regular ? "phone" : "sparkles")
                         .font(.system(size: 14, weight: selected ? .semibold : .regular))
                         .foregroundStyle(selected ? .white : IC.ink)
                         .frame(maxWidth: .infinity).padding(.vertical, 11)
@@ -472,6 +473,7 @@ struct SessionWizardView: View {
     private var typeHint: String {
         switch state.config.type {
         case .interview: "Собеседование: ответы от вашего лица по резюме, фактам, вакансии, материалам и вопросам профиля."
+        case .exam: "Экзамен: строгие ответы по материалам и активной теме, без выдумывания; оптимизировано под перебивания и доп. вопросы."
         case .regular: "Обычный звонок: что сказать по теме разговора, вашим инструкциям и материалам. После звонка — сводка и договоренности."
         case .mock: "ИИ-собеседование: модель задает вопросы голосом, вы отвечаете в микрофон, подсказки — как на звонке."
         }
@@ -508,6 +510,14 @@ struct SessionWizardView: View {
                     }
                     .labelsHidden()
                 }
+            }
+            if state.model.settings.audioSource == .allSystem {
+                Text("Весь системный звук включает видео и уведомления. Если звонок идёт в Chrome, захватываются все вкладки Chrome.")
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            if case .app(let id, _) = state.model.settings.audioSource, id == "com.google.Chrome" {
+                Text("Chrome: захватываются все вкладки браузера, не только звонок.")
+                    .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             row("globe", "Язык звонка") {
                 Picker("Язык звонка", selection: $state.config.language) {

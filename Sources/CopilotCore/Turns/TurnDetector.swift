@@ -10,10 +10,18 @@ public struct Turn: Sendable, Equatable {
     public var firedAt: Double
     /// ⌃⌥↩ «Answer now» — ход по команде владельца.
     public var forced: Bool
+    /// Номера фраз хода (`TranscriptEvent.utterance`): по ним строится звук для повторного распознавания (COPILOT-15).
+    public var utterances: [Int]
+    /// Склейка текстов фраз — предварительный текст (R-04): годится для эвристик конца хода и как запасной,
+    /// если повторное распознавание не удалось. `text` после повторного распознавания — итоговый вопрос.
+    public var provisionalText: String
 
-    public init(id: Int, text: String, speechEndedAt: Double, firedAt: Double, forced: Bool) {
+    public init(id: Int, text: String, speechEndedAt: Double, firedAt: Double, forced: Bool,
+                utterances: [Int] = [], provisionalText: String? = nil) {
         self.id = id
         self.text = text
+        self.utterances = utterances
+        self.provisionalText = provisionalText ?? text
         self.speechEndedAt = speechEndedAt
         self.firedAt = firedAt
         self.forced = forced
@@ -28,7 +36,7 @@ public struct Turn: Sendable, Equatable {
 /// собеседник, скорее всего, продолжит («Расскажите о проекте, который… сделали в прошлом году»).
 public struct TurnDetector: Sendable {
     public struct Config: Sendable {
-        public var thresholdMs: Double = 700
+        public var thresholdMs: Double = 1000
         public var minWords = 3
         public var continuationExtraMs: Double = 1300
         /// Без наушников микрофон слышит динамики: начало «речи владельца» во время речи собеседника и в течение
@@ -42,19 +50,25 @@ public struct TurnDetector: Sendable {
         public var staleFinalMs: Double = 8000
         /// «Собеседник говорит» дольше этого — событие конца речи потерялось (R-38).
         public var staleSpeechMs: Double = 30000
-        /// Явный вопрос (COPILOT-04 R-02): пауза короче T. Не больше T.
-        public var questionThresholdMs: Double = 350
+        /// Явный вопрос (COPILOT-04 R-02): пауза короче T. Не больше T. COPILOT-15 R-09: 600 мс (было 350) — звук вопроса
+        /// должен быть полным, прежде чем он уйдёт на повторное распознавание.
+        public var questionThresholdMs: Double = 600
         /// Считать явным вопросом и фразу, начатую вопросительным словом («как», «почему», «how»…), а не только «?».
         /// Выключено: на eval `turn` выигрыша не дало (те же 596 мс), а риск хода на оборванной фразе выше (handoff COPILOT-04).
         public var questionStarters = false
+        /// Разрешить короткие доп. вопросы (1–2 слова: «А статья?», «Почему?», «Исключения?»), когда уже есть активная тема,
+        /// и отбрасывать пустой бэкченнел («ага», «хорошо», «дякую»), чтобы не копился в `pending`.
+        public var allowShortFollowUps = false
 
-        public init(thresholdMs: Double = 700) {
+        public init(thresholdMs: Double = 1000) {
             self.thresholdMs = thresholdMs
         }
     }
 
     public var config: Config
     private var pending: [String] = []
+    private var pendingUtterances: [Int] = []
+    private var lastUtterances: [Int] = []
     private var lastSpeechEnd: Double?
     private var interviewerSpeaking = false
     private var interviewerStartedAt: Double?
@@ -93,12 +107,18 @@ public struct TurnDetector: Sendable {
     }
 
     /// Итоговый текст фразы. `speechEnd` — момент конца речи.
-    public mutating func phraseFinal(_ text: String, speechEnd: Double) {
+    public mutating func phraseFinal(_ text: String, speechEnd: Double, utterance: Int? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         interviewerSpeaking = false
         interviewerStoppedAt = max(interviewerStoppedAt ?? speechEnd, speechEnd)
         guard !trimmed.isEmpty else { return }
+        // В активном диалоге пустой бэкченнел («ага», «хорошо», «дякую») не копим в `pending`,
+        // чтобы он не склеивался потом со следующим вопросом в обрывочную кашу.
+        if config.allowShortFollowUps, pending.isEmpty, Self.isBackchannel(trimmed) {
+            return
+        }
         pending.append(trimmed)
+        if let utterance { pendingUtterances.append(utterance) }
         lastFinalText = trimmed
         lastSpeechEnd = speechEnd
     }
@@ -146,13 +166,27 @@ public struct TurnDetector: Sendable {
             interviewerStoppedAt = end
         }
         if ownerSpeaking {
-            suppressed = true
+            // Если владелец начал отвечать после вопроса — подавляем автоход (S-07).
+            // При активной теме и коротком перебивании (владелец говорил ДО экзаменатора и замолкает в пределах 600 мс)
+            // даём владельцу договорить хвост, не глуша вопрос экзаменатора навсегда.
+            let isBriefBargeInYield = config.allowShortFollowUps
+                && (ownerStartedAt ?? .infinity) < (interviewerStartedAt ?? 0)
+                && (t - end) < 600
+            if !isBriefBargeInYield { suppressed = true }
             return nil
         }
         let text = pendingText
-        guard Self.wordCount(text) >= config.minWords else { return nil }
-        guard t - end >= waitMs(for: text) else { return nil }
-        return fire(text: text, speechEnd: end, at: t, forced: false)
+        let words = Self.wordCount(text)
+        if words >= config.minWords {
+            guard t - end >= waitMs(for: text) else { return nil }
+            return fire(text: text, speechEnd: end, at: t, forced: false)
+        }
+        // Короткий доп. вопрос (1–2 слова: «А статья?», «Почему?», «Исключения?») при активной теме — ждём полную паузу T.
+        if config.allowShortFollowUps, words >= 1, Self.isShortFollowUp(text) {
+            guard t - end >= config.thresholdMs else { return nil }
+            return fire(text: text, speechEnd: end, at: t, forced: false)
+        }
+        return nil
     }
 
     /// Сколько ждать после конца речи: фраза оборвана — дольше T, явный вопрос — короче (R-05, COPILOT-04 R-02).
@@ -173,6 +207,13 @@ public struct TurnDetector: Sendable {
         return text
     }
 
+    /// Черновик вместе с номерами фраз (COPILOT-15 R-08): по ним звук уходит на повторное распознавание.
+    /// nil — как у `draft(at:)`, либо у накопленных фраз нет номеров (тогда звука для повторного распознавания нет).
+    public func draftSnapshot(at t: Double) -> (text: String, utterances: [Int])? {
+        guard let text = draft(at: t), !pendingUtterances.isEmpty else { return nil }
+        return (text, pendingUtterances)
+    }
+
     /// ⌃⌥↩: немедленный ход по последней реплике, даже если условия не выполнены (R-05).
     /// Если собеседник говорит или его фраза ещё распознаётся — ход будет сразу по приходе итогового текста.
     public mutating func force(at t: Double) -> Turn? {
@@ -183,18 +224,20 @@ public struct TurnDetector: Sendable {
         }
         let text = pending.isEmpty ? (lastFinalText ?? lastTurnText ?? "") : pendingText
         guard !text.isEmpty else { return nil }
-        return fire(text: text, speechEnd: lastSpeechEnd ?? t, at: t, forced: true)
+        return fire(text: text, speechEnd: lastSpeechEnd ?? t, at: t, forced: true,
+                    utterances: pending.isEmpty ? lastUtterances : pendingUtterances)
     }
 
     /// Ход по тексту, который отбросил фильтр (COPILOT-05 S-08): владелец решил ответить на него сам.
     public mutating func forceText(_ text: String, at t: Double) -> Turn {
-        fire(text: text, speechEnd: t, at: t, forced: true)
+        fire(text: text, speechEnd: t, at: t, forced: true, utterances: [])
     }
 
     /// Сброс (пауза S-08).
     public mutating func reset() {
         forceRequested = false
         pending.removeAll()
+        pendingUtterances.removeAll()
         lastSpeechEnd = nil
         interviewerSpeaking = false
         interviewerStoppedAt = nil
@@ -203,11 +246,14 @@ public struct TurnDetector: Sendable {
         suppressed = false
     }
 
-    private mutating func fire(text: String, speechEnd: Double, at t: Double, forced: Bool) -> Turn {
-        let turn = Turn(id: nextID, text: text, speechEndedAt: speechEnd, firedAt: t, forced: forced)
+    private mutating func fire(text: String, speechEnd: Double, at t: Double, forced: Bool, utterances: [Int]? = nil) -> Turn {
+        let used = utterances ?? pendingUtterances
+        let turn = Turn(id: nextID, text: text, speechEndedAt: speechEnd, firedAt: t, forced: forced, utterances: used)
         nextID += 1
         lastTurnText = text
+        if !used.isEmpty { lastUtterances = used }
         pending.removeAll()
+        pendingUtterances.removeAll()
         suppressed = false
         return turn
     }
@@ -255,5 +301,50 @@ public struct TurnDetector: Sendable {
             $0.lowercased().trimmingCharacters(in: .punctuationCharacters)
         } ?? ""
         return continuationWords.contains(lastWord)
+    }
+
+    /// Пустые подтверждения/реакции собеседника (бэкченнел), не требующие ответа.
+    /// Проверяется пословно: составные фразы вроде «Добре, дякую.», «Хорошо, спасибо.» тоже отбрасываются целиком.
+    private static let backchannelWords: Set<String> = [
+        "ага", "угу", "да", "так", "добре", "хорошо", "понял", "поняла", "понятно",
+        "зрозуміло", "ясно", "окей", "ок", "ok", "okay", "спасибо", "дякую", "thanks", "thank", "you",
+        "продолжайте", "продовжуйте", "дальше", "далі", "слушаю", "слухаю", "мгм", "угум", "супер", "отлично", "чудово",
+    ]
+
+    /// Короткие ключевые слова уточнений (1–2 слова) на экзамене и интервью (RU / UK / EN).
+    private static let shortFollowUpKeywords: Set<String> = [
+        // ru
+        "почему", "зачем", "откуда", "статья", "статью", "статьи", "исключения", "исключение", "сроки", "срок",
+        "пример", "примеры", "подробнее", "конкретнее", "уточните", "обоснуйте", "последствия", "основания",
+        "разница", "отличие", "условия", "признаки", "ответственность", "сложность", "память", "альтернативы",
+        // uk
+        "чому", "навіщо", "звідки", "стаття", "статтю", "статті", "винятки", "виняток", "строки", "строк",
+        "термін", "терміни", "приклад", "приклади", "детальніше", "конкретніше", "уточніть", "обґрунтуйте",
+        "наслідки", "підстави", "різниця", "відмінність", "умови", "ознаки", "відповідальність", "складність", "пам'ять",
+        // en
+        "why", "example", "examples", "exceptions", "complexity", "memory", "explain", "elaborate", "alternatives",
+    ]
+
+    static func normalizedShort(_ text: String) -> String {
+        text.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    public static func isBackchannel(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasSuffix("?") { return false }
+        let words = normalizedShort(trimmed).split(separator: " ").map(String.init)
+        return !words.isEmpty && words.count <= 4 && words.allSatisfy { backchannelWords.contains($0) }
+    }
+
+    public static func isShortFollowUp(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let norm = normalizedShort(trimmed)
+        guard !norm.isEmpty, !isBackchannel(trimmed) else { return false }
+        if trimmed.hasSuffix("?") { return true }
+        let words = norm.split(separator: " ").map(String.init)
+        return words.contains { shortFollowUpKeywords.contains($0) }
     }
 }

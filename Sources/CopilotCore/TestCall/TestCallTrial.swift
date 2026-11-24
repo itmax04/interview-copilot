@@ -32,7 +32,6 @@ public struct TestCallTrial: Sendable {
     public private(set) var partial = ""
     public private(set) var result: TestCallResult?
     private var pending: Set<Int> = []
-    private var revising: Set<Int> = []
     private var seen: Set<Int> = []
     private var finals: [Int: String] = [:]
     private var endedAt: Double?
@@ -55,21 +54,14 @@ public struct TestCallTrial: Sendable {
         case .final(let u, let value, _, let end, let emitted):
             guard seen.contains(u) else { return }
             finals[u] = value
-            if !revising.contains(u) { pending.remove(u) }
+            pending.remove(u)
             partial = ""
             phraseEnd = max(phraseEnd, end)
             emittedAt = max(emittedAt, emitted)
-        case .revising(let u):
-            // Оценка — по уточнённому тексту (R-37); задержка — по быстрому итогу, который видит ход.
-            if seen.contains(u) { revising.insert(u) }
         case .discarded(let u, _), .foreignVoice(let u, _, _, _):
             pending.remove(u)
-            revising.remove(u)
-        case .revised(let u, let value, _):
-            guard seen.contains(u) else { return }
-            finals[u] = value
-            revising.remove(u)
-            pending.remove(u)
+        case .speaker:
+            break   // говорящий важен только самопроверке «Микрофон Mac»
         }
     }
 

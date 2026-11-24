@@ -84,3 +84,18 @@ public enum ListeningStatus: Sendable, Equatable {
 public enum StatusDot: Sendable, Equatable {
     case green, gray, red
 }
+
+/// «Точный вопрос (+2 с)» (COPILOT-17 R-06): подсказка ждёт Whisper по звуку вопроса. Три состояния.
+public enum PreciseQuestionMode: String, Codable, CaseIterable, Sendable {
+    case auto, on, off
+
+    /// Ждать ли Whisper в этой сессии: только украинский (`uk`); `auto` — только экзамен.
+    public static func waits(mode: PreciseQuestionMode, session: SessionType?, language: RecognitionLanguage) -> Bool {
+        guard language == .uk else { return false }
+        switch mode {
+        case .on: return true
+        case .off: return false
+        case .auto: return session == .exam
+        }
+    }
+}

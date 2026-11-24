@@ -20,7 +20,8 @@ Links: [intent.md](intent.md) · [handoff.md](handoff.md)
   said": facts (numbers, technologies, names) stay consistent, but the model does not claim the candidate said it.
 - **R-08. "I'm answering now" in the self-check** — ⌃⌥A (reassignable in Hotkeys). In the "Mac microphone" mode speech until the second
   press is the owner's answer into the memory (not a question, no turn and no hint); the panel shows "Your answer is being recorded". It turns off when
-  the source changes; not needed on a call (answers are heard through a separate channel).
+  the source changes; not needed on a call (answers are heard through a separate channel). With COPILOT-05 "Rehearsal
+  with an interviewer" on, phrases in the owner's voice are answers without ⌃⌥A (05/R-01); ⌃⌥A stays a manual override.
 - **R-06. Data.** The history is local, retention R-18 (30 days); the request goes through the PII filter (01/R-12); no text is written to logs.
 
 ## Acceptance criteria

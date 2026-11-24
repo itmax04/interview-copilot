@@ -110,6 +110,50 @@ final class MicrophoneTap: @unchecked Sendable {
         return status == noErr ? device : nil
     }
 
+    static func defaultInputDeviceName() -> String? {
+        guard let device = defaultInputDevice() else { return nil }
+        var property = AudioObjectPropertyAddress(mSelector: kAudioObjectPropertyName,
+                                                  mScope: kAudioObjectPropertyScopeGlobal,
+                                                  mElement: kAudioObjectPropertyElementMain)
+        var name: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        let status = AudioObjectGetPropertyData(device, &property, 0, nil, &size, &name)
+        guard status == noErr, let name else { return nil }
+        return name.takeRetainedValue() as String
+    }
+
+    /// Проверяет, замьючен ли системный микрофон по умолчанию на уровне macOS (`kAudioDevicePropertyMute == 1`).
+    static func isDefaultInputMuted() -> Bool {
+        guard let device = defaultInputDevice() else { return false }
+        var property = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute,
+                                                  mScope: kAudioObjectPropertyScopeInput,
+                                                  mElement: kAudioObjectPropertyElementMain)
+        guard AudioObjectHasProperty(device, &property) else { return false }
+        var muted: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        let status = AudioObjectGetPropertyData(device, &property, 0, nil, &size, &muted)
+        return status == noErr && muted != 0
+    }
+
+    /// Снимает системный mute с микрофона по умолчанию (`kAudioDevicePropertyMute = 0`).
+    @discardableResult
+    static func unmuteDefaultInput() -> Bool {
+        guard let device = defaultInputDevice() else { return false }
+        var property = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyMute,
+                                                  mScope: kAudioObjectPropertyScopeInput,
+                                                  mElement: kAudioObjectPropertyElementMain)
+        guard AudioObjectHasProperty(device, &property) else { return false }
+        var muted: UInt32 = 0
+        let size = UInt32(MemoryLayout<UInt32>.size)
+        let status = AudioObjectSetPropertyData(device, &property, 0, nil, size, &muted)
+        if status == noErr {
+            Log.audio.notice("default input device unmuted")
+            return true
+        }
+        Log.audio.error("could not unmute default input status=\(status)")
+        return false
+    }
+
     @MainActor private func observeDefaultInput() {
         // An input change with the same format may not post AVAudioEngineConfigurationChange.
         let listener: AudioObjectPropertyListenerBlock = { @Sendable [weak self] _, _ in
@@ -158,4 +202,13 @@ final class MicrophoneTap: @unchecked Sendable {
             stop()
         }
     }
+}
+
+/// Публичный доступ к проверке и снятию системного mute у микрофона по умолчанию в macOS.
+public enum DefaultInputMute {
+    public static func isMuted() -> Bool { MicrophoneTap.isDefaultInputMuted() }
+    @discardableResult
+    public static func unmute() -> Bool { MicrophoneTap.unmuteDefaultInput() }
+    /// Имя устройства ввода по умолчанию (для уведомления «Микрофон не даёт звука»); nil — не определено.
+    public static func deviceName() -> String? { MicrophoneTap.defaultInputDeviceName() }
 }

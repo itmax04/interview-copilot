@@ -217,29 +217,22 @@ struct TurnRobustnessTests {
         #expect(d.tick(at: 3900) == nil) // ждём итог продолжения, а не стреляем по половине вопроса
     }
 
-    @Test func trialAndAnswerWaitForRevisedText() {
+    @Test func trialAndAnswerUsePhraseFinals() {
         var trial = TestCallTrial(clip: TestCallClip(id: "c", language: "uk", title: "t", text: "Розкажіть про себе", file: ""))
         trial.handle(.speechStarted(utterance: 1))
         trial.handle(.speechStarted(utterance: 2))
-        trial.handle(.revising(utterance: 1))
         trial.handle(.final(utterance: 1, text: "Расскажите про себе", language: "ru", phraseEnd: 1_000_000_000, emittedAt: 1_500_000_000))
         trial.handle(.discarded(utterance: 2, phraseEnd: 2_000_000_000))
         trial.endPlayback(at: 10)
         trial.tick(at: 11)
-        #expect(trial.result == nil) // ждём уточнения
-        trial.handle(.revised(utterance: 1, text: "Розкажіть про себе", language: "uk"))
-        trial.tick(at: 11.1)
-        #expect(trial.result?.errors == 0)
-        #expect(trial.result?.latencyMs == 500) // задержка — по быстрому итогу
+        #expect(trial.result != nil) // уточнения нет: итог по тексту фраз
+        #expect(trial.result?.latencyMs == 500)
 
         var a = AnswerCapture(startedAt: 0)
         a.handle(.speechStarted(utterance: 5), at: 1)
-        a.handle(.revising(utterance: 5), at: 3)
         a.handle(.final(utterance: 5, text: "Я працюю", language: "uk", phraseEnd: 0, emittedAt: 0), at: 3)
         a.requestFinish(at: 3)
-        #expect(!a.isComplete(at: 4))
-        a.handle(.revised(utterance: 5, text: "Я працюю в команді", language: "uk"), at: 5)
-        #expect(a.isComplete(at: 5) && a.text == "Я працюю в команді")
+        #expect(a.isComplete(at: 4) && a.text == "Я працюю")
     }
 
     @Test func answerLanguageFollowsMenuOrUkrainianLetters() {

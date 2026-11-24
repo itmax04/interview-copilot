@@ -270,6 +270,35 @@ struct StreamingTranscriberTests {
 
 }
 
+/// Быстрый итог + медленное уточнение (как Parakeet + Whisper turbo), считает вызовы уточнения.
+final class SlowRevisionRecognizer: SpeechRecognizer, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _revisions = 0
+    var revisions: Int { lock.withLock { _revisions } }
+    let nativeMultilingual = true
+    let revisionDelay: Double
+
+    init(revisionDelay: Double) { self.revisionDelay = revisionDelay }
+
+    func transcribe(_ samples: [Float], language: String?, prompt: String?, reducedContext: Bool) throws -> Transcription {
+        Transcription(text: "черновик", language: "uk", languageProbabilities: [:],
+                      audioSeconds: Double(samples.count) / 16_000, elapsedMs: 1, noSpeechProbability: 0,
+                      averageTokenProbability: 0.9)
+    }
+
+    func detectLanguage(_ samples: [Float]) throws -> (String, [String: Float]) { ("uk", ["uk": 1]) }
+    func cancel() {}
+    func revisionNeeded(_ first: Transcription, language: String?) -> Bool { true }
+
+    func revise(_ samples: [Float], language: String?, prompt: String?) throws -> Transcription? {
+        lock.withLock { _revisions += 1 }
+        Thread.sleep(forTimeInterval: revisionDelay)
+        return Transcription(text: "уточнено", language: "uk", languageProbabilities: [:],
+                             audioSeconds: Double(samples.count) / 16_000, elapsedMs: revisionDelay * 1000,
+                             noSpeechProbability: 0, averageTokenProbability: 0.9)
+    }
+}
+
 /// Распознаватель, у которого первый итог «отменён» чужим `cancel()` (COPILOT-13).
 final class CancelledOnceRecognizer: SpeechRecognizer, @unchecked Sendable {
     private let lock = NSLock()

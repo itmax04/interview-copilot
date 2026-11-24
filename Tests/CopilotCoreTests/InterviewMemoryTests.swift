@@ -84,7 +84,7 @@ struct InterviewMemoryTests {
         // Новые действия — в конце allCases: номера прежних горячих клавиш не меняются (⌃⌥A — шестая, ⌃⌥N — после неё).
         #expect(HotkeyAction.allCases.firstIndex(of: .ownerAnswer) == 5)
         #expect(HotkeyAction.allCases.firstIndex(of: .newSession) == 6)
-        #expect(Array(HotkeyAction.allCases.suffix(4)) == [.chat, .clearTranscript, .previousAnswer, .nextAnswer])
+        #expect(Array(HotkeyAction.allCases.suffix(6)) == [.chat, .clearTranscript, .previousAnswer, .nextAnswer, .toggleMic, .voiceClarify])
         #expect(HotkeyBinding.defaults[.ownerAnswer]?.displayString == "⌃⌥A")
     }
 
@@ -178,6 +178,37 @@ struct InterviewMemoryTests {
         m.reviseText("скоротили час обробки на сорок відсотків", to: "Скоротили час обробки на 40 %.")
         #expect(m.all.first?.answer == ["CRM для логістики.", "Скоротили час обробки на 40 %."])
         #expect(m.all.first?.question == "Над яким проєктом ви працювали?")
+    }
+
+    /// Живая сессия 2026-11-20: короткий черновик («да») заменялся подстрокой внутри чужих слов вопроса
+    /// («когда» → «когТак»), и в плотной речи вопросы в памяти становились неразборчивыми.
+    @Test func revisionDoesNotReplaceInsideOtherWords() {
+        let m = InterviewMemory()
+        m.addQuestion("Когда вы начали работать с Kafka? да", turnID: 1)
+        m.reviseText("да", to: "Так.")
+        #expect(m.all.first?.question == "Когда вы начали работать с Kafka? Так.")
+    }
+
+    /// Уточнение старой фразы не трогает такую же фразу в более новом месте вопроса: заменяется одно, последнее вхождение.
+    @Test func revisionReplacesOnlyOneOccurrence() {
+        let m = InterviewMemory()
+        m.addQuestion("Окей. Расскажите о проекте. Окей.", turnID: 1)
+        m.reviseText("Окей.", to: "Окей, понял.")
+        #expect(m.all.first?.question == "Окей. Расскажите о проекте. Окей, понял.")
+    }
+
+    /// Ответ владельца (самопроверка, ⌃⌥A) уточняется только в ответах: раньше его черновик заменялся и в тексте вопросов.
+    @Test func ownerAnswerRevisionDoesNotTouchQuestions() {
+        let m = InterviewMemory()
+        m.addQuestion("Да, а какой у вас опыт с Postgres?", turnID: 1)
+        m.addAnswer("Да")
+        m.reviseText("Да", to: "Так", scope: .answers)
+        #expect(m.all.first?.question == "Да, а какой у вас опыт с Postgres?")
+        #expect(m.all.first?.answer == ["Так"])
+        // Уточнение вопроса интервьюера не трогает ответы.
+        m.reviseText("Да", to: "Ну", scope: .questions)
+        #expect(m.all.first?.question == "Ну, а какой у вас опыт с Postgres?")
+        #expect(m.all.first?.answer == ["Так"])
     }
 
     @Test func notAQuestionFragmentIsDropped() {

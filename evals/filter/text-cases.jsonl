@@ -180,18 +180,18 @@
 {"text": "Dzisiaj wieczorem w telewizji będzie bardzo ciekawy film o historii Polski.", "setting": "auto", "channel": "allSystem", "expect": "drop", "tag": "foreign-pl"}
 {"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "english-mic"}
 {"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "english-mic"}
-{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "uk", "channel": "call", "expect": "keep", "tag": "english-call"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "english-call"}
 {"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "english-mic"}
 {"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "english-mic"}
-{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "ru", "channel": "call", "expect": "keep", "tag": "english-call"}
+{"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "english-call"}
 {"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "en", "channel": "mic", "expect": "keep", "tag": "english-allowed"}
 {"text": "And now the weather forecast for the weekend: sunny with a light breeze.", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "english-allowed"}
 {"text": "I really love watching football matches with my friends on Sunday.", "setting": "uk", "channel": "mic", "expect": "drop", "tag": "english-mic"}
 {"text": "I really love watching football matches with my friends on Sunday.", "setting": "uk", "channel": "allSystem", "expect": "drop", "tag": "english-mic"}
-{"text": "I really love watching football matches with my friends on Sunday.", "setting": "uk", "channel": "call", "expect": "keep", "tag": "english-call"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "english-call"}
 {"text": "I really love watching football matches with my friends on Sunday.", "setting": "ru", "channel": "mic", "expect": "drop", "tag": "english-mic"}
 {"text": "I really love watching football matches with my friends on Sunday.", "setting": "ru", "channel": "allSystem", "expect": "drop", "tag": "english-mic"}
-{"text": "I really love watching football matches with my friends on Sunday.", "setting": "ru", "channel": "call", "expect": "keep", "tag": "english-call"}
+{"text": "I really love watching football matches with my friends on Sunday.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "english-call"}
 {"text": "I really love watching football matches with my friends on Sunday.", "setting": "en", "channel": "mic", "expect": "keep", "tag": "english-allowed"}
 {"text": "I really love watching football matches with my friends on Sunday.", "setting": "auto", "channel": "mic", "expect": "keep", "tag": "english-allowed"}
 {"text": "Pull request and code review", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "term-phrase"}
@@ -212,3 +212,25 @@
 {"text": "Guten Tag", "setting": "en", "channel": "mic", "expect": "keep", "tag": "short"}
 {"text": "Mm-hmm", "setting": "uk", "channel": "mic", "expect": "keep", "tag": "short"}
 {"text": "Mm-hmm", "setting": "en", "channel": "mic", "expect": "keep", "tag": "short"}
+{"text": "Ich bin the day is nice and we go to the market now.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Ich bin the day is nice and we go to the market now.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Ya das ist very good and then we make the thing tomorrow.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Ya das ist very good and then we make the thing tomorrow.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "So we have a bit of the time and you can come with me.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "So we have a bit of the time and you can come with me.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Now the car is in the house and my brother he is coming.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Now the car is in the house and my brother he is coming.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Yes I think it is not so good for the people in the city.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Yes I think it is not so good for the people in the city.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "We will see the film at the evening and then we go home.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "We will see the film at the evening and then we go home.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Okay and you the water is here now come to the table please.", "setting": "uk", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Okay and you the water is here now come to the table please.", "setting": "ru", "channel": "call", "expect": "drop", "tag": "pseudo-en-call"}
+{"text": "Розкажіть про ваш досвід з Docker і Kubernetes у продакшені.", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms-call"}
+{"text": "Как вы настраивали CI/CD и code review в GitLab?", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms-call"}
+{"text": "Чим відрізняється REST від GraphQL у вашому проєкті?", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms-call"}
+{"text": "Расскажите, как вы использовали Redis и PostgreSQL в одном сервисе.", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms-call"}
+{"text": "Pull request and code review", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms-call"}
+{"text": "Pull request and code review", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms-call"}
+{"text": "Kubernetes Deployment", "setting": "uk", "channel": "call", "expect": "keep", "tag": "terms-call"}
+{"text": "Unit tests and integration tests", "setting": "ru", "channel": "call", "expect": "keep", "tag": "terms-call"}

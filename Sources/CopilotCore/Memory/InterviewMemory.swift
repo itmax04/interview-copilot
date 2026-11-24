@@ -68,11 +68,11 @@ public final class InterviewMemory: @unchecked Sendable {
     /// Порог сходства bge-m3 для «та же тема»; при явной отсылке к прошлому — мягче (подбор — eval `memory`).
     public static let minScore: Float = 0.55
     public static let backReferenceMinScore: Float = 0.35
-    /// Лимиты текста одного обмена в промпте.
-    public static let maxQuestionChars = 300
-    public static let maxAnswerChars = 500
-    /// Показанная подсказка вместо незаписанного ответа — короче: только опорные факты.
-    public static let maxHintChars = 300
+    /// Лимиты текста одного обмена в промпте (расширены в E-02, чтобы не резать контекст экзаменационного ответа).
+    public static let maxQuestionChars = 350
+    public static let maxAnswerChars = 1000
+    /// Показанная подсказка вместо незаписанного ответа — опорные факты и нормы.
+    public static let maxHintChars = 600
 
     /// Подсказка без разметки, в одну строку.
     static func plainHint(_ hint: String?) -> String {
@@ -104,6 +104,9 @@ public final class InterviewMemory: @unchecked Sendable {
 
     public var all: [SessionExchange] { lock.withLock { exchanges } }
 
+    /// Идентификатор последнего обмена в памяти (активный вопрос/билет).
+    public var currentExchangeID: Int? { lock.withLock { exchanges.last?.id } }
+
     @discardableResult
     public func addQuestion(_ text: String, turnID: Int? = nil, at date: Date = Date()) -> Int {
         lock.withLock {
@@ -114,37 +117,76 @@ public final class InterviewMemory: @unchecked Sendable {
         }
     }
 
-    /// Фраза владельца относится к последнему вопросу. До первого вопроса — не сохраняется (нечему отвечать).
-    public func addAnswer(_ text: String) {
+    /// Фраза владельца относится к указанному обмену (`toExchangeID`) или к последнему вопросу.
+    /// При перебивании `toExchangeID` удерживает прерванный ответ на старом вопросе, даже если новый уже добавлен.
+    public func addAnswer(_ text: String, toExchangeID exchangeID: Int? = nil) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         lock.withLock {
-            guard !exchanges.isEmpty else { return }
-            exchanges[exchanges.count - 1].answer.append(trimmed)
-            embeddings[exchanges[exchanges.count - 1].id] = nil   // ответ изменился — эмбеддинг пересчитать
+            let index: Int? = if let exchangeID {
+                exchanges.lastIndex(where: { $0.id == exchangeID })
+            } else {
+                exchanges.isEmpty ? nil : exchanges.count - 1
+            }
+            guard let i = index else { return }
+            exchanges[i].answer.append(trimmed)
+            embeddings[exchanges[i].id] = nil   // ответ изменился — эмбеддинг пересчитать
         }
     }
 
-    /// Уточнённый текст реплики (Whisper, R-37) заменяет быстрый в вопросах и ответах последних обменов, где он встречается.
-    public func reviseText(_ old: String, to new: String) {
+    /// Заменяет предварительный текст прерванного ответа владельца на перераспознанный в конкретном обмене.
+    public func reviseAnswer(_ old: String, to new: String, inExchangeID exchangeID: Int) {
         let old = old.trimmingCharacters(in: .whitespacesAndNewlines)
         let new = new.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !old.isEmpty, !new.isEmpty, old != new else { return }
         lock.withLock {
+            guard let i = exchanges.lastIndex(where: { $0.id == exchangeID }),
+                  let j = exchanges[i].answer.lastIndex(of: old) else { return }
+            exchanges[i].answer[j] = new
+            embeddings[exchanges[i].id] = nil
+        }
+    }
+
+    /// Уточнённый текст реплики (Whisper, R-37) заменяет быстрый в вопросах и ответах последних обменов, где он встречается.
+    public enum ReviseScope: Sendable { case questions, answers, all }
+
+    public func reviseText(_ old: String, to new: String, scope: ReviseScope = .all) {
+        let old = old.trimmingCharacters(in: .whitespacesAndNewlines)
+        let new = new.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !old.isEmpty, !new.isEmpty, old != new else { return }
+        // Одна реплика — одна замена: самое новое вхождение, целыми словами. Раньше заменялись все вхождения
+        // подстроки в трёх последних вопросах: короткий черновик («да») менял буквы внутри чужих слов («когда»),
+        // и в плотной речи вопросы становились неразборчивыми (живая сессия 2026-11-20).
+        lock.withLock {
             for i in exchanges.indices.reversed().prefix(3) {
-                var changed = false
-                if exchanges[i].question.contains(old) {
-                    exchanges[i].question = exchanges[i].question.replacingOccurrences(of: old, with: new)
-                    changed = true
-                }
                 // Ответ владельца в самопроверке (⌃⌥A) — тоже черновик Parakeet до уточнения (COPILOT-07).
-                if let j = exchanges[i].answer.lastIndex(of: old) {
+                if scope != .questions, let j = exchanges[i].answer.lastIndex(of: old) {
                     exchanges[i].answer[j] = new
-                    changed = true
+                    embeddings[exchanges[i].id] = nil
+                    return
                 }
-                if changed { embeddings[exchanges[i].id] = nil }
+                if scope != .answers, let r = Self.lastWholeWordRange(of: old, in: exchanges[i].question) {
+                    exchanges[i].question.replaceSubrange(r, with: new)
+                    embeddings[exchanges[i].id] = nil
+                    return
+                }
             }
         }
+    }
+
+    /// Последнее вхождение `needle`, не начинающееся и не кончающееся посреди слова.
+    static func lastWholeWordRange(of needle: String, in text: String) -> Range<String.Index>? {
+        func isWordChar(_ c: Character) -> Bool { c.isLetter || c.isNumber }
+        var searchEnd = text.endIndex
+        while let r = text.range(of: needle, options: .backwards, range: text.startIndex..<searchEnd) {
+            let startOK = r.lowerBound == text.startIndex || !isWordChar(text[text.index(before: r.lowerBound)])
+                || !isWordChar(needle.first!)
+            let endOK = r.upperBound == text.endIndex || !isWordChar(text[r.upperBound]) || !isWordChar(needle.last!)
+            if startOK && endOK { return r }
+            guard r.upperBound > text.startIndex else { return nil }
+            searchEnd = text.index(before: r.upperBound)
+        }
+        return nil
     }
 
     /// Подсказка, показанная на ход. По номеру хода, а не по тексту: уточнение Whisper (~3 с) приходит раньше конца

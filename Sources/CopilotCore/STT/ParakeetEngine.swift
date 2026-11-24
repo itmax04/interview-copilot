@@ -11,6 +11,20 @@ public final class ParakeetEngine: SpeechRecognizer, @unchecked Sendable {
     private let cancellationLock = NSLock()
     private var activeTask: Task<Void, Never>?
 
+    /// COPILOT-17 R-02: аварийный выключатель подсказки языка (фильтр алфавита убирает латиницу в uk/ru).
+    public nonisolated(unsafe) static var useLanguageHint = true
+
+    /// COPILOT-17 R-01: язык сессии → фильтр алфавита FluidAudio. Auto (nil) и неизвестные коды — без подсказки.
+    /// Это только фильтр по письму: uk и ru оба кириллица, подсказка их не различает.
+    static func languageHint(for code: String?) -> Language? {
+        switch code?.lowercased() {
+        case "uk": .ukrainian
+        case "ru": .russian
+        case "en": .english
+        default: nil
+        }
+    }
+
     private init(manager: AsrManager) { self.manager = manager }
 
     public static func load(from directory: URL) async throws -> ParakeetEngine {
@@ -42,13 +56,14 @@ public final class ParakeetEngine: SpeechRecognizer, @unchecked Sendable {
         let audio = WhisperEngine.normalized(input)
         let result = BlockingResult<Transcription>()
         let manager = self.manager
+        let hint = Self.useLanguageHint ? Self.languageHint(for: language) : nil
         let task = Task.detached(priority: .userInitiated) {
             do {
                 try Task.checkCancellation()
                 var state = try TdtDecoderState()
                 let started = Date()
-                // Не ограничиваем алфавит: в русской/украинской фразе могут быть английские термины.
-                let recognized = try await manager.transcribe(audio, decoderState: &state)
+                // COPILOT-17 R-01: при фиксированном языке сессии — подсказка (фильтр алфавита); в Auto не ограничиваем.
+                let recognized = try await manager.transcribe(audio, decoderState: &state, language: hint)
                 try Task.checkCancellation()
                 let text = recognized.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 result.finish(.success(Transcription(text: text,

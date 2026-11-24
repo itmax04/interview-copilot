@@ -1,0 +1,10 @@
+[
+ ["uk1","Lesya","Розкажіть про проєкт, де ви переносили сервіс на Kubernetes. Які проблеми з пам'яттю виникли і як ви їх діагностували?"],
+ ["uk2","Lesya","Добре, дякую. А тепер уявіть, що база даних PostgreSQL почала відповідати повільно після релізу. З чого ви почнете пошук причини?"],
+ ["uk3","Lesya","Ви згадали, що керували командою з п'яти людей. Як ви розподіляли задачі і що робили, коли хтось не встигав до дедлайну?"],
+ ["uk4","Lesya","Чим відрізняється процес від потоку? І коли ви оберете асинхронний код замість кількох потоків у Swift?"],
+ ["ru1","Milena","Расскажите о самом сложном баге в продакшене. Как вы его нашли и что изменили в процессе после этого?"],
+ ["ru2","Milena","Хорошо. А почему вы решили уйти с текущего места работы, и какие ожидания по зарплате у вас сейчас?"],
+ ["en1","Samantha","Tell me about a time you migrated a service to Kubernetes. What memory problems did you hit and how did you diagnose them?"],
+ ["en2","Samantha","Okay, thanks. Now imagine the PostgreSQL database became slow right after a release. Where would you start looking for the cause?"]
+]

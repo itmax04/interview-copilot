@@ -34,6 +34,11 @@ Numbers without a prefix belong to this task; previous ones — "01/", "03/", "0
 - **R-01. Two channels.** The call channel — as now (01/R-01, 01/R-03), filters R-02 and R-05. The microphone channel:
   - on a call it is transcribed (an exception to 01/R-02), passes R-02…R-05, the result is only hint context (R-07);
   - in the "Mac microphone" mode — the source of questions, only the owner's voice is accepted (Q13);
+    with "Rehearsal with an interviewer" on (added 2026-11-20, off by default) and a voice sample: a phrase the voiceprint
+    rejects goes the question path (transcript line, R-05 language filter, turn, hint); a phrase it accepts is the owner's
+    answer (as 06/R-08, without ⌃⌥A). ⌃⌥A stays a manual override (any phrase is an answer while it is on); a phrase
+    without a verdict (< 0.5 s of speech, CAM++ not loaded) follows the ⌃⌥A state. The gate is on in this mode even with
+    "Only my voice" off; the call-time microphone channel and the AI interview keep dropping other voices;
   - in the AI interview (03/R-32) the owner's answer passes the same voice filter.
   The "the owner is speaking" detection (01/R-02, S-07 TurnDetector) stays.
 - **R-02. Speech detector.** Silero VAD (FluidAudio `VadManager`, streaming mode) instead of the energy detector
@@ -49,7 +54,8 @@ Numbers without a prefix belong to this task; previous ones — "01/", "03/", "0
   - Allowed: Українська/Русский → {uk, ru}; English → {en}; Auto → {uk, ru, en} (Q7, Q12).
   - Phrase language: Apple `NLLanguageRecognizer` (on device) + the share of Cyrillic/Latin; uk and ru are one group.
   - Latin words inside a phrase in an allowed language are always kept (Q9).
-  - A whole English phrase with uk/ru: passes in the call channel (Q8); on the microphone and in "All system audio" — only
+  - A whole English phrase with uk/ru: ~~passes in the call channel (Q8)~~ **superseded by COPILOT-16 R-01: dropped on the call
+    channel too**; on the microphone and in "All system audio" — only
     if ≤ 4 words and all words are dictionary terms: résumé, job, `questions.yaml`, a built-in IT list (`Resources/terms-en.txt`).
   - A phrase shorter than 3 words with an uncertain language is not dropped (better to let it through than to lose a question).
   - A "Language filter" toggle.

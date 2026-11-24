@@ -138,19 +138,28 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// результат смешанный (одни фразы точнее, другие переводятся/повторяются) — выключено по умолчанию.
     public var recognitionPromptFromBank = false
     public var language: RecognitionLanguage = .auto
-    /// Порог паузы T, мс (R-05: 700, диапазон 400–1500).
-    public var pauseThresholdMs: Int = 700
+    /// Порог паузы T, мс (R-05, COPILOT-15 R-09: 1000, было 700; диапазон 400–1500).
+    public var pauseThresholdMs: Int = 1000
     /// Пауза после явного вопроса (фраза кончается «?»), мс; не больше T (COPILOT-04 R-02).
-    public var questionPauseMs: Int = 350
+    public var questionPauseMs: Int = 600
     /// Опережающий запрос (COPILOT-04 R-01): модель начинает отвечать, как только готов текст законченной фразы,
     /// не дожидаясь паузы T. Если собеседник продолжил, запрос отменяется — лишние запросы к модели.
     public var speculativeAnswers = true
     /// Фильтр языка (COPILOT-05 R-05): реплики на чужом языке — серым, английские термины сохраняются.
     public var languageFilter = true
+    /// «Точный вопрос (+2 с)» (COPILOT-17 R-06): ждать Whisper перед подсказкой; auto — только экзамен; только для украинского.
+    public var preciseQuestion: PreciseQuestionMode = .auto
+    /// Сохранять звук вопросов собеседника на этом Mac (COPILOT-17 R-09); по умолчанию выключено.
+    public var saveQuestionAudio = false
+    public var questionAudioRetentionDays = 14
+    public static let questionAudioRetentionRange = 1...90
     /// Нейросетевая проверка речи Silero (COPILOT-05 R-02): шум без речи не становится репликой. Нужна модель.
     public var neuralSpeechGate = true
     /// Только голос владельца в микрофоне (COPILOT-05 R-03): нужен записанный образец голоса.
     public var ownerVoiceOnly = true
+    /// Репетиция с собеседником в «Микрофон Mac»: чужой голос — вопросы и подсказки, голос владельца — ответы без ⌃⌥A.
+    /// Выключено: по умолчанию вопросы читает сам владелец, чужие голоса — серым (COPILOT-05 Q13). Нужен образец голоса.
+    public var rehearsalWithInterviewer = false
     /// Порог сходства с отпечатком голоса; 0 — персональный по образцу (`VoicePrint.recommendedThreshold`).
     public var ownerVoiceThreshold: Double = 0
     /// Шумоподавление реплики микрофона LocalVQE (COPILOT-05 R-04). Выключено: на eval `enhance` Parakeet с ним
@@ -159,6 +168,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Расшифровывать речь владельца на созвоне и передавать модели как контекст (COPILOT-05 R-07, Q6):
     /// в панели и истории её нет; текст ответов уходит в модель вместе с вопросом.
     public var ownerSpeechContext = true
+    /// Автоматическое «уточнение голосом» (COPILOT-18 D1): фраза владельца, похожая на повтор или поправку вопроса,
+    /// запускает или меняет подсказку. По умолчанию выключено — речь владельца идёт только в память и историю как ответ.
+    public var ownerVoiceClarification = false
 
     // Answer / Bank
     public var mode: AnswerMode = .bankAndHint
@@ -211,7 +223,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
 
     /// Версия схемы настроек: при чтении старых значений по умолчанию они обновляются (см. `migrated()`).
     public var schemaVersion = AppSettings.currentSchema
-    public static let currentSchema = 6
+    public static let currentSchema = 7
 
     public init() {}
 
@@ -238,6 +250,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
             // Быстрые провайдеры (R-36) — в начало сохранённой цепочки.
             s.chain = [.groq, .cerebras] + s.chain.filter { $0 != .groq && $0 != .cerebras }
             s.schemaVersion = 6
+        }
+        if s.schemaVersion < 7 {
+            // COPILOT-15 R-09: пороги паузы выросли (700 → 1000, 350 → 600). Значения, выбранные владельцем, не трогаем.
+            if s.pauseThresholdMs == 700 { s.pauseThresholdMs = AppSettings().pauseThresholdMs }
+            if s.questionPauseMs == 350 { s.questionPauseMs = AppSettings().questionPauseMs }
+            s.schemaVersion = 7
         }
         return s
     }
@@ -266,6 +284,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         s.questionPauseMs = s.questionPauseMs.clamped(to: Self.questionPauseRange)
         s.bankThreshold = s.bankThreshold.clamped(to: Self.bankThresholdRange)
         s.historyRetentionDays = s.historyRetentionDays.clamped(to: Self.retentionRange)
+        s.questionAudioRetentionDays = s.questionAudioRetentionDays.clamped(to: Self.questionAudioRetentionRange)
         s.panelOpacity = s.panelOpacity.clamped(to: Self.panelOpacityRange)
         s.panelWidth = s.panelWidth.clamped(to: Self.panelWidthRange)
         s.panelZoom = s.panelZoom.clamped(to: Self.panelZoomRange)
@@ -302,11 +321,16 @@ public struct AppSettings: Codable, Equatable, Sendable {
         questionPauseMs = v(.questionPauseMs, d.questionPauseMs)
         speculativeAnswers = v(.speculativeAnswers, d.speculativeAnswers)
         languageFilter = v(.languageFilter, d.languageFilter)
+        preciseQuestion = v(.preciseQuestion, d.preciseQuestion)
+        saveQuestionAudio = v(.saveQuestionAudio, d.saveQuestionAudio)
+        questionAudioRetentionDays = v(.questionAudioRetentionDays, d.questionAudioRetentionDays)
         neuralSpeechGate = v(.neuralSpeechGate, d.neuralSpeechGate)
         ownerVoiceOnly = v(.ownerVoiceOnly, d.ownerVoiceOnly)
+        rehearsalWithInterviewer = v(.rehearsalWithInterviewer, d.rehearsalWithInterviewer)
         ownerVoiceThreshold = v(.ownerVoiceThreshold, d.ownerVoiceThreshold)
         micNoiseSuppression = v(.micNoiseSuppression, d.micNoiseSuppression)
         ownerSpeechContext = v(.ownerSpeechContext, d.ownerSpeechContext)
+        ownerVoiceClarification = v(.ownerVoiceClarification, d.ownerVoiceClarification)
         mode = v(.mode, d.mode)
         useProfile = v(.useProfile, d.useProfile)
         activeProfileID = v(.activeProfileID, d.activeProfileID)

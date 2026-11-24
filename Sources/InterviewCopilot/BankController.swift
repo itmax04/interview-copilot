@@ -76,6 +76,7 @@ final class BankController {
 
     /// Материалы активного профиля и их индекс (R-06).
     private(set) var materials: [MaterialFile] = []
+    private(set) var materialTexts: [String] = []
     private(set) var materialIndex = MaterialIndex.empty
     private(set) var materialStatus = ""
     private var embedder: TextEmbedder?
@@ -314,15 +315,16 @@ final class BankController {
         materialTask = nil
         materialGeneration += 1
         let generation = materialGeneration
-        guard let id = activeID else { materials = []; materialIndex = .empty; return }
+        guard let id = activeID else { materials = []; materialTexts = []; materialIndex = .empty; return }
         materials = library.listMaterials(id)
+        let files = library.materialTexts(id)
+        materialTexts = files.map(\.text)
         guard let embedder else {
             materialStatus = materials.isEmpty ? "" : (modelLoad != nil ? L("Загружаю модель…") : "Нет модели эмбеддингов — поиск по материалам выключен")
             materialIndex = .empty
             return
         }
         if materials.isEmpty { materialIndex = .empty; materialStatus = ""; onChange?(); return }
-        let files = library.materialTexts(id)
         let cacheURL = library.materialsCacheURL(id)
         materialStatus = "Индексирую материалы…"
         onChange?()

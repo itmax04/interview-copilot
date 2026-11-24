@@ -155,6 +155,23 @@ public final class VoiceEmbedder: @unchecked Sendable {
     }
 }
 
+/// Решение проверки голоса по одной реплике (COPILOT-05 R-03).
+public struct VoiceVerdict: Sendable, Equatable {
+    /// Косинусное сходство с отпечатком владельца.
+    public var similarity: Float
+    /// Сходство не ниже порога: говорит владелец.
+    public var accepted: Bool
+    /// Режим «Репетиция с собеседником»: чужой голос не отбрасывается, реплика идёт итогом с пометкой говорящего
+    /// (`TranscriptEvent.speaker`), а куда её направить — решает приложение (`SpeakerRouter`).
+    public var routeBySpeaker: Bool
+
+    public init(similarity: Float, accepted: Bool, routeBySpeaker: Bool = false) {
+        self.similarity = similarity
+        self.accepted = accepted
+        self.routeBySpeaker = routeBySpeaker
+    }
+}
+
 /// Текущее состояние проверки голоса для очереди распознавания (COPILOT-05 R-03): модель, отпечаток, порог, включено ли.
 /// Приложение меняет его при смене источника, режима ИИ-собеседования, настроек и образца; распознавание только читает.
 public final class VoiceGateBox: @unchecked Sendable {
@@ -164,6 +181,8 @@ public final class VoiceGateBox: @unchecked Sendable {
         /// 0 — персональный порог образца.
         public var threshold: Float = 0
         public var active = false
+        /// Режим «Репетиция с собеседником» (только «Микрофон Mac»): говорящий помечается, чужой голос не отбрасывается.
+        public var routeBySpeaker = false
         public init() {}
     }
 
@@ -182,12 +201,22 @@ public final class VoiceGateBox: @unchecked Sendable {
         return s.threshold > 0 ? s.threshold : print.recommendedThreshold
     }
 
-    public func check(_ samples: [Float], ignoringActive: Bool = false) -> (similarity: Float, accepted: Bool)? {
+    /// Вердикт по реплике; nil — проверка выключена, нет модели или образца, речи меньше `minShortSeconds`.
+    /// `allowRouting: false` — канал, где чужой голос всегда отбрасывается (микрофон на созвоне).
+    public func check(_ samples: [Float], ignoringActive: Bool = false, allowRouting: Bool = true) -> VoiceVerdict? {
         let s = current
         guard s.active || ignoringActive, let embedder = s.embedder, let print = s.print,
               let measured = embedder.measure(samples, to: print) else { return nil }
+        return Self.verdict(similarity: measured.similarity, speechSeconds: measured.speechSeconds, state: s,
+                            allowRouting: allowRouting)
+    }
+
+    /// Решение по измеренному сходству (вынесено для тестов без модели CAM++).
+    static func verdict(similarity: Float, speechSeconds: Double, state s: State, allowRouting: Bool) -> VoiceVerdict? {
+        guard let print = s.print else { return nil }
         var threshold = s.threshold > 0 ? s.threshold : print.recommendedThreshold
-        if measured.speechSeconds < VoiceEmbedder.minSeconds { threshold -= VoiceEmbedder.shortMargin }
-        return (measured.similarity, measured.similarity >= threshold)
+        if speechSeconds < VoiceEmbedder.minSeconds { threshold -= VoiceEmbedder.shortMargin }
+        return VoiceVerdict(similarity: similarity, accepted: similarity >= threshold,
+                            routeBySpeaker: s.routeBySpeaker && allowRouting)
     }
 }

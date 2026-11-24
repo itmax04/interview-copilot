@@ -11,6 +11,10 @@ public enum HotkeyAction: String, Codable, CaseIterable, Sendable {
     case newSession
     /// Оверлей (COPILOT-09 R-07, R-09, R-10): чат, очистить расшифровку, предыдущий / следующий ответ.
     case chat, clearTranscript, previousAnswer, nextAnswer
+    /// «Микрофон выкл.» — приложение перестаёт слушать микрофон владельца (COPILOT-18 D2, D5).
+    case toggleMic
+    /// «Уточнение голосом» одним разом: следующая фраза владельца уточняет вопрос (COPILOT-18 D9).
+    case voiceClarify
 
     public var title: String {
         switch self {
@@ -25,6 +29,8 @@ public enum HotkeyAction: String, Codable, CaseIterable, Sendable {
         case .clearTranscript: L10n.t("Очистить расшифровку")
         case .previousAnswer: L10n.t("Предыдущий ответ")
         case .nextAnswer: L10n.t("Следующий ответ")
+        case .toggleMic: L10n.t("Микрофон выкл. / вкл.")
+        case .voiceClarify: L10n.t("Уточнение голосом (одна фраза)")
         }
     }
 }
@@ -54,6 +60,8 @@ public struct HotkeyBinding: Codable, Equatable, Hashable, Sendable {
         .clearTranscript: HotkeyBinding(keyCode: UInt32(kVK_Delete), modifiers: ctrlOpt),
         .previousAnswer: HotkeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: ctrlOpt),
         .nextAnswer: HotkeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: ctrlOpt),
+        .toggleMic: HotkeyBinding(keyCode: UInt32(kVK_ANSI_M), modifiers: ctrlOpt),
+        .voiceClarify: HotkeyBinding(keyCode: UInt32(kVK_ANSI_U), modifiers: ctrlOpt),
     ]
 
     public static let cmd = UInt32(cmdKey)
@@ -68,6 +76,8 @@ public struct HotkeyBinding: Codable, Equatable, Hashable, Sendable {
         .clearTranscript: HotkeyBinding(keyCode: UInt32(kVK_Delete), modifiers: cmdShift),
         .previousAnswer: HotkeyBinding(keyCode: UInt32(kVK_LeftArrow), modifiers: cmd),
         .nextAnswer: HotkeyBinding(keyCode: UInt32(kVK_RightArrow), modifiers: cmd),
+        .toggleMic: HotkeyBinding(keyCode: UInt32(kVK_ANSI_M), modifiers: cmdShift),
+        .voiceClarify: HotkeyBinding(keyCode: UInt32(kVK_ANSI_U), modifiers: cmdShift),
     ]
 
     static let keyNames: [UInt32: String] = {

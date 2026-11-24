@@ -19,6 +19,7 @@ final class SessionController {
 
     func deleteAll() throws {
         persist = false
+        QuestionAudioStore().deleteAll()    // COPILOT-17 R-10: звук вопросов уходит вместе с историей
         try store.deleteAll()
     }
     private(set) var current: SessionRecord?
@@ -52,10 +53,12 @@ final class SessionController {
         scheduleSave()
     }
 
-    /// Уточнённый итог реплики (R-37) заменяет её быстрый текст.
-    func reviseUtterance(id: Int, text: String, language: String) {
-        guard let i = current?.utterances.lastIndex(where: { $0.id == id }), let at = current?.utterances[i].at else { return }
-        current?.utterances[i] = .init(id: id, text: text, language: language, at: at)
+    /// Вопрос хода целиком (фоновый проход Whisper, COPILOT-15 R-07): первая фраза получает весь текст, остальные убираются.
+    func reviseQuestion(utterances ids: [Int], text: String, language: String) {
+        guard let first = ids.first, let i = current?.utterances.lastIndex(where: { $0.id == first }), let at = current?.utterances[i].at else { return }
+        current?.utterances[i] = .init(id: first, text: text, language: language, at: at)
+        let rest = Set(ids.dropFirst())
+        current?.utterances.removeAll { rest.contains($0.id) }
         scheduleSave()
     }
 
@@ -67,10 +70,10 @@ final class SessionController {
         scheduleSave()
     }
 
-    /// Уточненный текст вашей фразы (самопроверка) заменяет черновой — последнее совпадение.
-    func reviseOwnerUtterance(_ fast: String, to text: String) {
-        guard let i = current?.ownerUtterances.lastIndex(where: { $0.text == fast }), let u = current?.ownerUtterances[i] else { return }
-        current?.ownerUtterances[i] = .init(id: u.id, text: text, language: u.language, at: u.at)
+    /// «Микрофон выкл.» нажат или отпущен (COPILOT-18 D7): отрезок отмечается в сессии — разбор не примет молчание за отсутствие ответа.
+    func micMuteChanged(off: Bool, at now: Date = Date()) {
+        guard current != nil else { return }
+        MicMutedInterval.apply(muted: off, at: now, to: &current!.micMutedIntervals)
         scheduleSave()
     }
 
@@ -114,7 +117,9 @@ final class SessionController {
     func finish() -> SessionRecord? {
         saveTask?.cancel()
         saveTask = nil
-        current?.endedAt = Date()
+        let now = Date()
+        current?.endedAt = now
+        if current != nil { MicMutedInterval.close(&current!.micMutedIntervals, at: now) }
         saveNow()
         let finished = current
         current = nil

@@ -15,22 +15,27 @@ floating overlay. During a call (Google Meet in a browser, Zoom, Telegram) the a
    Claude → custom API), streamed; the first words appear about 1 s after the question ends;
 6. remembers the whole interview: questions, the owner's answers, shown hints — and reviews it after the call.
 
-Languages: Ukrainian, Russian, English. One user — the owner. No audio is written to disk.
+Languages: Ukrainian, Russian, English. One user — the owner. By default no audio is written to disk (opt-in `question-audio/`, §4).
 
 ## 2. Data flow
 ```
 call app audio ─► SystemAudioCapture ─► AudioRingBuffer (30 s) ─► StreamingTranscriber ─┐
 owner mic ─► MicActivityDetector (is the owner speaking) ─► TurnDetector                  │
-          └► second StreamingTranscriber (owner answers) ─► InterviewMemory.addAnswer     │
+          └► second StreamingTranscriber (owner answers) ─► OwnerAnswerAssembler ─►       │
+             re-decode of the answer's own audio ─► InterviewMemory.addAnswer             │
                                                                                           ▼
 StreamingTranscriber: EnergyVAD splits phrases → [LocalVQE, off] → Silero "is it speech" →
   Parakeet (final ~0.1 s) → HallucinationFilter → CAM++ voiceprint (microphone mode) →
-  events .partial / .final / .revised (Whisper turbo refine, ~3 s) / .foreignVoice / .discarded
+  events .partial / .final / .foreignVoice / .discarded;
+  "Rehearsal with an interviewer" (mic mode): the verdict comes as .speaker before .final instead of .foreignVoice,
+  `SpeakerRouter` sends the owner's voice to answers and other voices to questions
                                                                                           │
-ListeningController.handle: language filter (LanguageGate + term dictionary) → overlay line or a gray line
+ListeningController.handle: language filter (LanguageGate + term dictionary; the language comes from SessionLanguageLock:
+  "auto" settles on uk/ru or en after 3 phrases, whole English is dropped on every channel unless allowed) → overlay line or a gray line
                                                                                           ▼
-TurnController → TurnDetector: pause T (700 ms; 350 ms after "?"), owner speech, echo → Turn
-  + speculative request (draft) for a finished phrase before the pause expires
+TurnController → TurnDetector: pause T (1000 ms; 600 ms after "?"), owner speech, echo → Turn (phrase texts are
+  provisional) → QuestionRedecoder: one Parakeet pass over the whole question audio (≤ 2 s, else phrase text) = Turn.text
+  + speculative request (draft) only after the same re-decode of the audio so far (DraftGate), adopted when texts are equal
                                                                                           ▼
 AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerController.handle(turn)
   AnswerController: BankController.lookup (one bge-m3 embedding: bank cards + material chunks) →
@@ -42,6 +47,9 @@ AppDelegate.turnCompleted → InterviewMemory.addQuestion(turnID) → AnswerCont
 hint → InterviewMemory.setHint(turnID); everything → SessionController → SessionStore (JSON, retention) →
 ReviewController (post-call comments, summary, "Ask AI")
 ```
+
+**Owner microphone switch (COPILOT-18).** «Микрофон выкл.» (overlay button, ⇧⌘M in a session, ⌃⌥M otherwise; call sessions only) makes the app ignore the owner microphone completely: the owner channel is deactivated (samples dropped, transcriber paused without cancelling the shared engine), pending owner phrases are discarded, "owner speaking" is reported false (the turn ends by pause only) and the silent-mic notice is suppressed. Meet and the macOS mute are untouched; `PanelModel.micHardwareMuted` is separate. Muted intervals (`MicMutedInterval`, times only) are stored in the session and marked in the history and the review. The automatic voice clarification (`OwnerQuestionDetector` → hint) runs only with the setting `ownerVoiceClarification` (off by default). A one-shot «Уточнить» (overlay button, ⇧⌘U in a session, ⌃⌥U otherwise; `VoiceClarifyArm`) treats only the next owner phrase as a clarification (`OwnerQuestionDetector.detectForced`), then disarms; it self-disarms after 15 s, on mute and at session start/end.
+
 The main actor (`@MainActor`) owns the UI and controllers. Recognition, embeddings, Keychain and networking run in the
 background (`Task.detached`, transcriber queues). Cross-thread state uses small `…Box` classes with `NSLock`
 (`TranscriberBox`, `VoiceGateBox`, `EnhancerBox`, `AudioRouteBox`).
@@ -49,9 +57,9 @@ background (`Task.detached`, transcriber queues). Cross-thread state uses small 
 ## 3. Modules
 | Folder | What | Key types |
 |---|---|---|
-| `Sources/CopilotCore/Audio` | capture, VAD, buffer, permissions | `SystemAudioCapture`, `MicrophoneCapture`, `EnergyVAD`, `AudioRingBuffer`, `AudioSourceResolver` |
-| `…/STT` | recognition | `StreamingTranscriber` (segmentation, finals, refinement), `ParakeetEngine`, `WhisperEngine`, `HybridRecognizer` |
-| `…/Filter` | what not to recognize or show | `SileroSpeechGate`, `LanguageGate`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
+| `Sources/CopilotCore/Audio` | capture, VAD, buffer, permissions | `SystemAudioCapture`, `MicrophoneCapture`, `EnergyVAD`, `AudioRingBuffer`, `AudioSourceResolver`, `MicSilenceDetector` |
+| `…/STT` | recognition | `StreamingTranscriber` (segmentation, finals, refinement; Parakeet language hint from the session language, optional wait for the Whisper text before the hint — `PreciseQuestionMode`, uk only; question-audio sink), `QuestionAudioStore` (Storage, opt-in WAV + sidecar), `ParakeetEngine`, `WhisperEngine`, `HybridRecognizer` |
+| `…/Filter` | what not to recognize or show | `SileroSpeechGate`, `LanguageGate`, `SessionLanguageLock`, `TermDictionary`/`BuiltinTerms`, `VoicePrint`/`VoiceEmbedder`/`VoiceGateBox`, `SpeechEnhancer`, `HallucinationFilter` |
 | `…/Turns` | end of question | `TurnDetector` (pure logic, fully tested), `TurnEval` |
 | `…/Profiles` | profiles, file import, materials (COPILOT-08) | `ProfileLibrary` (create, switch, delete, migrate the old `profile/`, materials), `ProfileDocument`, `DocumentText` (PDF — PDFKit, .docx/.rtf — AppKit, .txt/.md), `MaterialChunker`, `MaterialIndex`, `MaterialIndexBuilder` |
 | `…/Bank` | profile and answer bank | `Profile`, `ProfileStore.load`, `QuestionBank` (YAML: `BankCard` with an answer status, `QuestionBankWriter`), `QuestionImport` (rules + model), `QuestionPreparation` (phrasings, drafts), `BankMatcher`, `TextEmbedder` |
@@ -84,6 +92,8 @@ Rule: logic belongs in `CopilotCore` (tested without UI); the app only wires and
   `parakeet-models.json`, `filter-models.json`);
 - `sessions/*.json` — history (utterances, turns, exchanges with the owner's answers, review), permissions 600, purged by
   retention; "Delete all history" also removes unreadable files;
+- `question-audio/` — opt-in (`AppSettings.saveQuestionAudio`, default off): call-channel question WAV (16 kHz mono) + numbers-only sidecar,
+  dir 700, files 600, excluded from backup, retention `questionAudioRetentionDays` (default 14), wiped by "Delete all history";
 - `voice/owner.json` — voiceprint (192 numbers), 600; `usage.json` — spending.
 Settings — UserDefaults `com.itmax04.interviewcopilot`, key `settings.v1`. API keys — Keychain only.
 
@@ -129,10 +139,10 @@ Eval thresholds — `evals/README.md`. Live checks run from the signed `.app`: o
 
 ## 7. Log and debugging
 `log show --predicate 'subsystem == "com.itmax04.interviewcopilot"' --info --last 30m` (in zsh — `/usr/bin/log`).
-Categories: `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Important events: `transcript_final`, `transcript_revised`,
+Categories: `audio`, `stt`, `turns`, `llm`, `metrics`, `app`. Important events: `transcript_final`, `redecode`, `whisper_history`,
 `filtered reason=lang|vad|voice|echo|hallucination`, `voice_ok similarity=…`, `turn_end`, `draft_start/used/cancelled`,
 `bank_match`, `no_match`, `first_token … ms_from_speech_end=…`, `not_a_question`, `last resort: …`,
-`owner answering on/off`, `owner_final`, `capture_restart`.
+`language_locked`/`language_unlocked`, `mic_silent`, `source_call_only`, `owner answering on/off`, `owner_final … redecoded=`, `redecode`/`redecode_failed`, `capture_restart`.
 **Utterance texts, answers and keys are never logged** — only events, numbers and model IDs; provider error messages are
 redacted (`SSE.redactIdentifiers`).
 
@@ -158,6 +168,10 @@ redacted (`SSE.redactIdentifiers`).
 | COPILOT-11 | fixes after the test interview: chain "last resort", hedge to another provider, screenshots only to image-capable providers, Gemini timeout floor, "have you worked with X?" rule, interviewer monologue is not a question, overlay resizing, "Delete all" questions (0.15) | `feat/copilot-11-test-call-fixes` |
 | COPILOT-12 | final review: capture start/stop race, history wipe, error redaction, Groq token budget, repository hygiene, English documentation and `AGENTS.md`, `main` fast-forwarded (0.15.1) | `feat/copilot-12-final-review` |
 | COPILOT-13 | technical audit: finals lost to a stray cancel, microphone restart on device change, retention of unreadable sessions, save throttle, shared URLSession, job page decoding (in progress) | `feat/copilot-13-audit-fixes` |
+| COPILOT-15 | accurate turns: whole-question Parakeet re-decode (`QuestionAudioRange`, `QuestionRedecoder`), provisional partials, one background Whisper pass per question (`HistoryPassScheduler`, history/memory only), pause 1000/600 ms, understood-question line in the hint, gated drafts (`DraftGate`), owner answers re-decoded as a whole (`OwnerAnswerAssembler`), prepared fallback B `StreamingTranscriber.Config.hintWaitsForWhisper` (off) (in progress) | `feat/copilot-15-accurate-turns` |
+| COPILOT-16 | source and language: `LanguageGate` drops whole English/foreign phrases on the call channel, `SessionLanguageLock` ("auto" settles on the interview language, «Разрешить английский»), `MicSilenceDetector` ("Микрофон не даёт звука"), "All system audio" notice with «Только звонок» (in progress) | `feat/copilot-16-source-language` |
+| COPILOT-17 | Ukrainian question accuracy: Parakeet language hint, exam new-ticket openers, Whisper text corrects the active ticket root (`TicketRootUpdate`), «Точный вопрос (+2 с)» setting (wait for Whisper, uk only, never for drafts/bank cards), opt-in local question audio (`QuestionAudioStore`) (in progress) | `feat/copilot-17-uk-question` |
+| COPILOT-18 | owner microphone toggle «Микрофон выкл.» (overlay button, ⇧⌘M in a session / ⌃⌥M; owner channel fully ignored, `MicMutedInterval` marks in history and review) and the voice clarification setting (`ownerVoiceClarification`, off by default), one-shot «Уточнить» ⇧⌘U (D9) (in progress) | `feat/copilot-18-mic-toggle` |
 
 Branches form a chain (each from the previous one). `main` is fast-forwarded to the latest reviewed task by the owner's decision.
 

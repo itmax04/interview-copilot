@@ -504,9 +504,9 @@ struct SessionDetail: View {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     let q = search.trimmingCharacters(in: .whitespaces).lowercased()
                     let lines = session.timeline.filter { line in
-                        (showHints || line.speaker != .hint)
+                        line.speaker == .micOff ? (speaker != .interviewer && q.isEmpty) : ((showHints || line.speaker != .hint)
                             && (speaker == nil || line.speaker == speaker || (line.speaker == .hint && speaker == nil))
-                            && (q.isEmpty || line.text.lowercased().contains(q))
+                            && (q.isEmpty || line.text.lowercased().contains(q)))
                     }
                     if lines.isEmpty { Text("Ничего не найдено").foregroundStyle(IC.secondary) }
                     ForEach(lines) { line in TranscriptBubble(line: line, asker: asker) }
@@ -599,7 +599,14 @@ private struct TranscriptBubble: View {
     @State private var open = false
 
     var body: some View {
-        if line.speaker == .hint {
+        if line.speaker == .micOff {
+            // COPILOT-18 D7: пауза в записи ваших слов — не «вы молчали».
+            Label(L("Микрофон выключен в Copilot · %@ — ваши слова не записывались", line.mutedRange), systemImage: "mic.slash.fill")
+                .font(.system(size: 12)).foregroundStyle(IC.red)
+                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                .background(IC.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                .accessibilityElement(children: .combine)
+        } else if line.speaker == .hint {
             DisclosureGroup(isExpanded: $open) {
                 MarkdownText(line.text, fontSize: 12).foregroundStyle(IC.secondary).frame(maxWidth: .infinity, alignment: .leading)
             } label: {

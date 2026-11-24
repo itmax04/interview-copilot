@@ -10,6 +10,8 @@ final class AnswerController {
     private let panel: PanelModel
     private let providers: [ProviderID: LLMProvider]
     private var generation: Task<Void, Never>?
+    /// Монотонный идентификатор текущей генерации: старые потоки и отмененные коллбеки никогда не смешиваются с новым ответом.
+    private var activeGenerationID: UInt64 = 0
     private(set) var lastQuestion: Turn?
     private var lastMatch: BankMatch?
     /// Фрагменты материалов последнего вопроса (COPILOT-08 R-06) — и для сильной модели.
@@ -40,13 +42,26 @@ final class AnswerController {
     var session: () -> SessionConfig? = { nil }
 
     /// Настройки с цепочкой сессии: выбранная в мастере модель — первой (COPILOT-09 R-01).
+    /// Язык активной сессии также жёстко фиксируется, чтобы не слетать в `.auto` посреди экзамена.
     private var effectiveSettings: AppSettings {
         var s = model.settings
-        if let c = session() { s.chain = c.chain(from: s.chain) }
+        if let c = session() {
+            s.chain = c.chain(from: s.chain)
+            if c.language != .auto { s.language = c.language }
+        }
         return s
     }
 
     private var isRegularCall: Bool { session()?.type == .regular }
+    private var isExamCall: Bool { session()?.type == .exam }
+    /// Активная тема/билет текущего диалога (E-02): сохраняется через всю цепочку доп. вопросов и перебиваний.
+    private var activeTopic: ActiveTopic?
+    /// Время последнего вопроса и счётчик синтетических turnID для повтора голосом владельца.
+    private var lastQuestionAt: Date?
+    private var nextOwnerTurnID = -1000
+
+    var lastQuestionAge: TimeInterval? { lastQuestionAt.map { Date().timeIntervalSince($0) } }
+    var hasActiveQuestion: Bool { panel.history.entries.last != nil }
 
     /// Тип, указания и стиль ответа сессии; без сессии (ИИ-собеседование, смоки) — стиль по умолчанию из настроек.
     private var sessionPrompt: SessionPrompt? {
@@ -55,11 +70,11 @@ final class AnswerController {
         return SessionPrompt(type: c.type, instructions: c.instructions, style: c.effectiveStyle(default: d))
     }
 
-    /// Профиль в промпте: обычный звонок — только инструкции профиля (без резюме и карточек, Q14); собеседование —
-    /// с вакансией и компанией из мастера вместо вакансии профиля.
+    /// Профиль в промпте: обычный звонок и экзамен — только инструкции профиля (без резюме/легенд работодателей,
+    /// но экзамен использует материалы и карточки); собеседование — с вакансией и компанией из мастера.
     private func promptProfile(_ settings: AppSettings) -> Profile? {
         let s = session()
-        if s?.type == .regular { return Profile(name: bank.profile.name, instructions: bank.profile.instructions) }
+        if s?.type == .regular || s?.type == .exam { return Profile(name: bank.profile.name, instructions: bank.profile.instructions) }
         guard settings.useProfile else { return nil }
         return s?.applyingJob(to: bank.profile) ?? bank.profile
     }
@@ -106,50 +121,187 @@ final class AnswerController {
         let version: Int
     }
 
+    /// Начинает новую генерацию и жёстко изолирует её от любых событий предыдущей.
+    @discardableResult
+    private func bumpGeneration() -> UInt64 {
+        activeGenerationID &+= 1
+        generation?.cancel()
+        generation = nil
+        return activeGenerationID
+    }
+
+    /// Обновляет `ownerLastSpoken` в `activeTopic` из памяти интервью (включая только что сброшенный прерванный ответ).
+    private func syncActiveTopicSpeech() {
+        guard var topic = activeTopic, let memory else { return }
+        let exchanges = memory.all
+        let relevant = exchanges.suffix(3).compactMap { ex -> String? in
+            let a = ex.answerText.trimmingCharacters(in: .whitespacesAndNewlines)
+            return a.isEmpty ? nil : a
+        }
+        if !relevant.isEmpty {
+            topic.ownerLastSpoken = String(relevant.joined(separator: " ").suffix(1000))
+            activeTopic = topic
+        }
+    }
+
+    /// COPILOT-17 R-05: Whisper по звуку уточнил текст — если это корень активного билета, обновляем его заголовки.
+    func refineTicketRoot(turn: Int, old: String, new: String, audioSeconds: Double) {
+        guard let out = TicketRootUpdate.apply(turn: turn, oldText: old, newText: new, audioSeconds: audioSeconds,
+                                               topic: &activeTopic, history: &panel.history) else { return }
+        Log.metrics.notice("ticket_root_updated turn=\(turn) chars_old=\(out.charsOld) chars_new=\(out.charsNew)")
+    }
+
     /// Новый ход: отменяет незавершённую генерацию прошлого (R-10), открывает новый вопрос в истории.
     func handle(_ turn: Turn) {
-        generation?.cancel()
+        let genID = bumpGeneration()
         lastQuestion = turn
+        lastQuestionAt = Date()
         panel.history.cancelUnfinished()
-        let ids = panel.history.begin(question: turn.text, turnID: turn.id, kind: .hint)
+
+        // E-02/E-04: определяем доп. вопрос или неразборчивый обрывок на экзамене при активной теме.
+        let unclear = TranscriptSanityCheck.looksUnclear(turn.text)
+        let detectedFollowUp = isExamCall ? FollowUpDetector.isExamFollowUp(turn.text) : FollowUpDetector.isFollowUp(turn.text)
+        let isFollowUp = activeTopic != nil && (detectedFollowUp || (isExamCall && unclear))
+        if isFollowUp { syncActiveTopicSpeech() }
+
+        let ids = panel.history.begin(question: turn.text, turnID: turn.id, kind: .hint,
+                                      rootEntryID: isFollowUp ? activeTopic?.rootEntryID : nil,
+                                      rootTitle: isFollowUp ? activeTopic?.rootTitle : nil)
         let slot = Slot(entry: ids.entry, version: ids.version)
-        // COPILOT-04 R-01: ответ на этот текст уже готовится (или запрос ещё собирается — чтение ключей) —
-        // ход забирает его, без нового запроса. Если опережающий запрос решит, что нужна карточка базы, ход пойдёт обычным путём.
-        if let d = draft, d.text == turn.text, !d.declined {
-            adopt(d, turn: turn, slot: slot)
+
+        if isFollowUp {
+            activeTopic?.followUpDepth += 1
+        } else {
+            activeTopic = ActiveTopic(rootExchangeID: memory?.currentExchangeID, rootEntryID: ids.entry,
+                                      rootQuestion: turn.text)
+        }
+
+        // COPILOT-04 R-01: опережающий запрос забираем только на обычном (не follow-up) вопросе.
+        if !isFollowUp, let d = draft, d.text == turn.text, !d.declined {
+            adopt(d, turn: turn, slot: slot, genID: genID)
             return
         }
         cancelDraft()
-        answerNormally(turn, slot: slot)
+        answerNormally(turn, slot: slot, genID: genID, isFollowUp: isFollowUp)
     }
 
-    private func answerNormally(_ turn: Turn, slot: Slot) {
-        let settings = effectiveSettings
-        generation = Task { [weak self] in
-            guard let self else { return }
-            // «Без профиля» (R-40): база не ищется, модель отвечает сама. Обычный звонок (COPILOT-09) — без карточек,
-            // но с материалами профиля.
-            guard settings.useProfile else {
-                self.lastMatch = nil
-                self.lastMaterials = self.isRegularCall ? await self.bank.lookup(turn.text, threshold: 1).materials : []
-                guard !Task.isCancelled else { return }
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials, slot: slot)
+    /// Повтор или уточнение вопроса голосом самого владельца (без нажатия кнопок):
+    /// при повторе в пределах 25–30 с обновляет текущую карточку новой версией, иначе создаёт новую карточку.
+    func handleOwnerQuestion(_ decision: OwnerQuestionDetector.Decision) {
+        guard decision != .none else { return }
+        let genID = bumpGeneration()
+        cancelDraft()
+        panel.history.cancelUnfinished()
+        let now = Self.now()
+
+        switch decision {
+        case .none:
+            return
+        case .replaceLastQuestion(let repeated):
+            if let lastEntry = panel.history.entries.last,
+               let versionID = panel.history.beginVersion(of: lastEntry.id, kind: .hint, instruction: L("Повтор голосом")) {
+                panel.history.retitle(entry: lastEntry.id, question: repeated)
+                panel.history.select(entry: lastEntry.id)
+                let wasFollowUp = lastEntry.rootEntryID != nil
+                nextOwnerTurnID -= 1
+                let turn = Turn(id: lastEntry.turnID ?? nextOwnerTurnID, text: repeated, speechEndedAt: now, firedAt: now, forced: true)
+                lastQuestion = turn
+                lastQuestionAt = Date()
+                if !wasFollowUp {
+                    activeTopic = ActiveTopic(rootExchangeID: memory?.currentExchangeID, rootEntryID: lastEntry.id, rootQuestion: repeated)
+                }
+                answerNormally(turn, slot: Slot(entry: lastEntry.id, version: versionID), genID: genID,
+                               isFollowUp: wasFollowUp, label: "ownerVoice")
                 return
             }
-            let found = await self.bank.lookup(turn.text, threshold: settings.bankThreshold)
-            guard !Task.isCancelled else { return }
-            self.lastMaterials = found.materials
-            if !found.materials.isEmpty {
-                Log.metrics.notice("materials_found turn=\(turn.id) count=\(found.materials.count) best=\(found.materials[0].score, format: .fixed(precision: 3))")
+            // Фолбэк, если истории ещё нет: открываем как новый вопрос.
+            handleOwnerQuestion(.newQuestion(repeated))
+
+        case .clarifyLastQuestion(let correction):
+            if let lastEntry = panel.history.entries.last,
+               let versionID = panel.history.beginVersion(of: lastEntry.id, kind: .hint, instruction: L("Уточнение голосом: %@", correction)) {
+                let previousQ = lastEntry.question
+                let combinedPromptQ = "\(previousQ) (\(L("уточнение голосом")): \(correction))"
+                let searchQuery = "\(correction) \(previousQ)"
+                panel.history.retitle(entry: lastEntry.id, question: "\(previousQ) · \(correction)")
+                panel.history.select(entry: lastEntry.id)
+                let wasFollowUp = lastEntry.rootEntryID != nil
+                nextOwnerTurnID -= 1
+                let turn = Turn(id: lastEntry.turnID ?? nextOwnerTurnID, text: combinedPromptQ, speechEndedAt: now, firedAt: now, forced: true)
+                lastQuestion = turn
+                lastQuestionAt = Date()
+                if !wasFollowUp {
+                    activeTopic = ActiveTopic(rootExchangeID: memory?.currentExchangeID, rootEntryID: lastEntry.id, rootQuestion: combinedPromptQ)
+                }
+                answerNormally(turn, slot: Slot(entry: lastEntry.id, version: versionID), genID: genID,
+                               isFollowUp: wasFollowUp, label: "ownerVoice", searchOverride: searchQuery)
+                return
+            }
+            handleOwnerQuestion(.newQuestion(correction))
+
+        case .newQuestion(let question):
+            nextOwnerTurnID -= 1
+            let turn = Turn(id: nextOwnerTurnID, text: question, speechEndedAt: now, firedAt: now, forced: true)
+            lastQuestion = turn
+            lastQuestionAt = Date()
+            let detectedFollowUp = isExamCall ? FollowUpDetector.isExamFollowUp(question) : FollowUpDetector.isFollowUp(question)
+            let isFollowUp = activeTopic != nil && detectedFollowUp
+            if isFollowUp { syncActiveTopicSpeech() }
+            let ids = panel.history.begin(question: question, turnID: turn.id, kind: .hint,
+                                          rootEntryID: isFollowUp ? activeTopic?.rootEntryID : nil,
+                                          rootTitle: isFollowUp ? activeTopic?.rootTitle : nil)
+            if isFollowUp {
+                activeTopic?.followUpDepth += 1
+            } else {
+                activeTopic = ActiveTopic(rootExchangeID: memory?.currentExchangeID, rootEntryID: ids.entry, rootQuestion: question)
+            }
+            answerNormally(turn, slot: Slot(entry: ids.entry, version: ids.version), genID: genID,
+                           isFollowUp: isFollowUp, label: "ownerVoice")
+        }
+    }
+
+    private func answerNormally(_ turn: Turn, slot: Slot, genID: UInt64, isFollowUp: Bool = false,
+                                label: String = "generated", searchOverride: String? = nil) {
+        let settings = effectiveSettings
+        let searchQuery = searchOverride ?? (isFollowUp ? activeTopic?.contextualSearchQuery(for: turn.text) : nil) ?? turn.text
+        let topicSnapshot = isFollowUp ? activeTopic : nil
+        generation = Task { [weak self] in
+            guard let self, self.activeGenerationID == genID else { return }
+            // «Без профиля» (R-40): база не ищется, модель отвечает сама. Обычный звонок и экзамен — с материалами профиля.
+            let needsMaterials = settings.useProfile || self.isRegularCall || self.isExamCall
+            guard settings.useProfile else {
+                self.lastMatch = nil
+                if needsMaterials {
+                    let raw = await self.bank.lookup(searchQuery, threshold: 1).materials
+                    self.lastMaterials = topicSnapshot?.mergeMaterials(followUpHits: raw) ?? raw
+                } else {
+                    self.lastMaterials = []
+                }
+                guard !Task.isCancelled, self.activeGenerationID == genID else { return }
+                if !isFollowUp { self.activeTopic?.rootMaterials = Array(self.lastMaterials.prefix(3)) }
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: self.lastMaterials,
+                           slot: slot, genID: genID, isFollowUp: isFollowUp, label: label)
+                return
+            }
+            // На follow-up порог 1.0 блокирует случайную подмену чужой карточкой банка, оставляя контекстные материалы.
+            let cardThreshold = isFollowUp ? 1.0 : settings.bankThreshold
+            let found = await self.bank.lookup(searchQuery, threshold: cardThreshold)
+            guard !Task.isCancelled, self.activeGenerationID == genID else { return }
+            let materials = topicSnapshot?.mergeMaterials(followUpHits: found.materials) ?? found.materials
+            self.lastMaterials = materials
+            if !isFollowUp { self.activeTopic?.rootMaterials = Array(materials.prefix(3)) }
+            if !materials.isEmpty {
+                Log.metrics.notice("materials_found turn=\(turn.id) count=\(materials.count) best=\(materials[0].score, format: .fixed(precision: 3)) followup=\(isFollowUp ? 1 : 0)")
             }
             guard let match = found.match else {
                 // Базы нет (нет модели эмбеддингов) — генерация без карточек, если можно.
-                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: found.materials, slot: slot)
+                self.route(turn, match: BankMatch(matched: nil, top: []), settings: settings, materials: materials,
+                           slot: slot, genID: genID, isFollowUp: isFollowUp, label: label)
                 return
             }
             self.lastMatch = match
             Log.metrics.notice("bank_match turn=\(turn.id) matched=\(match.matched != nil) score=\(match.top.first?.score ?? 0, format: .fixed(precision: 3)) ms_from_speech_end=\(Int(Self.now() - turn.speechEndedAt))")
-            self.route(turn, match: match, settings: settings, materials: found.materials, slot: slot)
+            self.route(turn, match: match, settings: settings, materials: materials, slot: slot, genID: genID, isFollowUp: isFollowUp, label: label)
         }
     }
 
@@ -161,35 +313,43 @@ final class AnswerController {
     }
 
     private func hintRequest(question: String, base: BankCard?, top: [CardScore], settings: AppSettings,
-                             memory: MemoryContext = MemoryContext(), materials: [MaterialHit] = []) -> LLMRequest {
+                             memory: MemoryContext = MemoryContext(), materials: [MaterialHit] = [],
+                             isFollowUp: Bool? = nil) -> LLMRequest {
         PromptBuilder.hintRequest(question: question, transcript: transcript(), cards: top, baseCard: base,
                                   profile: promptProfile(settings), redactPII: settings.piiFilterEnabled,
                                   answerLanguage: PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: question),
                                   memory: memory, generalInstructions: bank.generalInstructions,
-                                  materials: settings.useProfile || isRegularCall ? materials : [], session: sessionPrompt,
-                                  followUp: followUpContext(for: question))
+                                  materials: (settings.useProfile || isRegularCall || isExamCall) ? materials : [],
+                                  session: sessionPrompt,
+                                  followUp: followUpContext(for: question, explicitFollowUp: isFollowUp))
     }
 
-    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = [], slot: Slot) {
+    private func route(_ turn: Turn, match: BankMatch, settings: AppSettings, materials: [MaterialHit] = [],
+                       slot: Slot, genID: UInt64, isFollowUp: Bool = false, label: String = "generated") {
         let modelsAvailable = modelsAvailable(settings)
         switch AnswerRouter.decide(mode: settings.mode, match: match, modelsAvailable: modelsAvailable, useProfile: settings.useProfile) {
         case .bankCard(let card):
             showCard(card, turn: turn, slot: slot)
+            activeTopic?.lastShownHint = card.card.answer
         case .noMatch(let top):
             showNoMatch(top, turn: turn, reason: modelsAvailable || (settings.mode == .bankOnly && settings.useProfile) ? nil : "Модели недоступны: нет ключей",
                         slot: slot)
         case .generate(let base, let top):
             let secrets = model.secrets
             let providers = self.providers
+            let expectedLang = PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: turn.text)
             generation = Task { [weak self] in
-                guard let self else { return }
+                guard let self, self.activeGenerationID == genID else { return }
                 // История интервью (COPILOT-06) и ключи — не на главном потоке.
                 let memory = await self.memoryContext(for: turn.text, turnID: turn.id)
                 let request = self.hintRequest(question: turn.text, base: base, top: top, settings: settings, memory: memory,
-                                               materials: materials)
+                                               materials: materials, isFollowUp: isFollowUp)
                 let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
-                guard !Task.isCancelled, self.lastQuestion?.id == turn.id else { return }
-                self.generate(turn: turn, chain: chain, request: request, fallbackTop: top, slot: slot)
+                guard !Task.isCancelled, self.activeGenerationID == genID, self.lastQuestion?.id == turn.id else { return }
+                self.generate(turn: turn, chain: chain, request: request, fallbackTop: top, slot: slot,
+                              label: label, genID: genID, expectedLanguage: expectedLang) { [weak self] answer in
+                    self?.activeTopic?.lastShownHint = answer
+                }
             }
         }
     }
@@ -228,14 +388,57 @@ final class AnswerController {
 
     // MARK: Генерация (S-03, S-04, R-10)
 
+    /// Строит запасную цепочку для ретрая после срабатывания `OutputSanityGuard`:
+    /// исключает сбойного провайдера, если в цепочке есть другие с ключом (например, Groq → Gemini).
+    private func retryChain(from chain: ProviderChain, excluding failed: ProviderID?) -> ProviderChain? {
+        guard let failed else { return nil }
+        let alternates = chain.steps.filter { $0.provider.id != failed && $0.key?.isEmpty == false }
+        guard !alternates.isEmpty else { return nil }
+        var next = chain
+        next.steps = alternates
+        return next
+    }
+
     private func generate(turn: Turn, chain: ProviderChain, request: LLMRequest, fallbackTop: [CardScore], slot: Slot,
-                          label: String = "generated", onComplete: ((String) -> Void)? = nil) {
+                          label: String = "generated", genID: UInt64? = nil, expectedLanguage: String? = nil,
+                          retryDepth: Int = 0, onComplete: ((String) -> Void)? = nil) {
+        let effectiveGenID = genID ?? activeGenerationID
+        let guardCfg: OutputSanityGuard.Config? = (request.purpose == .hint && retryDepth == 0)
+            ? OutputSanityGuard.Config(expectedLanguage: expectedLanguage, requireUnderstoodLine: true, earlyBufferChars: 90)
+            : nil
+        let onReject: (@MainActor (OutputSanityGuard.Issue, ProviderID?) -> Void)?
+        if guardCfg != nil {
+            onReject = { [weak self] issue, failedProvider in
+                guard let self, self.activeGenerationID == effectiveGenID else { return }
+                Log.metrics.notice("output_guard_rejected turn=\(turn.id) reason=\(issue.rawValue, privacy: .public) provider=\(failedProvider?.rawValue ?? "?", privacy: .public) retry=\(retryDepth)")
+                self.generation?.cancel()
+                let nextChain = self.retryChain(from: chain, excluding: failedProvider) ?? chain
+                self.panel.history.update(entry: slot.entry, version: slot.version) { v in
+                    v.text = ""
+                    v.source = L("Уточняю ответ…")
+                    v.status = .waiting
+                }
+                var retryRequest = request
+                if issue == .languageMix, let lang = expectedLanguage, !retryRequest.messages.isEmpty {
+                    let langName = InterviewerPrompt.languageName(lang)
+                    let lastIdx = retryRequest.messages.count - 1
+                    retryRequest.messages[lastIdx].text += "\n\nCRITICAL CORRECTION: Your previous output used the wrong language. Answer STRICTLY in \(langName) only — do NOT use any other language."
+                }
+                self.generate(turn: turn, chain: nextChain, request: retryRequest, fallbackTop: fallbackTop, slot: slot,
+                              label: label, genID: effectiveGenID, expectedLanguage: expectedLanguage,
+                              retryDepth: retryDepth + 1, onComplete: onComplete)
+            }
+        } else {
+            onReject = nil
+        }
         let consume = makeConsumer(turn: turn, purpose: request.purpose, fallbackTop: fallbackTop, slot: slot, label: label,
-                                   onComplete: onComplete)
+                                   genID: effectiveGenID, sanityGuard: guardCfg.map { OutputSanityGuard(config: $0) },
+                                   onReject: onReject, onComplete: onComplete)
         generation = Task { [weak self] in
             for await event in chain.run(request) {
                 if Task.isCancelled { return }
-                self?.account(event)
+                guard let self, self.activeGenerationID == effectiveGenID else { return }
+                self.account(event)
                 consume(event)
             }
         }
@@ -258,16 +461,23 @@ final class AnswerController {
     }
 
     /// Вывод ответа в его версию истории (S-03, S-04, R-10; COPILOT-09 R-08). `speculative` — ответ начат опережающим
-    /// запросом (метрика COPILOT-04).
+    /// запросом (метрика COPILOT-04). `genID` изолирует поток от старых генераций; `sanityGuard` отсекает мусор и смесь языков.
     private func makeConsumer(turn: Turn, purpose: LLMPurpose, fallbackTop: [CardScore], slot: Slot, label: String,
-                              speculative: Bool = false, onComplete: ((String) -> Void)? = nil) -> @MainActor (ChainEvent) -> Void {
+                              speculative: Bool = false, genID: UInt64? = nil, sanityGuard: OutputSanityGuard? = nil,
+                              onReject: (@MainActor (OutputSanityGuard.Issue, ProviderID?) -> Void)? = nil,
+                              onComplete: ((String) -> Void)? = nil) -> @MainActor (ChainEvent) -> Void {
         var text = ""
         var provider: ProviderID?
         var actualModel: String?
         var firstMs: Double?
         var usage: TokenUsage?
+        var revealed = (sanityGuard == nil || (sanityGuard?.config.earlyBufferChars ?? 0) <= 0)
+        var lastCheckedCount = 0
+        var rejected = false
         return { [weak self] event in
             guard let self else { return }
+            if let genID, self.activeGenerationID != genID { return }
+            if rejected { return }
             switch event {
             case .attempt(let p, let m):
                 provider = p
@@ -285,6 +495,25 @@ final class AnswerController {
                 text += t
                 // «—» — не вопрос: ничего не показываем, пока не станет ясно (R-11).
                 if PromptBuilder.isNoAnswer(text) || (text.count <= 2 && "—–-".contains(text.trimmingCharacters(in: .whitespaces))) { return }
+                if let sanityGuard {
+                    if !revealed {
+                        guard text.count >= sanityGuard.config.earlyBufferChars else { return }
+                        if let issue = sanityGuard.check(text, isFinal: false), let onReject {
+                            rejected = true
+                            onReject(issue, provider)
+                            return
+                        }
+                        revealed = true
+                        lastCheckedCount = text.count
+                    } else if text.count - lastCheckedCount >= 120 {
+                        lastCheckedCount = text.count
+                        if let issue = sanityGuard.check(text, isFinal: false), let onReject {
+                            rejected = true
+                            onReject(issue, provider)
+                            return
+                        }
+                    }
+                }
                 let shown = text, source = "\(Self.label(provider, actualModel)) · \(Self.kindTitle(label))", latency = firstMs.map { $0 / 1000 }
                 self.panel.history.update(entry: slot.entry, version: slot.version) { v in
                     v.text = shown
@@ -294,6 +523,8 @@ final class AnswerController {
                 }
             case .restart:
                 text = ""
+                revealed = (sanityGuard == nil || (sanityGuard?.config.earlyBufferChars ?? 0) <= 0)
+                lastCheckedCount = 0
                 self.panel.history.update(entry: slot.entry, version: slot.version) { $0.text = "" }
             case .providerFailed, .keyFailed:
                 break // учтено в `account`
@@ -306,10 +537,26 @@ final class AnswerController {
                     Log.metrics.notice("not_a_question turn=\(turn.id)")
                     self.onNotAQuestion?(turn)
                 } else {
-                    self.panel.history.update(entry: slot.entry, version: slot.version) { $0.status = .complete }
-                    onComplete?(text)
+                    if let sanityGuard, let issue = sanityGuard.check(text, isFinal: true), let onReject {
+                        rejected = true
+                        onReject(issue, provider)
+                        return
+                    }
+                    let shown = text, source = "\(Self.label(provider, actualModel)) · \(Self.kindTitle(label))", latency = firstMs.map { $0 / 1000 }
+                    self.panel.history.update(entry: slot.entry, version: slot.version) { v in
+                        if !revealed {
+                            v.text = shown
+                            v.source = source
+                            if let latency { v.latency = latency }
+                        }
+                        v.status = .complete
+                    }
+                    // Строка «понял вопрос» (COPILOT-15 R-10) — только для владельца на панели: в память и историю идёт ответ.
+                    let answer = UnderstoodLine.answer(text)
+                    Log.metrics.notice("understood_line turn=\(turn.id) state=\(UnderstoodLine.state(text), privacy: .public)")
+                    onComplete?(answer)
                     self.onAnswer?(AnswerRecord(turn: turn, source: provider?.rawValue ?? "?", model: actualModel, cardID: nil,
-                                                text: text, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
+                                                text: answer, firstTokenMs: firstMs, cardShownMs: nil, usage: usage))
                 }
             case .exhausted(let reason):
                 // S-04: понятная ошибка и «Повторить»; ближайшие карточки — в «нет в базе».
@@ -339,7 +586,11 @@ final class AnswerController {
         /// Ход, забравший запрос до решения: если запрос откажется, ход уйдёт обычным путём.
         var adoptedTurn: Turn?
         var adoptedSlot: Slot?
+        var adoptedGenID: UInt64?
         var task: Task<Void, Never>?
+        var request: LLMRequest?
+        var chain: ProviderChain?
+        var expectedLanguage: String?
         private var buffered: [ChainEvent] = []
         private var consumer: (@MainActor (ChainEvent) -> Void)?
 
@@ -365,10 +616,15 @@ final class AnswerController {
     private var draft: Draft?
 
     /// Начать отвечать на законченную реплику до истечения паузы T. Повтор с тем же текстом ничего не делает,
-    /// новый текст (собеседник продолжил) отменяет прежний запрос.
+    /// новый текст (собеседник продолжил) отменяет прежний запрос. Короткие follow-up пропускают черновик,
+    /// чтобы дождаться сброса прерванной речи владельца и контекстного RAG (E-02/E-03).
     func prefetch(_ text: String) {
         let settings = effectiveSettings
         guard settings.speculativeAnswers, draft?.text != text else { return }
+        let detectedFollowUp = isExamCall ? FollowUpDetector.isExamFollowUp(text) : FollowUpDetector.isFollowUp(text)
+        if activeTopic != nil, detectedFollowUp || (isExamCall && TranscriptSanityCheck.looksUnclear(text)) {
+            return
+        }
         cancelDraft()
         let d = Draft(text: text, startedAt: Self.now())
         draft = d
@@ -376,7 +632,7 @@ final class AnswerController {
         let providers = self.providers
         d.task = Task { [weak self] in
             guard let self else { return }
-            if settings.useProfile || self.isRegularCall {
+            if settings.useProfile || self.isRegularCall || self.isExamCall {
                 let found = await self.bank.lookup(text, threshold: settings.bankThreshold)
                 if let match = found.match, settings.useProfile { d.match = match }
                 d.materials = found.materials
@@ -387,14 +643,21 @@ final class AnswerController {
                                                                            modelsAvailable: self.modelsAvailable(settings),
                                                                            useProfile: settings.useProfile) else {
                 d.declined = true
-                if let turn = d.adoptedTurn, let slot = d.adoptedSlot, self.lastQuestion?.id == turn.id { self.answerNormally(turn, slot: slot) }
+                if let turn = d.adoptedTurn, let slot = d.adoptedSlot, let genID = d.adoptedGenID,
+                   self.activeGenerationID == genID, self.lastQuestion?.id == turn.id {
+                    self.answerNormally(turn, slot: slot, genID: genID)
+                }
                 return
             }
             let memory = await self.memoryContext(for: text)
+            let expectedLang = PromptBuilder.answerLanguage(setting: settings.language.whisperCode, question: text)
             let request = self.hintRequest(question: text, base: base, top: top, settings: settings, memory: memory,
                                            materials: d.materials)
             d.fallbackTop = top
+            d.request = request
+            d.expectedLanguage = expectedLang
             let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
+            d.chain = chain
             guard !Task.isCancelled, self.draft === d || d.adopted else { return }
             d.generating = true
             for await event in chain.run(request) {
@@ -414,14 +677,42 @@ final class AnswerController {
         Log.metrics.notice("draft_cancelled lead_ms=\(Int(Self.now() - d.startedAt)) generating=\(d.generating)")
     }
 
-    private func adopt(_ d: Draft, turn: Turn, slot: Slot) {
+    private func adopt(_ d: Draft, turn: Turn, slot: Slot, genID: UInt64) {
         draft = nil
         d.adoptedTurn = turn
         d.adoptedSlot = slot
-        if model.settings.useProfile { lastMatch = d.match; lastMaterials = d.materials } else { lastMatch = nil; lastMaterials = [] }
+        d.adoptedGenID = genID
+        if model.settings.useProfile || isExamCall {
+            lastMatch = model.settings.useProfile ? d.match : nil
+            lastMaterials = d.materials
+            activeTopic?.rootMaterials = Array(d.materials.prefix(3))
+        } else {
+            lastMatch = nil
+            lastMaterials = []
+        }
         Log.metrics.notice("draft_used turn=\(turn.id) started_ms_from_speech_end=\(Int(d.startedAt - turn.speechEndedAt)) lead_ms=\(Int(turn.firedAt - d.startedAt)) generating=\(d.generating)")
         generation = d.task
-        d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, slot: slot, label: "generated", speculative: true))
+        let expectedLang = d.expectedLanguage ?? PromptBuilder.answerLanguage(setting: effectiveSettings.language.whisperCode, question: turn.text)
+        let sanityGuard = OutputSanityGuard(config: .init(expectedLanguage: expectedLang, requireUnderstoodLine: true, earlyBufferChars: 90))
+        let onReject: @MainActor (OutputSanityGuard.Issue, ProviderID?) -> Void = { [weak self] issue, failedProvider in
+            guard let self, self.activeGenerationID == genID else { return }
+            Log.metrics.notice("output_guard_rejected turn=\(turn.id) reason=\(issue.rawValue, privacy: .public) provider=\(failedProvider?.rawValue ?? "?", privacy: .public) retry=0")
+            self.generation?.cancel()
+            self.panel.history.update(entry: slot.entry, version: slot.version) { v in
+                v.text = ""
+                v.source = L("Уточняю ответ…")
+                v.status = .waiting
+            }
+            if let req = d.request, let chain = d.chain {
+                let nextChain = self.retryChain(from: chain, excluding: failedProvider) ?? chain
+                self.generate(turn: turn, chain: nextChain, request: req, fallbackTop: d.fallbackTop, slot: slot,
+                              genID: genID, expectedLanguage: expectedLang, retryDepth: 1)
+            } else {
+                self.answerNormally(turn, slot: slot, genID: genID)
+            }
+        }
+        d.attach(makeConsumer(turn: turn, purpose: .hint, fallbackTop: d.fallbackTop, slot: slot, label: "generated",
+                              speculative: true, genID: genID, sanityGuard: sanityGuard, onReject: onReject))
     }
 
     /// Подпись вида ответа рядом с моделью — на языке интерфейса (COPILOT-12: раньше «generated» было по-английски
@@ -431,6 +722,7 @@ final class AnswerController {
         case "generated": L("ответ модели")
         case "strong": L("сильная модель")
         case "screenshot": L("по скриншоту")
+        case "ownerVoice": L("с вашего голоса")
         case "уточнение": L("уточнение")
         default: label
         }
@@ -497,7 +789,7 @@ final class AnswerController {
 
     /// Снимок: в течение 30 с после прошлого — та же задача (до 3 снимков, новая версия решения по всем), иначе новая.
     func screenshot(_ jpeg: Data, chain: ProviderChain, language: String?) {
-        generation?.cancel()
+        let genID = bumpGeneration()
         let isNew = tasks.add(jpeg)
         guard let task = tasks.task else { return }
         let slot: Slot
@@ -516,7 +808,7 @@ final class AnswerController {
         let turn = Turn(id: -1, text: "Скриншот задачи", speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         let taskID = task.id
         generate(turn: turn, chain: chain, request: PromptBuilder.screenshotRequest(images: task.images, language: language),
-                 fallbackTop: [], slot: slot, label: "screenshot") { [weak self] text in
+                 fallbackTop: [], slot: slot, label: "screenshot", genID: genID) { [weak self] text in
             guard let self else { return }
             self.tasks.setSolution(text, taskID: taskID)
             if let statement = self.tasks.task?.statement { self.panel.history.retitle(entry: slot.entry, question: "Задача: " + statement) }
@@ -524,18 +816,22 @@ final class AnswerController {
         }
     }
 
-    /// Clear (Q13) и конец сессии: задача больше не идет в запросы.
+    /// Clear (Q13) и конец сессии: задача и активная тема больше не идут в запросы.
     func clearTask() {
         tasks.clear()
+        activeTopic = nil
+        lastQuestionAt = nil
         onTaskChange?(nil)
     }
 
-    /// Контекст уточнения для запроса: активная задача и «короткий вопрос без предмета» (R-15, R-16).
-    private func followUpContext(for question: String) -> FollowUpContext {
-        let isFollowUp = FollowUpDetector.isFollowUp(question)
+    /// Контекст уточнения для запроса: активная задача, активная тема/билет и флаг неясного STT (R-15, R-16, E-02, E-04).
+    private func followUpContext(for question: String, explicitFollowUp: Bool? = nil) -> FollowUpContext {
+        let isFollowUp = explicitFollowUp ?? FollowUpDetector.isFollowUp(question)
         let active = tasks.active()
         if active != nil, isFollowUp { tasks.touch() }
-        return FollowUpContext(activeTask: active?.promptSummary, isFollowUp: isFollowUp)
+        return FollowUpContext(activeTask: active?.promptSummary, isFollowUp: isFollowUp,
+                               activeTopic: isFollowUp ? activeTopic : nil,
+                               transcriptUnclear: TranscriptSanityCheck.looksUnclear(question))
     }
 
     // MARK: Уточнение и повтор (COPILOT-09 R-08, R-10)
@@ -549,20 +845,20 @@ final class AnswerController {
         let settings = effectiveSettings
         let secrets = model.secrets
         let providers = self.providers
-        generation?.cancel()
+        let genID = bumpGeneration()
         guard let version = panel.history.beginVersion(of: entry.id, kind: .refine, instruction: label ?? instruction) else { return }
         let slot = Slot(entry: entry.id, version: version)
         let turn = Turn(id: entry.turnID ?? -1, text: entry.question, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         Log.metrics.notice("refine turn=\(turn.id) quick=\(label != nil)")
         generation = Task { [weak self] in
-            guard let self else { return }
+            guard let self, self.activeGenerationID == genID else { return }
             let memory = await self.memoryContext(for: entry.question, turnID: entry.turnID)
             let request = PromptBuilder.refine(self.hintRequest(question: entry.question, base: nil, top: [], settings: settings,
                                                                 memory: memory, materials: self.lastMaterials),
                                                previousAnswer: previous, instruction: instruction)
             let chain = await Task.detached { ChainFactory.chain(settings: settings, secrets: secrets, providers: providers) }.value
-            guard !Task.isCancelled else { return }
-            self.generate(turn: turn, chain: chain, request: request, fallbackTop: [], slot: slot, label: "уточнение")
+            guard !Task.isCancelled, self.activeGenerationID == genID else { return }
+            self.generate(turn: turn, chain: chain, request: request, fallbackTop: [], slot: slot, label: "уточнение", genID: genID)
         }
     }
 
@@ -570,20 +866,23 @@ final class AnswerController {
     func retry(entry entryID: Int) {
         guard let entry = panel.history.entry(entryID),
               let version = panel.history.beginVersion(of: entryID, kind: .hint) else { return }
-        generation?.cancel()
+        let genID = bumpGeneration()
         let turn = Turn(id: entry.turnID ?? -1, text: entry.question, speechEndedAt: Self.now(), firedAt: Self.now(), forced: true)
         lastQuestion = turn
-        answerNormally(turn, slot: Slot(entry: entryID, version: version))
+        answerNormally(turn, slot: Slot(entry: entryID, version: version), genID: genID)
     }
 
     func cancel() {
-        generation?.cancel()
+        bumpGeneration()
         cancelDraft()
         panel.history.cancelUnfinished()
     }
 
     private func copyAnswer() {
-        guard let text = panel.history.current?.current?.text, !text.isEmpty else { return }
+        guard let raw = panel.history.current?.current?.text, !raw.isEmpty else { return }
+        // Копируется ответ без строки «понял вопрос» (COPILOT-15 R-10); выделив мышью, владелец возьмёт и её.
+        let text = UnderstoodLine.answer(raw)
+        guard !text.isEmpty else { return }
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(text, forType: .string)

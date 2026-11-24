@@ -36,7 +36,9 @@ final class ListeningController {
     }
 
     private(set) var phase: Phase = .idle
-    private(set) var source: ResolvedAudioSource = .none
+    private(set) var source: ResolvedAudioSource = .none {
+        didSet { if source != oldValue { refreshAllSystemNotice() } }
+    }
     /// Уровень сигнала собеседника, dBFS (debug-индикатор P-03).
     private(set) var levelDB: Float = -120
     /// Уровень микрофона владельца для индикатора оверлея (COPILOT-09 R-08).
@@ -65,10 +67,57 @@ final class ListeningController {
         let language: String
         /// Причина фильтра («язык de») — строка серым, в подсказки не идёт (COPILOT-05 R-06).
         var filtered: String? = nil
+        /// Текст фразы ещё предварительный (COPILOT-15 R-04): вопрос хода заменит его повторным распознаванием.
+        var provisional = false
+    }
+
+    /// Повторное распознавание вопроса целиком по звуку фраз хода (COPILOT-15 R-01); освобождает звук фраз (кроме опережающего запроса: звук ещё нужен ходу).
+    func redecodeQuestion(utterances: [Int], turn: Int, provisional: String, release: Bool = true) async -> String? {
+        guard let transcriber else { return nil }
+        return await transcriber.redecodeQuestion(utterances: utterances, turn: turn, provisional: provisional, release: release)?.text
+    }
+
+    /// Итоговый текст хода заменяет строки его фраз: первая строка получает весь вопрос, остальные убираются (R-04).
+    func replaceQuestionLines(utterances: [Int], with text: String) {
+        guard let first = utterances.first, let i = transcript.lastIndex(where: { $0.id == first && $0.filtered == nil }) else { return }
+        transcript[i] = TranscriptLine(id: first, text: text, language: transcript[i].language)
+        let rest = Set(utterances.dropFirst())
+        transcript.removeAll { rest.contains($0.id) && $0.filtered == nil }
+        onChange?()
     }
 
     /// Фильтр отбросил реплику (COPILOT-05 R-06) — текст для ⌃⌥↩ «ответить всё равно».
     var onFiltered: ((String) -> Void)?
+    /// Фоновый проход Whisper по истории закончил вопрос хода (COPILOT-15 R-07): (номер хода, прежний текст, уточнённый, язык).
+    /// COPILOT-17 R-06: подсказка ждёт Whisper — решается при старте сессии (`PreciseQuestionMode.waits`).
+    private(set) var hintWaitsForWhisper = false
+    func setHintWaitsForWhisper(_ on: Bool) {
+        hintWaitsForWhisper = on
+        transcriber?.setHintWaitsForWhisper(on)
+    }
+    /// COPILOT-17 R-09: сохранение звука вопросов (по умолчанию выключено); запись — в фоне, после доставки хода.
+    let questionAudioStore = QuestionAudioStore()
+    var sessionStartedAt = Date()
+    private let questionAudioQueue = DispatchQueue(label: "com.itmax04.interviewcopilot.question-audio", qos: .utility)
+    private func saveQuestionAudio(_ audio: QuestionAudio, turn: Int, decodeMs: Int, language: String) {
+        guard model.settings.saveQuestionAudio, testSource == nil else { return }
+        let store = questionAudioStore, start = sessionStartedAt
+        let lang = language.isEmpty ? model.settings.language.rawValue : language
+        questionAudioQueue.async {
+            let side = QuestionAudioStore.Sidecar(durationSeconds: audio.seconds, language: lang, decodeMs: decodeMs)
+            if let bytes = store.save(samples: audio.samples, turn: turn, sessionStart: start, sidecar: side) {
+                Log.metrics.notice("question_audio_saved bytes=\(bytes) seconds=\(audio.seconds, format: .fixed(precision: 1))")
+            } else {
+                Log.metrics.notice("question_audio_failed turn=\(turn)")
+            }
+        }
+    }
+    var onHistoryText: ((Int, String, String, String, Double) -> Void)?
+
+    /// После хода: поставить проход Whisper по звуку вопроса (только история и память, не подсказка).
+    func submitHistoryPass(utterances: [Int], turn: Int, text: String) {
+        transcriber?.submitHistoryPass(utterances: utterances, turn: turn, text: text)
+    }
     /// Словарь терминов для фильтра языка: встроенный + резюме, вакансия, база (R-05).
     private var terms = TermDictionary()
     /// Silero (R-02): загружается один раз, применяется к распознаванию по настройке.
@@ -103,9 +152,18 @@ final class ListeningController {
     }
 
     /// Голос проверяется в режиме «Микрофон Mac» и в ответе владельца на ИИ-собеседовании (R-01, Q13).
+    /// Репетиция с собеседником — только в «Микрофон Mac» вне ИИ-собеседования: проверка включена и без «Только мой голос».
     private func updateVoiceGateActive() {
-        let micChannel = (testSource == nil && source == .microphone) || interviewRoute == .owner
-        voiceGate.update { $0.active = model.settings.ownerVoiceOnly && micChannel }
+        let selfTestMic = testSource == nil && source == .microphone
+        let micChannel = selfTestMic || interviewRoute == .owner
+        let rehearsal = model.settings.rehearsalWithInterviewer && selfTestMic && interviewRoute == nil
+        voiceGate.update {
+            $0.active = (model.settings.ownerVoiceOnly || rehearsal) && micChannel
+            $0.routeBySpeaker = rehearsal
+        }
+        // Вердикты прошлого режима или источника не должны решать судьбу новых реплик.
+        if speakerRouter.rehearsal != rehearsal { speakerRouter.reset() }
+        speakerRouter.rehearsal = rehearsal
         enhancerBox.update { $0.active = model.settings.micNoiseSuppression && micChannel }
         updateOwnerChannel()
     }
@@ -120,12 +178,15 @@ final class ListeningController {
     private let ownerBuffer = AudioRingBuffer(seconds: 30)
     private let ownerBox = TranscriberBox()
     private let ownerActive = LockedFlag()
-    /// Фраза владельца прошла фильтры — в память интервью (COPILOT-06).
-    var onOwnerSaid: ((String) -> Void)?
-    /// Уточнённый текст ответа владельца в самопроверке (Whisper приходит через ~3 с, иногда уже после ⌃⌥A): (черновик, итог).
-    var onOwnerRevised: ((String, String) -> Void)?
-    /// Черновой текст ответов владельца по номеру реплики — до уточнения.
-    private var ownerFastText: [Int: String] = [:]
+    /// Текущий активный обмен в памяти интервью — чтобы ответ владельца при перебивании крепился к нему.
+    var currentExchangeID: (() -> Int?)?
+    /// Фраза владельца прошла фильтры — в память интервью или повтор вопроса голосом
+    /// (текст, целевой exchangeID при перебивании, флаг `interrupted`).
+    var onOwnerSaid: ((String, Int?, Bool) -> Void)?
+    /// Уточнение предварительно сброшенного (при перебивании) ответа владельца после re-decode.
+    var onOwnerAnswerRevised: ((String, String, Int) -> Void)?
+    /// Вопрос или ответ владельца по говорящему (репетиция с собеседником) и ⌃⌥A.
+    private var speakerRouter = SpeakerRouter()
 
     /// Самопроверка: «сейчас отвечаю я» (⌃⌥A, COPILOT-06) — речь с микрофона идёт ответом в память, а не вопросом.
     private(set) var ownerAnswering = false
@@ -144,17 +205,62 @@ final class ListeningController {
         return true
     }
 
+    // MARK: «Микрофон выкл.» (COPILOT-18 D2–D6)
+
+    /// Владелец выключил свой микрофон в Copilot: речь с микрофона полностью игнорируется (нет распознавания, текста в истории,
+    /// памяти и разборе, подсказок, сигнала «владелец говорит» для конца хода). Системный mute и Meet не затрагиваются.
+    /// Не путать с `PanelModel.micHardwareMuted` (mute macOS). Не запоминается: каждая сессия начинается с включённым.
+    var ownerMicOff: Bool { speakingGate.off }
+    private var speakingGate = OwnerSpeakingGate()
+
+    /// Кнопка работает на созвоне со звуком приложения или системы; в самопроверке и тестовом звонке микрофон — единственный вход.
+    var ownerMicSwitchAvailable: Bool {
+        testSource == nil && source != .microphone && source != .none && model.settings.ownerSpeechContext
+    }
+
+    /// Нажатие: выключить ↔ включить. Возвращает новое состояние «выключен» или nil, если переключатель здесь недоступен.
+    @discardableResult
+    func toggleOwnerMic() -> Bool? {
+        guard ownerMicSwitchAvailable else { return nil }
+        setOwnerMicOff(!ownerMicOff)
+        return ownerMicOff
+    }
+
+    func setOwnerMicOff(_ off: Bool) {
+        guard ownerMicOff != off else { return }
+        // Накопленное и ещё не готовое отбрасывается; «говорит владелец» гасим (конец хода — по паузе) и возвращаем при включении посреди фразы.
+        if off { resetOwnerAnswer() }
+        if let speaking = speakingGate.setOff(off, current: ownerSpeaking) {
+            ownerSpeaking = speaking
+            onOwnerSpeaking?(speaking, Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
+        }
+        updateOwnerChannel()
+        Log.audio.notice("owner mic \(off ? "off" : "on", privacy: .public)")
+        onOwnerMicChanged?(off)
+        onChange?()
+    }
+
+    /// Начало и конец сессии: микрофон снова включён (D4).
+    func resetOwnerMic() { setOwnerMicOff(false) }
+
+    /// Состояние кнопки изменилось (для истории сессии и панели).
+    var onOwnerMicChanged: ((Bool) -> Void)?
+
     /// Канал владельца работает на созвоне (звук приложения или весь системный звук), не в самопроверке и не в тестах.
+    /// COPILOT-16 R-05: микрофон должен звучать — источник «Микрофон» или включён канал владельца (не тестовый звонок).
+    var micExpected: Bool { phase == .listening && testSource == nil && !ownerMicOff && (source == .microphone || ownerActive.value) }
+
     private func updateOwnerChannel() {
         let callSource: Bool = switch source {
         case .app, .allSystem: true
         default: false
         }
         let active = model.settings.ownerSpeechContext && testSource == nil && phase == .listening && callSource
-            && Permissions.microphone == .granted
+            && Permissions.microphone == .granted && !ownerMicOff
         guard ownerActive.value != active else { return }
         ownerActive.set(active)
-        ownerTranscriber?.setPaused(!active)
+        // COPILOT-18: на нажатие «Микрофон выкл.» общий движок не отменяем — идущий прогон интервьюера не должен теряться; прочие отключения — как раньше.
+        ownerTranscriber?.setPaused(!active, cancelRecognizer: !ownerMicOff)
         Log.audio.info("owner channel \(active ? "on" : "off", privacy: .public)")
     }
 
@@ -164,21 +270,110 @@ final class ListeningController {
     static let echoWindowMs: Double = 1500
 
     private func handleOwner(_ event: TranscriptEvent) {
-        guard case .final(_, let text, _, let phraseEnd, _) = event else { return }
+        // COPILOT-18 D3: фраза, дораспознанная после нажатия «Микрофон выкл.», не попадает никуда.
+        guard !ownerMicOff else {
+            if case .final(let u, _, _, _, _) = event { ownerTranscriber?.questionRanges.drop(utterance: u) }
+            return
+        }
+        // Универсальный режим «Всё сразу»: если в системном звуке тишина (звонок на телефоне или живой голос в комнате)
+        // и отпечаток голоса определил ЧУЖОЙ голос на микрофоне — направляем его как вопрос собеседника.
+        if case .foreignVoice(let u, let text, _, let phraseEnd) = event {
+            ownerTranscriber?.questionRanges.drop(utterance: u)
+            let endMs = Double(phraseEnd) / 1e6
+            if !callSpeaking, endMs - callSpeechEndedAt > 2000 {
+                routeForeignMicQuestion(text: text, phraseEnd: phraseEnd)
+            }
+            return
+        }
+        guard case .final(let u, let text, _, let phraseEnd, _) = event else { return }
         // Без образца голоса эхо интервьюера из динамиков неотличимо по языку: фраза микрофона, закончившаяся,
         // пока в звонке шла речь или в пределах 1,5 с после неё, считается эхом (как правило эха TurnDetector, S-07).
         if voiceGate.current.print == nil {
             let end = Double(phraseEnd) / 1e6
             if callSpeaking || end - callSpeechEndedAt < Self.echoWindowMs {
+                ownerTranscriber?.questionRanges.drop(utterance: u)
                 Log.metrics.notice("filtered reason=echo channel=mic")
                 return
             }
         }
         // Без образца голоса — хотя бы фильтр языка микрофона: ТВ на другом языке не станет «ответом владельца».
         if voiceGate.current.print == nil, model.settings.languageFilter,
-           case .drop = LanguageGate(setting: model.settings.language, terms: terms).check(text, channel: .mic) { return }
-        onOwnerSaid?(text)
-        Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text))")
+           case .drop = LanguageGate(setting: model.settings.language, terms: terms).check(text, channel: .mic) { 
+            ownerTranscriber?.questionRanges.drop(utterance: u)
+            return
+        }
+        // COPILOT-15 R-11: фразы владельца предварительные; ответ целиком распознаётся заново, когда владелец замолчал.
+        ownerAssembler.phraseFinal(text: text, utterance: u, speechEnd: Double(phraseEnd) / 1e6, exchangeID: currentExchangeID?())
+        startOwnerTick()
+    }
+
+    /// Фразы ответа владельца копятся до паузы (R-11).
+    private var ownerAssembler = OwnerAnswerAssembler()
+    private var ownerTickTask: Task<Void, Never>?
+    private var ownerFinishTask: Task<Void, Never>?
+
+    private func startOwnerTick() {
+        guard ownerTickTask == nil else { return }
+        ownerTickTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard let self else { return }
+                let now = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
+                if let answer = self.ownerAssembler.tick(at: now, speaking: self.ownerSpeaking) { self.finishOwnerAnswer(answer) }
+                if !self.ownerAssembler.hasPending { break }
+            }
+            self?.ownerTickTask = nil
+        }
+    }
+
+    /// Перебивание: экзаменатор начал говорить, пока владелец ещё не замолчал на 1 с.
+    /// Немедленно синхронно фиксируем накопленные фразы владельца в его исходном обмене (`targetExchangeID`),
+    /// чтобы новый доп. вопрос увидел прерванную речь, а затем доуточняем её перераспознаванием в фоне.
+    func flushOwnerForInterruption() {
+        guard let answer = ownerAssembler.flush() else { return }
+        ownerTickTask?.cancel()
+        ownerTickTask = nil
+        let targetID = answer.targetExchangeID ?? currentExchangeID?()
+        onOwnerSaid?(answer.provisionalText, targetID, true)
+        Log.metrics.notice("owner_interrupted_flush words=\(TurnDetectorWords.count(answer.provisionalText)) phrases=\(answer.utterances.count) exchange=\(targetID ?? -1)")
+        let previous = ownerFinishTask
+        let generation = ownerGeneration
+        let transcriber = ownerTranscriber
+        ownerFinishTask = Task { [weak self] in
+            await previous?.value
+            let redecoded = await transcriber?.redecodeQuestion(utterances: answer.utterances, turn: -1,
+                                                                provisional: answer.provisionalText, release: true)?.text
+            guard let self, self.ownerGeneration == generation else { return }
+            if let redecoded, redecoded != answer.provisionalText, let targetID {
+                self.onOwnerAnswerRevised?(answer.provisionalText, redecoded, targetID)
+            }
+        }
+    }
+
+    /// Ответ закончен: звук его фраз распознаётся целиком, без Whisper; не получилось — текст фраз.
+    /// Ответы идут по очереди, чтобы порядок в памяти не нарушался.
+    private func finishOwnerAnswer(_ answer: OwnerAnswer) {
+        let previous = ownerFinishTask
+        let generation = ownerGeneration
+        let transcriber = ownerTranscriber
+        ownerFinishTask = Task { [weak self] in
+            await previous?.value
+            let redecoded = await transcriber?.redecodeQuestion(utterances: answer.utterances, turn: -1,
+                                                                provisional: answer.provisionalText, release: true)?.text
+            guard let self, self.ownerGeneration == generation else { return }
+            let text = redecoded ?? answer.provisionalText
+            self.onOwnerSaid?(text, answer.targetExchangeID, false)
+            Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) phrases=\(answer.utterances.count) redecoded=\(redecoded != nil, privacy: .public)")
+        }
+    }
+
+    /// Пауза, очистка, смена распознавателя: накопленное и ещё не готовое отбрасывается.
+    private var ownerGeneration = 0
+    private func resetOwnerAnswer() {
+        ownerGeneration += 1
+        ownerAssembler.reset()
+        ownerTickTask?.cancel()
+        ownerTickTask = nil
     }
 
     /// Шумоподавление микрофона LocalVQE (R-04, по умолчанию выключено): модель загружается при включении.
@@ -219,10 +414,31 @@ final class ListeningController {
     /// Причина отбросить реплику или nil. Тестовый звонок не фильтруется: он меряет само распознавание.
     private func filterReason(_ text: String) -> String? {
         guard testSource == nil, model.settings.languageFilter else { return nil }
-        let gate = LanguageGate(setting: model.settings.language, terms: terms)
-        guard case .drop(let language) = gate.check(text, channel: gateChannel) else { return nil }
+        let base = model.settings.language
+        let gate = LanguageGate(setting: languageLock.effectiveSetting(base), terms: terms)
+        guard case .drop(let language) = gate.check(text, channel: gateChannel) else {
+            // COPILOT-16 R-03: «Авто» закрепляется за языком собеседника после 3 фраз одной группы.
+            if let group = languageLock.observeKept(text, base: base, terms: terms) {
+                Log.metrics.notice("language_locked group=\(group, privacy: .public) after=\(SessionLanguageLock.phrasesToLock)")
+            }
+            if englishNoticeVisible { englishNoticeVisible = false }
+            return nil
+        }
         Log.metrics.notice("filtered reason=lang channel=\(self.gateChannel.rawValue, privacy: .public) lang=\(language, privacy: .public)")
+        // R-04: две фразы подряд отброшены как английские — предлагаем разрешить английский.
+        if languageLock.observeDrop(language: language, base: base) { englishNoticeVisible = true }
         return L("язык %@", language)
+    }
+
+    /// COPILOT-16 R-03/R-04: замок языка сессии и подсказка «Разрешить английский» (только состояние сессии).
+    private var languageLock = SessionLanguageLock()
+    private(set) var englishNoticeVisible = false
+
+    /// Действие подсказки: английский разрешён до конца сессии (настройки не меняются).
+    func allowEnglish() {
+        languageLock.allowEnglish()
+        englishNoticeVisible = false
+        Log.metrics.notice("language_unlocked reason=owner")
     }
 
     /// Загрузка Silero в фоне (если включено и модель установлена) и подключение к распознаванию.
@@ -276,7 +492,30 @@ final class ListeningController {
     /// Микрофон как источник (режим самопроверки, запрос владельца 2026-10-07).
     private var micSource: (any MicrophoneInput)?
     private var testSource: AudioSourceSetting?
-    private var effectiveSource: AudioSourceSetting { testSource ?? model.settings.audioSource }
+    private var effectiveSource: AudioSourceSetting { testSource ?? sessionSourceOverride ?? model.settings.audioSource }
+
+    // COPILOT-16 R-06: предупреждение о «Всём системном звуке» и действие «Только звонок» (источник только на сессию).
+    private var sessionSourceOverride: AudioSourceSetting?
+    private var allSystemDismissed = false
+    private(set) var allSystemNotice: AudioSourceResolver.AllSystemNotice?
+
+    private func refreshAllSystemNotice() {
+        let notice = allSystemDismissed ? nil : AudioSourceResolver.allSystemNotice(for: source, running: Self.runningApps())
+        if notice != allSystemNotice { allSystemNotice = notice }
+    }
+
+    func dismissAllSystemNotice() {
+        allSystemDismissed = true
+        refreshAllSystemNotice()
+    }
+
+    /// «Только звонок»: на эту сессию захватываем приложение звонка; настройка источника не меняется.
+    func switchToCallOnly() {
+        guard let app = allSystemNotice?.callApp else { return }
+        sessionSourceOverride = .app(bundleID: app.bundleID, name: app.name)
+        Log.audio.notice("source_call_only app=\(app.name, privacy: .public)")
+        updateCapture(restart: false)
+    }
     private var usesMicrophone: Bool { effectiveSource == .microphone }
     var recognitionReady: Bool { transcriber != nil && phase == .listening }
     private var pausedBeforeTest = false
@@ -440,10 +679,14 @@ final class ListeningController {
     /// Начало сессии: расшифровка с чистого листа, захват по источнику из настроек.
     func startSession() {
         deliveryEpoch.advance()
-        ownerFastText.removeAll()
+        speakerRouter.reset()
         transcript = []
         partialText = nil
         callSpeaking = false
+        languageLock.reset()
+        englishNoticeVisible = false
+        sessionSourceOverride = nil
+        allSystemDismissed = false
         start()
     }
 
@@ -484,6 +727,7 @@ final class ListeningController {
 
     /// Смена источника из меню или настроек — без перезапуска приложения (R-01).
     func sourceSettingChanged() {
+        sessionSourceOverride = nil   // явная смена источника в настройках важнее «Только звонок»
         guard phase != .paused, phase != .standby else { return }
         if phase == .noPermission {
             if usesMicrophone { start() }
@@ -495,7 +739,11 @@ final class ListeningController {
     private func runningAppsChanged() {
         guard phase != .paused, phase != .noPermission, phase != .standby else { return }
         let resolved = AudioSourceResolver.resolve(effectiveSource, running: Self.runningApps())
-        if resolved != source { updateCapture(restart: false) }
+        if resolved != source { updateCapture(restart: false) } else {
+            let before = allSystemNotice
+            refreshAllSystemNotice()
+            if allSystemNotice != before { onChange?() }
+        }
     }
 
     /// A system stream can finish starting after cancellation. Drain that operation before touching the next stream.
@@ -630,6 +878,7 @@ final class ListeningController {
         ownerBox.set(nil)
         ownerTranscriber?.setPaused(true)
         ownerTranscriber = nil
+        resetOwnerAnswer()
         micSource?.stop()
         mic?.stop()
         updateCapture(restart: false)
@@ -639,6 +888,7 @@ final class ListeningController {
     func setRecognitionPrompt(_ provider: (@Sendable (String) -> String?)?) {
         promptProvider = provider
         transcriber?.setPromptProvider(testSource == nil ? provider : nil)
+        ownerTranscriber?.setPromptProvider(testSource == nil ? provider : nil)
     }
 
     private var promptProvider: (@Sendable (String) -> String?)?
@@ -658,6 +908,7 @@ final class ListeningController {
         ownerBox.set(nil)
         ownerTranscriber?.setPaused(true)
         ownerTranscriber = nil
+        resetOwnerAnswer()
         partialText = nil
         loadRecognizer()
     }
@@ -727,11 +978,20 @@ final class ListeningController {
             let enhancerBox = self.enhancerBox
             t.setAudioEnhancer { samples in enhancerBox.enhance(samples) }
             t.setPaused(phase != .listening)
+            t.setHistoryHandler { [weak self] turn, old, result, seconds in
+                Task { @MainActor in
+                    guard let self, self.recognizerGeneration == generation else { return }
+                    self.onHistoryText?(turn, old, result.text, result.language, seconds)
+                }
+            }
+            t.setHintWaitsForWhisper(hintWaitsForWhisper)
+            t.setQuestionAudioSink { [weak self] audio, turn, decodeMs, language in
+                Task { @MainActor in self?.saveQuestionAudio(audio, turn: turn, decodeMs: decodeMs, language: language) }
+            }
             transcriberBox.set(t)
             transcriber = t
             var ownerConfig = StreamingTranscriber.Config()
             ownerConfig.partialInterval = 3600        // промежуточный текст владельца не нужен
-            ownerConfig.allowRevision = false
             ownerConfig.vad = StreamingTranscriber.microphoneVAD
             let ot = StreamingTranscriber(recognizer: engine, buffer: ownerBuffer, config: ownerConfig) { [weak self] event in
                 let epoch = deliveryEpoch.current()
@@ -741,9 +1001,10 @@ final class ListeningController {
                 }
             }
             ot.setLanguage(model.settings.language.whisperCode)
+            ot.setPromptProvider(testSource == nil ? promptProvider : nil)
             ot.setSpeechGate(gate.map { g in { @Sendable samples in g.isSpeech(samples) } })
             // Эхо интервьюера из динамиков и чужие голоса отсекает отпечаток голоса (решение исполнителя, этап 4).
-            ot.setVoiceGate { samples in voiceGate.check(samples, ignoringActive: true) }
+            ot.setVoiceGate { samples in voiceGate.check(samples, ignoringActive: true, allowRouting: false) }
             ot.setPaused(!ownerActive.value)
             ownerBox.set(ot)
             ownerTranscriber = ot
@@ -766,30 +1027,34 @@ final class ListeningController {
             onOwnerTranscript?(event)
             return
         }
-        // Уточнение ответа владельца — и после выхода из режима ответа: реплика уже записана ответом, не вопросом.
-        if case .revised(let u, let text, _) = event, let fast = ownerFastText.removeValue(forKey: u) {
-            onOwnerRevised?(fast, text)
+        if case .speaker(let u, let owner, _) = event {
+            speakerRouter.noteSpeaker(utterance: u, owner: owner)
             return
         }
-        // Самопроверка, режим ответа (⌃⌥A): итог — ответ владельца в память; для хода — как шум, вопросов нет.
-        if ownerAnswering, source == .microphone {
+        // Самопроверка: ответ владельца (⌃⌥A или его голос в репетиции с собеседником) — в память; для хода — как шум.
+        if source == .microphone {
             switch event {
             case .final(let u, let text, _, let phraseEnd, _):
-                ownerFastText[u] = text
-                if ownerFastText.count > 20, let oldest = ownerFastText.keys.min() { ownerFastText.removeValue(forKey: oldest) }
-                onOwnerSaid?(text)
-                Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=self-test")
-                onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))
-            case .foreignVoice(_, _, _, let phraseEnd):
-                onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))
+                let route = speakerRouter.route(utterance: u, ownerAnswering: ownerAnswering)
+                speakerRouter.forget(utterance: u)
+                if route == .ownerAnswer {
+                    recordOwnerAnswer(utterance: u, text: text, phraseEnd: phraseEnd)
+                    return
+                }
+            case .discarded(let u, _), .foreignVoice(let u, _, _, _):
+                speakerRouter.forget(utterance: u)
             default:
-                break   // промежуточный текст ответа не показываем как реплику интервьюера
+                break
             }
-            return
+        }
+        if ownerAnswering, source == .microphone {
+            if case .foreignVoice(_, _, _, let phraseEnd) = event { onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd)) }
+            return   // промежуточный текст ответа не показываем как реплику интервьюера
         }
         switch event {
         case .speechStarted:
             callSpeaking = true
+            flushOwnerForInterruption()
         case .speechEnded(_, let at):
             callSpeaking = false
             callSpeechEndedAt = Double(at) / 1e6
@@ -807,10 +1072,10 @@ final class ListeningController {
                 onTranscript?(.discarded(utterance: u, phraseEnd: phraseEnd))
                 return
             }
-            transcript.append(TranscriptLine(id: u, text: text, language: language))
+            transcript.append(TranscriptLine(id: u, text: text, language: language, provisional: true))
             if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
             onChange?()
-        case .revising, .discarded:
+        case .discarded, .speaker:
             break
         case .foreignVoice(let u, let text, let similarity, let phraseEnd):
             // R-03, R-06: чужой голос — серой строкой; для хода — как шум.
@@ -821,16 +1086,43 @@ final class ListeningController {
             onFiltered?(text)
             onTranscript?(.discarded(utterance: u, phraseEnd: phraseEnd))
             return
-        case .revised(let u, let text, let language):
-            // Уточнённый итог (R-37) подменяет строку реплики в расшифровке.
-            if let i = transcript.lastIndex(where: { $0.id == u }) {
-                transcript[i] = TranscriptLine(id: u, text: text, language: language, filtered: transcript[i].filtered)
-                onChange?()
-                // Отфильтрованная реплика остаётся отфильтрованной: ход по ней уже не ждут.
-                if transcript[i].filtered != nil { return }
-            }
         }
         onTranscript?(event)
+    }
+
+    /// Чужой голос в микрофоне при тишине в системном звуке (телефон на громкой связи или очный экзамен) —
+    /// попадает в ленту расшифровки и на определение хода без переключения источника.
+    private func routeForeignMicQuestion(text: String, phraseEnd: UInt64) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let lineID = -Int(phraseEnd & 0x7FFF_FFFF)
+        if let reason = filterReason(trimmed) {
+            onFiltered?(trimmed)
+            transcript.append(TranscriptLine(id: lineID, text: trimmed, language: "", filtered: reason))
+            if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
+            onChange?()
+            return
+        }
+        flushOwnerForInterruption()
+        transcript.append(TranscriptLine(id: lineID, text: trimmed, language: "", provisional: false))
+        if transcript.count > 50 { transcript.removeFirst(transcript.count - 50) }
+        onChange?()
+        // Сбрасываем ложный флаг речи владельца и состояние подавления в TurnDetector перед доставкой чужого голоса.
+        onOwnerSpeaking?(false, Double(phraseEnd) / 1e6)
+        onTranscript?(.speechStarted(utterance: 0))
+        // utterance == 0 сигнализирует TurnController не делать ring re-decode из пустого системного буфера.
+        onTranscript?(.final(utterance: 0, text: trimmed, language: "", phraseEnd: phraseEnd, emittedAt: DispatchTime.now().uptimeNanoseconds))
+    }
+
+    /// Ответ владельца в самопроверке: в память интервью; для хода — как шум, вопросов нет.
+    private func recordOwnerAnswer(utterance u: Int, text: String, phraseEnd: UInt64) {
+        onOwnerSaid?(text, currentExchangeID?(), false)
+        Log.metrics.notice("owner_final words=\(TurnDetectorWords.count(text)) mode=\(self.ownerAnswering ? "self-test" : "rehearsal", privacy: .public)")
+        if partialText != nil {
+            partialText = nil
+            onChange?()
+        }
+        onTranscript?(.discarded(utterance: 0, phraseEnd: phraseEnd))
     }
 
     /// Ссылка на распознаватель, доступная из очереди захвата.
@@ -901,8 +1193,11 @@ final class ListeningController {
             mic = MicActivityDetector { [weak self] speaking in
                 let t = Double(DispatchTime.now().uptimeNanoseconds) / 1e6
                 Task { @MainActor in
-                    self?.ownerSpeaking = speaking
-                    self?.onOwnerSpeaking?(speaking, t)
+                    guard let self else { return }
+                    // COPILOT-18 D3: пока микрофон выключен, «владелец говорит» не сообщается (конец хода — по паузе).
+                    guard let effective = self.speakingGate.detector(speaking, current: self.ownerSpeaking) else { return }
+                    self.ownerSpeaking = effective
+                    self.onOwnerSpeaking?(effective, t)
                 }
             }
             // R-07: тот же микрофон — в распознавание речи владельца, пока канал включён.
@@ -968,6 +1263,7 @@ final class ListeningController {
         guard phase != new else { return }
         phase = new
         transcriber?.setPaused(new != .listening)
+        if new != .listening { resetOwnerAnswer() }
         // Гасим до `onChange`: он перерисовывает и скрытую панель, а отдельный кадр уровней скрытая панель пропускает —
         // иначе после паузы при скрытой панели волны застывали бы на последнем значении.
         if !reportsLevels {

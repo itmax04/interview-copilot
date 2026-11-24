@@ -66,7 +66,7 @@ public enum PromptScenarios {
 
     /// Первая строка ответа без разметки, в нижнем регистре.
     public static func firstLine(_ text: String) -> String {
-        let line = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+        let line = UnderstoodLine.answer(text).split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
         return line.replacingOccurrences(of: "**", with: "").trimmingCharacters(in: .whitespaces).lowercased()
     }
 

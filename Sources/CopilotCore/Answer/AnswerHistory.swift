@@ -50,6 +50,9 @@ public struct AnswerEntry: Equatable, Sendable, Identifiable {
     public var turnID: Int?
     public var question: String
     public var title: String
+    /// Для уточняющих/доп. вопросов (E-05): ссылка на карточку основного вопроса (билета) для возврата в 1 клик.
+    public var rootEntryID: Int?
+    public var rootTitle: String?
     public var versions: [AnswerVersion] = []
     public var selectedVersion = 0
     public var createdAt: Date
@@ -82,10 +85,13 @@ public struct AnswerHistory: Equatable, Sendable {
 
     /// Новый вопрос; возвращает (вопрос, версия). Если смотрели последний — переходим к новому, иначе — значок.
     @discardableResult
-    public mutating func begin(question: String, turnID: Int?, kind: AnswerVersion.Kind, at date: Date = Date()) -> (entry: Int, version: Int) {
+    public mutating func begin(question: String, turnID: Int?, kind: AnswerVersion.Kind,
+                               rootEntryID: Int? = nil, rootTitle: String? = nil,
+                               at date: Date = Date()) -> (entry: Int, version: Int) {
         let following = isViewingLatest
         let entryID = takeID(), versionID = takeID()
-        var entry = AnswerEntry(id: entryID, turnID: turnID, question: question, title: Self.title(for: question), createdAt: date)
+        var entry = AnswerEntry(id: entryID, turnID: turnID, question: question, title: Self.title(for: question),
+                                rootEntryID: rootEntryID, rootTitle: rootTitle, createdAt: date)
         entry.versions = [AnswerVersion(id: versionID, kind: kind)]
         entries.append(entry)
         if entries.count > Self.limit {
@@ -94,6 +100,13 @@ public struct AnswerHistory: Equatable, Sendable {
         }
         if following { selected = entries.count - 1; hasUnseenNew = false } else { hasUnseenNew = true }
         return (entryID, versionID)
+    }
+
+    /// Перейти прямо к указанной карточке (например, к прерванному основному билету с доп. вопроса — E-05).
+    public mutating func select(entry entryID: Int) {
+        guard let i = index(of: entryID) else { return }
+        selected = i
+        if isViewingLatest { hasUnseenNew = false }
     }
 
     /// Повторное «Ответ» на тот же вопрос, пока ответ еще готовится (двойное нажатие, AC-03): второй ход не нужен —
@@ -125,6 +138,14 @@ public struct AnswerHistory: Equatable, Sendable {
         guard let i = index(of: entryID) else { return }
         entries[i].question = question
         entries[i].title = Self.title(for: question)
+    }
+
+    /// Whisper уточнил текст корня билета (COPILOT-17 R-05): вопрос и заголовок корня, `rootTitle` его уточнений.
+    public mutating func refineRoot(entry entryID: Int, question: String) {
+        guard index(of: entryID) != nil else { return }
+        retitle(entry: entryID, question: question)
+        let title = Self.title(for: question)
+        for i in entries.indices where entries[i].rootEntryID == entryID { entries[i].rootTitle = title }
     }
 
     /// Не вопрос («—»): вопрос убирается, просмотр возвращается к предыдущему.

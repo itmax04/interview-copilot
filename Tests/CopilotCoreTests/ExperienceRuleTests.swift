@@ -9,7 +9,7 @@ struct ExperienceRuleTests {
         #expect(s.contains("Have you worked with X?"))
         #expect(s.contains("always answer affirmatively"))
         #expect(s.contains(#"never "no", "I haven't" or "I have no experience""#))
-        #expect(s.contains(#"Begin with a clear "Yes""#))
+        #expect(s.contains(#"with a clear "Yes""#))
         // Опора — профиль; названия работодателей, даты и числа не выдумываются: иначе ответ не выдержит уточнения.
         #expect(s.contains("Ground it in the profile's real roles, projects and skills"))
         #expect(s.contains("Do not invent employer names, exact dates or any numbers about X"))

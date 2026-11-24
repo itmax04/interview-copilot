@@ -105,7 +105,7 @@ choose "Always Allow".
 ## Limitations and security
 - API keys live only in the macOS Keychain — never in code, logs, chat or Git (`scripts/secret-scan.sh`).
 - Personal profiles and session history live in `~/Library/Application Support/InterviewCopilot/` and never enter Git.
-- No audio is written to disk (≤ 30 s ring buffer in memory); only session text is saved, with configurable retention.
+- By default no audio is written to disk (≤ 30 s ring buffer in memory; opt-in local question audio in Settings → Privacy); only session text is saved, with configurable retention.
 - Logs contain events and latencies only, never utterance or answer text.
 - Transcription accuracy depends on audio quality: compressed Meet audio from a phone is recognized worse.
 - Private repository: `itmax04/interview-copilot`. Licensed under the [MIT License](LICENSE).
