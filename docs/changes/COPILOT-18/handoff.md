@@ -10,7 +10,7 @@ Branch `feat/copilot-18-mic-toggle` (from `feat/copilot-17-uk-question`, 83592c6
 | P-03 app wiring | DONE | see git log | `swift build` PASS |
 | P-04 UI | DONE | see git log | `--ui-snapshots` 94/94 PNG; `panel-mic-toggle-on/off.png` checked by eye |
 | P-05 docs, review, full check | DONE (D9 pending, below) | c4f9357 docs, 8440086 review fixes | full check on tree 8440086 (run sequentially, no parallel build) — see "Full check" |
-| P-05a D9 one-shot voice clarification | DONE (code + docs); full check partly recorded; owner question open | b9c2f74 code, 3d791e5 docs | see "D9 — done" |
+| P-05a D9 one-shot voice clarification | DONE (code + docs; full check PASS on 3d791e5); owner question open | b9c2f74 code, 3d791e5 docs | see "D9 — done" |
 | H-1 owner live check | PENDING | — | — |
 
 ## Executor decisions
@@ -81,9 +81,18 @@ Branch `feat/copilot-18-mic-toggle`, HEAD 3d791e5 (+ this handoff commit), tree 
 ### Full check on tree 3d791e5 (sequential; log `/private/tmp/claude-501/-Users-macbook--claude-spares-spare-hX7LOE/0ff6bd41-c894-4134-966b-08d28e921a68/scratchpad/full-d9.txt`)
 - `swift test`: **PASS**, 561 tests in 98 suites (exit 0).
 - `scripts/run-evals.sh`: **PASS** (exit 0): filter-text 236/236, exam-followup 48/48, memory 8/8 and 0/2, materials 23/24 and 2/8.
-- `scripts/secret-scan.sh`, `scripts/check-localization.sh`, `scripts/build-app.sh`: **NOT RECORDED** — still running when this handoff was
-  written (context limit). Earlier on the same code: `check-localization.sh` PASS (855 keys, 856 translations, 0 missing). Read the log
-  above if it still exists; otherwise re-run these three sequentially.
+- `scripts/secret-scan.sh`: **PASS**, 0 findings (exit 0).
+- `scripts/check-localization.sh`: **PASS**, 855 keys, 856 translations, 0 missing, 0 format mismatches (exit 0).
+- `scripts/build-app.sh`: **PASS**, signed `dist/InterviewCopilot.app` (verified OK, exit 0).
+- AC-12, AC-13 (unit tests), AC-14 (snapshots), AC-08…AC-10: evidence above. AC-11 (incl. H-1 item f): **H-1 pending**.
+- Note: commit 9f9a514 says "full check PASS" but carried the earlier partial text; the full results are recorded by the next commit.
+
+### D9 behaviour notes (as implemented; owner asked about follow-ups and interruptions)
+- The interviewer asks a follow-up while armed: it goes the normal interviewer way (new card or follow-up version); the armed state is
+  untouched, and the owner's next phrase clarifies the **latest** card (`hasActiveQuestion` = the last history entry exists). 15 s timer still runs.
+- The interviewer interrupts the owner: the owner's flushed phrase comes with `interrupted = true`, does not spend the armed state and is
+  saved as an ordinary answer; the mode stays armed until the next uninterrupted phrase or the 15 s timeout.
+- Not covered by unit tests (app wiring); to watch in H-1 item (f).
 
 ### Open — owner question raised in chat (answer before H-1)
 The owner's scenario: "the model did not catch the interviewer's question → I press «Уточнить» → I repeat the question". With the current
@@ -94,6 +103,6 @@ those cases the phrase becomes an ordinary answer and the one shot is spent. Pro
 the automatic mode (D1, off by default) unchanged. If accepted: change `detectForced` + tests, update spec R-10/AC-13, re-run the full check.
 
 ## Next
-1. Record the remaining full-check lines (secret-scan, l10n, build-app) from the log or by re-running them sequentially.
-2. Get the owner's answer on "Open — owner question"; if «расширить», implement it (tests first), update spec, re-run the full check.
-3. Then **H-1** (plan.md, items a–f) together with COPILOT-17 H-1. No push.
+1. Get the owner's answer on "Open — owner question"; if «расширить», implement it (tests first), update spec R-10/AC-13, re-run the full
+   check sequentially. Also confirm with the owner the follow-up/interruption behaviour above (answered in chat; no change requested yet).
+2. Then **H-1** (plan.md, items a–f) together with COPILOT-17 H-1. No push.
