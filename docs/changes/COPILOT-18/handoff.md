@@ -103,6 +103,6 @@ those cases the phrase becomes an ordinary answer and the one shot is spent. Pro
 the automatic mode (D1, off by default) unchanged. If accepted: change `detectForced` + tests, update spec R-10/AC-13, re-run the full check.
 
 ## Next
-1. Get the owner's answer on "Open — owner question"; if «расширить», implement it (tests first), update spec R-10/AC-13, re-run the full
+1. **Owner answered 2026-11-24: «Расширить режим».** Implement it (tests first), update spec R-10/AC-13, re-run the full
    check sequentially. Also confirm with the owner the follow-up/interruption behaviour above (answered in chat; no change requested yet).
 2. Then **H-1** (plan.md, items a–f) together with COPILOT-17 H-1. No push.
