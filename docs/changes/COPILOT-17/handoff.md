@@ -166,6 +166,21 @@ Diagnosis of the live session of 2026-11-23 18:32:43–18:33:54: side-session no
   `scripts/check-localization.sh` PASS (843/843); `scripts/build-app.sh` PASS (signed app in `dist/`).
 - NOT RUN: AC-06 metrics replay, AC-08 latency numbers, a real call with saving on (H-1).
 
+## After P-10 (2026-11-24)
+- The P-10 build (`dist/InterviewCopilot.app`, HEAD ddd9fc3) was copied to `/Applications/InterviewCopilot.app` (the owner's Desktop
+  link) with `ditto`; `codesign --verify --deep` OK; launched.
+- Owner Meet self-test (second device next to the Mac, Meet through the Mac speakers): an extra «Версия 2 · с вашего голоса» came from
+  the owner's own mic phrase, classified by `OwnerQuestionDetector` as `clarifyLastQuestion` (`App.swift` `onOwnerSaid` →
+  `AnswerController.handleOwnerQuestion`). Not a COPILOT-17 regression; the owner chose a new task.
+- Owner decisions for **COPILOT-18** (brainstorm; full notes outside the repo:
+  `~/Library/Application Support/Claude/side-session-notes/local_a32a5d4a-6a22-4a8b-9fbf-b628c6a26939/copilot18-mic-toggle-brainstorm.md`):
+  D1 automatic «уточнение голосом» becomes a setting, off by default; D2 a toggle «Микрофон выкл.» (press on / press off);
+  D3 when off the mic is fully ignored by Copilot (no recognition, no owner text in history/memory/review, no hints; Meet is not
+  touched); D4 every session starts with the mic on; D5 overlay toolbar button between «Скриншот» and «Чат» + global hotkey ⇧⌘M;
+  D6 indicator only (red state), no reminders, no auto-unmute, «Микрофон не даёт звука» suppressed while off; D7 history/review
+  mark muted intervals; D8 COPILOT-18 now on `feat/copilot-18-mic-toggle` from this branch, one live check covers H-1 of both tasks.
+
 ## Next
-H-1: live check by the owner (uk exam session): question text accuracy, ticket root title, «Точный вопрос (+2 с)» latency from the
+COPILOT-18 first (intent/spec/plan from the decisions above, then implementation on its own branch); then H-1 of COPILOT-17 and
+COPILOT-18 together. H-1 for COPILOT-17: live check by the owner (uk exam session): question text accuracy, ticket root title, «Точный вопрос (+2 с)» latency from the
 `hint_wait_whisper` logs, an English-term case in the owner's answer, question-audio saving and wipe. No push.
