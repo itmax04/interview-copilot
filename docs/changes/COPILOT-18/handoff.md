@@ -38,3 +38,13 @@ P-05 (new session): re-run the full check, run the independent review (fresh sub
 2. `ownerMicSwitchAvailable` is true for `source == .none` and when `ownerSpeechContext` is off — a press would log an interval "not recorded" although nothing was recorded; require an actually possible owner channel or record the decision.
 3. `resetOwnerMic()` at session end runs while phase is still `.listening` (re-activates the owner channel just before standby); and `updateOwnerChannel` now pauses with `cancelRecognizer: false` for ALL deactivations (permission, phase, standby), not only mute — pass `cancelRecognizer: !ownerMicOff` there; call the end-of-session reset after `enterStandby()` or without `updateOwnerChannel`.
 4. Nit: review marker line can be dropped by the "earlier part omitted" truncation — optionally keep it in the tail.
+
+## D9 (owner decision relayed 2026-11-24, NOT implemented yet) — one-shot «уточнение голосом»
+Request: the D1 setting stays (automatic clarification off by default). New control: overlay button next to «Микрофон выкл.» + global hotkey ⇧⌘U.
+Pressing arms a one-shot mode: the owner's NEXT phrase is treated as a voice clarification of the current question (existing
+`OwnerQuestionDetector` decisions / `AnswerController.handleOwnerQuestion`, clarify or replace logic); after that one phrase the mode turns
+itself off; pressing again while armed cancels. Armed state clearly visible on the button (`IC`/`ICDark` tokens, Reduce Motion).
+To do in the next session (after the P-05 full check is recorded; do not edit `Sources` while a check runs):
+- Add D9 to intent.md, R-/AC- rows to spec.md, a step to plan.md (P-05a), tests, strings (Russian single literals + en.lproj), `HotkeyAction.voiceClarify` appended last (session ⇧⌘U, otherwise ⌃⌥U).
+- Suggested executor decisions to record: (1) mic off → arming is **disabled** (button dimmed, hotkey ignored with a log line) rather than implicitly turning the mic on — HIG: an action must not silently change another control's state; (2) armed timeout **15 s** without a phrase, then it disarms itself silently; (3) armed state does not survive session end; (4) the armed phrase bypasses `ownerVoiceClarification` but still uses `OwnerQuestionDetector.detect` with the forced mode (if it returns `.none`, treat as `.clarifyLastQuestion` of the phrase when an active question exists, otherwise ordinary answer).
+- Then the full check, handoff → H-1 (add a D9 case to the H-1 list: arm, speak a short clarification, version «с вашего голоса» appears once; the next phrase does not).
