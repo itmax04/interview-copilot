@@ -94,15 +94,24 @@ Branch `feat/copilot-18-mic-toggle`, HEAD 3d791e5 (+ this handoff commit), tree 
   saved as an ordinary answer; the mode stays armed until the next uninterrupted phrase or the 15 s timeout.
 - Not covered by unit tests (app wiring); to watch in H-1 item (f).
 
-### Open — owner question raised in chat (answer before H-1)
-The owner's scenario: "the model did not catch the interviewer's question → I press «Уточнить» → I repeat the question". With the current
-`detectForced` this fails when (a) the repeated question is longer than `maxWords` = 15 words, or (b) there is no active question card and
-the phrase has no question form (no starter, no «?»); also (c) phrases starting like an answer («я думаю», «например», «это когда»). In
-those cases the phrase becomes an ordinary answer and the one shot is spent. Proposed (owner to choose: «Да, расширить» / «Оставить как
-есть»): in forced mode only, raise the word limit to 40 and treat any non-filler phrase without an active question as `.newQuestion`;
-the automatic mode (D1, off by default) unchanged. If accepted: change `detectForced` + tests, update spec R-10/AC-13, re-run the full check.
+### Widened forced mode — done (owner answered 2026-11-24: «Расширить режим»)
+Commits: 393d9a6 (code + tests), d5e3b21 (spec R-10/AC-13, plan H-1 f). `OwnerQuestionDetector.forcedMaxWords = 40`;
+`detectForced` runs `detect` with that limit, then: content phrase + active question → `clarifyLastQuestion`, no active question →
+`newQuestion`; empty / filler / backchannel / > 40 words → `.none`. Automatic `detect` (D1, 15 words) unchanged (private overload with
+`wordLimit`). Caveat: in forced mode a phrase that starts like an answer («я думаю…») is now also taken as clarification/new question
+(the armed phrase is by definition not an answer). Note: tests and code were written in one pass, so there was no separate red run.
+Tests: `VoiceClarifyTests` 11 (new: long repeated question 16–40 words, no-question content phrase → newQuestion, exactly 40 / 41 words,
+D1 unchanged).
+
+Full check on d5e3b21, run sequentially (outputs in `/private/tmp/claude-501/chk/`):
+| Command | Exit | Result |
+|---|---|---|
+| `swift test` | 0 | PASS — 564 tests in 98 suites |
+| `scripts/run-evals.sh` | 0 | PASS (exam-followup 48/48; memory 8/8, 0/2; materials 23/24, 2/8) |
+| `scripts/secret-scan.sh` | 0 | PASS — 0 findings |
+| `scripts/check-localization.sh` | 0 | PASS — 855 keys, 0 missing |
+| `scripts/build-app.sh` | 0 | PASS — dist/InterviewCopilot.app signed |
 
 ## Next
-1. **Owner answered 2026-11-24: «Расширить режим».** Implement it (tests first), update spec R-10/AC-13, re-run the full
-   check sequentially. Also confirm with the owner the follow-up/interruption behaviour above (answered in chat; no change requested yet).
-2. Then **H-1** (plan.md, items a–f) together with COPILOT-17 H-1. No push.
+1. ~~Widen forced mode~~ — done above.
+2. **H-1** (plan.md, items a–f) together with COPILOT-17 H-1. No push.
