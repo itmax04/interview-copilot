@@ -1,5 +1,4 @@
 # Handoff pointer
 
-The state of the current work lives in the project's task handoff (project rule: `docs/changes/COPILOT-NN/handoff.md`).
-- Latest: `docs/changes/COPILOT-17/handoff.md` (branch `feat/copilot-17-uk-question`): P-01…P-10 done, H-1 pending,
-  next task COPILOT-18 (owner mic toggle) — decisions in its "After P-10" section.
+- Latest: `docs/changes/COPILOT-18/handoff.md` (branch `feat/copilot-18-mic-toggle`, commit c4f9357): P-02…P-04 done (552 tests pass),
+  P-05 pending (full check + independent review not completed), then H-1 together with COPILOT-17 H-1. No push.

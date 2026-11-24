@@ -9,7 +9,7 @@ Branch `feat/copilot-18-mic-toggle` (from `feat/copilot-17-uk-question`, 83592c6
 | P-02 core | DONE | see git log | `swift test` PASS: 552 tests, 97 suites (+9) |
 | P-03 app wiring | DONE | see git log | `swift build` PASS |
 | P-04 UI | DONE | see git log | `--ui-snapshots` 94/94 PNG; `panel-mic-toggle-on/off.png` checked by eye |
-| P-05 docs, review, full check | IN PROGRESS | — | — |
+| P-05 docs, review, full check | IN PROGRESS | docs in c4f9357 | full check was started in the background (output `/private/tmp/claude-501/full.txt`, may be gone) — **NOT RUN to completion as recorded; re-run**; independent review subagent launched, result not received — **re-run the review** |
 | H-1 owner live check | PENDING | — | — |
 
 ## Executor decisions
@@ -31,4 +31,4 @@ Branch `feat/copilot-18-mic-toggle` (from `feat/copilot-17-uk-question`, 83592c6
 notice, hotkey and button. Covered by review and by H-1.
 
 ## Next
-P-05: independent review (fresh subagent), fix findings, full check, `scripts/build-app.sh`; then H-1 (plan.md) together with COPILOT-17 H-1.
+P-05 (new session): re-run the full check, run the independent review (fresh subagent, standard, relay-review brief; focus: `ListeningController` gating, App wiring/order of `resetOwnerMic`, `MicMutedInterval`, hotkey ids), fix findings; independent review (fresh subagent), fix findings, full check, `scripts/build-app.sh`; then H-1 (plan.md) together with COPILOT-17 H-1.
