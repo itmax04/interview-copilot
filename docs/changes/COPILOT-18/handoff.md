@@ -10,8 +10,9 @@ Branch `feat/copilot-18-mic-toggle` (from `feat/copilot-17-uk-question`, 83592c6
 | P-03 app wiring | DONE | see git log | `swift build` PASS |
 | P-04 UI | DONE | see git log | `--ui-snapshots` 94/94 PNG; `panel-mic-toggle-on/off.png` checked by eye |
 | P-05 docs, review, full check | DONE (D9 pending, below) | c4f9357 docs, 8440086 review fixes | full check on tree 8440086 (run sequentially, no parallel build) — see "Full check" |
-| P-05a D9 one-shot voice clarification | DONE (code + docs; full check PASS on 3d791e5); owner question open | b9c2f74 code, 3d791e5 docs | see "D9 — done" |
-| H-1 owner live check | PENDING | — | — |
+| P-05a D9 one-shot voice clarification | DONE; widened forced mode added (owner decision 2026-11-24), full check PASS on d5e3b21 | b9c2f74 code, 3d791e5 docs | see "D9 — done" |
+| H-1 owner live check | DONE — owner: «все окей» (a–f), build d5e3b21 | f2d7a42 | owner verdict only, no log numbers |
+| P-06 final handoff, AC table | DONE — awaiting owner acceptance | see git log | table below |
 
 ## Executor decisions
 - **Availability.** The toggle works on call sessions only (source is not «Микрофон Mac», no test call, not the AI interview). There the
@@ -116,3 +117,19 @@ Full check on d5e3b21, run sequentially (outputs in `/private/tmp/claude-501/chk
 1. ~~Widen forced mode~~ — done above.
 2. ~~**H-1**~~ — owner live check done 2026-11-24 on build d5e3b21 installed to /Applications: «все окей» for items a–f (COPILOT-17 and 18 together). No numbers from the log were supplied; owner's verdict only. Installing the build into /Applications was done by the executor (ditto from dist/, codesign verify OK).
 3. **P-06**: final handoff with the AC evidence table, ask for acceptance. No push until the owner allows.
+
+## Final: AC evidence (P-06), tree d5e3b21 + docs commits
+| AC | Result | Evidence |
+|---|---|---|
+| AC-01…AC-04, AC-06 | PASS | `swift test` d5e3b21: 564 tests / 98 suites, exit 0 (`OwnerMicToggleTests`, `InterviewMemoryTests`, `ReviewTests`) |
+| AC-05, AC-14 | PASS (not re-run on d5e3b21) | `--ui-snapshots` + eye check at P-04/D9; no UI code changed afterwards |
+| AC-07 | PASS | independent review (sonnet, 83592c6..c4f9357: mergeable, findings fixed in 8440086) + owner live check H-1 (b), (c), (d) |
+| AC-08 | PASS | `scripts/check-localization.sh` 855 keys, 0 missing; `scripts/secret-scan.sh` 0 findings |
+| AC-09 | PASS | `scripts/run-evals.sh` exit 0 (exam-followup 48/48, memory 8/8 and 0/2, materials 23/24 and 2/8) |
+| AC-10 | PASS | all five commands, sequentially, exit 0 on d5e3b21; `build-app.sh` signed |
+| AC-11 | PASS (owner verdict) | H-1 a–f «все окей»; no log numbers supplied |
+| AC-12, AC-13 | PASS | `VoiceClarifyTests` 11 tests, incl. widened forced mode (40 words, no-question content phrase → newQuestion, D1 unchanged) |
+
+**Unverified / limits:** the widened forced mode was covered by unit tests and by the owner's live check, but no review subagent
+looked at commit 393d9a6 (owner-requested small change); ListeningController wiring is app-target code without unit tests;
+latency/log numbers for COPILOT-17 H-1 (e) were not supplied. No push done; branch is not merged into `main`.
