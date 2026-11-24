@@ -695,7 +695,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func sessionEnded(_ c: SessionConfig) -> Task<Void, Never> {
-        listening.resetOwnerMic()
         listening.setHintWaitsForWhisper(false)
         purgeQuestionAudio()
         hotkeys?.unregisterSession()
@@ -707,6 +706,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.cancel()
         let browserCleanup = c.type == .mock ? interviewer.close() : testCall.close()
         let standby = listening.enterStandby()
+        listening.resetOwnerMic()      // после standby: канал владельца не включается на миг; отрезок закрывается до finish()
         let record = sessions.finish()
         refreshUI()
         // Разбор (R-13, Q15): сразу после End в фоне; окно открывается на этой сессии — расшифровка видна сразу.

@@ -102,6 +102,18 @@ struct OwnerMicToggleTests {
         #expect(HotkeyAction.allCases.firstIndex(of: .nextAnswer) == HotkeyAction.allCases.count - 2)
     }
 
+    @Test func speakingSignalReturnsWhenMicIsReenabledMidPhrase() {
+        var g = OwnerSpeakingGate()
+        #expect(g.detector(true, current: false) == true)       // говорит, микрофон включён
+        #expect(g.setOff(true, current: true) == false)         // выключили: сигнал гасится
+        #expect(g.detector(false, current: false) == nil)       // пауза/речь при выключенном — ничего не сообщаем
+        #expect(g.detector(true, current: false) == nil)
+        #expect(g.setOff(false, current: false) == true)        // включили посреди фразы — сигнал сразу возвращается
+        #expect(g.detector(false, current: true) == false)
+        #expect(g.setOff(true, current: false) == nil)
+        #expect(g.setOff(false, current: false) == nil)         // не говорил — нечего возвращать
+    }
+
     // MARK: AC-03 пауза владельца не отменяет общий движок
 
     @Test func ownerPauseCanLeaveTheSharedEngineAlone() {

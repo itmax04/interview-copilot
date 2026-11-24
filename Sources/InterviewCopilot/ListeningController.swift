@@ -210,11 +210,12 @@ final class ListeningController {
     /// Владелец выключил свой микрофон в Copilot: речь с микрофона полностью игнорируется (нет распознавания, текста в истории,
     /// памяти и разборе, подсказок, сигнала «владелец говорит» для конца хода). Системный mute и Meet не затрагиваются.
     /// Не путать с `PanelModel.micHardwareMuted` (mute macOS). Не запоминается: каждая сессия начинается с включённым.
-    private(set) var ownerMicOff = false
+    var ownerMicOff: Bool { speakingGate.off }
+    private var speakingGate = OwnerSpeakingGate()
 
     /// Кнопка работает на созвоне со звуком приложения или системы; в самопроверке и тестовом звонке микрофон — единственный вход.
     var ownerMicSwitchAvailable: Bool {
-        testSource == nil && source != .microphone
+        testSource == nil && source != .microphone && source != .none && model.settings.ownerSpeechContext
     }
 
     /// Нажатие: выключить ↔ включить. Возвращает новое состояние «выключен» или nil, если переключатель здесь недоступен.
@@ -227,14 +228,11 @@ final class ListeningController {
 
     func setOwnerMicOff(_ off: Bool) {
         guard ownerMicOff != off else { return }
-        ownerMicOff = off
-        if off {
-            // Накопленное и ещё не готовое отбрасывается; «говорит владелец» гасим, чтобы конец хода шёл только по паузе.
-            resetOwnerAnswer()
-            if ownerSpeaking {
-                ownerSpeaking = false
-                onOwnerSpeaking?(false, Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
-            }
+        // Накопленное и ещё не готовое отбрасывается; «говорит владелец» гасим (конец хода — по паузе) и возвращаем при включении посреди фразы.
+        if off { resetOwnerAnswer() }
+        if let speaking = speakingGate.setOff(off, current: ownerSpeaking) {
+            ownerSpeaking = speaking
+            onOwnerSpeaking?(speaking, Double(DispatchTime.now().uptimeNanoseconds) / 1e6)
         }
         updateOwnerChannel()
         Log.audio.notice("owner mic \(off ? "off" : "on", privacy: .public)")
@@ -261,8 +259,8 @@ final class ListeningController {
             && Permissions.microphone == .granted && !ownerMicOff
         guard ownerActive.value != active else { return }
         ownerActive.set(active)
-        // COPILOT-18: общий движок не отменяем — идущий прогон канала интервьюера не должен теряться из-за кнопки микрофона.
-        ownerTranscriber?.setPaused(!active, cancelRecognizer: false)
+        // COPILOT-18: на нажатие «Микрофон выкл.» общий движок не отменяем — идущий прогон интервьюера не должен теряться; прочие отключения — как раньше.
+        ownerTranscriber?.setPaused(!active, cancelRecognizer: !ownerMicOff)
         Log.audio.info("owner channel \(active ? "on" : "off", privacy: .public)")
     }
 
@@ -1197,8 +1195,7 @@ final class ListeningController {
                 Task { @MainActor in
                     guard let self else { return }
                     // COPILOT-18 D3: пока микрофон выключен, «владелец говорит» не сообщается (конец хода — по паузе).
-                    let effective = speaking && !self.ownerMicOff
-                    guard self.ownerSpeaking != effective else { return }
+                    guard let effective = self.speakingGate.detector(speaking, current: self.ownerSpeaking) else { return }
                     self.ownerSpeaking = effective
                     self.onOwnerSpeaking?(effective, t)
                 }
