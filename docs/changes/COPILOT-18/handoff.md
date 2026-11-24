@@ -9,7 +9,7 @@ Branch `feat/copilot-18-mic-toggle` (from `feat/copilot-17-uk-question`, 83592c6
 | P-02 core | DONE | see git log | `swift test` PASS: 552 tests, 97 suites (+9) |
 | P-03 app wiring | DONE | see git log | `swift build` PASS |
 | P-04 UI | DONE | see git log | `--ui-snapshots` 94/94 PNG; `panel-mic-toggle-on/off.png` checked by eye |
-| P-05 docs, review, full check | IN PROGRESS | docs in c4f9357 | full check was started in the background (output `/private/tmp/claude-501/full.txt`, may be gone) — **NOT RUN to completion as recorded; re-run**; independent review subagent launched, result not received — **re-run the review** |
+| P-05 docs, review, full check | IN PROGRESS | docs in c4f9357 | full check was started in the background (output `/private/tmp/claude-501/full.txt`, may be gone) — **NOT RUN to completion as recorded; re-run**; independent review DONE (below); full check: `swift test` 551/552 — only the timing test `TurnRedecodeTests.swift:111` (1.04 s < 1.0 s) failed while the review ran in parallel, re-run alone; evals/secret-scan/localization/build-app NOT RUN |
 | H-1 owner live check | PENDING | — | — |
 
 ## Executor decisions
@@ -32,3 +32,9 @@ notice, hotkey and button. Covered by review and by H-1.
 
 ## Next
 P-05 (new session): re-run the full check, run the independent review (fresh subagent, standard, relay-review brief; focus: `ListeningController` gating, App wiring/order of `resetOwnerMic`, `MicMutedInterval`, hotkey ids), fix findings; independent review (fresh subagent), fix findings, full check, `scripts/build-app.sh`; then H-1 (plan.md) together with COPILOT-17 H-1.
+
+## Independent review (fresh subagent, sonnet, 83592c6..c4f9357): verdict mergeable, to fix in P-05
+1. `ListeningController` mic-activity callback: after unmute `ownerSpeaking` stays false until the next speech onset if the owner was mid-phrase (detector sends edges only) — keep the last raw `speaking` value and apply it in `setOwnerMicOff(false)`.
+2. `ownerMicSwitchAvailable` is true for `source == .none` and when `ownerSpeechContext` is off — a press would log an interval "not recorded" although nothing was recorded; require an actually possible owner channel or record the decision.
+3. `resetOwnerMic()` at session end runs while phase is still `.listening` (re-activates the owner channel just before standby); and `updateOwnerChannel` now pauses with `cancelRecognizer: false` for ALL deactivations (permission, phase, standby), not only mute — pass `cancelRecognizer: !ownerMicOff` there; call the end-of-session reset after `enterStandby()` or without `updateOwnerChannel`.
+4. Nit: review marker line can be dropped by the "earlier part omitted" truncation — optionally keep it in the tail.
