@@ -959,3 +959,11 @@
 "Уточнение голосом: моя короткая фраза может менять подсказку" = "Voice clarification: my short phrase may change the hint";
 "Выключено по умолчанию. Если включить, повтор или поправка вопроса вашим голосом создаёт новую версию подсказки («с вашего голоса»). Выключенным ваша речь только сохраняется как ответ в памяти и истории. Рядом с колонками ноутбука или при втором устройстве лучше оставить выключенным." = "Off by default. When on, repeating or correcting a question in your own voice creates a new hint version (“in your voice”). When off, your speech is only saved as an answer in memory and history. Keep it off if the microphone can hear the speakers or a second device.";
 "Микрофон выключен в Copilot · %@ — ваши слова не записывались" = "Microphone off in Copilot · %@ — your words were not recorded";
+
+/* COPILOT-18 D9: one-shot voice clarification */
+"Уточнить голосом" = "Clarify by voice";
+"Уточнить" = "Clarify";
+"Говорите…" = "Speak now…";
+"Уточнение голосом (одна фраза)" = "Voice clarification (one phrase)";
+"Следующая ваша фраза уточнит вопрос. Нажмите ещё раз, чтобы отменить" = "Your next phrase will clarify the question. Press again to cancel";
+"Одна следующая ваша фраза уточнит текущий вопрос (подсказка «с вашего голоса»)" = "Your next phrase will clarify the current question (a “from your voice” hint)";

@@ -236,6 +236,11 @@ private struct Toolbar: View {
                                label: "\(model.ownerMicOff ? "Микрофон выкл." : "Микрофон") \(model.hotkey(.toggleMic))") { model.onToggleOwnerMic?() }
                         .foregroundStyle(model.ownerMicOff ? AnyShapeStyle(ICDark.red) : AnyShapeStyle(.foreground))
                 }
+                if action == .chat, model.ownerMicAvailable, !model.ownerMicOff {
+                    IconButton(symbol: model.voiceClarifyArmed ? "waveform" : "mic.badge.plus",
+                               label: "\(model.voiceClarifyArmed ? "Говорите…" : "Уточнить голосом") \(model.hotkey(.voiceClarify))") { model.onVoiceClarify?() }
+                        .foregroundStyle(model.voiceClarifyArmed ? AnyShapeStyle(ICDark.accent) : AnyShapeStyle(.foreground))
+                }
                 IconButton(symbol: icon, label: "\(title) \(model.hotkey(action))") {
                     switch action {
                     case .answerNow: model.onAnswerNow?()
@@ -307,6 +312,13 @@ private struct Toolbar: View {
                                         keys: model.hotkey(.toggleMic), size: model.fontSize, alert: model.ownerMicOff) { model.onToggleOwnerMic?() }
                             .help(model.ownerMicOff ? "Микрофон выключен только для Copilot. Нажмите, чтобы включить снова"
                                   : "Выключить микрофон для Copilot: он не будет слушать вас. Встреча вас по-прежнему слышит")
+                    }
+                    // D9: при выключенном микрофоне кнопки нет — уточнять нечем, а пять кнопок не помещаются в узкий оверлей.
+                    if model.ownerMicAvailable, !model.ownerMicOff {
+                        ICOverlayButton(title: model.voiceClarifyArmed ? "Говорите…" : "Уточнить", icon: model.voiceClarifyArmed ? "waveform" : "mic.badge.plus",
+                                        keys: model.hotkey(.voiceClarify), size: model.fontSize, armed: model.voiceClarifyArmed) { model.onVoiceClarify?() }
+                            .help(model.voiceClarifyArmed ? "Следующая ваша фраза уточнит вопрос. Нажмите ещё раз, чтобы отменить"
+                                  : "Одна следующая ваша фраза уточнит текущий вопрос (подсказка «с вашего голоса»)")
                     }
                     ICOverlayButton(title: "Чат", icon: "bubble.left", keys: model.hotkey(.chat), size: model.fontSize) { model.onToggleChat?() }
                         .help("Вопрос текстом или уточнение ответа")

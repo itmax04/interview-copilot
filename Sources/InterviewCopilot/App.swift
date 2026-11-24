@@ -335,19 +335,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.sessions.micMuteChanged(off: off)
             self.panelModel.ownerMicOff = off
+            if off, self.voiceClarify.isArmed { self.voiceClarify.disarm(); self.voiceClarifyChanged() }   // D9: при выключенном микрофоне режим не живёт
             self.refreshUI()
         }
         listening.onOwnerSaid = { [weak self] text, exchangeID, interrupted in
             guard let self else { return }
             // Если владелец не был перебит, а сам повторил или уточнил вопрос — обновляем/создаём подсказку без кнопок.
             // COPILOT-18 D1: только если владелец включил «Уточнение голосом»; по умолчанию его речь — лишь ответ в памяти.
-            if self.model.settings.ownerVoiceClarification, !interrupted, !self.testCall.active, !self.testCallOnly, self.liveSession.isActive,
+            // D9: одноразовое «Уточнение голосом» (кнопка / ⇧⌘U) обходит настройку, но только для одной следующей фразы.
+            let forced = self.voiceClarify.consume(interrupted: interrupted)
+            if forced { self.voiceClarifyChanged() }
+            if forced || self.model.settings.ownerVoiceClarification, !interrupted, !self.testCall.active, !self.testCallOnly, self.liveSession.isActive,
                self.liveSession.config.type != .mock {
-                let decision = OwnerQuestionDetector.detect(
-                    text: text,
-                    secondsSinceLastQuestion: self.answers.lastQuestionAge,
-                    hasActiveQuestion: self.answers.hasActiveQuestion
-                )
+                let age = self.answers.lastQuestionAge, active = self.answers.hasActiveQuestion
+                let decision = forced
+                    ? OwnerQuestionDetector.detectForced(text: text, secondsSinceLastQuestion: age, hasActiveQuestion: active)
+                    : OwnerQuestionDetector.detect(text: text, secondsSinceLastQuestion: age, hasActiveQuestion: active)
                 if decision != .none {
                     Log.metrics.notice("owner_question_trigger decision=\(String(describing: decision).prefix(24), privacy: .public)")
                     if case .newQuestion(let q) = decision {
@@ -512,6 +515,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if panelModel.allSystemCallApp != allSystem?.callApp?.name { panelModel.allSystemCallApp = allSystem?.callApp?.name }
         panelModel.ownerAnswering = listening.ownerAnswering
         panelModel.ownerMicOff = listening.ownerMicOff
+        panelModel.voiceClarifyArmed = voiceClarify.isArmed
         panelModel.ownerMicAvailable = liveSession.isActive && liveSession.config.type != .mock && !testCall.active && !testCallOnly
             && listening.ownerMicSwitchAvailable
         panelModel.quickProfiles = bank.profiles
@@ -668,6 +672,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.settings.lastSessionConfig = c.defaultsForNext()
         listening.sessionStartedAt = Date()
         listening.resetOwnerMic()
+        resetVoiceClarify()
         listening.setHintWaitsForWhisper(PreciseQuestionMode.waits(mode: model.settings.preciseQuestion, session: c.type, language: c.language))
         memory.reset()
         turns.setAllowShortFollowUps(false)
@@ -706,6 +711,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         answers.cancel()
         let browserCleanup = c.type == .mock ? interviewer.close() : testCall.close()
         let standby = listening.enterStandby()
+        resetVoiceClarify()
         listening.resetOwnerMic()      // после standby: канал владельца не включается на миг; отрезок закрывается до finish()
         let record = sessions.finish()
         refreshUI()
@@ -736,6 +742,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .strongModel: answers.askStrongModel()
         case .ownerAnswer: toggleOwnerAnswering()
         case .toggleMic: toggleOwnerMic()
+        case .voiceClarify: toggleVoiceClarify()
         case .screenshot: takeScreenshot()
         case .newSession: showWizard()
         case .chat: toggleChat()
@@ -859,6 +866,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         panelModel.onOwnerAnswer = { [weak self] in self?.toggleOwnerAnswering() }
         panelModel.onToggleOwnerMic = { [weak self] in self?.toggleOwnerMic() }
+        panelModel.onVoiceClarify = { [weak self] in self?.toggleVoiceClarify() }
     }
 
     /// ⇧⌘M (в сессии) / ⌃⌥M или кнопка «Микрофон» в оверлее: Copilot перестаёт слушать микрофон владельца и снова слушает (COPILOT-18).
@@ -869,6 +877,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         refreshUI()
+    }
+
+    // MARK: «Уточнение голосом» одним разом (COPILOT-18 D9)
+
+    private var voiceClarify = VoiceClarifyArm()
+    private var voiceClarifyTimer: Task<Void, Never>?
+
+    /// ⇧⌘U (в сессии) / ⌃⌥U или кнопка: взвести («следующая моя фраза уточняет вопрос») или отменить. Выключенный микрофон не включается молча.
+    private func toggleVoiceClarify() {
+        guard liveSession.isActive, liveSession.config.type != .mock, !testCall.active, !testCallOnly,
+              listening.ownerMicSwitchAvailable else {
+            Log.app.info("voice clarify ignored: no call session")
+            return
+        }
+        if listening.ownerMicOff, !voiceClarify.isArmed {
+            Log.app.info("voice clarify ignored: owner mic is off")
+            return
+        }
+        let armed = voiceClarify.toggle(now: Date())
+        Log.app.notice("voice clarify \(armed ? "armed" : "cancelled", privacy: .public)")
+        voiceClarifyChanged()
+    }
+
+    /// Состояние изменилось: таймер самоотключения (15 с, пока владелец говорит — ждём конца фразы) и панель.
+    private func voiceClarifyChanged() {
+        voiceClarifyTimer?.cancel()
+        voiceClarifyTimer = nil
+        if voiceClarify.isArmed {
+            voiceClarifyTimer = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(VoiceClarifyArm.timeoutSeconds))
+                while !Task.isCancelled, let self, self.voiceClarify.isArmed {
+                    if self.voiceClarify.expire(now: Date(), ownerSpeaking: self.listening.ownerSpeaking) {
+                        Log.app.notice("voice clarify timed out")
+                        self.voiceClarifyChanged()
+                        return
+                    }
+                    try? await Task.sleep(for: .seconds(1))
+                }
+            }
+        }
+        refreshUI()
+    }
+
+    /// Начало и конец сессии: режим не переживает сессию.
+    private func resetVoiceClarify() {
+        guard voiceClarify.isArmed else { return }
+        voiceClarify.disarm()
+        voiceClarifyChanged()
     }
 
     /// ⌃⌥A или пункт меню «Сейчас отвечаю я» (самопроверка, COPILOT-06/07).

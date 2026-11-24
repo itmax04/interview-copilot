@@ -162,6 +162,9 @@ final class PanelModel {
     /// Кнопка доступна: сессия на созвоне со звуком приложения/системы (в самопроверке и тестовом звонке микрофон — единственный вход).
     var ownerMicAvailable = false
     var onToggleOwnerMic: (() -> Void)?
+    /// «Уточнение голосом» взведено: следующая фраза владельца уточняет вопрос (COPILOT-18 D9).
+    var voiceClarifyArmed = false
+    var onVoiceClarify: (() -> Void)?
 
     func selectPrevious() { history.selectPrevious() }
     func selectNext() { history.selectNext() }

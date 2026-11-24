@@ -84,7 +84,7 @@ struct InterviewMemoryTests {
         // Новые действия — в конце allCases: номера прежних горячих клавиш не меняются (⌃⌥A — шестая, ⌃⌥N — после неё).
         #expect(HotkeyAction.allCases.firstIndex(of: .ownerAnswer) == 5)
         #expect(HotkeyAction.allCases.firstIndex(of: .newSession) == 6)
-        #expect(Array(HotkeyAction.allCases.suffix(5)) == [.chat, .clearTranscript, .previousAnswer, .nextAnswer, .toggleMic])
+        #expect(Array(HotkeyAction.allCases.suffix(6)) == [.chat, .clearTranscript, .previousAnswer, .nextAnswer, .toggleMic, .voiceClarify])
         #expect(HotkeyBinding.defaults[.ownerAnswer]?.displayString == "⌃⌥A")
     }
 

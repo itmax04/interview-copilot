@@ -98,8 +98,9 @@ struct OwnerMicToggleTests {
     @Test func hotkeyDefaults() {
         #expect(HotkeyBinding.defaults[.toggleMic]?.displayString == "⌃⌥M")
         #expect(HotkeyBinding.sessionDefaults[.toggleMic]?.displayString == "⇧⌘M")
-        #expect(HotkeyAction.allCases.last == .toggleMic)
-        #expect(HotkeyAction.allCases.firstIndex(of: .nextAnswer) == HotkeyAction.allCases.count - 2)
+        #expect(HotkeyAction.allCases.last == .voiceClarify)
+        #expect(HotkeyAction.allCases.dropLast().last == .toggleMic)
+        #expect(HotkeyAction.allCases.firstIndex(of: .nextAnswer) == HotkeyAction.allCases.count - 3)
     }
 
     @Test func speakingSignalReturnsWhenMicIsReenabledMidPhrase() {

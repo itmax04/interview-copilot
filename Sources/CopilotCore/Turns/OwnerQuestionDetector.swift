@@ -80,6 +80,8 @@ public enum OwnerQuestionDetector {
         "чути", "слышно", "видно", "раз", "два", "три", "перевірка", "проверка", "тест",
     ]
 
+    static func isFiller(_ word: String) -> Bool { fillerWords.contains(word) }
+
     /// Явные префиксы поправки («ні, риси», «не рейси а риси»).
     private static let correctionPrefixes: [String] = [
         "ні, ", "нет, ", "не ", "я про ", "мав на увазі ", "имел в виду ",
